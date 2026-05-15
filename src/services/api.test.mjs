@@ -261,25 +261,6 @@ test('生成服务属性补齐时可传递 collector group', async () => {
   assert.equal(request.body.collector_group_id, '507f1f77bcf86cd799439013');
 });
 
-test('保存 Agent Additional Configuration 时调用实例覆盖接口', async () => {
-  const request = await captureRequest(
-    () => api.saveAgentAdditionalConfig('collector-a', 'exporters:\n  otlp:\n    endpoint: otel-gateway:4317', true),
-    {
-      id: '507f1f77bcf86cd799439071',
-      scope: 'instance',
-      target_id: 'collector-a',
-      config_map_key: '',
-      yaml_patch: 'exporters:\n  otlp:\n    endpoint: otel-gateway:4317',
-      status: 'pending',
-      version: 1,
-    },
-  );
-
-  assert.equal(request.path, '/api/v1/opamp/agents/collector-a/additional-config');
-  assert.equal(request.init.method, 'PUT');
-  assert.equal(request.body.send, true);
-  assert.equal(request.body.yaml_patch, 'exporters:\n  otlp:\n    endpoint: otel-gateway:4317');
-});
 
 test('预览解析规则时调用 parser-rule/preview', async () => {
   const request = await captureRequest(
@@ -457,4 +438,57 @@ test('删除 Collector Group 时使用 DELETE 方法', async () => {
 
   assert.equal(request.path, '/api/v1/collector-groups/507f1f77bcf86cd799439030');
   assert.equal(request.init.method, 'DELETE');
+});
+
+test('获取服务绑定 Agent 时调用 GET /services/:id/agents', async () => {
+  const request = await captureRequest(
+    () => api.getServiceAgents('svc-001'),
+    [{ instance_uid: 'agent-001', service_id: 'svc-001', runtime_status: 'online' }],
+  );
+
+  assert.equal(request.path, '/api/v1/services/svc-001/agents');
+});
+
+test('保存服务公共处理片段时调用 pipeline/base', async () => {
+  const request = await captureRequest(
+    () => api.saveServicePipelineBase('svc-001', ''),
+    { id: 'service-base:svc-001', base_yaml: '' },
+  );
+
+  assert.equal(request.path, '/api/v1/services/svc-001/pipeline/base');
+  assert.equal(request.init.method, 'PUT');
+  assert.equal(request.body.base_yaml, '');
+});
+
+test('保存服务级解析规则时不再传递 collector_group_id', async () => {
+  const request = await captureRequest(
+    () => api.saveServicePipelineParserRule('svc-001', { parseMode: 'json', parseFrom: 'body', enabled: true }),
+    { id: 'rule-001', service_id: 'svc-001', parse_mode: 'json', enabled: true },
+  );
+
+  assert.equal(request.path, '/api/v1/services/svc-001/pipeline/parser-rule');
+  assert.equal(request.init.method, 'PUT');
+  assert.equal('collector_group_id' in request.body, false);
+});
+
+test('发布服务级 Pipeline 时调用服务发布接口并映射下发数量', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({
+    service_id: 'svc-001',
+    config_hash: 'abc123',
+    rendered_yaml: 'service:\n',
+    agent_count: 2,
+    active_delivery_count: 1,
+    queued_delivery_count: 1,
+    skipped_agents: [],
+  });
+
+  try {
+    const result = await api.publishServicePipeline('svc-001');
+    assert.equal(result.serviceId, 'svc-001');
+    assert.equal(result.activeDeliveryCount, 1);
+    assert.equal(result.queuedDeliveryCount, 1);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

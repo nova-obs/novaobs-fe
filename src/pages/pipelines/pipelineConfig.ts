@@ -1,4 +1,4 @@
-import type { CollectorConfigAgentStatus, CollectorGroup } from '../../services/types';
+import type { CollectorConfigAgentStatus } from '../../services/types';
 
 const configStatusText: Record<string, string> = {
   none: '未发布',
@@ -18,8 +18,8 @@ export function shortHash(hash: string) {
   return hash ? hash.slice(0, 8) : '-';
 }
 
-export function summarizeCollectorGroupConfig(group: Pick<CollectorGroup, 'name' | 'configVersion' | 'lastPublishStatus' | 'desiredConfigHash'>) {
-  return `${group.name} · v${group.configVersion || 0} · ${configStatusLabel(group.lastPublishStatus)} · ${shortHash(group.desiredConfigHash)}`;
+export function summarizeServiceConfig(input: { name: string; status: string; configHash: string }) {
+  return `${input.name} · ${configStatusLabel(input.status)} · ${shortHash(input.configHash)}`;
 }
 
 export function describeApplyMatrix(agents: Pick<CollectorConfigAgentStatus, 'remoteConfigCapable' | 'inSync'>[]) {
@@ -43,8 +43,9 @@ export function configStatusColor(status: string) {
 
 export function sourceTypeLabel(type: string) {
   const labels: Record<string, string> = {
-    platform_template: '平台模板',
-    group_override: '采集组覆盖',
+    base_template: '公共处理',
+    platform_template: '公共处理',
+    group_override: '服务覆盖',
     service_enrichment: '服务属性补齐',
     service_pipeline_patch: '业务解析规则',
   };

@@ -65,6 +65,7 @@ export interface UpdateServiceInput {
 export interface OpAMPAgent {
   instanceUid: string;
   collectorGroupId: string;
+  serviceId: string;
   online: boolean;
   healthy: boolean;
   capabilities: number;
@@ -86,6 +87,7 @@ export interface AgentAttribute {
 export interface AgentState {
   instanceUid: string;
   collectorGroupId: string;
+  serviceId: string;
   online: boolean;
   healthy: boolean;
   capabilities: number;
@@ -116,27 +118,10 @@ export interface AgentDetailConfiguration {
   lastRemoteConfig: string;
   lastRemoteConfigFiles: Record<string, string>;
   lastRemoteConfigHash: string;
-  expectedRenderedConfig: string;
   expectedConfigHash: string;
   inSync: boolean;
   applyStatus: string;
   configSources: CollectorConfigSources | null;
-  additionalConfig: CollectorAdditionalConfig | null;
-}
-
-export interface CollectorAdditionalConfig {
-  id: string;
-  scope: string;
-  targetId: string;
-  collectorGroupId: string;
-  configMapKey: string;
-  yamlPatch: string;
-  configHash: string;
-  lastRemoteConfigHash: string;
-  status: string;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface AgentDetail {
@@ -291,6 +276,7 @@ export interface CollectorInstance {
   id: string;
   instanceUid: string;
   collectorGroupId: string;
+  serviceId: string;
   hostname: string;
   podName: string;
   nodeName: string;
@@ -440,6 +426,27 @@ export interface CollectorConfigSources {
   warnings: string[];
   errors: string[];
   sourceBreakdown: ConfigSourceBreakdown[];
+}
+
+export interface ServicePipelineSources {
+  baseTemplate: CollectorPlatformTemplate | null;
+  serviceEnrichmentPatches: ServiceEnrichmentPatch[];
+  servicePipelinePatches: ServicePipelinePatch[];
+  renderedYaml: string;
+  configHash: string;
+  warnings: string[];
+  errors: string[];
+  sourceBreakdown: ConfigSourceBreakdown[];
+}
+
+export interface ServicePipelinePublishResult {
+  serviceId: string;
+  configHash: string;
+  renderedYaml: string;
+  agentCount: number;
+  activeDeliveryCount: number;
+  queuedDeliveryCount: number;
+  skippedAgents: string[];
 }
 
 export interface ParserPreviewResult {

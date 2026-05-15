@@ -1,7 +1,6 @@
 import type { ReactNode } from 'react';
+import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
-import { CollectorsPage } from '../pages/collectors/CollectorsPage';
-import { AgentDetailPage } from '../pages/collectors/AgentDetailPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MetricsPage } from '../pages/metrics/MetricsPage';
 import { OnboardingPage } from '../pages/onboarding/OnboardingPage';
@@ -20,10 +19,9 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/', title: '平台总览', element: <OverviewPage /> },
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
   { path: '/onboarding', title: '服务接入', element: <OnboardingPage /> },
-  { path: '/collectors', title: 'Collector Groups', element: <CollectorsPage /> },
-  { path: '/collectors/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace /> },
   { path: '/pipelines', title: '日志 Pipeline', element: <PipelinesPage /> },
+  { path: '/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },
   { path: '/alerts', title: '告警中心', element: <AlertsPage /> },
   { path: '/metrics', title: 'Metrics', element: <MetricsPage /> },
   { path: '/traces', title: 'Traces', element: <TracesPage /> },

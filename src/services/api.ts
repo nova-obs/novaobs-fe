@@ -7,7 +7,6 @@ import type {
   CollectorConfigValidation,
   CollectorGroupConfigStatus,
   CollectorConfigVersion,
-  CollectorAdditionalConfig,
   CollectorGroup,
   CollectorGroupStatus,
   CollectorGroupOverride,
@@ -26,6 +25,8 @@ import type {
   Service,
   ServiceEnrichmentPatch,
   ServiceOnboarding,
+  ServicePipelinePublishResult,
+  ServicePipelineSources,
   ServiceParserRule,
   ServicePipelinePatch,
   ServiceSummary,
@@ -153,6 +154,7 @@ function mapAgent(raw: any): OpAMPAgent {
   return {
     instanceUid: String(raw.instance_uid ?? raw.instanceUid ?? ''),
     collectorGroupId: String(raw.collector_group_id ?? ''),
+    serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
     online: raw.online ?? false,
     healthy: raw.healthy ?? false,
     capabilities: raw.capabilities ?? 0,
@@ -173,6 +175,7 @@ function mapAgentDetail(raw: any): AgentDetail {
       state: {
         instanceUid: raw.agent?.state?.instance_uid ?? raw.instance_uid ?? '',
         collectorGroupId: String(raw.agent?.state?.collector_group_id ?? ''),
+        serviceId: String(raw.agent?.state?.service_id ?? raw.agent?.state?.serviceId ?? ''),
         online: raw.agent?.state?.online ?? false,
         healthy: raw.agent?.state?.healthy ?? false,
         capabilities: raw.agent?.state?.capabilities ?? 0,
@@ -206,30 +209,11 @@ function mapAgentDetail(raw: any): AgentDetail {
       lastRemoteConfig: raw.configuration?.last_remote_config ?? '',
       lastRemoteConfigFiles: raw.configuration?.last_remote_config_files ?? {},
       lastRemoteConfigHash: raw.configuration?.last_remote_config_hash ?? '',
-      expectedRenderedConfig: raw.configuration?.expected_rendered_config ?? '',
       expectedConfigHash: raw.configuration?.expected_config_hash ?? '',
       inSync: raw.configuration?.in_sync ?? false,
       applyStatus: raw.configuration?.apply_status ?? '',
       configSources: raw.configuration?.config_sources ? mapCollectorConfigSources(raw.configuration.config_sources) : null,
-      additionalConfig: raw.configuration?.additional_config?.target_id ? mapCollectorAdditionalConfig(raw.configuration.additional_config) : null,
     },
-  };
-}
-
-function mapCollectorAdditionalConfig(raw: any): CollectorAdditionalConfig {
-  return {
-    id: String(raw.id ?? ''),
-    scope: raw.scope ?? '',
-    targetId: String(raw.target_id ?? ''),
-    collectorGroupId: String(raw.collector_group_id ?? ''),
-    configMapKey: raw.config_map_key ?? '',
-    yamlPatch: raw.yaml_patch ?? '',
-    configHash: raw.config_hash ?? '',
-    lastRemoteConfigHash: raw.last_remote_config_hash ?? '',
-    status: raw.status ?? '',
-    version: raw.version ?? 0,
-    createdAt: raw.created_at ?? '',
-    updatedAt: raw.updated_at ?? '',
   };
 }
 
@@ -383,6 +367,7 @@ function mapCollectorInstance(raw: any): CollectorInstance {
     id: String(raw.id ?? ''),
     instanceUid: String(raw.instance_uid ?? raw.instanceUid ?? ''),
     collectorGroupId: String(raw.collector_group_id ?? ''),
+    serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
     hostname: raw.hostname ?? '',
     podName: raw.pod_name ?? raw.podName ?? '',
     nodeName: raw.node_name ?? raw.nodeName ?? '',
@@ -536,6 +521,31 @@ function mapCollectorConfigSources(raw: any): CollectorConfigSources {
   };
 }
 
+function mapServicePipelineSources(raw: any): ServicePipelineSources {
+  return {
+    baseTemplate: raw.base_template || raw.base ? mapCollectorPlatformTemplate(raw.base_template ?? raw.base) : null,
+    serviceEnrichmentPatches: Array.isArray(raw.service_enrichment_patches) ? raw.service_enrichment_patches.map(mapServiceEnrichmentPatch) : (raw.enrichment ? [mapServiceEnrichmentPatch(raw.enrichment)] : []),
+    servicePipelinePatches: Array.isArray(raw.service_pipeline_patches) ? raw.service_pipeline_patches.map(mapServicePipelinePatch) : (raw.parser ? [mapServicePipelinePatch(raw.parser)] : []),
+    renderedYaml: raw.rendered_yaml ?? '',
+    configHash: raw.config_hash ?? '',
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+    errors: Array.isArray(raw.errors) ? raw.errors.map(String) : [],
+    sourceBreakdown: Array.isArray(raw.source_breakdown) ? raw.source_breakdown.map(mapSourceBreakdown) : [],
+  };
+}
+
+function mapServicePipelinePublishResult(raw: any): ServicePipelinePublishResult {
+  return {
+    serviceId: String(raw.service_id ?? ''),
+    configHash: raw.config_hash ?? '',
+    renderedYaml: raw.rendered_yaml ?? '',
+    agentCount: raw.agent_count ?? 0,
+    activeDeliveryCount: raw.active_delivery_count ?? 0,
+    queuedDeliveryCount: raw.queued_delivery_count ?? 0,
+    skippedAgents: Array.isArray(raw.skipped_agents) ? raw.skipped_agents.map(String) : [],
+  };
+}
+
 function mapServiceParserRule(raw: any): ServiceParserRule {
   return {
     id: String(raw.id ?? ''),
@@ -655,16 +665,13 @@ export const api = {
     const raw = await request<any[]>('/opamp/agents');
     return raw.map(mapAgent);
   },
+  async getServiceAgents(serviceId: string): Promise<OpAMPAgent[]> {
+    const raw = await request<any[]>(`/services/${serviceId}/agents`);
+    return raw.map(mapAgent);
+  },
   async getAgentDetail(uid: string): Promise<AgentDetail> {
     const raw = await request<any>(`/opamp/agents/${uid}`);
     return mapAgentDetail(raw);
-  },
-  async saveAgentAdditionalConfig(uid: string, yamlPatch: string, send: boolean): Promise<CollectorAdditionalConfig> {
-    const raw = await request<any>(`/opamp/agents/${uid}/additional-config`, {
-      method: 'PUT',
-      body: JSON.stringify({ yaml_patch: yamlPatch, send }),
-    });
-    return mapCollectorAdditionalConfig(raw);
   },
   async createCollectorGroup(input: Partial<CollectorGroup>): Promise<CollectorGroup> {
     const raw = await request<any>('/collector-groups', {
@@ -839,9 +846,75 @@ export const api = {
     const raw = await request<any>(`/services/${serviceId}/parser-rule/generate-patch`, { method: 'POST' });
     return mapServicePipelinePatch(raw);
   },
+  async saveServicePipelineBase(serviceId: string, baseYaml: string): Promise<CollectorPlatformTemplate> {
+    const raw = await request<any>(`/services/${serviceId}/pipeline/base`, {
+      method: 'PUT',
+      body: JSON.stringify({ base_yaml: baseYaml }),
+    });
+    return mapCollectorPlatformTemplate(raw);
+  },
+  async regenerateServicePipelineEnrichment(serviceId: string): Promise<ServiceEnrichmentPatch> {
+    const raw = await request<any>(`/services/${serviceId}/pipeline/enrichment/regenerate`, { method: 'POST' });
+    return mapServiceEnrichmentPatch(raw);
+  },
+  async saveServicePipelineParserRule(serviceId: string, input: Partial<ServiceParserRule>): Promise<ServiceParserRule> {
+    const raw = await request<any>(`/services/${serviceId}/pipeline/parser-rule`, {
+      method: 'PUT',
+      body: JSON.stringify({
+        parse_mode: input.parseMode ?? 'none',
+        parse_from: input.parseFrom ?? 'body',
+        regex_pattern: input.regexPattern,
+        json_mappings: input.jsonMappings ?? {},
+        attribute_mappings: input.attributeMappings ?? input.jsonMappings ?? {},
+        resource_mappings: input.resourceMappings ?? {},
+        ottl_statements: input.ottlStatements ?? [],
+        sample_log: input.sampleLog,
+        enabled: input.enabled ?? false,
+      }),
+    });
+    return mapServiceParserRule(raw);
+  },
+  async previewServicePipelineParserRule(serviceId: string, input: Partial<ServiceParserRule>): Promise<ParserPreviewResult> {
+    const raw = await request<any>(`/services/${serviceId}/pipeline/parser-rule/preview`, {
+      method: 'POST',
+      body: JSON.stringify({
+        parse_mode: input.parseMode ?? 'none',
+        parse_from: input.parseFrom ?? 'body',
+        regex_pattern: input.regexPattern,
+        json_mappings: input.jsonMappings ?? {},
+        attribute_mappings: input.attributeMappings ?? input.jsonMappings ?? {},
+        resource_mappings: input.resourceMappings ?? {},
+        ottl_statements: input.ottlStatements ?? [],
+        sample_log: input.sampleLog,
+      }),
+    });
+    return mapParserPreviewResult(raw);
+  },
+  async generateServicePipelineParserPatch(serviceId: string): Promise<ServicePipelinePatch> {
+    const raw = await request<any>(`/services/${serviceId}/pipeline/parser-rule/generate-patch`, { method: 'POST' });
+    return mapServicePipelinePatch(raw);
+  },
+  async getServicePipelineSources(serviceId: string): Promise<ServicePipelineSources> {
+    const raw = await request<any>(`/services/${serviceId}/pipeline/sources`);
+    return mapServicePipelineSources(raw);
+  },
+  async publishServicePipeline(serviceId: string): Promise<ServicePipelinePublishResult> {
+    const raw = await request<any>(`/services/${serviceId}/pipeline/publish`, { method: 'POST' });
+    return mapServicePipelinePublishResult(raw);
+  },
   async getCollectorGroupConfigStatus(groupId: string): Promise<CollectorGroupConfigStatus> {
     const raw = await request<any>(`/collector-groups/${groupId}/config/status`);
     return mapCollectorGroupConfigStatus(raw);
+  },
+  async assignInstanceService(instanceUid: string, serviceId: string): Promise<CollectorInstance> {
+    const raw = await request<any>(`/opamp/instances/${instanceUid}/service`, {
+      method: 'POST',
+      body: JSON.stringify({ service_id: serviceId }),
+    });
+    return mapCollectorInstance(raw);
+  },
+  async unassignInstanceService(instanceUid: string): Promise<void> {
+    await request<any>(`/opamp/instances/${instanceUid}/service`, { method: 'DELETE' });
   },
   async assignInstanceGroup(instanceUid: string, groupId: string): Promise<CollectorInstance> {
     const raw = await request<any>(`/opamp/instances/${instanceUid}/group`, {

@@ -8,7 +8,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const current = getNavigationByPath(location.pathname);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-background text-on-surface">
+    <div className="flex h-screen min-w-[1024px] overflow-hidden bg-background text-on-surface">
       <aside className="flex w-60 shrink-0 flex-col border-r border-outline bg-surface-container">
         <div className="px-6 py-7">
           <div className="font-display text-lg font-semibold text-on-surface">Observability Hub</div>

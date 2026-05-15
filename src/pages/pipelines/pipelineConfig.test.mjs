@@ -5,16 +5,15 @@ import {
   describeApplyMatrix,
   shortHash,
   sourceTypeLabel,
-  summarizeCollectorGroupConfig,
+  summarizeServiceConfig,
 } from './pipelineConfig.ts';
 
-test('汇总 Collector Group 配置状态', () => {
-  assert.equal(summarizeCollectorGroupConfig({
-    name: 'logs-gateway',
-    configVersion: 3,
-    lastPublishStatus: 'pending',
-    desiredConfigHash: 'abcdef1234567890',
-  }), 'logs-gateway · v3 · 待应用 · abcdef12');
+test('汇总服务配置状态', () => {
+  assert.equal(summarizeServiceConfig({
+    name: 'order-api',
+    status: 'pending',
+    configHash: 'abcdef1234567890',
+  }), 'order-api · 待应用 · abcdef12');
 });
 
 test('应用矩阵按能力和同步状态汇总', () => {
@@ -38,7 +37,7 @@ test('状态和 hash 展示函数稳定处理空值', () => {
 });
 
 test('配置来源类型展示名称稳定', () => {
-  assert.equal(sourceTypeLabel('platform_template'), '平台模板');
+  assert.equal(sourceTypeLabel('base_template'), '公共处理');
   assert.equal(sourceTypeLabel('service_pipeline_patch'), '业务解析规则');
   assert.equal(sourceTypeLabel('custom'), 'custom');
 });
