@@ -6,6 +6,7 @@ export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 export type ServiceSource = 'manual' | 'cmdb';
 export type SyncStatus = 'local' | 'synced';
 export type ServiceIdentityType = 'k8s_workload' | 'host_process' | 'syslog_device';
+export type ServiceTargetType = 'cloud_native_workload' | 'host_process' | 'physical_or_network_device';
 
 export interface Service {
   id: string;
@@ -29,6 +30,44 @@ export interface Service {
   status: ServiceStatus;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ServiceTarget {
+  id: string;
+  serviceId: string;
+  targetType: ServiceTargetType;
+  environment: string;
+  displayName: string;
+  identityAttributes: Record<string, string>;
+  matchRules: Record<string, string>;
+  source: ServiceSource | 'discovered';
+  syncStatus: SyncStatus | 'stale' | 'conflict';
+  lastSyncedAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CreateServiceTargetInput {
+  targetType: ServiceTargetType;
+  environment?: string;
+  displayName?: string;
+  identityAttributes: Record<string, string>;
+  matchRules?: Record<string, string>;
+}
+
+export interface ServiceGraphPipelineSummary {
+  configHash: string;
+  sourceBreakdown: Array<{ type: string; id: string; name: string; status: string; hash: string; warnings: string[] }>;
+  warnings: string[];
+  errors: string[];
+}
+
+export interface ServiceObservabilityGraph {
+  service: Service;
+  targets: ServiceTarget[];
+  agents: CollectorInstance[];
+  pipelines: ServiceGraphPipelineSummary;
+  alertRules: AlertRule[];
 }
 
 export interface CreateServiceInput {

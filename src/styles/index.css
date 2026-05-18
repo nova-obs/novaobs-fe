@@ -4,8 +4,8 @@
 
 :root {
   color-scheme: light;
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
-  background: #f8f9fa;
+  font-family: Geist, Satoshi, Aptos, ui-sans-serif, system-ui, sans-serif;
+  background: #f2f5ef;
 }
 
 * {
@@ -16,8 +16,9 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background: #f8f9fa;
-  color: #191b23;
+  background: #f2f5ef;
+  color: #1d2426;
+  font-feature-settings: "cv02", "cv03", "cv04";
 }
 
 ::-webkit-scrollbar {
@@ -30,25 +31,56 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #c2c6d6;
+  background: #b9c6be;
   border-radius: 999px;
 }
 
 @layer components {
   .console-panel {
-    @apply rounded-lg border border-outline bg-surface-container;
-    box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+    @apply rounded-lg bg-surface-container/85 shadow-panel;
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(18px) saturate(1.08);
+  }
+
+  .atlas-sidebar-panel {
+    @apply relative rounded-lg shadow-panel;
+    background:
+      linear-gradient(180deg, rgba(255, 254, 250, 0.72) 0%, rgba(246, 250, 245, 0.56) 52%, rgba(232, 243, 240, 0.66) 100%),
+      radial-gradient(circle at 26% 18%, rgba(31, 122, 118, 0.13), transparent 34%),
+      radial-gradient(circle at 82% 78%, rgba(88, 127, 67, 0.12), transparent 38%);
+    border: 1px solid rgba(255, 255, 255, 0.72);
+    backdrop-filter: blur(22px) saturate(1.12);
+  }
+
+  .atlas-nav-active {
+    background:
+      linear-gradient(135deg, rgba(220, 239, 235, 0.96), rgba(255, 254, 250, 0.58)),
+      radial-gradient(circle at 18% 24%, rgba(31, 122, 118, 0.18), transparent 42%);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.84),
+      0 16px 32px -24px rgba(31, 122, 118, 0.72);
   }
 
   .console-input {
-    @apply h-9 rounded border border-outline bg-surface-lowest px-3 text-sm text-on-surface outline-none transition-colors placeholder:text-muted/70 focus:border-primary focus:ring-2 focus:ring-primary/10;
+    @apply h-9 rounded-lg border border-outline/70 bg-surface-lowest/80 px-3 text-sm text-on-surface outline-none transition-all placeholder:text-muted/60 focus:border-primary/60 focus:bg-white focus:ring-2 focus:ring-primary/10;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
   }
 
   .console-table th {
-    @apply sticky top-0 bg-surface-low px-3 py-2 text-left text-xs font-semibold text-muted;
+    @apply sticky top-0 bg-surface-low/85 px-3 py-2 text-left text-xs font-semibold text-muted backdrop-blur;
   }
 
   .console-table td {
-    @apply h-10 border-t border-outline px-3 py-2 text-sm text-on-surface;
+    @apply h-10 border-t border-outline/55 px-3 py-2 text-sm text-on-surface;
+  }
+
+  .soft-tile {
+    @apply rounded-lg shadow-panel;
+    background: rgba(255, 254, 250, 0.72);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+  }
+
+  .quiet-button {
+    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all active:translate-y-px;
   }
 }

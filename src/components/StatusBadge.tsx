@@ -65,7 +65,7 @@ const statusText: Record<string, string> = {
 
 export function StatusBadge({ value }: { value: StatusValue }) {
   return (
-    <span className={`inline-flex rounded-sm border px-1.5 py-0.5 text-[11px] font-semibold ${statusClass[value] ?? statusClass.low}`}>
+    <span className={`inline-flex rounded-lg border px-2 py-0.5 text-[11px] font-semibold ${statusClass[value] ?? statusClass.low}`}>
       {statusText[value] ?? value}
     </span>
   );

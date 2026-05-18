@@ -2,12 +2,10 @@ import type { ReactNode } from 'react';
 import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
-import { MetricsPage } from '../pages/metrics/MetricsPage';
 import { OnboardingPage } from '../pages/onboarding/OnboardingPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
 import { PipelinesPage } from '../pages/pipelines/PipelinesPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
-import { TracesPage } from '../pages/traces/TracesPage';
 
 export interface RouteDefinition {
   path: string;
@@ -23,10 +21,12 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/pipelines', title: '日志 Pipeline', element: <PipelinesPage /> },
   { path: '/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },
   { path: '/alerts', title: '告警中心', element: <AlertsPage /> },
-  { path: '/metrics', title: 'Metrics', element: <MetricsPage /> },
-  { path: '/traces', title: 'Traces', element: <TracesPage /> },
 ];
 
 export const getRouteTitle = (path: string) => {
-  return routeDefinitions.find((route) => route.path === path)?.title ?? '平台总览';
+  const normalizedPath = path.split('?')[0] || '/';
+  if (normalizedPath.startsWith('/agents/')) return 'Agent Detail';
+  return routeDefinitions.find((route) => route.path === normalizedPath)?.title ?? '平台总览';
 };
+
+export const getDocumentTitle = (path: string) => `${getRouteTitle(path)} - NovaObs`;

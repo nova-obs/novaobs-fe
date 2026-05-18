@@ -10,7 +10,7 @@ export function AlertsPage() {
     <div className="space-y-6">
       <div>
         <h1 className="font-display text-2xl font-semibold text-on-surface">告警中心</h1>
-        <p className="mt-1 text-sm text-muted">第一阶段仅展示规则模型，后续对接 vmalert 与 AlertManager。</p>
+        <p className="mt-1 text-sm text-muted">集中维护规则模型、查询条件、严重级别和通知路由。</p>
       </div>
       <DataPanel title="规则列表" meta={`${data.length} rules`}>
         <div className="overflow-auto">

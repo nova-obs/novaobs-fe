@@ -1,10 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Edit3, Plus, RefreshCw, Search, XCircle } from 'lucide-react';
+import { Bell, Cpu, Edit3, Eye, GitBranch, Plus, RefreshCw, Search, Server, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
-import type { CreateServiceInput, Service, UpdateServiceInput } from '../../services/types';
+import type { CreateServiceInput, Service, ServiceObservabilityGraph, ServiceTargetType, UpdateServiceInput } from '../../services/types';
+import { graphStatItems, targetLocationSummary, targetTypeLabel } from './servicesViewModel';
 
 const emptyForm: CreateServiceInput & { description?: string } = {
   name: '',
@@ -17,6 +19,31 @@ const emptyForm: CreateServiceInput & { description?: string } = {
   alertRoute: '',
   sloLevel: '',
   identityType: 'k8s_workload',
+};
+
+const targetAttributeFields: Record<ServiceTargetType, Array<{ key: string; label: string; placeholder: string }>> = {
+  cloud_native_workload: [
+    { key: 'k8s.cluster.name', label: 'Cluster', placeholder: 'prod-1' },
+    { key: 'k8s.namespace.name', label: 'Namespace', placeholder: 'orders' },
+    { key: 'k8s.deployment.name', label: 'Workload', placeholder: 'orders-api' },
+  ],
+  host_process: [
+    { key: 'host.name', label: 'Host', placeholder: 'vm-01' },
+    { key: 'process.executable.name', label: 'Process', placeholder: 'orders-api' },
+    { key: 'net.host.port', label: 'Port', placeholder: '8080' },
+  ],
+  physical_or_network_device: [
+    { key: 'device.name', label: 'Device', placeholder: 'edge-fw-01' },
+    { key: 'net.host.ip', label: 'IP', placeholder: '10.0.0.8' },
+    { key: 'vendor', label: 'Vendor', placeholder: 'Cisco / Huawei' },
+  ],
+};
+
+const emptyTargetForm = {
+  targetType: 'cloud_native_workload' as ServiceTargetType,
+  displayName: '',
+  environment: '',
+  identityAttributes: {} as Record<string, string>,
 };
 
 function sourceLabel(source: string) {
@@ -32,11 +59,21 @@ export function ServicesPage() {
   const [filters, setFilters] = useState({ q: '', environment: '', status: '', source: '' });
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const [targetForm, setTargetForm] = useState(emptyTargetForm);
 
   const { data = [], isLoading, error, refetch } = useQuery({
     queryKey: ['services', filters],
     queryFn: () => api.getServices(filters),
+  });
+
+  const selectedService = data.find((svc) => svc.id === selectedServiceId) ?? data[0] ?? null;
+  const activeServiceId = selectedServiceId ?? selectedService?.id ?? null;
+  const { data: graph, isLoading: graphLoading, error: graphError } = useQuery({
+    queryKey: ['service-observability-graph', activeServiceId],
+    queryFn: () => api.getServiceObservabilityGraph(activeServiceId!),
+    enabled: !!activeServiceId,
   });
 
   const createMutation = useMutation({
@@ -70,6 +107,24 @@ export function ServicesPage() {
       setEditingId(null);
       setShowForm(false);
       setForm(emptyForm);
+    },
+  });
+
+  const createTargetMutation = useMutation({
+    mutationFn: () => {
+      if (!activeServiceId) throw new Error('缺少服务 ID');
+      const attrs = Object.fromEntries(Object.entries(targetForm.identityAttributes).filter(([, value]) => value.trim() !== ''));
+      return api.createServiceTarget(activeServiceId, {
+        targetType: targetForm.targetType,
+        environment: targetForm.environment || selectedService?.environment,
+        displayName: targetForm.displayName || undefined,
+        identityAttributes: attrs,
+        matchRules: attrs,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['service-observability-graph', activeServiceId] });
+      setTargetForm(emptyTargetForm);
     },
   });
 
@@ -183,7 +238,7 @@ export function ServicesPage() {
                     <tr>
                       <th>服务</th>
                       <th>环境</th>
-                      <th>集群 / Namespace</th>
+                      <th>默认定位</th>
                       <th>Owner</th>
                       <th>来源</th>
                       <th>同步</th>
@@ -201,7 +256,7 @@ export function ServicesPage() {
                           <div className="text-[11px] text-muted">{svc.displayName}</div>
                         </td>
                         <td className="font-mono">{svc.environment}</td>
-                        <td className="font-mono text-xs">{svc.cluster} / {svc.namespace}</td>
+                        <td className="font-mono text-xs">{svc.cluster || '-'}{svc.namespace ? ` / ${svc.namespace}` : ''}</td>
                         <td className="text-sm">{svc.ownerTeam}{svc.owner ? ` · ${svc.owner}` : ''}</td>
                         <td><span className={`text-xs ${svc.source === 'cmdb' ? 'text-info' : 'text-muted'}`}>{sourceLabel(svc.source)}</span></td>
                         <td><span className={`text-xs ${svc.syncStatus === 'synced' ? 'text-emerald-400' : 'text-muted'}`}>{syncLabel(svc.syncStatus)}</span></td>
@@ -210,6 +265,7 @@ export function ServicesPage() {
                         <td><StatusBadge value={svc.status} /></td>
                         <td>
                           <button className="rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => openEdit(svc)}><Edit3 className="h-3.5 w-3.5" /></button>
+                          <button className="ml-1 rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => setSelectedServiceId(svc.id)}><Eye className="h-3.5 w-3.5" /></button>
                         </td>
                       </tr>
                     ))}
@@ -218,8 +274,136 @@ export function ServicesPage() {
               </div>
             )}
           </DataPanel>
+
+          {activeServiceId ? (
+            <ServiceGraphPanel
+              graph={graph}
+              loading={graphLoading}
+              error={graphError as Error | null}
+              targetForm={targetForm}
+              setTargetForm={setTargetForm}
+              onCreateTarget={() => createTargetMutation.mutate()}
+              creatingTarget={createTargetMutation.isPending}
+              createTargetError={createTargetMutation.error as Error | null}
+            />
+          ) : null}
         </>
       )}
     </div>
   );
+}
+
+function ServiceGraphPanel({
+  graph,
+  loading,
+  error,
+  targetForm,
+  setTargetForm,
+  onCreateTarget,
+  creatingTarget,
+  createTargetError,
+}: {
+  graph?: ServiceObservabilityGraph;
+  loading: boolean;
+  error: Error | null;
+  targetForm: typeof emptyTargetForm;
+  setTargetForm: (value: typeof emptyTargetForm) => void;
+  onCreateTarget: () => void;
+  creatingTarget: boolean;
+  createTargetError: Error | null;
+}) {
+  const fields = targetAttributeFields[targetForm.targetType];
+  return (
+    <DataPanel title="观测关系" meta={graph?.service.name ?? 'service'}>
+      {loading ? (
+        <div className="flex items-center gap-2 py-4 text-sm text-muted"><RefreshCw className="h-4 w-4 animate-spin" />加载中...</div>
+      ) : error ? (
+        <div className="flex items-center gap-2 py-4 text-sm text-red-400"><XCircle className="h-4 w-4" />{error.message}</div>
+      ) : graph ? (
+        <div className="space-y-5">
+          <div className="grid gap-3 md:grid-cols-4">
+            {graphStatItems(graph).map((item) => (
+              <div key={item.label} className="rounded border border-outline bg-surface-lowest px-3 py-2">
+                <div className="text-[11px] text-muted">{item.label}</div>
+                <div className="mt-1 font-display text-xl font-semibold text-on-surface">{item.value}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="grid gap-4 xl:grid-cols-[1.15fr_0.85fr]">
+            <div className="rounded border border-outline bg-surface-lowest">
+              <div className="flex items-center justify-between border-b border-outline px-4 py-3">
+                <div className="flex items-center gap-2 text-sm font-semibold"><Server className="h-4 w-4 text-primary" />运行目标</div>
+                <span className="text-xs text-muted">{graph.targets.length}</span>
+              </div>
+              <div className="divide-y divide-outline">
+                {graph.targets.length === 0 ? <EmptyRelation label="暂无运行目标" /> : graph.targets.map((target) => (
+                  <div key={target.id} className="px-4 py-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="font-semibold text-on-surface">{target.displayName || targetTypeLabel(target.targetType)}</div>
+                      <span className="rounded bg-surface-low px-2 py-1 text-[11px] text-muted">{targetTypeLabel(target.targetType)}</span>
+                    </div>
+                    <div className="mt-1 font-mono text-xs text-muted">{targetLocationSummary(target)}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="rounded border border-outline bg-surface-lowest p-4">
+              <div className="mb-3 flex items-center gap-2 text-sm font-semibold"><Plus className="h-4 w-4 text-primary" />新增运行目标</div>
+              <div className="grid gap-3">
+                <select className="console-input w-full" value={targetForm.targetType} onChange={(e) => setTargetForm({ ...emptyTargetForm, targetType: e.target.value as ServiceTargetType })}>
+                  <option value="cloud_native_workload">云原生工作负载</option>
+                  <option value="host_process">VM / 物理机进程</option>
+                  <option value="physical_or_network_device">物理设备 / 网络设备</option>
+                </select>
+                <input className="console-input w-full" placeholder="展示名称" value={targetForm.displayName} onChange={(e) => setTargetForm({ ...targetForm, displayName: e.target.value })} />
+                <input className="console-input w-full" placeholder="环境" value={targetForm.environment} onChange={(e) => setTargetForm({ ...targetForm, environment: e.target.value })} />
+                {fields.map((field) => (
+                  <input
+                    key={field.key}
+                    className="console-input w-full"
+                    placeholder={`${field.label}: ${field.placeholder}`}
+                    value={targetForm.identityAttributes[field.key] ?? ''}
+                    onChange={(e) => setTargetForm({ ...targetForm, identityAttributes: { ...targetForm.identityAttributes, [field.key]: e.target.value } })}
+                  />
+                ))}
+                <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={creatingTarget} onClick={onCreateTarget}>
+                  {creatingTarget ? <RefreshCw className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : null}
+                  保存目标
+                </button>
+                {createTargetError ? <p className="text-sm text-red-400">{createTargetError.message}</p> : null}
+              </div>
+            </div>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-3">
+            <RelationList icon={<Cpu className="h-4 w-4 text-primary" />} title="Agent" empty="暂无 Agent" items={graph.agents.map((agent) => ({ id: agent.instanceUid, title: agent.instanceUid, meta: `${agent.runtimeStatus} · ${agent.remoteConfigStatus || 'unset'}` }))} />
+            <RelationList icon={<GitBranch className="h-4 w-4 text-primary" />} title="Pipeline" empty="暂无 Pipeline 片段" items={graph.pipelines.sourceBreakdown.map((source) => ({ id: source.id || source.name, title: source.name || source.type, meta: `${source.type} · ${source.status || 'unknown'}` }))} />
+            <RelationList icon={<Bell className="h-4 w-4 text-primary" />} title="告警规则" empty="暂无告警规则" items={graph.alertRules.map((rule) => ({ id: rule.id, title: rule.name, meta: `${rule.severity} · ${rule.status}` }))} />
+          </div>
+        </div>
+      ) : null}
+    </DataPanel>
+  );
+}
+
+function RelationList({ icon, title, items, empty }: { icon: ReactNode; title: string; items: Array<{ id: string; title: string; meta: string }>; empty: string }) {
+  return (
+    <div className="rounded border border-outline bg-surface-lowest">
+      <div className="flex items-center gap-2 border-b border-outline px-3 py-2 text-sm font-semibold">{icon}{title}</div>
+      <div className="divide-y divide-outline">
+        {items.length === 0 ? <EmptyRelation label={empty} /> : items.map((item) => (
+          <div key={item.id} className="px-3 py-2">
+            <div className="truncate text-sm font-semibold text-on-surface">{item.title}</div>
+            <div className="mt-0.5 truncate text-[11px] text-muted">{item.meta}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function EmptyRelation({ label }: { label: string }) {
+  return <div className="px-3 py-4 text-sm text-muted">{label}</div>;
 }

@@ -1,12 +1,10 @@
 import { Link } from 'react-router-dom';
-import { Activity, ArrowRight, Bell, BookOpenCheck } from 'lucide-react';
+import { ArrowRight, BookOpenCheck } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { getOnboardingDomains } from './onboardingDomains';
 
 const icons = {
   logs: BookOpenCheck,
-  alerts: Bell,
-  metrics: Activity,
 };
 
 export function OnboardingPage() {
@@ -17,11 +15,11 @@ export function OnboardingPage() {
       <div>
         <h1 className="font-display text-2xl font-semibold text-on-surface">服务接入</h1>
         <p className="mt-1 text-sm text-muted">
-          服务接入是服务进入统一可观测性平台的总入口，按日志、告警、监控三个接入域分别治理。
+          服务接入是服务进入统一可观测性平台的总入口，当前聚焦日志采集、解析和发布闭环。
         </p>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-3">
+      <div className="grid gap-4 xl:grid-cols-2">
         {domains.map((domain) => {
           const Icon = icons[domain.id];
           const available = domain.status === 'available';
@@ -60,10 +58,9 @@ export function OnboardingPage() {
       </div>
 
       <DataPanel title="接入域边界" meta="service onboarding model">
-        <div className="grid gap-3 text-sm md:grid-cols-3">
+        <div className="grid gap-3 text-sm md:grid-cols-2">
           <Boundary title="日志接入" body="负责日志采集入口、解析、字段标准化、Pipeline 配置发布和 Agent 应用状态。" />
-          <Boundary title="告警接入" body="负责服务告警规则、路由、通知和规则验证，不复用日志 Pipeline 的接入状态。" />
-          <Boundary title="监控接入" body="负责服务指标、SLO、仪表盘和指标告警，与日志接入并列。" />
+          <Boundary title="告警规则" body="当前在告警中心维护规则模型和路由字段；告警接入向导不在主 UI 占位展示。" />
         </div>
       </DataPanel>
     </div>

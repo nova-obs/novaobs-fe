@@ -9,9 +9,8 @@ test('主导航包含第一阶段全部模块且路径唯一', () => {
     '/services',
     '/onboarding',
     '/logs',
+    '/pipelines',
     '/alerts',
-    '/metrics',
-    '/traces',
   ]);
   assert.equal(new Set(items.map((item) => item.path)).size, items.length);
 });

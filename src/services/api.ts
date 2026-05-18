@@ -13,6 +13,7 @@ import type {
   CollectorInstance,
   CollectorPlatformTemplate,
   CollectorTarget,
+  CreateServiceTargetInput,
   CreateServiceInput,
   GeneratedConfig,
   IdentitySummary,
@@ -23,6 +24,8 @@ import type {
   OverviewSummary,
   ReceiverProfile,
   Service,
+  ServiceObservabilityGraph,
+  ServiceTarget,
   ServiceEnrichmentPatch,
   ServiceOnboarding,
   ServicePipelinePublishResult,
@@ -119,6 +122,23 @@ function mapService(raw: any): Service {
     syncStatus: raw.sync_status ?? 'local',
     lastSyncedAt: raw.last_synced_at ?? undefined,
     status: raw.status ?? 'pending',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapServiceTarget(raw: any): ServiceTarget {
+  return {
+    id: String(raw.id ?? ''),
+    serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
+    targetType: raw.target_type ?? raw.targetType ?? 'cloud_native_workload',
+    environment: raw.environment ?? '',
+    displayName: raw.display_name ?? raw.displayName ?? '',
+    identityAttributes: raw.identity_attributes ?? raw.identityAttributes ?? {},
+    matchRules: raw.match_rules ?? raw.matchRules ?? {},
+    source: raw.source ?? 'manual',
+    syncStatus: raw.sync_status ?? raw.syncStatus ?? 'local',
+    lastSyncedAt: raw.last_synced_at ?? raw.lastSyncedAt ?? undefined,
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
@@ -546,6 +566,21 @@ function mapServicePipelinePublishResult(raw: any): ServicePipelinePublishResult
   };
 }
 
+function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
+  return {
+    service: mapService(raw.service ?? {}),
+    targets: Array.isArray(raw.targets) ? raw.targets.map(mapServiceTarget) : [],
+    agents: Array.isArray(raw.agents) ? raw.agents.map(mapCollectorInstance) : [],
+    pipelines: {
+      configHash: raw.pipelines?.config_hash ?? raw.pipelines?.configHash ?? '',
+      sourceBreakdown: Array.isArray(raw.pipelines?.source_breakdown) ? raw.pipelines.source_breakdown.map(mapSourceBreakdown) : [],
+      warnings: Array.isArray(raw.pipelines?.warnings) ? raw.pipelines.warnings.map(String) : [],
+      errors: Array.isArray(raw.pipelines?.errors) ? raw.pipelines.errors.map(String) : [],
+    },
+    alertRules: Array.isArray(raw.alert_rules) ? raw.alert_rules.map(mapAlertRule) : [],
+  };
+}
+
 function mapServiceParserRule(raw: any): ServiceParserRule {
   return {
     id: String(raw.id ?? ''),
@@ -655,6 +690,27 @@ export const api = {
       }),
     });
     return mapService(raw);
+  },
+  async getServiceTargets(serviceId: string): Promise<ServiceTarget[]> {
+    const raw = await request<any[]>(`/services/${serviceId}/targets`);
+    return raw.map(mapServiceTarget);
+  },
+  async createServiceTarget(serviceId: string, input: CreateServiceTargetInput): Promise<ServiceTarget> {
+    const raw = await request<any>(`/services/${serviceId}/targets`, {
+      method: 'POST',
+      body: JSON.stringify({
+        target_type: input.targetType,
+        environment: input.environment,
+        display_name: input.displayName,
+        identity_attributes: input.identityAttributes,
+        match_rules: input.matchRules ?? {},
+      }),
+    });
+    return mapServiceTarget(raw);
+  },
+  async getServiceObservabilityGraph(serviceId: string): Promise<ServiceObservabilityGraph> {
+    const raw = await request<any>(`/services/${serviceId}/observability-graph`);
+    return mapServiceObservabilityGraph(raw);
   },
   async getLogs(): Promise<LogEntry[]> {
     const raw = await request<any[] | { items?: any[] }>('/logs');
