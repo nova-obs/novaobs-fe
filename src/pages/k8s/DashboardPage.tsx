@@ -62,7 +62,21 @@ export function DashboardPage() {
           </div>
 
           <div className="relative mt-5 grid min-h-[240px] gap-4 lg:grid-cols-[minmax(0,1fr)_220px]">
-            <div className="relative overflow-hidden rounded-lg bg-white/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <div className="grid gap-2 md:hidden">
+              {[
+                ['API Server', 'unknown'],
+                ['Workloads', `${stats?.workloads ?? 47} active`],
+                ['Namespaces', `${stats?.namespaces ?? 12} domains`],
+                ['RBAC Sync', 'NovaObs policy'],
+              ].map(([label, meta]) => (
+                <div key={label} className="flex items-center justify-between rounded-lg bg-white/52 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+                  <span className="text-sm font-semibold text-on-surface">{label}</span>
+                  <span className="font-mono text-[11px] text-muted">{meta}</span>
+                </div>
+              ))}
+            </div>
+
+            <div className="relative hidden overflow-hidden rounded-lg bg-white/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] md:block">
               <svg className="absolute inset-0 h-full w-full text-primary/35" viewBox="0 0 100 100" aria-hidden="true">
                 <path d="M12 54 C24 32 38 34 48 24 C62 10 72 32 88 20" fill="none" stroke="currentColor" strokeWidth="0.55" strokeDasharray="1.5 2.5" />
                 <path d="M18 78 C30 62 42 68 54 52 C66 35 74 48 88 38" fill="none" stroke="currentColor" strokeWidth="0.55" strokeDasharray="1.5 2.5" />
