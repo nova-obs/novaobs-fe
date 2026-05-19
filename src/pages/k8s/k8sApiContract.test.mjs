@@ -241,3 +241,41 @@ test('K8s Kubeconfig 生成只返回元数据，导出单独调用', async () =>
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s 模板管理调用统一 NovaObs API 并单独渲染', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (init.method === 'POST' && String(path).endsWith('/render')) {
+      return jsonResponse({ rendered_yaml: 'kind: Deployment\nmetadata:\n  name: orders-api', audit_id: 'audit-render-1' });
+    }
+    if (init.method === 'POST') {
+      return jsonResponse({ item: { id: 'tpl-1', name: 'orders-deploy', type: 'Deployment', yaml_content: 'kind: Deployment', variables: [{ name: 'image', required: true }] }, audit_id: 'audit-create-1' });
+    }
+    if (init.method === 'DELETE') {
+      return jsonResponse({ status: 'deleted', audit_id: 'audit-delete-1' });
+    }
+    return jsonResponse([{ id: 'tpl-1', name: 'orders-deploy', type: 'Deployment', yaml_content: 'kind: Deployment', variables: [{ name: 'image', required: true }], source: 'startorch' }]);
+  };
+
+  try {
+    const templates = await k8sApi.listTemplates();
+    const created = await k8sApi.createTemplate({ name: 'orders-deploy', type: 'Deployment', yamlContent: 'kind: Deployment', variables: [{ name: 'image', description: '', required: true }] });
+    const rendered = await k8sApi.renderTemplate('tpl-1', { image: 'orders:v2' });
+    const deleted = await k8sApi.deleteTemplate('tpl-1');
+
+    assert.equal(requests[0].path, '/api/v1/k8s/templates');
+    assert.equal(requests[1].path, '/api/v1/k8s/templates');
+    assert.equal(JSON.parse(requests[1].init.body).yaml_content, 'kind: Deployment');
+    assert.equal(requests[2].path, '/api/v1/k8s/templates/render');
+    assert.equal(JSON.parse(requests[2].init.body).variables.image, 'orders:v2');
+    assert.equal(requests[3].path, '/api/v1/k8s/templates/tpl-1');
+    assert.equal(templates[0].yamlContent, 'kind: Deployment');
+    assert.equal(created.auditId, 'audit-create-1');
+    assert.equal(rendered.auditId, 'audit-render-1');
+    assert.equal(deleted.auditId, 'audit-delete-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -13,6 +13,7 @@ import { K8sPlaceholderPage } from '../pages/k8s/K8sPlaceholderPage';
 import { K8sRbacPage } from '../pages/k8s/RbacPage';
 import { K8sServiceAccountPage } from '../pages/k8s/ServiceAccountPage';
 import { K8sKubeconfigPage } from '../pages/k8s/KubeconfigPage';
+import { K8sTemplatePage } from '../pages/k8s/TemplatePage';
 import { k8sNavigationItems } from '../pages/k8s/navigation';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { OnboardingPage } from '../pages/onboarding/OnboardingPage';
@@ -39,6 +40,7 @@ const k8sChildRoutes: RouteDefinition[] = [
   { path: 'service-accounts', title: 'K8s 运维', element: <K8sServiceAccountPage /> },
   { path: 'rbac', title: 'K8s 运维', element: <K8sRbacPage /> },
   { path: 'kubeconfig', title: 'K8s 运维', element: <K8sKubeconfigPage /> },
+  { path: 'templates', title: 'K8s 运维', element: <K8sTemplatePage /> },
   ...k8sNavigationItems
     .filter((item) => (
       item.path !== '/k8s' &&
@@ -50,7 +52,8 @@ const k8sChildRoutes: RouteDefinition[] = [
       item.path !== '/k8s/certificates' &&
       item.path !== '/k8s/service-accounts' &&
       item.path !== '/k8s/rbac' &&
-      item.path !== '/k8s/kubeconfig'
+      item.path !== '/k8s/kubeconfig' &&
+      item.path !== '/k8s/templates'
     ))
     .map((item) => ({
       path: item.path.replace('/k8s/', ''),

@@ -139,6 +139,30 @@ export interface K8sKubeconfigExport {
   auditId: string;
 }
 
+export interface K8sTemplateVariable {
+  name: string;
+  description: string;
+  defaultValue?: string;
+  required: boolean;
+}
+
+export interface K8sTemplate {
+  id: string;
+  name: string;
+  type: string;
+  yamlContent: string;
+  variables: K8sTemplateVariable[];
+  description: string;
+  source: string;
+  createdBy: string;
+  updatedAt: string;
+}
+
+export interface K8sTemplateRender {
+  renderedYAML: string;
+  auditId: string;
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -305,6 +329,36 @@ function mapKubeconfigExport(raw: any): K8sKubeconfigExport {
   };
 }
 
+function mapTemplateVariable(raw: any): K8sTemplateVariable {
+  return {
+    name: raw.name ?? '',
+    description: raw.description ?? '',
+    defaultValue: raw.default_value ?? raw.defaultValue ?? undefined,
+    required: Boolean(raw.required),
+  };
+}
+
+function mapTemplate(raw: any): K8sTemplate {
+  return {
+    id: String(raw.id ?? ''),
+    name: raw.name ?? '',
+    type: raw.type ?? '',
+    yamlContent: raw.yaml_content ?? raw.yamlContent ?? '',
+    variables: Array.isArray(raw.variables) ? raw.variables.map(mapTemplateVariable) : [],
+    description: raw.description ?? '',
+    source: raw.source ?? '',
+    createdBy: raw.created_by ?? raw.createdBy ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapTemplateRender(raw: any): K8sTemplateRender {
+  return {
+    renderedYAML: raw.rendered_yaml ?? raw.renderedYAML ?? '',
+    auditId: raw.audit_id ?? raw.auditId ?? '',
+  };
+}
+
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
@@ -428,5 +482,49 @@ export const k8sApi = {
       body: JSON.stringify({ secret_id: secretId }),
     });
     return mapKubeconfigExport(raw);
+  },
+  async listTemplates(type = ''): Promise<K8sTemplate[]> {
+    const params = new URLSearchParams();
+    if (type) params.set('type', type);
+    const raw = await apiRequest<any[]>(`/k8s/templates${params.toString() ? `?${params.toString()}` : ''}`);
+    return raw.map(mapTemplate);
+  },
+  async createTemplate(input: { name: string; type: string; yamlContent: string; variables: K8sTemplateVariable[]; description?: string }): Promise<K8sWriteResult<K8sTemplate>> {
+    const raw = await apiRequest<any>('/k8s/templates', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: input.name,
+        type: input.type,
+        yaml_content: input.yamlContent,
+        variables: input.variables.map((item) => ({ name: item.name, description: item.description, default_value: item.defaultValue, required: item.required })),
+        description: input.description ?? '',
+      }),
+    });
+    return mapWriteResult(raw, mapTemplate);
+  },
+  async updateTemplate(input: { id: string; name: string; type: string; yamlContent: string; variables: K8sTemplateVariable[]; description?: string }): Promise<K8sWriteResult<K8sTemplate>> {
+    const raw = await apiRequest<any>('/k8s/templates', {
+      method: 'PUT',
+      body: JSON.stringify({
+        id: input.id,
+        name: input.name,
+        type: input.type,
+        yaml_content: input.yamlContent,
+        variables: input.variables.map((item) => ({ name: item.name, description: item.description, default_value: item.defaultValue, required: item.required })),
+        description: input.description ?? '',
+      }),
+    });
+    return mapWriteResult(raw, mapTemplate);
+  },
+  async deleteTemplate(id: string): Promise<K8sWriteResult<never>> {
+    const raw = await apiRequest<any>(`/k8s/templates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw);
+  },
+  async renderTemplate(id: string, variables: Record<string, string>): Promise<K8sTemplateRender> {
+    const raw = await apiRequest<any>('/k8s/templates/render', {
+      method: 'POST',
+      body: JSON.stringify({ id, variables }),
+    });
+    return mapTemplateRender(raw);
   },
 };

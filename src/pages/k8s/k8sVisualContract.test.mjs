@@ -14,6 +14,7 @@ const certificateSource = readFileSync(new URL('./CertificatePage.tsx', import.m
 const serviceAccountSource = readFileSync(new URL('./ServiceAccountPage.tsx', import.meta.url), 'utf8');
 const rbacPageSource = readFileSync(new URL('./RbacPage.tsx', import.meta.url), 'utf8');
 const kubeconfigSource = readFileSync(new URL('./KubeconfigPage.tsx', import.meta.url), 'utf8');
+const templateSource = readFileSync(new URL('./TemplatePage.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
@@ -91,4 +92,14 @@ test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导
   assert.equal(kubeconfigSource.includes('权限不足'), true);
   assert.equal(kubeconfigSource.includes('审计导出'), true);
   assert.equal(kubeconfigSource.includes('普通响应只返回 Secret 元数据'), true);
+});
+
+test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () => {
+  assert.equal(templateSource.includes('模板管理'), true);
+  assert.equal(templateSource.includes('/api/v1/k8s/templates'), true);
+  assert.equal(templateSource.includes('变量摘要'), true);
+  assert.equal(templateSource.includes('权限不足'), true);
+  assert.equal(templateSource.includes('操作已落审计'), true);
+  assert.equal(templateSource.includes('删除确认摘要'), true);
+  assert.equal(templateSource.includes('rendered_yaml'), true);
 });
