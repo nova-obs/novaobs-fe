@@ -9,7 +9,8 @@ export function K8sClusterPage() {
     queryFn: () => k8sApi.listClusters(),
     retry: false,
   });
-  const displayClusters = data.length ? data : fallbackClusters;
+  const useFallback = isLoading || Boolean(error);
+  const displayClusters = useFallback ? fallbackClusters : data;
 
   return (
     <div className="space-y-4">
@@ -26,31 +27,38 @@ export function K8sClusterPage() {
           </div>
         ) : null}
         <div className="overflow-auto">
-          <table className="console-table min-w-[760px] w-full">
-            <thead>
-              <tr>
-                <th>集群</th>
-                <th>版本</th>
-                <th>区域</th>
-                <th>状态</th>
-                <th>来源</th>
-              </tr>
-            </thead>
-            <tbody>
-              {displayClusters.map((cluster) => (
-                <tr key={cluster.id} className="bg-white/35 hover:bg-white/60">
-                  <td>
-                    <div className="font-semibold text-primary">{cluster.name}</div>
-                    <div className="text-[11px] text-muted">{cluster.description || cluster.id}</div>
-                  </td>
-                  <td className="font-mono text-xs">{cluster.version || '-'}</td>
-                  <td className="font-mono text-xs">{cluster.region || '-'}</td>
-                  <td><StatusPill status={cluster.status} /></td>
-                  <td className="text-xs text-muted">startorch</td>
+          {displayClusters.length ? (
+            <table className="console-table min-w-[760px] w-full">
+              <thead>
+                <tr>
+                  <th>集群</th>
+                  <th>版本</th>
+                  <th>区域</th>
+                  <th>状态</th>
+                  <th>来源</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {displayClusters.map((cluster) => (
+                  <tr key={cluster.id} className="bg-white/35 hover:bg-white/60">
+                    <td>
+                      <div className="font-semibold text-primary">{cluster.name}</div>
+                      <div className="text-[11px] text-muted">{cluster.description || cluster.id}</div>
+                    </td>
+                    <td className="font-mono text-xs">{cluster.version || '-'}</td>
+                    <td className="font-mono text-xs">{cluster.region || '-'}</td>
+                    <td><StatusPill status={cluster.status} /></td>
+                    <td className="text-xs text-muted">startorch</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <div className="font-semibold text-on-surface">暂无集群</div>
+              <p className="mt-2 text-sm text-muted">后端已联通，但当前筛选条件下没有返回 Kubernetes 集群。</p>
+            </div>
+          )}
         </div>
       </DataPanel>
     </div>
