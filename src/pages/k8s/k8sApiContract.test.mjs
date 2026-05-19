@@ -30,3 +30,23 @@ test('K8s 集群列表调用统一 NovaObs API', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s 命名空间列表调用统一 NovaObs API', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse([
+      { id: 'orders', cluster_id: 'prod', name: 'orders', status: 'active', owner: 'orders-team', phase: 'Active' },
+    ]);
+  };
+
+  try {
+    const namespaces = await k8sApi.listNamespaces('prod', 'orders');
+    assert.equal(requests[0].path, '/api/v1/k8s/namespaces?cluster_id=prod&q=orders');
+    assert.equal(namespaces[0].clusterId, 'prod');
+    assert.equal(namespaces[0].name, 'orders');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
