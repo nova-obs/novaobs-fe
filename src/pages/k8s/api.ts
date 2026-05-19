@@ -127,6 +127,18 @@ export interface K8sRBACBinding {
   updatedAt: string;
 }
 
+export interface K8sKubeconfigMetadata {
+  secretId: string;
+  fingerprint: string;
+  expiresAt: string;
+  auditId: string;
+}
+
+export interface K8sKubeconfigExport {
+  kubeconfig: string;
+  auditId: string;
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -277,6 +289,22 @@ function mapRBACBinding(raw: any): K8sRBACBinding {
   };
 }
 
+function mapKubeconfigMetadata(raw: any): K8sKubeconfigMetadata {
+  return {
+    secretId: raw.secret_id ?? raw.secretId ?? '',
+    fingerprint: raw.fingerprint ?? '',
+    expiresAt: raw.expires_at ?? raw.expiresAt ?? '',
+    auditId: raw.audit_id ?? raw.auditId ?? '',
+  };
+}
+
+function mapKubeconfigExport(raw: any): K8sKubeconfigExport {
+  return {
+    kubeconfig: raw.kubeconfig ?? '',
+    auditId: raw.audit_id ?? raw.auditId ?? '',
+  };
+}
+
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
@@ -386,5 +414,19 @@ export const k8sApi = {
     params.set('uid', input.uid);
     const raw = await apiRequest<any>(`/k8s/rbac/bindings?${params.toString()}`, { method: 'DELETE' });
     return mapWriteResult(raw);
+  },
+  async createKubeconfig(input: { clusterId: string; namespace: string; serviceAccount: string }): Promise<K8sKubeconfigMetadata> {
+    const raw = await apiRequest<any>('/k8s/kubeconfigs', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, service_account: input.serviceAccount }),
+    });
+    return mapKubeconfigMetadata(raw);
+  },
+  async exportKubeconfig(secretId: string): Promise<K8sKubeconfigExport> {
+    const raw = await apiRequest<any>('/k8s/kubeconfigs/export', {
+      method: 'POST',
+      body: JSON.stringify({ secret_id: secretId }),
+    });
+    return mapKubeconfigExport(raw);
   },
 };

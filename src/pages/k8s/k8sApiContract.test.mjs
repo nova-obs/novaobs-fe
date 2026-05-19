@@ -212,3 +212,32 @@ test('K8s RBAC Role 和 Binding 调用统一 NovaObs API', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s Kubeconfig 生成只返回元数据，导出单独调用', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (String(path).includes('/export')) {
+      return jsonResponse({ kubeconfig: 'apiVersion: v1\nkind: Config', audit_id: 'audit-export-1' });
+    }
+    return jsonResponse({ secret_id: 'secret-1', fingerprint: 'sha256:abc', expires_at: '2026-05-20T00:00:00Z', audit_id: 'audit-create-1' });
+  };
+
+  try {
+    const metadata = await k8sApi.createKubeconfig({ clusterId: 'prod', namespace: 'orders', serviceAccount: 'orders-reader' });
+    const exported = await k8sApi.exportKubeconfig('secret-1');
+
+    assert.equal(requests[0].path, '/api/v1/k8s/kubeconfigs');
+    assert.equal(requests[0].init.method, 'POST');
+    assert.equal(JSON.parse(requests[0].init.body).service_account, 'orders-reader');
+    assert.equal(requests[1].path, '/api/v1/k8s/kubeconfigs/export');
+    assert.equal(JSON.parse(requests[1].init.body).secret_id, 'secret-1');
+    assert.equal(metadata.secretId, 'secret-1');
+    assert.equal(metadata.auditId, 'audit-create-1');
+    assert.equal(exported.kubeconfig.includes('apiVersion'), true);
+    assert.equal(exported.auditId, 'audit-export-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

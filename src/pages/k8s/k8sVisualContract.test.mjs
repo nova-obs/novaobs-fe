@@ -13,6 +13,7 @@ const auditSource = readFileSync(new URL('./AuditPage.tsx', import.meta.url), 'u
 const certificateSource = readFileSync(new URL('./CertificatePage.tsx', import.meta.url), 'utf8');
 const serviceAccountSource = readFileSync(new URL('./ServiceAccountPage.tsx', import.meta.url), 'utf8');
 const rbacPageSource = readFileSync(new URL('./RbacPage.tsx', import.meta.url), 'utf8');
+const kubeconfigSource = readFileSync(new URL('./KubeconfigPage.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
@@ -82,4 +83,12 @@ test('K8s RBAC 页面展示确认摘要、权限不足态和审计结果', () =>
   assert.equal(rbacPageSource.includes('权限不足'), true);
   assert.equal(rbacPageSource.includes('操作已落审计'), true);
   assert.equal(rbacPageSource.includes('删除确认摘要'), true);
+});
+
+test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导出', () => {
+  assert.equal(kubeconfigSource.includes('Kubeconfig'), true);
+  assert.equal(kubeconfigSource.includes('Secret 元数据'), true);
+  assert.equal(kubeconfigSource.includes('权限不足'), true);
+  assert.equal(kubeconfigSource.includes('审计导出'), true);
+  assert.equal(kubeconfigSource.includes('普通响应只返回 Secret 元数据'), true);
 });
