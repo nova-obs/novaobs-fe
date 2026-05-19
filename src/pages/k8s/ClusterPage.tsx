@@ -9,16 +9,17 @@ export function K8sClusterPage() {
     queryFn: () => k8sApi.listClusters(),
     retry: false,
   });
+  const displayClusters = data.length ? data : fallbackClusters;
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
-        <ClusterMetric icon={Network} label="连接集群" value={String(data.length || 1)} meta="startorch baseline" />
+        <ClusterMetric icon={Network} label="连接集群" value={String(displayClusters.length)} meta="startorch baseline" />
         <ClusterMetric icon={Database} label="区域" value="cn-shanghai" meta="primary region" />
         <ClusterMetric icon={ShieldCheck} label="权限域" value="global" meta="NovaObs RBAC" />
       </div>
 
-      <DataPanel title="集群列表" meta={isLoading ? '加载中' : `${data.length} 个集群 · 最近 15 分钟`}>
+      <DataPanel title="集群列表" meta={isLoading ? '加载中' : `${displayClusters.length} 个集群 · 最近 15 分钟`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             集群 API 暂未连接，等待后端 `/api/v1/k8s/clusters`。
@@ -36,7 +37,7 @@ export function K8sClusterPage() {
               </tr>
             </thead>
             <tbody>
-              {(data.length ? data : fallbackClusters).map((cluster) => (
+              {displayClusters.map((cluster) => (
                 <tr key={cluster.id} className="bg-white/35 hover:bg-white/60">
                   <td>
                     <div className="font-semibold text-primary">{cluster.name}</div>
