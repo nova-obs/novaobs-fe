@@ -13,6 +13,36 @@ export function targetTypeLabel(type: ServiceTargetType | string) {
   }
 }
 
+export function targetPurposeLabel(type: ServiceTargetType | string) {
+  switch (type) {
+    case 'cloud_native_workload':
+      return '用于 Kubernetes 拓扑、Pod 日志归属和工作负载级 Pipeline 下发';
+    case 'host_process':
+      return '用于 VM / 物理机进程采集、主机日志归属和端口级排障';
+    case 'physical_or_network_device':
+      return '用于网络设备、Syslog 来源和边缘节点告警定位';
+    default:
+      return '用于把服务映射到真实运行实体，支撑采集、配置和告警归因';
+  }
+}
+
+export function runningTargetPurposeItems() {
+  return [
+    {
+      title: '定位真实运行实体',
+      description: '把服务从 CMDB 条目落到 Pod、进程、主机或网络设备，避免只看服务名却不知道日志来自哪里。',
+    },
+    {
+      title: '绑定采集与配置下发',
+      description: '为 Agent、Collector Group 和 Pipeline 提供匹配字段，决定哪些采集规则应该作用到这个服务。',
+    },
+    {
+      title: '支撑排障和告警归因',
+      description: '把日志、告警、配置 hash 和负责人串起来，帮助快速判断是服务、主机、设备还是下发配置问题。',
+    },
+  ];
+}
+
 export function targetLocationSummary(target: Pick<ServiceTarget, 'targetType' | 'identityAttributes'>) {
   const attrs = target.identityAttributes ?? {};
   if (target.targetType === 'cloud_native_workload') {

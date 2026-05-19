@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Bell, Cpu, Edit3, Eye, GitBranch, Plus, RefreshCw, Search, Server, XCircle } from 'lucide-react';
+import { Bell, Cpu, Edit3, Eye, GitBranch, Link2, Plus, RefreshCw, Search, Server, ShieldCheck, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
 import type { CreateServiceInput, Service, ServiceObservabilityGraph, ServiceTargetType, UpdateServiceInput } from '../../services/types';
-import { graphStatItems, targetLocationSummary, targetTypeLabel } from './servicesViewModel';
+import { graphStatItems, runningTargetPurposeItems, targetLocationSummary, targetPurposeLabel, targetTypeLabel } from './servicesViewModel';
 
 const emptyForm: CreateServiceInput & { description?: string } = {
   name: '',
@@ -321,6 +321,31 @@ function ServiceGraphPanel({
         <div className="flex items-center gap-2 py-4 text-sm text-red-400"><XCircle className="h-4 w-4" />{error.message}</div>
       ) : graph ? (
         <div className="space-y-5">
+          <div className="rounded-lg bg-primary-soft/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <div className="flex items-start gap-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/70 text-primary">
+                <Link2 className="h-4 w-4" />
+              </div>
+              <div>
+                <div className="font-display text-sm font-semibold text-on-surface">运行目标的作用</div>
+                <p className="mt-1 text-xs leading-5 text-muted">
+                  运行目标把服务目录里的业务服务映射到真实运行实体，是日志归属、Agent 绑定、Pipeline 下发和告警定位的共同锚点。
+                </p>
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
+              {runningTargetPurposeItems().map((item) => (
+                <div key={item.title} className="rounded-lg bg-white/58 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+                  <div className="flex items-center gap-2 text-xs font-semibold text-on-surface">
+                    <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                    {item.title}
+                  </div>
+                  <p className="mt-1 text-[11px] leading-4 text-muted">{item.description}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+
           <div className="grid gap-3 md:grid-cols-4">
             {graphStatItems(graph).map((item) => (
               <div key={item.label} className="rounded border border-outline bg-surface-lowest px-3 py-2">
@@ -344,6 +369,7 @@ function ServiceGraphPanel({
                       <span className="rounded bg-surface-low px-2 py-1 text-[11px] text-muted">{targetTypeLabel(target.targetType)}</span>
                     </div>
                     <div className="mt-1 font-mono text-xs text-muted">{targetLocationSummary(target)}</div>
+                    <div className="mt-2 text-[11px] leading-4 text-muted">{targetPurposeLabel(target.targetType)}</div>
                   </div>
                 ))}
               </div>
