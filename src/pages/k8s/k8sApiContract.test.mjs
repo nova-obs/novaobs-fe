@@ -50,3 +50,27 @@ test('K8s 命名空间列表调用统一 NovaObs API', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s 资源列表调用统一 NovaObs API 并映射完整身份', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse([
+      {
+        identity: { cluster_id: 'prod', namespace: 'orders', api_version: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders' },
+        status: 'warning',
+        labels: { app: 'orders-api' },
+      },
+    ]);
+  };
+
+  try {
+    const resources = await k8sApi.listResources({ clusterId: 'prod', namespace: 'orders', kind: 'Deployment' });
+    assert.equal(requests[0].path, '/api/v1/k8s/resources?cluster_id=prod&namespace=orders&kind=Deployment');
+    assert.equal(resources[0].identity.uid, 'uid-orders');
+    assert.equal(resources[0].identity.apiVersion, 'apps/v1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

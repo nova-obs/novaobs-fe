@@ -5,6 +5,7 @@ import { K8sClusterPage } from '../pages/k8s/ClusterPage';
 import { DashboardPage } from '../pages/k8s/DashboardPage';
 import { K8sOpsLayout } from '../pages/k8s/K8sOpsLayout';
 import { K8sNamespacePage } from '../pages/k8s/NamespacePage';
+import { K8sResourcePage } from '../pages/k8s/ResourcePage';
 import { K8sPlaceholderPage } from '../pages/k8s/K8sPlaceholderPage';
 import { k8sNavigationItems } from '../pages/k8s/navigation';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
@@ -25,8 +26,9 @@ const k8sChildRoutes: RouteDefinition[] = [
   { index: true, title: 'K8s 运维', element: <DashboardPage /> },
   { path: 'clusters', title: 'K8s 运维', element: <K8sClusterPage /> },
   { path: 'namespaces', title: 'K8s 运维', element: <K8sNamespacePage /> },
+  { path: 'resource-view', title: 'K8s 运维', element: <K8sResourcePage /> },
   ...k8sNavigationItems
-    .filter((item) => item.path !== '/k8s' && item.path !== '/k8s/clusters' && item.path !== '/k8s/namespaces')
+    .filter((item) => item.path !== '/k8s' && item.path !== '/k8s/clusters' && item.path !== '/k8s/namespaces' && item.path !== '/k8s/resource-view')
     .map((item) => ({
       path: item.path.replace('/k8s/', ''),
       title: 'K8s 运维',

@@ -19,6 +19,22 @@ export interface K8sNamespace {
   updatedAt: string;
 }
 
+export interface K8sResourceIdentity {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  uid: string;
+}
+
+export interface K8sResourceSummary {
+  identity: K8sResourceIdentity;
+  status: string;
+  labels: Record<string, string>;
+  updatedAt: string;
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -42,6 +58,26 @@ function mapNamespace(raw: any): K8sNamespace {
   };
 }
 
+function mapResourceIdentity(raw: any): K8sResourceIdentity {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    apiVersion: raw.api_version ?? raw.apiVersion ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    uid: raw.uid ?? '',
+  };
+}
+
+function mapResource(raw: any): K8sResourceSummary {
+  return {
+    identity: mapResourceIdentity(raw.identity ?? {}),
+    status: raw.status ?? 'unknown',
+    labels: raw.labels ?? {},
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
@@ -54,5 +90,14 @@ export const k8sApi = {
     if (query.trim()) params.set('q', query.trim());
     const raw = await apiRequest<any[]>(`/k8s/namespaces?${params.toString()}`);
     return raw.map(mapNamespace);
+  },
+  async listResources(filter: { clusterId?: string; namespace?: string; kind?: string; query?: string } = {}): Promise<K8sResourceSummary[]> {
+    const params = new URLSearchParams();
+    if (filter.clusterId) params.set('cluster_id', filter.clusterId);
+    if (filter.namespace) params.set('namespace', filter.namespace);
+    if (filter.kind) params.set('kind', filter.kind);
+    if (filter.query?.trim()) params.set('q', filter.query.trim());
+    const raw = await apiRequest<any[]>(`/k8s/resources?${params.toString()}`);
+    return raw.map(mapResource);
   },
 };
