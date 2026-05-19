@@ -74,3 +74,26 @@ test('K8s 资源列表调用统一 NovaObs API 并映射完整身份', async () 
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s 部署历史和审计事件调用统一 NovaObs API', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (String(path).includes('audit-events')) {
+      return jsonResponse([{ id: 'audit-1', cluster_id: 'prod', namespace: 'orders', resource_kind: 'Deployment', resource_name: 'orders-api', action: 'rollout.pause', actor: 'platform-admin', trace_id: 'trace-1' }]);
+    }
+    return jsonResponse([{ id: 'deploy-1', cluster_id: 'prod', namespace: 'orders', workload: 'orders-api', action: 'rollout.pause', revision: 'rev-1', actor: 'platform-admin' }]);
+  };
+
+  try {
+    const history = await k8sApi.listDeploymentHistory('prod');
+    const audits = await k8sApi.listAuditEvents('prod');
+    assert.equal(requests[0].path, '/api/v1/k8s/deployment-history?cluster_id=prod');
+    assert.equal(requests[1].path, '/api/v1/k8s/audit-events?cluster_id=prod');
+    assert.equal(history[0].workload, 'orders-api');
+    assert.equal(audits[0].traceId, 'trace-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -35,6 +35,32 @@ export interface K8sResourceSummary {
   updatedAt: string;
 }
 
+export interface K8sDeploymentHistory {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  workload: string;
+  action: string;
+  status: string;
+  revision: string;
+  actor: string;
+  startedAt: string;
+  finishedAt: string;
+}
+
+export interface K8sAuditEvent {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  resourceKind: string;
+  resourceName: string;
+  action: string;
+  actor: string;
+  status: string;
+  traceId: string;
+  createdAt: string;
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -78,6 +104,36 @@ function mapResource(raw: any): K8sResourceSummary {
   };
 }
 
+function mapDeploymentHistory(raw: any): K8sDeploymentHistory {
+  return {
+    id: String(raw.id ?? ''),
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    workload: raw.workload ?? '',
+    action: raw.action ?? '',
+    status: raw.status ?? 'unknown',
+    revision: raw.revision ?? '',
+    actor: raw.actor ?? '',
+    startedAt: raw.started_at ?? raw.startedAt ?? '',
+    finishedAt: raw.finished_at ?? raw.finishedAt ?? '',
+  };
+}
+
+function mapAuditEvent(raw: any): K8sAuditEvent {
+  return {
+    id: String(raw.id ?? ''),
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    resourceKind: raw.resource_kind ?? raw.resourceKind ?? '',
+    resourceName: raw.resource_name ?? raw.resourceName ?? '',
+    action: raw.action ?? '',
+    actor: raw.actor ?? '',
+    status: raw.status ?? 'unknown',
+    traceId: raw.trace_id ?? raw.traceId ?? '',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+  };
+}
+
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
@@ -99,5 +155,13 @@ export const k8sApi = {
     if (filter.query?.trim()) params.set('q', filter.query.trim());
     const raw = await apiRequest<any[]>(`/k8s/resources?${params.toString()}`);
     return raw.map(mapResource);
+  },
+  async listDeploymentHistory(clusterId = 'prod'): Promise<K8sDeploymentHistory[]> {
+    const raw = await apiRequest<any[]>(`/k8s/deployment-history?cluster_id=${encodeURIComponent(clusterId)}`);
+    return raw.map(mapDeploymentHistory);
+  },
+  async listAuditEvents(clusterId = 'prod'): Promise<K8sAuditEvent[]> {
+    const raw = await apiRequest<any[]>(`/k8s/audit-events?cluster_id=${encodeURIComponent(clusterId)}`);
+    return raw.map(mapAuditEvent);
   },
 };

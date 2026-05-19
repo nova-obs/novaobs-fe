@@ -8,6 +8,8 @@ const navigationSource = readFileSync(new URL('./navigation.ts', import.meta.url
 const clusterSource = readFileSync(new URL('./ClusterPage.tsx', import.meta.url), 'utf8');
 const namespaceSource = readFileSync(new URL('./NamespacePage.tsx', import.meta.url), 'utf8');
 const resourceSource = readFileSync(new URL('./ResourcePage.tsx', import.meta.url), 'utf8');
+const deploymentHistorySource = readFileSync(new URL('./DeploymentHistoryPage.tsx', import.meta.url), 'utf8');
+const auditSource = readFileSync(new URL('./AuditPage.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
@@ -41,4 +43,12 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('API Version'), true);
   assert.equal(resourceSource.includes('UID'), true);
   assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), true);
+});
+
+test('K8s 部署历史和审计页面展示追踪上下文', () => {
+  assert.equal(deploymentHistorySource.includes('部署历史'), true);
+  assert.equal(deploymentHistorySource.includes('/api/v1/k8s/deployment-history'), true);
+  assert.equal(auditSource.includes('操作审计'), true);
+  assert.equal(auditSource.includes('Trace'), true);
+  assert.equal(auditSource.includes('/api/v1/k8s/audit-events'), true);
 });
