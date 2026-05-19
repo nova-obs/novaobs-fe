@@ -167,3 +167,48 @@ test('K8s ServiceAccount 写操作调用统一 NovaObs API 并传递审计上下
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s RBAC Role 和 Binding 调用统一 NovaObs API', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (init.method === 'POST' && String(path).includes('/roles')) {
+      return jsonResponse({ item: { id: 'role-1', cluster_id: 'prod', namespace: 'orders', kind: 'Role', name: 'orders-reader', uid: 'uid-role', rules: [{ api_groups: [''], resources: ['pods'], verbs: ['get'] }] }, audit_id: 'audit-role-1' });
+    }
+    if (init.method === 'POST' && String(path).includes('/bindings')) {
+      return jsonResponse({ item: { id: 'binding-1', cluster_id: 'prod', namespace: 'orders', kind: 'RoleBinding', name: 'orders-reader-binding', uid: 'uid-binding', role_ref: { kind: 'Role', name: 'orders-reader' }, subjects: [{ kind: 'ServiceAccount', name: 'orders-reader', namespace: 'orders' }] }, audit_id: 'audit-binding-1' });
+    }
+    if (init.method === 'DELETE') {
+      return jsonResponse({ status: 'deleted', audit_id: 'audit-binding-delete-1' });
+    }
+    if (String(path).includes('/bindings')) {
+      return jsonResponse([{ id: 'binding-1', cluster_id: 'prod', namespace: 'orders', kind: 'RoleBinding', name: 'orders-reader-binding', uid: 'uid-binding', role_ref: { kind: 'Role', name: 'orders-reader' }, subjects: [] }]);
+    }
+    return jsonResponse([{ id: 'role-1', cluster_id: 'prod', namespace: 'orders', kind: 'Role', name: 'orders-reader', uid: 'uid-role', rules: [{ api_groups: [''], resources: ['pods'], verbs: ['get'] }] }]);
+  };
+
+  try {
+    const roles = await k8sApi.listRBACRoles('prod', 'orders');
+    const bindings = await k8sApi.listRBACBindings('prod', 'orders');
+    const role = await k8sApi.createRBACRole({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader' });
+    const binding = await k8sApi.createRBACBinding({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader-binding', roleName: 'orders-reader', serviceAccountName: 'orders-reader' });
+    const deleted = await k8sApi.deleteRBACBinding({ clusterId: 'prod', namespace: 'orders', kind: 'RoleBinding', name: 'orders-reader-binding', uid: 'uid-binding' });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/rbac/roles?cluster_id=prod&namespace=orders');
+    assert.equal(requests[1].path, '/api/v1/k8s/rbac/bindings?cluster_id=prod&namespace=orders');
+    assert.equal(requests[2].path, '/api/v1/k8s/rbac/roles');
+    assert.equal(requests[2].init.method, 'POST');
+    assert.equal(JSON.parse(requests[2].init.body).rules[0].resources[0], 'pods');
+    assert.equal(requests[3].path, '/api/v1/k8s/rbac/bindings');
+    assert.equal(JSON.parse(requests[3].init.body).role_ref.name, 'orders-reader');
+    assert.equal(requests[4].path, '/api/v1/k8s/rbac/bindings?cluster_id=prod&namespace=orders&kind=RoleBinding&name=orders-reader-binding&uid=uid-binding');
+    assert.equal(roles[0].rules[0].apiGroups[0], '');
+    assert.equal(bindings[0].roleRef.name, 'orders-reader');
+    assert.equal(role.auditId, 'audit-role-1');
+    assert.equal(binding.auditId, 'audit-binding-1');
+    assert.equal(deleted.auditId, 'audit-binding-delete-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

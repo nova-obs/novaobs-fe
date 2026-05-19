@@ -90,6 +90,43 @@ export interface K8sWriteResult<T> {
   auditId: string;
 }
 
+export interface K8sRBACRule {
+  apiGroups: string[];
+  resources: string[];
+  verbs: string[];
+}
+
+export interface K8sRBACRole {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  kind: string;
+  name: string;
+  uid: string;
+  rules: K8sRBACRule[];
+  source: string;
+  updatedAt: string;
+}
+
+export interface K8sRBACSubject {
+  kind: string;
+  name: string;
+  namespace: string;
+}
+
+export interface K8sRBACBinding {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  kind: string;
+  name: string;
+  uid: string;
+  roleRef: { kind: string; name: string };
+  subjects: K8sRBACSubject[];
+  source: string;
+  updatedAt: string;
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -198,6 +235,48 @@ function mapWriteResult<T>(raw: any, mapItem?: (value: any) => T): K8sWriteResul
   };
 }
 
+function mapRBACRule(raw: any): K8sRBACRule {
+  return {
+    apiGroups: Array.isArray(raw.api_groups ?? raw.apiGroups) ? (raw.api_groups ?? raw.apiGroups).map(String) : [],
+    resources: Array.isArray(raw.resources) ? raw.resources.map(String) : [],
+    verbs: Array.isArray(raw.verbs) ? raw.verbs.map(String) : [],
+  };
+}
+
+function mapRBACRole(raw: any): K8sRBACRole {
+  return {
+    id: String(raw.id ?? ''),
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    uid: raw.uid ?? '',
+    rules: Array.isArray(raw.rules) ? raw.rules.map(mapRBACRule) : [],
+    source: raw.source ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapRBACBinding(raw: any): K8sRBACBinding {
+  return {
+    id: String(raw.id ?? ''),
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    uid: raw.uid ?? '',
+    roleRef: {
+      kind: raw.role_ref?.kind ?? raw.roleRef?.kind ?? '',
+      name: raw.role_ref?.name ?? raw.roleRef?.name ?? '',
+    },
+    subjects: Array.isArray(raw.subjects)
+      ? raw.subjects.map((item: any) => ({ kind: item.kind ?? '', name: item.name ?? '', namespace: item.namespace ?? '' }))
+      : [],
+    source: raw.source ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
@@ -255,6 +334,57 @@ export const k8sApi = {
     const raw = await apiRequest<any>(`/k8s/service-accounts?${params.toString()}`, {
       method: 'DELETE',
     });
+    return mapWriteResult(raw);
+  },
+  async listRBACRoles(clusterId = 'prod', namespace = 'orders'): Promise<K8sRBACRole[]> {
+    const params = new URLSearchParams();
+    if (clusterId) params.set('cluster_id', clusterId);
+    if (namespace) params.set('namespace', namespace);
+    const raw = await apiRequest<any[]>(`/k8s/rbac/roles?${params.toString()}`);
+    return raw.map(mapRBACRole);
+  },
+  async listRBACBindings(clusterId = 'prod', namespace = 'orders'): Promise<K8sRBACBinding[]> {
+    const params = new URLSearchParams();
+    if (clusterId) params.set('cluster_id', clusterId);
+    if (namespace) params.set('namespace', namespace);
+    const raw = await apiRequest<any[]>(`/k8s/rbac/bindings?${params.toString()}`);
+    return raw.map(mapRBACBinding);
+  },
+  async createRBACRole(input: { clusterId: string; namespace: string; name: string }): Promise<K8sWriteResult<K8sRBACRole>> {
+    const raw = await apiRequest<any>('/k8s/rbac/roles', {
+      method: 'POST',
+      body: JSON.stringify({
+        cluster_id: input.clusterId,
+        namespace: input.namespace,
+        kind: 'Role',
+        name: input.name,
+        rules: [{ api_groups: [''], resources: ['pods'], verbs: ['get', 'list'] }],
+      }),
+    });
+    return mapWriteResult(raw, mapRBACRole);
+  },
+  async createRBACBinding(input: { clusterId: string; namespace: string; name: string; roleName: string; serviceAccountName: string }): Promise<K8sWriteResult<K8sRBACBinding>> {
+    const raw = await apiRequest<any>('/k8s/rbac/bindings', {
+      method: 'POST',
+      body: JSON.stringify({
+        cluster_id: input.clusterId,
+        namespace: input.namespace,
+        kind: 'RoleBinding',
+        name: input.name,
+        role_ref: { kind: 'Role', name: input.roleName },
+        subjects: [{ kind: 'ServiceAccount', name: input.serviceAccountName, namespace: input.namespace }],
+      }),
+    });
+    return mapWriteResult(raw, mapRBACBinding);
+  },
+  async deleteRBACBinding(input: { clusterId: string; namespace: string; kind: string; name: string; uid: string }): Promise<K8sWriteResult<never>> {
+    const params = new URLSearchParams();
+    params.set('cluster_id', input.clusterId);
+    params.set('namespace', input.namespace);
+    params.set('kind', input.kind);
+    params.set('name', input.name);
+    params.set('uid', input.uid);
+    const raw = await apiRequest<any>(`/k8s/rbac/bindings?${params.toString()}`, { method: 'DELETE' });
     return mapWriteResult(raw);
   },
 };
