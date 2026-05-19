@@ -70,5 +70,6 @@ test('K8s ServiceAccount 页面展示 RBAC 权限不足态和审计结果', () =
   assert.equal(serviceAccountSource.includes('/api/v1/k8s/service-accounts'), true);
   assert.equal(serviceAccountSource.includes('权限不足'), true);
   assert.equal(serviceAccountSource.includes('操作已落审计'), true);
+  assert.equal(serviceAccountSource.includes('删除确认摘要'), true);
   assert.equal(serviceAccountSource.includes('不会在页面、日志或响应中展示 token'), true);
 });

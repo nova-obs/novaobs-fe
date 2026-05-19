@@ -242,7 +242,6 @@ export const k8sApi = {
   async createServiceAccount(input: { clusterId: string; namespace: string; name: string }): Promise<K8sWriteResult<K8sServiceAccount>> {
     const raw = await apiRequest<any>('/k8s/service-accounts', {
       method: 'POST',
-      headers: { 'X-NovaObs-User': 'user-1' },
       body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, name: input.name }),
     });
     return mapWriteResult(raw, mapServiceAccount);
@@ -255,7 +254,6 @@ export const k8sApi = {
     params.set('uid', input.uid);
     const raw = await apiRequest<any>(`/k8s/service-accounts?${params.toString()}`, {
       method: 'DELETE',
-      headers: { 'X-NovaObs-User': 'user-1' },
     });
     return mapWriteResult(raw);
   },

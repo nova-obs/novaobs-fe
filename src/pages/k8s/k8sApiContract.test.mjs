@@ -154,10 +154,11 @@ test('K8s ServiceAccount 写操作调用统一 NovaObs API 并传递审计上下
     assert.equal(requests[0].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders');
     assert.equal(requests[1].path, '/api/v1/k8s/service-accounts');
     assert.equal(requests[1].init.method, 'POST');
-    assert.equal(requests[1].init.headers['X-NovaObs-User'], 'user-1');
+    assert.equal('X-NovaObs-User' in requests[1].init.headers, false);
     assert.equal(JSON.parse(requests[1].init.body).name, 'orders-reader');
     assert.equal(requests[2].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders&name=orders-reader&uid=uid-1');
     assert.equal(requests[2].init.method, 'DELETE');
+    assert.equal('X-NovaObs-User' in requests[2].init.headers, false);
     assert.equal(accounts[0].uid, 'uid-1');
     assert.equal(created.auditId, 'audit-create-1');
     assert.equal(created.item.uid, 'uid-1');

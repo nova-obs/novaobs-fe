@@ -135,7 +135,15 @@ export function K8sServiceAccountPage() {
             <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               <div className="font-mono">cluster={DEFAULT_CLUSTER}</div>
               <div className="font-mono">namespace={DEFAULT_NAMESPACE}</div>
+              <div className="font-mono">name={name || '-'}</div>
               <div className="mt-2">不会在页面、日志或响应中展示 token。</div>
+            </div>
+            <div className="mt-3 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <div className="font-semibold text-on-surface">删除确认摘要</div>
+              <div className="mt-2 font-mono">cluster={currentTarget?.clusterId ?? '-'}</div>
+              <div className="font-mono">namespace={currentTarget?.namespace ?? '-'}</div>
+              <div className="font-mono">name={currentTarget?.name ?? '-'}</div>
+              <div className="font-mono">uid={currentTarget?.uid ?? '-'}</div>
             </div>
             <div className="mt-4 flex gap-2">
               <button
