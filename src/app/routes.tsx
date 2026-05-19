@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
 import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
+import { K8sClusterPage } from '../pages/k8s/ClusterPage';
 import { DashboardPage } from '../pages/k8s/DashboardPage';
 import { K8sOpsLayout } from '../pages/k8s/K8sOpsLayout';
 import { K8sPlaceholderPage } from '../pages/k8s/K8sPlaceholderPage';
@@ -21,8 +22,9 @@ export interface RouteDefinition {
 
 const k8sChildRoutes: RouteDefinition[] = [
   { index: true, title: 'K8s 运维', element: <DashboardPage /> },
+  { path: 'clusters', title: 'K8s 运维', element: <K8sClusterPage /> },
   ...k8sNavigationItems
-    .filter((item) => item.path !== '/k8s')
+    .filter((item) => item.path !== '/k8s' && item.path !== '/k8s/clusters')
     .map((item) => ({
       path: item.path.replace('/k8s/', ''),
       title: 'K8s 运维',
