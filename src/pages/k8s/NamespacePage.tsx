@@ -3,26 +3,13 @@ import { Folder, Layers3, ShieldCheck } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from './api';
 
-const fallbackNamespaces = [
-  {
-    id: 'orders',
-    clusterId: 'prod',
-    name: 'orders',
-    status: 'unknown',
-    owner: 'orders-team',
-    phase: 'Active',
-    updatedAt: '',
-  },
-];
-
 export function K8sNamespacePage() {
   const { data = [], isLoading, error } = useQuery({
     queryKey: ['k8s-namespaces', 'prod'],
     queryFn: () => k8sApi.listNamespaces('prod'),
     retry: false,
   });
-  const useFallback = isLoading || Boolean(error);
-  const namespaces = useFallback ? fallbackNamespaces : data;
+  const namespaces = data;
 
   return (
     <div className="space-y-4">
@@ -33,12 +20,17 @@ export function K8sNamespacePage() {
       </div>
 
       <DataPanel title="命名空间列表" meta={`${namespaces.length} 个命名空间 · 最近 15 分钟`}>
+        {isLoading ? (
+          <div className="mb-3 rounded-lg bg-white/45 px-3 py-2 text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+            正在从 `/api/v1/k8s/namespaces` 读取命名空间。
+          </div>
+        ) : null}
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             命名空间 API 暂未连接，等待后端 `/api/v1/k8s/namespaces`。
           </div>
         ) : null}
-        {namespaces.length ? (
+        {!isLoading && !error && namespaces.length ? (
           <div className="overflow-auto">
             <table className="console-table min-w-[760px] w-full">
               <thead>
@@ -68,12 +60,13 @@ export function K8sNamespacePage() {
               </tbody>
             </table>
           </div>
-        ) : (
+        ) : null}
+        {!isLoading && !error && !namespaces.length ? (
           <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
             <div className="font-semibold text-on-surface">暂无命名空间</div>
             <p className="mt-2 text-sm text-muted">后端已联通，但当前集群没有返回 Kubernetes 命名空间。</p>
           </div>
-        )}
+        ) : null}
       </DataPanel>
     </div>
   );
