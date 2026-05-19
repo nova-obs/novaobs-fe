@@ -1,7 +1,10 @@
 import type { ReactNode } from 'react';
 import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
+import { DashboardPage } from '../pages/k8s/DashboardPage';
 import { K8sOpsLayout } from '../pages/k8s/K8sOpsLayout';
+import { K8sPlaceholderPage } from '../pages/k8s/K8sPlaceholderPage';
+import { k8sNavigationItems } from '../pages/k8s/navigation';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { OnboardingPage } from '../pages/onboarding/OnboardingPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
@@ -9,10 +12,23 @@ import { PipelinesPage } from '../pages/pipelines/PipelinesPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
 
 export interface RouteDefinition {
-  path: string;
+  path?: string;
+  index?: boolean;
   title: string;
   element: ReactNode;
+  children?: RouteDefinition[];
 }
+
+const k8sChildRoutes: RouteDefinition[] = [
+  { index: true, title: 'K8s 运维', element: <DashboardPage /> },
+  ...k8sNavigationItems
+    .filter((item) => item.path !== '/k8s')
+    .map((item) => ({
+      path: item.path.replace('/k8s/', ''),
+      title: 'K8s 运维',
+      element: <K8sPlaceholderPage title={item.label} />,
+    })),
+];
 
 export const routeDefinitions: RouteDefinition[] = [
   { path: '/', title: '平台总览', element: <OverviewPage /> },
@@ -20,7 +36,7 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/onboarding', title: '服务接入', element: <OnboardingPage /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace /> },
   { path: '/pipelines', title: '日志 Pipeline', element: <PipelinesPage /> },
-  { path: '/k8s/*', title: 'K8s 运维', element: <K8sOpsLayout /> },
+  { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },
   { path: '/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },
   { path: '/alerts', title: '告警中心', element: <AlertsPage /> },
 ];
@@ -29,11 +45,12 @@ export const getRouteTitle = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
   if (normalizedPath.startsWith('/agents/')) return 'Agent Detail';
   const route = routeDefinitions.find((item) => {
-    if (item.path.endsWith('/*')) {
-      const basePath = item.path.slice(0, -2);
-      return normalizedPath === basePath || normalizedPath.startsWith(`${basePath}/`);
+    if (!item.path) {
+      return false;
     }
-    return item.path === normalizedPath;
+    return item.path === '/'
+      ? normalizedPath === '/'
+      : normalizedPath === item.path || normalizedPath.startsWith(`${item.path}/`);
   });
   return route?.title ?? '平台总览';
 };

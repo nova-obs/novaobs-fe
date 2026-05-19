@@ -9,10 +9,17 @@ test('路由定义覆盖主路径', () => {
     '/onboarding',
     '/logs',
     '/pipelines',
-    '/k8s/*',
+    '/k8s',
     '/agents/:uid',
     '/alerts',
   ]);
+});
+
+test('K8s 运维使用嵌套路由承载模块子页面', () => {
+  const route = routeDefinitions.find((item) => item.path === '/k8s');
+  assert.equal(route?.children?.[0].index, true);
+  assert.equal(route?.children?.some((item) => item.path === 'namespaces'), true);
+  assert.equal(route?.children?.some((item) => item.path === 'rbac'), true);
 });
 
 test('日志 Pipeline 保留独立入口，旧接入入口已移除', () => {
