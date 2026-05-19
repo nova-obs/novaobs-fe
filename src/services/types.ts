@@ -545,3 +545,41 @@ export interface OverviewSummary {
   healthyPipelineCount: number;
   activeAlertCount: number;
 }
+
+export type K8sHealthStatus = 'healthy' | 'warning' | 'unknown' | 'failed';
+export type K8sSyncStatus = 'applied' | 'pending' | 'unknown' | 'failed';
+
+export interface K8sPodStats {
+  total: number;
+  ready: number;
+  warning: number;
+}
+
+export interface K8sDashboardStats {
+  clusterId: string;
+  health: K8sHealthStatus;
+  namespaces: number;
+  workloads: number;
+  pods: K8sPodStats;
+}
+
+export interface K8sDashboardSignal {
+  key: string;
+  label: string;
+  status: K8sHealthStatus;
+  source: string;
+  checkedAt: string;
+}
+
+export interface K8sDashboardSyncState {
+  status: K8sSyncStatus;
+  source: string;
+  timeWindow: string;
+  lastSyncedAt: string;
+}
+
+export interface K8sDashboardSnapshot {
+  stats: K8sDashboardStats;
+  signals: K8sDashboardSignal[];
+  sync: K8sDashboardSyncState;
+}

@@ -17,6 +17,7 @@ import type {
   CreateServiceInput,
   GeneratedConfig,
   IdentitySummary,
+  K8sDashboardSnapshot,
   LogEntry,
   OnboardingWorkspace,
   OpAMPAgent,
@@ -98,6 +99,37 @@ function mapOverview(raw: any): OverviewSummary {
     logThroughputPerMinute: raw.log_throughput_per_minute ?? raw.logThroughputPerMinute ?? 0,
     healthyPipelineCount: raw.healthy_pipeline_count ?? raw.healthyPipelineCount ?? 0,
     activeAlertCount: raw.active_alert_count ?? raw.activeAlertCount ?? raw.alerts ?? 0,
+  };
+}
+
+function mapK8sDashboardSnapshot(raw: any): K8sDashboardSnapshot {
+  return {
+    stats: {
+      clusterId: String(raw.stats?.cluster_id ?? raw.stats?.clusterId ?? ''),
+      health: raw.stats?.health ?? 'unknown',
+      namespaces: raw.stats?.namespaces ?? 0,
+      workloads: raw.stats?.workloads ?? 0,
+      pods: {
+        total: raw.stats?.pods?.total ?? 0,
+        ready: raw.stats?.pods?.ready ?? 0,
+        warning: raw.stats?.pods?.warning ?? 0,
+      },
+    },
+    signals: Array.isArray(raw.signals)
+      ? raw.signals.map((signal: any) => ({
+        key: String(signal.key ?? ''),
+        label: signal.label ?? '',
+        status: signal.status ?? 'unknown',
+        source: signal.source ?? '',
+        checkedAt: signal.checked_at ?? signal.checkedAt ?? '',
+      }))
+      : [],
+    sync: {
+      status: raw.sync?.status ?? 'unknown',
+      source: raw.sync?.source ?? 'startorch',
+      timeWindow: raw.sync?.time_window ?? raw.sync?.timeWindow ?? '最近 15 分钟',
+      lastSyncedAt: raw.sync?.last_synced_at ?? raw.sync?.lastSyncedAt ?? '',
+    },
   };
 }
 
@@ -1014,5 +1046,9 @@ export const api = {
   async getAlertRules(): Promise<AlertRule[]> {
     const raw = await request<any[]>('/alert-rules');
     return raw.map(mapAlertRule);
+  },
+  async getK8sDashboard(clusterId = 'prod'): Promise<K8sDashboardSnapshot> {
+    const raw = await request<any>(`/k8sops/dashboard?cluster_id=${encodeURIComponent(clusterId)}`);
+    return mapK8sDashboardSnapshot(raw);
   },
 };

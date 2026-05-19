@@ -181,6 +181,20 @@ test('getServices 支持查询参数', async () => {
   assert.ok(request.path.includes('status=active'));
 });
 
+test('获取 K8s Dashboard 时调用统一 K8sOps API', async () => {
+  const request = await captureRequest(
+    () => api.getK8sDashboard('prod'),
+    {
+      stats: { cluster_id: 'prod', health: 'unknown', namespaces: 12, workloads: 47, pods: { total: 128, ready: 109, warning: 7 } },
+      signals: [{ key: 'api-server', label: 'API Server', status: 'unknown', source: 'startorch', checked_at: '2026-05-19T10:30:00Z' }],
+      sync: { status: 'unknown', source: 'startorch', time_window: '最近 15 分钟', last_synced_at: '2026-05-19T10:30:00Z' },
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/k8sops/dashboard?cluster_id=prod');
+  assert.equal(request.init.method, undefined);
+});
+
 test('校验 Collector Group 配置时调用 validate 接口', async () => {
   const request = await captureRequest(
     () => api.validateCollectorGroupConfig('507f1f77bcf86cd799439013'),

@@ -10,6 +10,7 @@ test('主导航包含第一阶段全部模块且路径唯一', () => {
     '/onboarding',
     '/logs',
     '/pipelines',
+    '/k8s',
     '/alerts',
   ]);
   assert.equal(new Set(items.map((item) => item.path)).size, items.length);
@@ -17,5 +18,6 @@ test('主导航包含第一阶段全部模块且路径唯一', () => {
 
 test('根据路径解析当前导航项', () => {
   assert.equal(getNavigationByPath('/logs?level=error')?.id, 'logs');
+  assert.equal(getNavigationByPath('/k8s/namespaces')?.id, 'k8s');
   assert.equal(getNavigationByPath('/unknown'), undefined);
 });
