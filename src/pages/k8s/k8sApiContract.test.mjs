@@ -279,3 +279,34 @@ test('K8s 模板管理调用统一 NovaObs API 并单独渲染', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s 发布部署调用统一 NovaObs API 并传递完整资源身份', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  const result = { status: 'accepted', message: 'ok', audit_id: 'audit-deploy-1', resources: [{ cluster_id: 'prod', namespace: 'orders', api_version: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders-api' }] };
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse(result);
+  };
+
+  try {
+    const preview = await k8sApi.previewDeployment({ clusterId: 'prod', yamlContent: 'kind: Deployment' });
+    const applied = await k8sApi.applyDeployment({ clusterId: 'prod', yamlContent: 'kind: Deployment' });
+    const deleted = await k8sApi.deleteDeployment({ clusterId: 'prod', namespace: 'orders', apiVersion: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders-api' });
+    const rollback = await k8sApi.rollbackDeployment({ historyId: 'deploy-1', identity: { clusterId: 'prod', namespace: 'orders', apiVersion: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders-api' } });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/deployments/preview');
+    assert.equal(requests[1].path, '/api/v1/k8s/deployments');
+    assert.equal(requests[2].path, '/api/v1/k8s/deployments');
+    assert.equal(requests[2].init.method, 'DELETE');
+    assert.equal(JSON.parse(requests[2].init.body).identity.uid, 'uid-orders-api');
+    assert.equal(requests[3].path, '/api/v1/k8s/deployments/rollback');
+    assert.equal(JSON.parse(requests[3].init.body).history_id, 'deploy-1');
+    assert.equal(preview.resources[0].apiVersion, 'apps/v1');
+    assert.equal(applied.auditId, 'audit-deploy-1');
+    assert.equal(deleted.status, 'accepted');
+    assert.equal(rollback.resources[0].uid, 'uid-orders-api');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

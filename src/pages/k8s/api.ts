@@ -163,6 +163,22 @@ export interface K8sTemplateRender {
   auditId: string;
 }
 
+export interface K8sDeploymentIdentity {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  uid?: string;
+}
+
+export interface K8sDeploymentOperationResult {
+  status: string;
+  message: string;
+  auditId: string;
+  resources: K8sDeploymentIdentity[];
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -359,6 +375,26 @@ function mapTemplateRender(raw: any): K8sTemplateRender {
   };
 }
 
+function mapDeploymentIdentity(raw: any): K8sDeploymentIdentity {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    apiVersion: raw.api_version ?? raw.apiVersion ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    uid: raw.uid ?? undefined,
+  };
+}
+
+function mapDeploymentOperationResult(raw: any): K8sDeploymentOperationResult {
+  return {
+    status: raw.status ?? '',
+    message: raw.message ?? '',
+    auditId: raw.audit_id ?? raw.auditId ?? '',
+    resources: Array.isArray(raw.resources) ? raw.resources.map(mapDeploymentIdentity) : [],
+  };
+}
+
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
@@ -526,5 +562,52 @@ export const k8sApi = {
       body: JSON.stringify({ id, variables }),
     });
     return mapTemplateRender(raw);
+  },
+  async previewDeployment(input: { clusterId: string; yamlContent: string }): Promise<K8sDeploymentOperationResult> {
+    const raw = await apiRequest<any>('/k8s/deployments/preview', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, yaml_content: input.yamlContent }),
+    });
+    return mapDeploymentOperationResult(raw);
+  },
+  async applyDeployment(input: { clusterId: string; yamlContent: string }): Promise<K8sDeploymentOperationResult> {
+    const raw = await apiRequest<any>('/k8s/deployments', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, yaml_content: input.yamlContent }),
+    });
+    return mapDeploymentOperationResult(raw);
+  },
+  async deleteDeployment(identity: K8sDeploymentIdentity): Promise<K8sDeploymentOperationResult> {
+    const raw = await apiRequest<any>('/k8s/deployments', {
+      method: 'DELETE',
+      body: JSON.stringify({
+        identity: {
+          cluster_id: identity.clusterId,
+          namespace: identity.namespace,
+          api_version: identity.apiVersion,
+          kind: identity.kind,
+          name: identity.name,
+          uid: identity.uid,
+        },
+      }),
+    });
+    return mapDeploymentOperationResult(raw);
+  },
+  async rollbackDeployment(input: { identity: K8sDeploymentIdentity; historyId: string }): Promise<K8sDeploymentOperationResult> {
+    const raw = await apiRequest<any>('/k8s/deployments/rollback', {
+      method: 'POST',
+      body: JSON.stringify({
+        history_id: input.historyId,
+        identity: {
+          cluster_id: input.identity.clusterId,
+          namespace: input.identity.namespace,
+          api_version: input.identity.apiVersion,
+          kind: input.identity.kind,
+          name: input.identity.name,
+          uid: input.identity.uid,
+        },
+      }),
+    });
+    return mapDeploymentOperationResult(raw);
   },
 };
