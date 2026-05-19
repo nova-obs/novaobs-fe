@@ -97,3 +97,37 @@ test('K8s 部署历史和审计事件调用统一 NovaObs API', async () => {
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s 证书中心调用统一 NovaObs API 且只映射元数据', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse([
+      {
+        id: 'cert-prod-1',
+        cluster_id: 'prod',
+        namespace: 'ingress',
+        name: 'wildcard-prod',
+        common_name: '*.prod.example.com',
+        fingerprint: 'sha256:6f7d8e',
+        not_after: '2026-08-19T00:00:00Z',
+        status: 'valid',
+        source: 'startorch',
+        private_key: 'must-not-be-used',
+      },
+    ]);
+  };
+
+  try {
+    const certificates = await k8sApi.listCertificates('prod');
+    assert.equal(requests[0].path, '/api/v1/k8s/certificates?cluster_id=prod');
+    assert.equal(certificates[0].clusterId, 'prod');
+    assert.equal(certificates[0].commonName, '*.prod.example.com');
+    assert.equal(certificates[0].fingerprint, 'sha256:6f7d8e');
+    assert.equal(certificates[0].notAfter, '2026-08-19T00:00:00Z');
+    assert.equal('privateKey' in certificates[0], false);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

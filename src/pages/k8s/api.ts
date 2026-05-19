@@ -61,6 +61,18 @@ export interface K8sAuditEvent {
   createdAt: string;
 }
 
+export interface K8sCertificate {
+  id: string;
+  clusterId: string;
+  namespace: string;
+  name: string;
+  commonName: string;
+  fingerprint: string;
+  notAfter: string;
+  status: string;
+  source: string;
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -134,6 +146,20 @@ function mapAuditEvent(raw: any): K8sAuditEvent {
   };
 }
 
+function mapCertificate(raw: any): K8sCertificate {
+  return {
+    id: String(raw.id ?? ''),
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    name: raw.name ?? '',
+    commonName: raw.common_name ?? raw.commonName ?? '',
+    fingerprint: raw.fingerprint ?? '',
+    notAfter: raw.not_after ?? raw.notAfter ?? '',
+    status: raw.status ?? 'unknown',
+    source: raw.source ?? '',
+  };
+}
+
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
@@ -163,5 +189,9 @@ export const k8sApi = {
   async listAuditEvents(clusterId = 'prod'): Promise<K8sAuditEvent[]> {
     const raw = await apiRequest<any[]>(`/k8s/audit-events?cluster_id=${encodeURIComponent(clusterId)}`);
     return raw.map(mapAuditEvent);
+  },
+  async listCertificates(clusterId = 'prod'): Promise<K8sCertificate[]> {
+    const raw = await apiRequest<any[]>(`/k8s/certificates?cluster_id=${encodeURIComponent(clusterId)}`);
+    return raw.map(mapCertificate);
   },
 };

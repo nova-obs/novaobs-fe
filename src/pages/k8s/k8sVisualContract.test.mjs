@@ -10,6 +10,7 @@ const namespaceSource = readFileSync(new URL('./NamespacePage.tsx', import.meta.
 const resourceSource = readFileSync(new URL('./ResourcePage.tsx', import.meta.url), 'utf8');
 const deploymentHistorySource = readFileSync(new URL('./DeploymentHistoryPage.tsx', import.meta.url), 'utf8');
 const auditSource = readFileSync(new URL('./AuditPage.tsx', import.meta.url), 'utf8');
+const certificateSource = readFileSync(new URL('./CertificatePage.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
@@ -51,4 +52,14 @@ test('K8s 部署历史和审计页面展示追踪上下文', () => {
   assert.equal(auditSource.includes('操作审计'), true);
   assert.equal(auditSource.includes('Trace'), true);
   assert.equal(auditSource.includes('/api/v1/k8s/audit-events'), true);
+});
+
+test('K8s 证书中心只展示证书元数据和安全边界', () => {
+  assert.equal(certificateSource.includes('证书中心'), true);
+  assert.equal(certificateSource.includes('/api/v1/k8s/certificates'), true);
+  assert.equal(certificateSource.includes('Fingerprint'), true);
+  assert.equal(certificateSource.includes('Not After'), true);
+  assert.equal(certificateSource.includes('密钥材料留在后端受控域'), true);
+  assert.equal(certificateSource.includes('privateKey'), false);
+  assert.equal(certificateSource.includes('private_key'), false);
 });

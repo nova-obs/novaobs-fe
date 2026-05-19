@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
 import { K8sAuditPage } from '../pages/k8s/AuditPage';
+import { K8sCertificatePage } from '../pages/k8s/CertificatePage';
 import { K8sClusterPage } from '../pages/k8s/ClusterPage';
 import { DashboardPage } from '../pages/k8s/DashboardPage';
 import { K8sDeploymentHistoryPage } from '../pages/k8s/DeploymentHistoryPage';
@@ -31,6 +32,7 @@ const k8sChildRoutes: RouteDefinition[] = [
   { path: 'resource-view', title: 'K8s 运维', element: <K8sResourcePage /> },
   { path: 'deploy-history', title: 'K8s 运维', element: <K8sDeploymentHistoryPage /> },
   { path: 'audit', title: 'K8s 运维', element: <K8sAuditPage /> },
+  { path: 'certificates', title: 'K8s 运维', element: <K8sCertificatePage /> },
   ...k8sNavigationItems
     .filter((item) => (
       item.path !== '/k8s' &&
@@ -38,7 +40,8 @@ const k8sChildRoutes: RouteDefinition[] = [
       item.path !== '/k8s/namespaces' &&
       item.path !== '/k8s/resource-view' &&
       item.path !== '/k8s/deploy-history' &&
-      item.path !== '/k8s/audit'
+      item.path !== '/k8s/audit' &&
+      item.path !== '/k8s/certificates'
     ))
     .map((item) => ({
       path: item.path.replace('/k8s/', ''),
