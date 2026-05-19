@@ -131,3 +131,38 @@ test('K8s 证书中心调用统一 NovaObs API 且只映射元数据', async () 
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s ServiceAccount 写操作调用统一 NovaObs API 并传递审计上下文', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (init.method === 'POST') {
+      return jsonResponse({ item: { id: 'sa-1', cluster_id: 'prod', namespace: 'orders', name: 'orders-reader', uid: 'uid-1', status: 'active' }, audit_id: 'audit-create-1' });
+    }
+    if (init.method === 'DELETE') {
+      return jsonResponse({ status: 'deleted', audit_id: 'audit-delete-1' });
+    }
+    return jsonResponse([{ id: 'sa-1', cluster_id: 'prod', namespace: 'orders', name: 'orders-reader', uid: 'uid-1', status: 'active', source: 'startorch' }]);
+  };
+
+  try {
+    const accounts = await k8sApi.listServiceAccounts('prod', 'orders');
+    const created = await k8sApi.createServiceAccount({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader' });
+    const deleted = await k8sApi.deleteServiceAccount({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader', uid: 'uid-1' });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders');
+    assert.equal(requests[1].path, '/api/v1/k8s/service-accounts');
+    assert.equal(requests[1].init.method, 'POST');
+    assert.equal(requests[1].init.headers['X-NovaObs-User'], 'user-1');
+    assert.equal(JSON.parse(requests[1].init.body).name, 'orders-reader');
+    assert.equal(requests[2].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders&name=orders-reader&uid=uid-1');
+    assert.equal(requests[2].init.method, 'DELETE');
+    assert.equal(accounts[0].uid, 'uid-1');
+    assert.equal(created.auditId, 'audit-create-1');
+    assert.equal(created.item.uid, 'uid-1');
+    assert.equal(deleted.auditId, 'audit-delete-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

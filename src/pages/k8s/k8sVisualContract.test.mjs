@@ -11,6 +11,7 @@ const resourceSource = readFileSync(new URL('./ResourcePage.tsx', import.meta.ur
 const deploymentHistorySource = readFileSync(new URL('./DeploymentHistoryPage.tsx', import.meta.url), 'utf8');
 const auditSource = readFileSync(new URL('./AuditPage.tsx', import.meta.url), 'utf8');
 const certificateSource = readFileSync(new URL('./CertificatePage.tsx', import.meta.url), 'utf8');
+const serviceAccountSource = readFileSync(new URL('./ServiceAccountPage.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
@@ -62,4 +63,12 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('密钥材料留在后端受控域'), true);
   assert.equal(certificateSource.includes('privateKey'), false);
   assert.equal(certificateSource.includes('private_key'), false);
+});
+
+test('K8s ServiceAccount 页面展示 RBAC 权限不足态和审计结果', () => {
+  assert.equal(serviceAccountSource.includes('ServiceAccount'), true);
+  assert.equal(serviceAccountSource.includes('/api/v1/k8s/service-accounts'), true);
+  assert.equal(serviceAccountSource.includes('权限不足'), true);
+  assert.equal(serviceAccountSource.includes('操作已落审计'), true);
+  assert.equal(serviceAccountSource.includes('不会在页面、日志或响应中展示 token'), true);
 });
