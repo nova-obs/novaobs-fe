@@ -136,6 +136,13 @@ test('K8s RBAC 页面展示确认摘要、权限不足态和审计结果', () =>
 
 test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导出', () => {
   assert.equal(kubeconfigSource.includes('Kubeconfig'), true);
+  assert.equal(kubeconfigSource.includes('k8sApi.listServiceAccounts'), true);
+  assert.equal(kubeconfigSource.includes('集群选择'), true);
+  assert.equal(kubeconfigSource.includes('命名空间选择'), true);
+  assert.equal(kubeconfigSource.includes('ServiceAccount 选择'), true);
+  assert.equal(kubeconfigSource.includes('DEFAULT_CLUSTER'), false);
+  assert.equal(kubeconfigSource.includes('DEFAULT_NAMESPACE'), false);
+  assert.equal(kubeconfigSource.includes("useState('orders-reader')"), false);
   assert.equal(kubeconfigSource.includes('Secret 元数据'), true);
   assert.equal(kubeconfigSource.includes('权限不足'), true);
   assert.equal(kubeconfigSource.includes('审计导出'), true);
