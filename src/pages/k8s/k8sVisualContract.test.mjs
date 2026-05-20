@@ -117,8 +117,13 @@ test('K8s ServiceAccount 页面展示 RBAC 权限不足态和审计结果', () =
 
 test('K8s RBAC 页面展示确认摘要、权限不足态和审计结果', () => {
   assert.equal(rbacPageSource.includes('RBAC'), true);
-  assert.equal(rbacPageSource.includes('/api/v1/k8s/rbac/roles'), true);
-  assert.equal(rbacPageSource.includes('/api/v1/k8s/rbac/bindings'), true);
+  assert.equal(rbacPageSource.includes('k8sApi.listRBACRoles'), true);
+  assert.equal(rbacPageSource.includes('k8sApi.listRBACBindings'), true);
+  assert.equal(rbacPageSource.includes('集群选择'), true);
+  assert.equal(rbacPageSource.includes('命名空间选择'), true);
+  assert.equal(rbacPageSource.includes('DEFAULT_CLUSTER'), false);
+  assert.equal(rbacPageSource.includes('DEFAULT_NAMESPACE'), false);
+  assert.equal(rbacPageSource.includes("useState('orders-reader')"), false);
   assert.equal(rbacPageSource.includes('权限不足'), true);
   assert.equal(rbacPageSource.includes('操作已落审计'), true);
   assert.equal(rbacPageSource.includes('删除确认摘要'), true);

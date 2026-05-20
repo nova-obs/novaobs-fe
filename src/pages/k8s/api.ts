@@ -668,14 +668,14 @@ export const k8sApi = {
     });
     return mapWriteResult(raw);
   },
-  async listRBACRoles(clusterId = 'prod', namespace = 'orders'): Promise<K8sRBACRole[]> {
+  async listRBACRoles(clusterId = '', namespace = ''): Promise<K8sRBACRole[]> {
     const params = new URLSearchParams();
     if (clusterId) params.set('cluster_id', clusterId);
     if (namespace) params.set('namespace', namespace);
     const raw = await apiRequest<any[]>(`/k8s/rbac/roles?${params.toString()}`);
     return raw.map(mapRBACRole);
   },
-  async listRBACBindings(clusterId = 'prod', namespace = 'orders'): Promise<K8sRBACBinding[]> {
+  async listRBACBindings(clusterId = '', namespace = ''): Promise<K8sRBACBinding[]> {
     const params = new URLSearchParams();
     if (clusterId) params.set('cluster_id', clusterId);
     if (namespace) params.set('namespace', namespace);

@@ -1,40 +1,73 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link2, Plus, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sRBACBinding } from './api';
 
-const DEFAULT_CLUSTER = 'prod';
-const DEFAULT_NAMESPACE = 'orders';
-
 export function K8sRbacPage() {
   const queryClient = useQueryClient();
-  const [roleName, setRoleName] = useState('orders-reader');
-  const [bindingName, setBindingName] = useState('orders-reader-binding');
-  const [serviceAccountName, setServiceAccountName] = useState('orders-reader');
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [roleName, setRoleName] = useState('');
+  const [bindingName, setBindingName] = useState('');
+  const [serviceAccountName, setServiceAccountName] = useState('');
   const [selectedBinding, setSelectedBinding] = useState<K8sRBACBinding | null>(null);
   const [lastAuditId, setLastAuditId] = useState('');
 
+  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => k8sApi.listClusters(),
+    retry: false,
+  });
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+
+  const { data: namespaces = [], error: namespaceError } = useQuery({
+    queryKey: ['k8s-namespaces', activeClusterId],
+    queryFn: () => k8sApi.listNamespaces(activeClusterId),
+    enabled: Boolean(activeClusterId),
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!selectedClusterId && clusters[0]?.id) {
+      setSelectedClusterId(clusters[0].id);
+    }
+  }, [clusters, selectedClusterId]);
+
+  useEffect(() => {
+    const namespaceExists = namespaces.some((item) => item.name === namespace);
+    if (namespace && !namespaceExists) {
+      setNamespace(namespaces[0]?.name ?? '');
+      setSelectedBinding(null);
+      return;
+    }
+    if (!namespace && namespaces[0]?.name) {
+      setNamespace(namespaces[0].name);
+    }
+  }, [namespace, namespaces]);
+
   const rolesQuery = useQuery({
-    queryKey: ['k8s-rbac-roles', DEFAULT_CLUSTER, DEFAULT_NAMESPACE],
-    queryFn: () => k8sApi.listRBACRoles(DEFAULT_CLUSTER, DEFAULT_NAMESPACE),
+    queryKey: ['k8s-rbac-roles', activeClusterId, namespace],
+    queryFn: () => k8sApi.listRBACRoles(activeClusterId, namespace),
+    enabled: Boolean(activeClusterId && namespace),
     retry: false,
   });
   const bindingsQuery = useQuery({
-    queryKey: ['k8s-rbac-bindings', DEFAULT_CLUSTER, DEFAULT_NAMESPACE],
-    queryFn: () => k8sApi.listRBACBindings(DEFAULT_CLUSTER, DEFAULT_NAMESPACE),
+    queryKey: ['k8s-rbac-bindings', activeClusterId, namespace],
+    queryFn: () => k8sApi.listRBACBindings(activeClusterId, namespace),
+    enabled: Boolean(activeClusterId && namespace),
     retry: false,
   });
 
   const createRoleMutation = useMutation({
-    mutationFn: () => k8sApi.createRBACRole({ clusterId: DEFAULT_CLUSTER, namespace: DEFAULT_NAMESPACE, name: roleName }),
+    mutationFn: () => k8sApi.createRBACRole({ clusterId: activeClusterId, namespace, name: roleName }),
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       queryClient.invalidateQueries({ queryKey: ['k8s-rbac-roles'] });
     },
   });
   const createBindingMutation = useMutation({
-    mutationFn: () => k8sApi.createRBACBinding({ clusterId: DEFAULT_CLUSTER, namespace: DEFAULT_NAMESPACE, name: bindingName, roleName, serviceAccountName }),
+    mutationFn: () => k8sApi.createRBACBinding({ clusterId: activeClusterId, namespace, name: bindingName, roleName, serviceAccountName }),
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelectedBinding(result.item ?? null);
@@ -64,19 +97,60 @@ export function K8sRbacPage() {
   const currentBinding = selectedBinding ?? bindings[0];
   const isLoading = rolesQuery.isLoading || bindingsQuery.isLoading;
   const error = rolesQuery.error || bindingsQuery.error;
+  const canList = Boolean(activeClusterId && namespace);
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.8fr]">
-        <RbacMetric icon={ShieldCheck} label="Role" value={String(roles.length)} meta="namespace scoped" />
-        <RbacMetric icon={Link2} label="Binding" value={String(bindings.length)} meta="subject mapping" />
+        <RbacMetric icon={ShieldCheck} label="Role" value={String(roles.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
+        <RbacMetric icon={Link2} label="Binding" value={String(bindings.length)} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
         <RbacMetric icon={ShieldAlert} label="写权限" value="RBAC" meta="k8s.rbac" />
       </div>
+
+      <section className="console-panel px-4 py-3">
+        <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">集群选择</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={activeClusterId}
+              onChange={(event) => {
+                setSelectedClusterId(event.target.value);
+                setNamespace('');
+                setSelectedBinding(null);
+              }}
+              disabled={isLoadingClusters || !clusters.length}
+            >
+              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
+              {clusters.map((item) => (
+                <option key={item.id} value={item.id}>{item.name || item.id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">命名空间选择</span>
+            <select className="console-input mt-2 w-full" value={namespace} onChange={(event) => setNamespace(event.target.value)} disabled={!namespaces.length}>
+              {!namespaces.length ? <option value="">暂无命名空间</option> : null}
+              {namespaces.map((item) => (
+                <option key={`${item.clusterId}-${item.name}`} value={item.name}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="text-sm text-muted">
+            Role 与 RoleBinding 通过 Kubernetes API 实时只读读取，写操作仍由 NovaObs RBAC、审计和能力开关控制。
+          </div>
+        </div>
+        {clusterError || namespaceError ? (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
+          </div>
+        ) : null}
+      </section>
 
       <DataPanel title="RBAC" meta={isLoading ? '加载中' : `${roles.length} 个 Role · ${bindings.length} 个 Binding`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            RBAC API 暂未连接，等待后端 `/api/v1/k8s/rbac/roles` 与 `/api/v1/k8s/rbac/bindings`。
+            RBAC 读取失败：{errorMessage(error)}
           </div>
         ) : null}
         {permissionError ? (
@@ -93,6 +167,12 @@ export function K8sRbacPage() {
 
         <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
           <div className="space-y-4 overflow-hidden">
+            {!canList ? (
+              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+                <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
+                <p className="mt-2 text-sm text-muted">RBAC 资源按 namespace 读取，不做默认跨命名空间扫描。</p>
+              </div>
+            ) : null}
             <section className="overflow-auto">
               <table className="console-table min-w-[820px] w-full">
                 <thead>
@@ -116,11 +196,14 @@ export function K8sRbacPage() {
                       <td className="font-mono text-xs">{item.namespace || '-'}</td>
                       <td className="text-xs text-muted">{item.rules.map((rule) => `${rule.resources.join(',')}:${rule.verbs.join(',')}`).join(' · ') || '-'}</td>
                       <td className="font-mono text-[11px] text-muted">{item.uid}</td>
-                      <td className="text-xs text-muted">{item.source || 'startorch'}</td>
+                      <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {canList && !isLoading && !error && !roles.length ? (
+                <div className="mt-3 rounded-lg bg-white/45 px-4 py-6 text-center text-sm text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">当前命名空间没有返回 Role。</div>
+              ) : null}
             </section>
 
             <section className="overflow-auto">
@@ -146,13 +229,16 @@ export function K8sRbacPage() {
                         <div className="text-[11px] text-muted">{item.kind}</div>
                       </td>
                       <td className="font-mono text-xs">{item.roleRef.kind}/{item.roleRef.name}</td>
-                      <td className="text-xs text-muted">{item.subjects.map((subject) => `${subject.kind}:${subject.namespace}/${subject.name}`).join(' · ') || '-'}</td>
+                      <td className="text-xs text-muted">{item.subjects.map(formatSubject).join(' · ') || '-'}</td>
                       <td className="font-mono text-[11px] text-muted">{item.uid}</td>
-                      <td className="text-xs text-muted">{item.source || 'startorch'}</td>
+                      <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
+              {canList && !isLoading && !error && !bindings.length ? (
+                <div className="mt-3 rounded-lg bg-white/45 px-4 py-6 text-center text-sm text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">当前命名空间没有返回 RoleBinding。</div>
+              ) : null}
             </section>
           </div>
 
@@ -167,8 +253,8 @@ export function K8sRbacPage() {
             <input id="rbac-sa-name" className="console-input mt-2 w-full" value={serviceAccountName} onChange={(event) => setServiceAccountName(event.target.value)} />
 
             <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-mono">cluster={DEFAULT_CLUSTER}</div>
-              <div className="font-mono">namespace={DEFAULT_NAMESPACE}</div>
+              <div className="font-mono">cluster={activeClusterId || '-'}</div>
+              <div className="font-mono">namespace={namespace || '-'}</div>
               <div className="font-mono">role={roleName || '-'}</div>
               <div className="font-mono">binding={bindingName || '-'}</div>
             </div>
@@ -179,11 +265,11 @@ export function K8sRbacPage() {
               <div className="font-mono">uid={currentBinding?.uid ?? '-'}</div>
             </div>
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!roleName.trim() || createRoleMutation.isPending} onClick={() => createRoleMutation.mutate()}>
+              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!activeClusterId || !namespace || !roleName.trim() || createRoleMutation.isPending} onClick={() => createRoleMutation.mutate()}>
                 <Plus className="h-4 w-4" />
                 Role
               </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!bindingName.trim() || !serviceAccountName.trim() || createBindingMutation.isPending} onClick={() => createBindingMutation.mutate()}>
+              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!activeClusterId || !namespace || !bindingName.trim() || !serviceAccountName.trim() || createBindingMutation.isPending} onClick={() => createBindingMutation.mutate()}>
                 <Plus className="h-4 w-4" />
                 Binding
               </button>
@@ -212,4 +298,12 @@ function RbacMetric({ icon: Icon, label, value, meta }: { icon: typeof ShieldChe
       </div>
     </section>
   );
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。';
+}
+
+function formatSubject(subject: { kind: string; namespace: string; name: string }) {
+  return subject.namespace ? `${subject.kind}:${subject.namespace}/${subject.name}` : `${subject.kind}:${subject.name}`;
 }
