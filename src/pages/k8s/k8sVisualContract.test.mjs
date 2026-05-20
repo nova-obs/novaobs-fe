@@ -31,6 +31,10 @@ test('K8s Dashboard 展示来源、时间窗口、同步和审计上下文', () 
   assert.equal(dashboardSource.includes('最近 15 分钟'), true);
   assert.equal(dashboardSource.includes('配置状态'), true);
   assert.equal(dashboardSource.includes('操作审计'), true);
+  assert.equal(dashboardSource.includes('k8sApi.listClusters'), true);
+  assert.equal(dashboardSource.includes('k8sApi.listAuditEvents'), true);
+  assert.equal(dashboardSource.includes('resourceRows'), false);
+  assert.equal(dashboardSource.includes('eventRows'), false);
 });
 
 test('K8s 集群页面展示集群连接和来源上下文', () => {
@@ -70,6 +74,8 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('资源详情'), true);
   assert.equal(resourceSource.includes('YAML 预览'), true);
   assert.equal(resourceSource.includes('Pod 日志'), true);
+  assert.equal(resourceSource.includes('容器选择'), true);
+  assert.equal(resourceSource.includes('containerOptions'), true);
   assert.equal(resourceSource.includes('命名空间读取失败'), true);
   assert.equal(resourceSource.includes('资源 API 暂未连接'), false);
 });

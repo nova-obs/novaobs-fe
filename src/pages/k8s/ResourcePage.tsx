@@ -14,6 +14,7 @@ export function K8sResourcePage() {
   const [kind, setKind] = useState('');
   const [selected, setSelected] = useState<K8sResourceSummary | null>(null);
   const [activeTab, setActiveTab] = useState<ResourceTab>('detail');
+  const [selectedContainer, setSelectedContainer] = useState('');
   const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
     queryKey: ['k8s-clusters'],
     queryFn: () => k8sApi.listClusters(),
@@ -64,6 +65,10 @@ export function K8sResourcePage() {
     }
   }, [data, selected]);
 
+  useEffect(() => {
+    setSelectedContainer('');
+  }, [selectedIdentity?.clusterId, selectedIdentity?.namespace, selectedIdentity?.name, selectedIdentity?.uid]);
+
   const detailQuery = useQuery({
     queryKey: ['k8s-resource-detail', selectedIdentity],
     queryFn: () => k8sApi.getResourceDetail(selectedIdentity as K8sResourceIdentity),
@@ -77,15 +82,17 @@ export function K8sResourcePage() {
     retry: false,
   });
   const logsQuery = useQuery({
-    queryKey: ['k8s-pod-logs', selectedIdentity],
+    queryKey: ['k8s-pod-logs', selectedIdentity, selectedContainer],
     queryFn: () => k8sApi.getPodLogs({
       clusterId: selectedIdentity?.clusterId ?? '',
       namespace: selectedIdentity?.namespace ?? '',
       pod: selectedIdentity?.name ?? '',
+      container: selectedContainer || undefined,
     }),
     enabled: Boolean(selectedIdentity && selectedIdentity.kind === 'Pod' && activeTab === 'logs'),
     retry: false,
   });
+  const containerOptions = selectedIdentity?.kind === 'Pod' ? extractContainerOptions(detailQuery.data?.spec) : [];
 
   return (
     <div className="space-y-4">
@@ -237,7 +244,28 @@ export function K8sResourcePage() {
               <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">仅 Pod 支持日志读取</div>
             ) : null}
             {activeTab === 'logs' && selected.identity.kind === 'Pod' ? (
-              <CodePreview isLoading={logsQuery.isLoading} error={logsQuery.error} emptyText="暂无 Pod 日志" content={(logsQuery.data?.lines ?? []).join('\n')} />
+              <div className="space-y-3">
+                <div className="grid gap-3 rounded-lg bg-white/45 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] md:grid-cols-[minmax(180px,260px)_1fr] md:items-end">
+                  <label className="block">
+                    <span className="text-xs font-semibold text-muted">容器选择</span>
+                    <select
+                      className="console-input mt-2 w-full"
+                      value={selectedContainer}
+                      onChange={(event) => setSelectedContainer(event.target.value)}
+                      disabled={!containerOptions.length}
+                    >
+                      <option value="">默认容器</option>
+                      {containerOptions.map((container) => (
+                        <option key={container} value={container}>{container}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <div className="text-xs text-muted">
+                    多容器 Pod 可指定 container 参数，后端仍按 tailLines=200、limitBytes=1MiB 执行只读日志读取。
+                  </div>
+                </div>
+                <CodePreview isLoading={logsQuery.isLoading} error={logsQuery.error} emptyText="暂无 Pod 日志" content={(logsQuery.data?.lines ?? []).join('\n')} />
+              </div>
             ) : null}
           </div>
         )}
@@ -276,6 +304,16 @@ function errorMessage(error: unknown) {
 
 function identityKey(identity: K8sResourceIdentity) {
   return `${identity.clusterId}-${identity.namespace}-${identity.apiVersion}-${identity.kind}-${identity.name}-${identity.uid}`;
+}
+
+function extractContainerOptions(spec?: Record<string, any>) {
+  const containerNames = Array.isArray(spec?.containers)
+    ? spec.containers.map((item: any) => String(item?.name ?? '')).filter(Boolean)
+    : [];
+  const initContainerNames = Array.isArray(spec?.initContainers)
+    ? spec.initContainers.map((item: any) => String(item?.name ?? '')).filter(Boolean)
+    : [];
+  return Array.from(new Set([...containerNames, ...initContainerNames]));
 }
 
 function TabButton({ active, disabled = false, icon: Icon, label, onClick }: { active: boolean; disabled?: boolean; icon: LucideIcon; label: string; onClick: () => void }) {
