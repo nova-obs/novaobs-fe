@@ -4,23 +4,17 @@ import { FileCode2, Play, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sResourceSummary, type K8sTemplate } from './api';
 
-const DEFAULT_YAML = `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: <<name>>
-  namespace: <<namespace>>
-spec:
-  replicas: <<replicas>>`;
-
 export function K8sTemplatePage() {
   const queryClient = useQueryClient();
   const [selectedClusterId, setSelectedClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [selectedResourceUID, setSelectedResourceUID] = useState('');
   const [selected, setSelected] = useState<K8sTemplate | null>(null);
-  const [name, setName] = useState('deployment-baseline');
+  const [name, setName] = useState('');
+  const [lastTemplateName, setLastTemplateName] = useState('');
   const [templateType, setTemplateType] = useState('Deployment');
-  const [yamlContent, setYamlContent] = useState(DEFAULT_YAML);
+  const [yamlContent, setYamlContent] = useState('');
+  const [lastTemplateYAML, setLastTemplateYAML] = useState('');
   const [renderedYAML, setRenderedYAML] = useState('');
   const [lastAuditId, setLastAuditId] = useState('');
 
@@ -70,22 +64,42 @@ export function K8sTemplatePage() {
   }, [namespace, namespaces]);
 
   useEffect(() => {
-    const resourceExists = resources.some((item) => item.identity.uid === selectedResourceUID);
+    const resourceExists = resources.some((item) => resourceOptionKey(item) === selectedResourceUID);
     if (selectedResourceUID && !resourceExists) {
-      setSelectedResourceUID(resources[0]?.identity.uid ?? '');
+      setSelectedResourceUID(resources[0] ? resourceOptionKey(resources[0]) : '');
       return;
     }
-    if (!selectedResourceUID && resources[0]?.identity.uid) {
-      setSelectedResourceUID(resources[0].identity.uid);
+    if (!selectedResourceUID && resources[0]) {
+      setSelectedResourceUID(resourceOptionKey(resources[0]));
     }
   }, [resources, selectedResourceUID]);
 
-  const currentResource = resources.find((item) => item.identity.uid === selectedResourceUID) ?? resources[0];
+  const currentResource = resources.find((item) => resourceOptionKey(item) === selectedResourceUID) ?? resources[0];
   const variables = useMemo(
     () => extractVariables(yamlContent, { clusterId: activeClusterId, namespace, resource: currentResource, templateType }),
     [activeClusterId, currentResource, namespace, templateType, yamlContent],
   );
-  const variableValues = useMemo(() => Object.fromEntries(variables.map((item) => [item.name, item.defaultValue || 'value'])), [variables]);
+  const variableValues = useMemo(() => Object.fromEntries(variables.map((item) => [item.name, item.defaultValue ?? ''])), [variables]);
+
+  useEffect(() => {
+    syncTemplateDraft(namespace, templateType, currentResource);
+  }, [currentResource, namespace, templateType]);
+
+  function syncTemplateDraft(nextNamespace: string, nextType: string, resource?: K8sResourceSummary) {
+    if (!nextNamespace) {
+      return;
+    }
+    const generatedName = templateNameFromResource(nextType, resource);
+    if (generatedName && (!name.trim() || name === lastTemplateName)) {
+      setName(generatedName);
+      setLastTemplateName(generatedName);
+    }
+    const generatedYAML = buildTemplateYAML(nextNamespace, nextType, resource);
+    if (!yamlContent.trim() || yamlContent === lastTemplateYAML) {
+      setYamlContent(generatedYAML);
+      setLastTemplateYAML(generatedYAML);
+    }
+  }
 
   const createMutation = useMutation({
     mutationFn: () => k8sApi.createTemplate({ name, type: templateType, yamlContent, variables, description: 'NovaObs 发布模板' }),
@@ -148,6 +162,7 @@ export function K8sTemplatePage() {
                 setSelectedClusterId(event.target.value);
                 setNamespace('');
                 setSelectedResourceUID('');
+                setRenderedYAML('');
               }}
               disabled={isLoadingClusters || !clusters.length}
             >
@@ -165,6 +180,7 @@ export function K8sTemplatePage() {
               onChange={(event) => {
                 setNamespace(event.target.value);
                 setSelectedResourceUID('');
+                setRenderedYAML('');
               }}
               disabled={!namespaces.length}
             >
@@ -179,7 +195,7 @@ export function K8sTemplatePage() {
             <select className="console-input mt-2 w-full" value={selectedResourceUID} onChange={(event) => setSelectedResourceUID(event.target.value)} disabled={!resources.length}>
               {!resources.length ? <option value="">暂无同类型资源</option> : null}
               {resources.map((item) => (
-                <option key={item.identity.uid} value={item.identity.uid}>{item.identity.kind}/{item.identity.name}</option>
+                <option key={resourceOptionKey(item)} value={resourceOptionKey(item)}>{item.identity.kind}/{item.identity.name}</option>
               ))}
             </select>
           </label>
@@ -194,10 +210,10 @@ export function K8sTemplatePage() {
         ) : null}
       </section>
 
-      <DataPanel title="模板管理" meta={isLoading ? '加载中' : `${data.length} 个模板 · 渲染和变更受 RBAC 控制`}>
+      <DataPanel title="模板管理" meta={isLoading ? '加载中' : `${data.length} 个模板 · /api/v1/k8s/templates`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            模板 API 暂未连接，等待后端 `/api/v1/k8s/templates`。
+            模板读取失败：{errorMessage(error)}
           </div>
         ) : null}
         {permissionError ? (
@@ -239,9 +255,11 @@ export function K8sTemplatePage() {
                         onClick={() => {
                           setSelected(item);
                           setName(item.name);
+                          setLastTemplateName(item.name);
                           setTemplateType(item.type);
                           setSelectedResourceUID('');
                           setYamlContent(item.yamlContent);
+                          setLastTemplateYAML(item.yamlContent);
                           setRenderedYAML('');
                         }}
                       >
@@ -286,7 +304,16 @@ export function K8sTemplatePage() {
             <label className="mt-4 block text-xs font-semibold text-muted" htmlFor="template-name">Name</label>
             <input id="template-name" className="console-input mt-2 w-full" value={name} onChange={(event) => setName(event.target.value)} />
             <label className="mt-3 block text-xs font-semibold text-muted" htmlFor="template-type">Type</label>
-            <select id="template-type" className="console-input mt-2 w-full" value={templateType} onChange={(event) => setTemplateType(event.target.value)}>
+            <select
+              id="template-type"
+              className="console-input mt-2 w-full"
+              value={templateType}
+              onChange={(event) => {
+                setTemplateType(event.target.value);
+                setSelectedResourceUID('');
+                setRenderedYAML('');
+              }}
+            >
               {['Deployment', 'Service', 'StatefulSet', 'ConfigMap', 'Ingress', 'HorizontalPodAutoscaler'].map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
@@ -342,12 +369,51 @@ function extractVariables(value: string, context: TemplateContext) {
 
 function defaultVariableValue(name: string, context: TemplateContext) {
   const resource = context.resource?.identity;
-  if (name === 'cluster' || name === 'cluster_id') return context.clusterId || 'cluster';
-  if (name === 'namespace') return context.namespace || 'namespace';
-  if (name === 'name') return resource?.name || `${context.templateType.toLowerCase()}-sample`;
+  if (name === 'cluster' || name === 'cluster_id') return context.clusterId;
+  if (name === 'namespace') return context.namespace;
+  if (name === 'name') return resource?.name || '';
   if (name === 'kind') return resource?.kind || context.templateType;
-  if (name === 'replicas') return '2';
-  return 'value';
+  if (name === 'replicas') return '1';
+  return '';
+}
+
+function templateNameFromResource(templateType: string, resource?: K8sResourceSummary) {
+  if (!resource?.identity.name) {
+    return '';
+  }
+  return `${resource.identity.name}-${templateType.toLowerCase()}-template`;
+}
+
+function buildTemplateYAML(namespace: string, templateType: string, resource?: K8sResourceSummary) {
+  const kind = templateType || resource?.identity.kind || 'Deployment';
+  const apiVersion = apiVersionForKind(kind, resource);
+  return `apiVersion: ${apiVersion}
+kind: ${kind}
+metadata:
+  name: <<name>>
+  namespace: ${namespace}
+spec:
+  replicas: <<replicas>>`;
+}
+
+function apiVersionForKind(kind: string, resource?: K8sResourceSummary) {
+  if (resource?.identity.apiVersion) {
+    return resource.identity.apiVersion;
+  }
+  if (kind === 'Deployment' || kind === 'StatefulSet') {
+    return 'apps/v1';
+  }
+  if (kind === 'Ingress') {
+    return 'networking.k8s.io/v1';
+  }
+  if (kind === 'HorizontalPodAutoscaler') {
+    return 'autoscaling/v2';
+  }
+  return 'v1';
+}
+
+function resourceOptionKey(resource: K8sResourceSummary) {
+  return resource.identity.uid || `${resource.identity.kind}/${resource.identity.namespace}/${resource.identity.name}`;
 }
 
 function formatDate(value: string) {

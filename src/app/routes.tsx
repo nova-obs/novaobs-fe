@@ -10,13 +10,12 @@ import { K8sDeploymentPage } from '../pages/k8s/DeploymentPage';
 import { K8sOpsLayout } from '../pages/k8s/K8sOpsLayout';
 import { K8sNamespacePage } from '../pages/k8s/NamespacePage';
 import { K8sResourcePage } from '../pages/k8s/ResourcePage';
-import { K8sPlaceholderPage } from '../pages/k8s/K8sPlaceholderPage';
 import { K8sRbacPage } from '../pages/k8s/RbacPage';
 import { K8sServiceAccountPage } from '../pages/k8s/ServiceAccountPage';
 import { K8sKubeconfigPage } from '../pages/k8s/KubeconfigPage';
 import { K8sTemplatePage } from '../pages/k8s/TemplatePage';
 import { K8sTerminalPage } from '../pages/k8s/TerminalPage';
-import { k8sNavigationItems } from '../pages/k8s/navigation';
+import { K8sUserPage } from '../pages/k8s/UserPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { OnboardingPage } from '../pages/onboarding/OnboardingPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
@@ -36,6 +35,7 @@ const k8sChildRoutes: RouteDefinition[] = [
   { path: 'clusters', title: 'K8s 运维', element: <K8sClusterPage /> },
   { path: 'namespaces', title: 'K8s 运维', element: <K8sNamespacePage /> },
   { path: 'resource-view', title: 'K8s 运维', element: <K8sResourcePage /> },
+  { path: 'users', title: 'K8s 运维', element: <K8sUserPage /> },
   { path: 'deploy-history', title: 'K8s 运维', element: <K8sDeploymentHistoryPage /> },
   { path: 'audit', title: 'K8s 运维', element: <K8sAuditPage /> },
   { path: 'certificates', title: 'K8s 运维', element: <K8sCertificatePage /> },
@@ -45,27 +45,6 @@ const k8sChildRoutes: RouteDefinition[] = [
   { path: 'templates', title: 'K8s 运维', element: <K8sTemplatePage /> },
   { path: 'releases', title: 'K8s 运维', element: <K8sDeploymentPage /> },
   { path: 'terminal', title: 'K8s 运维', element: <K8sTerminalPage /> },
-  ...k8sNavigationItems
-    .filter((item) => (
-      item.path !== '/k8s' &&
-      item.path !== '/k8s/clusters' &&
-      item.path !== '/k8s/namespaces' &&
-      item.path !== '/k8s/resource-view' &&
-      item.path !== '/k8s/deploy-history' &&
-      item.path !== '/k8s/audit' &&
-      item.path !== '/k8s/certificates' &&
-      item.path !== '/k8s/service-accounts' &&
-      item.path !== '/k8s/rbac' &&
-      item.path !== '/k8s/kubeconfig' &&
-      item.path !== '/k8s/templates' &&
-      item.path !== '/k8s/releases' &&
-      item.path !== '/k8s/terminal'
-    ))
-    .map((item) => ({
-      path: item.path.replace('/k8s/', ''),
-      title: 'K8s 运维',
-      element: <K8sPlaceholderPage title={item.label} />,
-    })),
 ];
 
 export const routeDefinitions: RouteDefinition[] = [

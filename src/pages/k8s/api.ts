@@ -579,11 +579,11 @@ export const k8sApi = {
     });
     return mapWriteResult(raw, mapClusterCredential);
   },
-  async listNamespaces(clusterId = 'prod', query = ''): Promise<K8sNamespace[]> {
+  async listNamespaces(clusterId = '', query = ''): Promise<K8sNamespace[]> {
     const params = new URLSearchParams();
     if (clusterId) params.set('cluster_id', clusterId);
     if (query.trim()) params.set('q', query.trim());
-    const raw = await apiRequest<any[]>(`/k8s/namespaces?${params.toString()}`);
+    const raw = await apiRequest<any[]>(`/k8s/namespaces${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapNamespace);
   },
   async listResources(filter: { clusterId?: string; namespace?: string; kind?: string; query?: string } = {}): Promise<K8sResourceSummary[]> {
@@ -652,11 +652,11 @@ export const k8sApi = {
     const raw = await apiRequest<any>(`/k8s/certificates/${encodeURIComponent(id)}`, { method: 'DELETE' });
     return mapWriteResult(raw);
   },
-  async listServiceAccounts(clusterId = 'prod', namespace = 'orders'): Promise<K8sServiceAccount[]> {
+  async listServiceAccounts(clusterId = '', namespace = ''): Promise<K8sServiceAccount[]> {
     const params = new URLSearchParams();
     if (clusterId) params.set('cluster_id', clusterId);
     if (namespace) params.set('namespace', namespace);
-    const raw = await apiRequest<any[]>(`/k8s/service-accounts?${params.toString()}`);
+    const raw = await apiRequest<any[]>(`/k8s/service-accounts${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapServiceAccount);
   },
   async createServiceAccount(input: { clusterId: string; namespace: string; name: string }): Promise<K8sWriteResult<K8sServiceAccount>> {

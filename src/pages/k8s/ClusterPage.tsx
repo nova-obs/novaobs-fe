@@ -160,7 +160,7 @@ export function K8sClusterPage() {
         <DataPanel title="集群凭据" meta={`/api/v1/k8s/cluster-credentials · ${credentialsQuery.data?.length ?? 0} 条元数据`}>
           {credentialsQuery.error ? (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-              集群凭据 API 暂未连接，等待后端 `/api/v1/k8s/cluster-credentials`。
+              集群凭据读取失败：{errorMessage(credentialsQuery.error)}
             </div>
           ) : null}
           {!credentialClusterId ? (
@@ -277,4 +277,8 @@ function StatusPill({ status }: { status: string }) {
       {active ? '运行中' : status || 'unknown'}
     </span>
   );
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查 NovaObs 后端连接、平台 RBAC 与 Secret 服务状态。';
 }

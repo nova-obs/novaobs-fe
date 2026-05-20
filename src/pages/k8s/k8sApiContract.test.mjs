@@ -111,6 +111,25 @@ test('K8s 命名空间列表调用统一 NovaObs API', async () => {
   }
 });
 
+test('K8s 命名空间和 ServiceAccount API 不内置演示集群默认值', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse([]);
+  };
+
+  try {
+    await k8sApi.listNamespaces();
+    await k8sApi.listServiceAccounts();
+
+    assert.equal(requests[0].path, '/api/v1/k8s/namespaces');
+    assert.equal(requests[1].path, '/api/v1/k8s/service-accounts');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('K8s 集群凭据调用统一 NovaObs API 且只映射元数据', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;

@@ -17,6 +17,8 @@ const kubeconfigSource = readFileSync(new URL('./KubeconfigPage.tsx', import.met
 const templateSource = readFileSync(new URL('./TemplatePage.tsx', import.meta.url), 'utf8');
 const deploymentSource = readFileSync(new URL('./DeploymentPage.tsx', import.meta.url), 'utf8');
 const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.url), 'utf8');
+const userSource = readFileSync(new URL('./UserPage.tsx', import.meta.url), 'utf8');
+const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
@@ -50,8 +52,20 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('凭据录入'), true);
   assert.equal(clusterSource.includes('轮换'), true);
   assert.equal(clusterSource.includes('/api/v1/k8s/cluster-credentials'), true);
+  assert.equal(clusterSource.includes('集群凭据 API 暂未连接'), false);
   assert.equal(clusterSource.includes('kubeconfig'), true);
   assert.equal(clusterSource.includes('不在页面回显'), true);
+});
+
+test('K8s 用户管理页面接入真实 RBAC subject 数据面', () => {
+  assert.equal(routeSource.includes('K8sPlaceholderPage'), false);
+  assert.equal(userSource.includes('用户管理'), true);
+  assert.equal(userSource.includes('k8sApi.listClusters'), true);
+  assert.equal(userSource.includes('k8sApi.listNamespaces'), true);
+  assert.equal(userSource.includes('k8sApi.listRBACBindings'), true);
+  assert.equal(userSource.includes('平台用户映射'), true);
+  assert.equal(userSource.includes('RoleBinding'), true);
+  assert.equal(userSource.includes('后续会按 startorch'), false);
 });
 
 test('K8s 命名空间页面展示集群、来源和权限上下文', () => {
@@ -167,6 +181,10 @@ test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () =
   assert.equal(templateSource.includes("useState('orders-deployment')"), false);
   assert.equal(templateSource.includes("return 'orders-api'"), false);
   assert.equal(templateSource.includes("return 'orders'"), false);
+  assert.equal(templateSource.includes('DEFAULT_YAML'), false);
+  assert.equal(templateSource.includes('deployment-baseline'), false);
+  assert.equal(templateSource.includes('sample'), false);
+  assert.equal(templateSource.includes('模板 API 暂未连接'), false);
   assert.equal(templateSource.includes('变量摘要'), true);
   assert.equal(templateSource.includes('权限不足'), true);
   assert.equal(templateSource.includes('操作已落审计'), true);
