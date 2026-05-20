@@ -180,6 +180,20 @@ export interface K8sDeploymentOperationResult {
   resources: K8sDeploymentIdentity[];
 }
 
+export interface K8sTerminalResult {
+  status: string;
+  clusterId: string;
+  namespace: string;
+  command: string;
+  verb: string;
+  args: string[];
+  output: string;
+  exitCode: number;
+  auditId: string;
+  blockedReason: string;
+  mode: string;
+}
+
 function mapCluster(raw: any): K8sCluster {
   return {
     id: String(raw.id ?? ''),
@@ -394,6 +408,22 @@ function mapDeploymentOperationResult(raw: any): K8sDeploymentOperationResult {
     message: raw.message ?? '',
     auditId: raw.audit_id ?? raw.auditId ?? '',
     resources: Array.isArray(raw.resources) ? raw.resources.map(mapDeploymentIdentity) : [],
+  };
+}
+
+function mapTerminalResult(raw: any): K8sTerminalResult {
+  return {
+    status: raw.status ?? '',
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    command: raw.command ?? '',
+    verb: raw.verb ?? '',
+    args: raw.args ?? [],
+    output: raw.output ?? '',
+    exitCode: raw.exit_code ?? raw.exitCode ?? 0,
+    auditId: raw.audit_id ?? raw.auditId ?? '',
+    blockedReason: raw.blocked_reason ?? raw.blockedReason ?? '',
+    mode: raw.mode ?? '',
   };
 }
 
@@ -630,5 +660,12 @@ export const k8sApi = {
       }),
     });
     return mapDeploymentOperationResult(raw);
+  },
+  async execTerminal(input: { clusterId: string; namespace: string; command: string }): Promise<K8sTerminalResult> {
+    const raw = await apiRequest<any>('/k8s/terminal/exec', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, command: input.command }),
+    });
+    return mapTerminalResult(raw);
   },
 };

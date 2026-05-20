@@ -16,12 +16,14 @@ const rbacPageSource = readFileSync(new URL('./RbacPage.tsx', import.meta.url), 
 const kubeconfigSource = readFileSync(new URL('./KubeconfigPage.tsx', import.meta.url), 'utf8');
 const templateSource = readFileSync(new URL('./TemplatePage.tsx', import.meta.url), 'utf8');
 const deploymentSource = readFileSync(new URL('./DeploymentPage.tsx', import.meta.url), 'utf8');
+const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
   assert.equal(layoutSource.includes('Prod / CN-SHANGHAI-A'), true);
   assert.equal(navigationSource.includes('访问控制'), true);
   assert.equal(navigationSource.includes('证书中心'), true);
+  assert.equal(navigationSource.includes('受控终端'), true);
 });
 
 test('K8s Dashboard 展示来源、时间窗口、同步和审计上下文', () => {
@@ -116,4 +118,14 @@ test('K8s 发布部署页面展示完整资源身份、高风险确认和审计�
   assert.equal(deploymentSource.includes('操作已落审计'), true);
   assert.equal(deploymentSource.includes('api_version'), true);
   assert.equal(deploymentSource.includes('uid'), true);
+});
+
+test('K8s 受控终端页面展示只读策略、权限不足态和审计结果', () => {
+  assert.equal(terminalSource.includes('受控终端'), true);
+  assert.equal(terminalSource.includes('/api/v1/k8s/terminal/exec'), true);
+  assert.equal(terminalSource.includes('只读 kubectl'), true);
+  assert.equal(terminalSource.includes('权限不足'), true);
+  assert.equal(terminalSource.includes('audit_id'), true);
+  assert.equal(terminalSource.includes('delete'), true);
+  assert.equal(terminalSource.includes('port-forward'), true);
 });

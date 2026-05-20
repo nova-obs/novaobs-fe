@@ -347,3 +347,37 @@ test('K8s 发布部署调用统一 NovaObs API 并传递完整资源身份', asy
     globalThis.fetch = originalFetch;
   }
 });
+
+test('K8s 受控终端调用统一 NovaObs API 并映射审计结果', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({
+      status: 'accepted',
+      cluster_id: 'prod',
+      namespace: 'orders',
+      command: 'get pods -n orders',
+      verb: 'get',
+      args: ['pods', '-n', 'orders'],
+      output: 'NovaObs 已校验只读命令',
+      exit_code: 0,
+      audit_id: 'audit-terminal-1',
+      mode: 'dry_run',
+    });
+  };
+
+  try {
+    const result = await k8sApi.execTerminal({ clusterId: 'prod', namespace: 'orders', command: 'get pods -n orders' });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/terminal/exec');
+    assert.equal(JSON.parse(requests[0].init.body).cluster_id, 'prod');
+    assert.equal(JSON.parse(requests[0].init.body).namespace, 'orders');
+    assert.equal(JSON.parse(requests[0].init.body).command, 'get pods -n orders');
+    assert.equal(result.auditId, 'audit-terminal-1');
+    assert.equal(result.mode, 'dry_run');
+    assert.equal(result.exitCode, 0);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

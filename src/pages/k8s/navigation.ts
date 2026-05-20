@@ -12,6 +12,7 @@ import {
   ScrollText,
   ShieldCheck,
   ShieldUser,
+  SquareTerminal,
   UserRound,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -52,6 +53,7 @@ export const k8sNavigationItems: K8sNavigationItem[] = [
   { id: 'deploy-history', label: '部署历史', path: '/k8s/deploy-history', group: 'delivery', icon: History, description: '发布记录与回滚' },
   { id: 'audit', label: '操作审计', path: '/k8s/audit', group: 'delivery', icon: FileClock, description: '变更审计与追踪' },
   { id: 'certificates', label: '证书中心', path: '/k8s/certificates', group: 'security', icon: FileKey2, description: '证书与过期风险' },
+  { id: 'terminal', label: '受控终端', path: '/k8s/terminal', group: 'security', icon: SquareTerminal, description: '只读命令与审计' },
 ];
 
 export const getK8sNavigationByPath = (path: string) => {

@@ -27,6 +27,7 @@ test('K8s 运维二级导航保留 startorch 支持能力入口', () => {
     '/k8s/deploy-history',
     '/k8s/audit',
     '/k8s/certificates',
+    '/k8s/terminal',
   ]);
 });
 
@@ -34,4 +35,5 @@ test('K8s 运维可按子路径定位当前二级导航', () => {
   assert.equal(getK8sNavigationByPath('/k8s')?.id, 'dashboard');
   assert.equal(getK8sNavigationByPath('/k8s/namespaces')?.id, 'namespaces');
   assert.equal(getK8sNavigationByPath('/k8s/rbac/roles')?.id, 'rbac');
+  assert.equal(getK8sNavigationByPath('/k8s/terminal')?.id, 'terminal');
 });
