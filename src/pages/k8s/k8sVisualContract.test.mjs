@@ -103,7 +103,12 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
 
 test('K8s ServiceAccount 页面展示 RBAC 权限不足态和审计结果', () => {
   assert.equal(serviceAccountSource.includes('ServiceAccount'), true);
-  assert.equal(serviceAccountSource.includes('/api/v1/k8s/service-accounts'), true);
+  assert.equal(serviceAccountSource.includes('k8sApi.listServiceAccounts'), true);
+  assert.equal(serviceAccountSource.includes('集群选择'), true);
+  assert.equal(serviceAccountSource.includes('命名空间选择'), true);
+  assert.equal(serviceAccountSource.includes('DEFAULT_CLUSTER'), false);
+  assert.equal(serviceAccountSource.includes('DEFAULT_NAMESPACE'), false);
+  assert.equal(serviceAccountSource.includes("useState('orders-reader')"), false);
   assert.equal(serviceAccountSource.includes('权限不足'), true);
   assert.equal(serviceAccountSource.includes('操作已落审计'), true);
   assert.equal(serviceAccountSource.includes('删除确认摘要'), true);

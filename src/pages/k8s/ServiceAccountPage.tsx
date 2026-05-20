@@ -1,26 +1,58 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { KeyRound, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCheck } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sServiceAccount } from './api';
 
-const DEFAULT_CLUSTER = 'prod';
-const DEFAULT_NAMESPACE = 'orders';
-
 export function K8sServiceAccountPage() {
   const queryClient = useQueryClient();
-  const [name, setName] = useState('orders-reader');
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [name, setName] = useState('');
   const [selected, setSelected] = useState<K8sServiceAccount | null>(null);
   const [lastAuditId, setLastAuditId] = useState('');
 
+  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => k8sApi.listClusters(),
+    retry: false,
+  });
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+
+  const { data: namespaces = [], error: namespaceError } = useQuery({
+    queryKey: ['k8s-namespaces', activeClusterId],
+    queryFn: () => k8sApi.listNamespaces(activeClusterId),
+    enabled: Boolean(activeClusterId),
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!selectedClusterId && clusters[0]?.id) {
+      setSelectedClusterId(clusters[0].id);
+    }
+  }, [clusters, selectedClusterId]);
+
+  useEffect(() => {
+    const namespaceExists = namespaces.some((item) => item.name === namespace);
+    if (namespace && !namespaceExists) {
+      setNamespace(namespaces[0]?.name ?? '');
+      setSelected(null);
+      return;
+    }
+    if (!namespace && namespaces[0]?.name) {
+      setNamespace(namespaces[0].name);
+    }
+  }, [namespace, namespaces]);
+
   const { data = [], isLoading, error } = useQuery({
-    queryKey: ['k8s-service-accounts', DEFAULT_CLUSTER, DEFAULT_NAMESPACE],
-    queryFn: () => k8sApi.listServiceAccounts(DEFAULT_CLUSTER, DEFAULT_NAMESPACE),
+    queryKey: ['k8s-service-accounts', activeClusterId, namespace],
+    queryFn: () => k8sApi.listServiceAccounts(activeClusterId, namespace),
+    enabled: Boolean(activeClusterId && namespace),
     retry: false,
   });
 
   const createMutation = useMutation({
-    mutationFn: () => k8sApi.createServiceAccount({ clusterId: DEFAULT_CLUSTER, namespace: DEFAULT_NAMESPACE, name }),
+    mutationFn: () => k8sApi.createServiceAccount({ clusterId: activeClusterId, namespace, name }),
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelected(result.item ?? null);
@@ -47,19 +79,60 @@ export function K8sServiceAccountPage() {
   }, [createMutation.error, deleteMutation.error]);
 
   const currentTarget = selected ?? data[0];
+  const canList = Boolean(activeClusterId && namespace);
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr_0.9fr]">
-        <ServiceAccountMetric icon={UserRoundCheck} label="ServiceAccount" value={String(data.length)} meta="cluster/prod namespace/orders" />
+        <ServiceAccountMetric icon={UserRoundCheck} label="ServiceAccount" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
         <ServiceAccountMetric icon={ShieldCheck} label="权限模型" value="RBAC" meta="k8s.service-account" />
         <ServiceAccountMetric icon={KeyRound} label="敏感输出" value="none" meta="token hidden" />
       </div>
 
+      <section className="console-panel px-4 py-3">
+        <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">集群选择</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={activeClusterId}
+              onChange={(event) => {
+                setSelectedClusterId(event.target.value);
+                setNamespace('');
+                setSelected(null);
+              }}
+              disabled={isLoadingClusters || !clusters.length}
+            >
+              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
+              {clusters.map((item) => (
+                <option key={item.id} value={item.id}>{item.name || item.id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">命名空间选择</span>
+            <select className="console-input mt-2 w-full" value={namespace} onChange={(event) => setNamespace(event.target.value)} disabled={!namespaces.length}>
+              {!namespaces.length ? <option value="">暂无命名空间</option> : null}
+              {namespaces.map((item) => (
+                <option key={`${item.clusterId}-${item.name}`} value={item.name}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="text-sm text-muted">
+            列表通过 Kubernetes API 实时只读读取，写操作仍由 NovaObs RBAC、审计和后端能力开关控制。
+          </div>
+        </div>
+        {clusterError || namespaceError ? (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
+          </div>
+        ) : null}
+      </section>
+
       <DataPanel title="ServiceAccount" meta={isLoading ? '加载中' : `${data.length} 个账号 · 写操作受 RBAC 控制`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            ServiceAccount API 暂未连接，等待后端 `/api/v1/k8s/service-accounts`。
+            ServiceAccount 读取失败：{errorMessage(error)}
           </div>
         ) : null}
         {permissionError ? (
@@ -81,7 +154,13 @@ export function K8sServiceAccountPage() {
                 正在读取 ServiceAccount。
               </div>
             ) : null}
-            {!isLoading && !error && data.length ? (
+            {!canList ? (
+              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+                <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
+                <p className="mt-2 text-sm text-muted">ServiceAccount 按 namespace 级 RBAC 读取，不做默认全命名空间扫描。</p>
+              </div>
+            ) : null}
+            {canList && !isLoading && !error && data.length ? (
               <table className="console-table min-w-[820px] w-full">
                 <thead>
                   <tr>
@@ -114,7 +193,7 @@ export function K8sServiceAccountPage() {
                 </tbody>
               </table>
             ) : null}
-            {!isLoading && !error && !data.length ? (
+            {canList && !isLoading && !error && !data.length ? (
               <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
                 <div className="font-semibold text-on-surface">暂无 ServiceAccount</div>
                 <p className="mt-2 text-sm text-muted">当前命名空间没有返回服务账号。</p>
@@ -133,8 +212,8 @@ export function K8sServiceAccountPage() {
               onChange={(event) => setName(event.target.value)}
             />
             <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-mono">cluster={DEFAULT_CLUSTER}</div>
-              <div className="font-mono">namespace={DEFAULT_NAMESPACE}</div>
+              <div className="font-mono">cluster={activeClusterId || '-'}</div>
+              <div className="font-mono">namespace={namespace || '-'}</div>
               <div className="font-mono">name={name || '-'}</div>
               <div className="mt-2">不会在页面、日志或响应中展示 token。</div>
             </div>
@@ -148,7 +227,7 @@ export function K8sServiceAccountPage() {
             <div className="mt-4 flex gap-2">
               <button
                 className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!name.trim() || createMutation.isPending}
+                disabled={!activeClusterId || !namespace || !name.trim() || createMutation.isPending}
                 onClick={() => createMutation.mutate()}
               >
                 <Plus className="h-4 w-4" />
@@ -192,4 +271,8 @@ function StatusPill({ status }: { status: string }) {
       {active ? '运行中' : status || 'unknown'}
     </span>
   );
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。';
 }
