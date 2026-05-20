@@ -1,39 +1,113 @@
-import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { CloudUpload, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
-import { k8sApi, type K8sDeploymentIdentity, type K8sDeploymentOperationResult } from './api';
-
-const DEFAULT_CLUSTER = 'prod';
-const DEFAULT_YAML = `apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: orders-api
-  namespace: orders
-spec:
-  replicas: 2`;
-
-const DEFAULT_IDENTITY: K8sDeploymentIdentity = {
-  clusterId: DEFAULT_CLUSTER,
-  namespace: 'orders',
-  apiVersion: 'apps/v1',
-  kind: 'Deployment',
-  name: 'orders-api',
-  uid: 'uid-orders-api',
-};
+import { k8sApi, type K8sDeploymentIdentity, type K8sDeploymentOperationResult, type K8sResourceSummary } from './api';
 
 export function K8sDeploymentPage() {
-  const [yamlContent, setYamlContent] = useState(DEFAULT_YAML);
-  const [identity, setIdentity] = useState<K8sDeploymentIdentity>(DEFAULT_IDENTITY);
-  const [historyId, setHistoryId] = useState('deploy-orders-1');
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [selectedResourceUID, setSelectedResourceUID] = useState('');
+  const [yamlContent, setYamlContent] = useState('');
+  const [lastTemplateYAML, setLastTemplateYAML] = useState('');
+  const [identity, setIdentity] = useState<K8sDeploymentIdentity>(emptyIdentity());
+  const [historyId, setHistoryId] = useState('');
   const [lastResult, setLastResult] = useState<K8sDeploymentOperationResult | null>(null);
 
+  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => k8sApi.listClusters(),
+    retry: false,
+  });
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+
+  const { data: namespaces = [], error: namespaceError } = useQuery({
+    queryKey: ['k8s-namespaces', activeClusterId],
+    queryFn: () => k8sApi.listNamespaces(activeClusterId),
+    enabled: Boolean(activeClusterId),
+    retry: false,
+  });
+
+  const { data: resources = [], isLoading: isLoadingResources, error: resourceError } = useQuery({
+    queryKey: ['k8s-deployment-resources', activeClusterId, namespace],
+    queryFn: () => k8sApi.listResources({ clusterId: activeClusterId, namespace, kind: 'Deployment' }),
+    enabled: Boolean(activeClusterId && namespace),
+    retry: false,
+  });
+
+  const { data: histories = [], error: historyError } = useQuery({
+    queryKey: ['k8s-deployment-history', activeClusterId, namespace],
+    queryFn: () => k8sApi.listDeploymentHistory(activeClusterId, namespace),
+    enabled: Boolean(activeClusterId),
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!selectedClusterId && clusters[0]?.id) {
+      setSelectedClusterId(clusters[0].id);
+    }
+  }, [clusters, selectedClusterId]);
+
+  useEffect(() => {
+    const namespaceExists = namespaces.some((item) => item.name === namespace);
+    if (namespace && !namespaceExists) {
+      setNamespace(namespaces[0]?.name ?? '');
+      setSelectedResourceUID('');
+      setLastResult(null);
+      return;
+    }
+    if (!namespace && namespaces[0]?.name) {
+      setNamespace(namespaces[0].name);
+    }
+  }, [namespace, namespaces]);
+
+  useEffect(() => {
+    const resourceExists = resources.some((item) => resourceOptionKey(item) === selectedResourceUID);
+    if (selectedResourceUID && !resourceExists) {
+      setSelectedResourceUID(resources[0] ? resourceOptionKey(resources[0]) : '');
+      return;
+    }
+    if (!selectedResourceUID && resources[0]) {
+      setSelectedResourceUID(resourceOptionKey(resources[0]));
+    }
+  }, [resources, selectedResourceUID]);
+
+  const currentResource = resources.find((item) => resourceOptionKey(item) === selectedResourceUID) ?? resources[0];
+
+  useEffect(() => {
+    const nextIdentity = identityFromResource(activeClusterId, namespace, currentResource);
+    setIdentity(nextIdentity);
+    syncDeploymentYAML(namespace, currentResource);
+    setLastResult(null);
+  }, [activeClusterId, currentResource, namespace]);
+
+  useEffect(() => {
+    const historyExists = histories.some((item) => item.id === historyId);
+    if (historyId && !historyExists) {
+      setHistoryId(histories[0]?.id ?? '');
+      return;
+    }
+    if (!historyId && histories[0]?.id) {
+      setHistoryId(histories[0].id);
+    }
+  }, [histories, historyId]);
+
+  function syncDeploymentYAML(nextNamespace: string, resource?: K8sResourceSummary) {
+    const shouldSync = !yamlContent.trim() || yamlContent === lastTemplateYAML;
+    if (!shouldSync || !nextNamespace) {
+      return;
+    }
+    const nextYAML = buildDeploymentYAML(nextNamespace, resource);
+    setYamlContent(nextYAML);
+    setLastTemplateYAML(nextYAML);
+  }
+
   const previewMutation = useMutation({
-    mutationFn: () => k8sApi.previewDeployment({ clusterId: DEFAULT_CLUSTER, yamlContent }),
+    mutationFn: () => k8sApi.previewDeployment({ clusterId: activeClusterId, yamlContent }),
     onSuccess: setLastResult,
   });
   const applyMutation = useMutation({
-    mutationFn: () => k8sApi.applyDeployment({ clusterId: DEFAULT_CLUSTER, yamlContent }),
+    mutationFn: () => k8sApi.applyDeployment({ clusterId: activeClusterId, yamlContent }),
     onSuccess: setLastResult,
   });
   const deleteMutation = useMutation({
@@ -51,20 +125,98 @@ export function K8sDeploymentPage() {
   }, [previewMutation.error, applyMutation.error, deleteMutation.error, rollbackMutation.error]);
 
   const resourceCount = lastResult?.resources.length ?? extractResourceCount(yamlContent);
+  const canPreview = Boolean(activeClusterId && yamlContent.trim());
+  const hasCompleteIdentity = completeIdentity(identity);
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.8fr]">
-        <DeployMetric label="资源" value={String(resourceCount)} meta="cluster/prod" />
-        <DeployMetric label="动作" value={lastResult?.status || 'preview'} meta="k8s.deployment" />
+        <DeployMetric label="资源" value={String(resourceCount)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
+        <DeployMetric label="动作" value={lastResult?.status || 'preview'} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
         <DeployMetric label="审计" value={lastResult?.auditId ? 'recorded' : 'pending'} meta={lastResult?.auditId || 'namespace scope'} />
       </div>
+
+      <section className="console-panel px-4 py-3">
+        <div className="grid gap-3 xl:grid-cols-[minmax(180px,260px)_minmax(180px,240px)_minmax(220px,280px)_1fr] xl:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">集群选择</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={activeClusterId}
+              onChange={(event) => {
+                setSelectedClusterId(event.target.value);
+                setNamespace('');
+                setSelectedResourceUID('');
+                setYamlContent('');
+                setLastTemplateYAML('');
+                setHistoryId('');
+                setLastResult(null);
+              }}
+              disabled={isLoadingClusters || !clusters.length}
+            >
+              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
+              {clusters.map((item) => (
+                <option key={item.id} value={item.id}>{item.name || item.id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">命名空间选择</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={namespace}
+              onChange={(event) => {
+                setNamespace(event.target.value);
+                setSelectedResourceUID('');
+                setHistoryId('');
+                setLastResult(null);
+              }}
+              disabled={!namespaces.length}
+            >
+              {!namespaces.length ? <option value="">暂无命名空间</option> : null}
+              {namespaces.map((item) => (
+                <option key={`${item.clusterId}-${item.name}`} value={item.name}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">资源参考</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={selectedResourceUID}
+              onChange={(event) => {
+                setSelectedResourceUID(event.target.value);
+                setLastResult(null);
+              }}
+              disabled={!resources.length}
+            >
+              {!resources.length ? <option value="">暂无 Deployment 资源</option> : null}
+              {resources.map((item) => (
+                <option key={resourceOptionKey(item)} value={resourceOptionKey(item)}>{item.identity.kind}/{item.identity.name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="text-sm text-muted">
+            预览、发布、删除和回滚统一走 NovaObs RBAC 与审计；真实目标从 Kubernetes 只读 API 派生。
+          </div>
+        </div>
+        {clusterError || namespaceError || resourceError || historyError ? (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError || historyError)}
+          </div>
+        ) : null}
+      </section>
 
       <DataPanel title="发布部署" meta="preview / apply / delete / rollback 统一走 NovaObs RBAC 与审计">
         {permissionError ? (
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             <ShieldAlert className="h-4 w-4" />
             权限不足：当前用户缺少 `k8s.deployment` 对应操作权限。
+          </div>
+        ) : null}
+        {isLoadingResources ? (
+          <div className="mb-3 rounded-lg bg-white/45 px-3 py-2 text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+            正在读取当前命名空间的 Deployment 参考。
           </div>
         ) : null}
         {lastResult?.auditId ? (
@@ -91,13 +243,13 @@ export function K8sDeploymentPage() {
                   <div key={`${item.kind}-${item.name}-${item.uid || 'preview'}`} className="rounded-lg bg-white/50 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
-                        <div className="truncate font-semibold text-primary">{item.name}</div>
-                        <div className="mt-1 text-[11px] text-muted">{item.kind}</div>
+                        <div className="truncate font-semibold text-primary">{item.name || '-'}</div>
+                        <div className="mt-1 text-[11px] text-muted">{item.kind || '-'}</div>
                       </div>
-                      <div className="shrink-0 rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{item.namespace}</div>
+                      <div className="shrink-0 rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{item.namespace || '-'}</div>
                     </div>
                     <div className="mt-3 grid gap-2 text-[11px] text-muted">
-                      <div className="break-all font-mono">api={item.apiVersion}</div>
+                      <div className="break-all font-mono">api={item.apiVersion || '-'}</div>
                       <div className="break-all font-mono">uid={item.uid || '-'}</div>
                     </div>
                   </div>
@@ -114,30 +266,38 @@ export function K8sDeploymentPage() {
             <IdentityInput label="kind" value={identity.kind} onChange={(value) => setIdentity({ ...identity, kind: value })} />
             <IdentityInput label="name" value={identity.name} onChange={(value) => setIdentity({ ...identity, name: value })} />
             <IdentityInput label="uid" value={identity.uid || ''} onChange={(value) => setIdentity({ ...identity, uid: value })} />
-            <IdentityInput label="history_id" value={historyId} onChange={setHistoryId} />
+            <label className="mt-3 block text-xs font-semibold text-muted">
+              history_id
+              <select className="console-input mt-2 w-full" value={historyId} onChange={(event) => setHistoryId(event.target.value)} disabled={!histories.length}>
+                {!histories.length ? <option value="">暂无部署历史</option> : null}
+                {histories.map((item) => (
+                  <option key={item.id} value={item.id}>{item.workload || item.id} · {item.revision || item.action || item.id}</option>
+                ))}
+              </select>
+            </label>
 
             <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               <div className="font-semibold text-on-surface">确认摘要</div>
-              <div className="mt-2 font-mono">cluster={DEFAULT_CLUSTER}</div>
+              <div className="mt-2 font-mono">cluster={activeClusterId || '-'}</div>
               <div className="font-mono">namespace={identity.namespace || '-'}</div>
               <div className="font-mono">resource={identity.kind || '-'}/{identity.name || '-'}</div>
               <div className="font-mono">uid={identity.uid || '-'}</div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!yamlContent.trim() || previewMutation.isPending} onClick={() => previewMutation.mutate()}>
+              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()}>
                 <CloudUpload className="h-4 w-4" />
                 预览
               </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!yamlContent.trim() || applyMutation.isPending} onClick={() => applyMutation.mutate()}>
+              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!canPreview || applyMutation.isPending} onClick={() => applyMutation.mutate()}>
                 <CloudUpload className="h-4 w-4" />
                 发布
               </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!identity.uid || deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>
+              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!hasCompleteIdentity || deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>
                 <Trash2 className="h-4 w-4" />
                 删除
               </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!identity.uid || !historyId.trim() || rollbackMutation.isPending} onClick={() => rollbackMutation.mutate()}>
+              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!hasCompleteIdentity || !historyId.trim() || rollbackMutation.isPending} onClick={() => rollbackMutation.mutate()}>
                 <RotateCcw className="h-4 w-4" />
                 回滚
               </button>
@@ -168,6 +328,47 @@ function IdentityInput({ label, value, onChange }: { label: string; value: strin
   );
 }
 
+function identityFromResource(clusterId: string, namespace: string, resource?: K8sResourceSummary): K8sDeploymentIdentity {
+  if (!resource) {
+    return { ...emptyIdentity(), clusterId, namespace };
+  }
+  return {
+    clusterId,
+    namespace: resource.identity.namespace || namespace,
+    apiVersion: resource.identity.apiVersion,
+    kind: resource.identity.kind,
+    name: resource.identity.name,
+    uid: resource.identity.uid,
+  };
+}
+
+function emptyIdentity(): K8sDeploymentIdentity {
+  return { clusterId: '', namespace: '', apiVersion: '', kind: '', name: '', uid: '' };
+}
+
+function buildDeploymentYAML(namespace: string, resource?: K8sResourceSummary) {
+  const name = resource?.identity.name || 'workload-name';
+  return `apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${name}
+  namespace: ${namespace || 'default'}
+spec:
+  replicas: 1`;
+}
+
+function completeIdentity(value: K8sDeploymentIdentity) {
+  return Boolean(value.clusterId && value.namespace && value.apiVersion && value.kind && value.name && value.uid);
+}
+
+function resourceOptionKey(resource: K8sResourceSummary) {
+  return resource.identity.uid || `${resource.identity.kind}/${resource.identity.namespace}/${resource.identity.name}`;
+}
+
 function extractResourceCount(value: string) {
   return Math.max(1, value.split('---').filter((item) => item.trim()).length);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '读取失败';
 }

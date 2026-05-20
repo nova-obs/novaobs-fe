@@ -223,10 +223,10 @@ test('K8s 部署历史和审计事件调用统一 NovaObs API', async () => {
   };
 
   try {
-    const history = await k8sApi.listDeploymentHistory('prod');
-    const audits = await k8sApi.listAuditEvents('prod');
-    assert.equal(requests[0].path, '/api/v1/k8s/deployment-history?cluster_id=prod');
-    assert.equal(requests[1].path, '/api/v1/k8s/audit-events?cluster_id=prod');
+    const history = await k8sApi.listDeploymentHistory('prod', 'orders');
+    const audits = await k8sApi.listAuditEvents('prod', 'orders');
+    assert.equal(requests[0].path, '/api/v1/k8s/deployment-history?cluster_id=prod&namespace=orders');
+    assert.equal(requests[1].path, '/api/v1/k8s/audit-events?cluster_id=prod&namespace=orders');
     assert.equal(history[0].workload, 'orders-api');
     assert.equal(audits[0].traceId, 'trace-1');
   } finally {

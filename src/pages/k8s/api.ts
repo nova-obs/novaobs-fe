@@ -612,12 +612,18 @@ export const k8sApi = {
     const raw = await apiRequest<any>(`/k8s/pod-logs?${params.toString()}`);
     return mapPodLogs(raw);
   },
-  async listDeploymentHistory(clusterId = 'prod'): Promise<K8sDeploymentHistory[]> {
-    const raw = await apiRequest<any[]>(`/k8s/deployment-history?cluster_id=${encodeURIComponent(clusterId)}`);
+  async listDeploymentHistory(clusterId = '', namespace = ''): Promise<K8sDeploymentHistory[]> {
+    const params = new URLSearchParams();
+    if (clusterId) params.set('cluster_id', clusterId);
+    if (namespace) params.set('namespace', namespace);
+    const raw = await apiRequest<any[]>(`/k8s/deployment-history${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapDeploymentHistory);
   },
-  async listAuditEvents(clusterId = 'prod'): Promise<K8sAuditEvent[]> {
-    const raw = await apiRequest<any[]>(`/k8s/audit-events?cluster_id=${encodeURIComponent(clusterId)}`);
+  async listAuditEvents(clusterId = '', namespace = ''): Promise<K8sAuditEvent[]> {
+    const params = new URLSearchParams();
+    if (clusterId) params.set('cluster_id', clusterId);
+    if (namespace) params.set('namespace', namespace);
+    const raw = await apiRequest<any[]>(`/k8s/audit-events${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapAuditEvent);
   },
   async listCertificates(clusterId = '', namespace = ''): Promise<K8sCertificate[]> {
