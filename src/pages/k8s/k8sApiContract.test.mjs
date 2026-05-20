@@ -11,6 +11,15 @@ function jsonResponse(data) {
   };
 }
 
+function jsonErrorResponse(data, code = 'k8s_terminal_command_blocked', message = '命令不符合 NovaObs 终端安全策略') {
+  return {
+    ok: false,
+    status: 400,
+    headers: { get: () => null },
+    json: async () => ({ success: false, data, error: { code, message }, meta: {} }),
+  };
+}
+
 test('K8s 集群列表调用统一 NovaObs API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
@@ -364,6 +373,7 @@ test('K8s 受控终端调用统一 NovaObs API 并映射审计结果', async () 
       exit_code: 0,
       audit_id: 'audit-terminal-1',
       mode: 'dry_run',
+      output_truncated: true,
     });
   };
 
@@ -377,6 +387,34 @@ test('K8s 受控终端调用统一 NovaObs API 并映射审计结果', async () 
     assert.equal(result.auditId, 'audit-terminal-1');
     assert.equal(result.mode, 'dry_run');
     assert.equal(result.exitCode, 0);
+    assert.equal(result.outputTruncated, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('K8s 受控终端保留 blocked 响应中的策略结果', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonErrorResponse({
+    status: 'blocked',
+    cluster_id: 'prod',
+    namespace: 'orders',
+    command: 'delete pod orders-api',
+    verb: 'delete',
+    output: '动词 "delete" 不在只读允许列表中',
+    exit_code: 126,
+    audit_id: 'audit-terminal-blocked',
+    blocked_reason: '动词 "delete" 不在只读允许列表中',
+    mode: 'policy_guard',
+  });
+
+  try {
+    const result = await k8sApi.execTerminal({ clusterId: 'prod', namespace: 'orders', command: 'delete pod orders-api' });
+
+    assert.equal(result.status, 'blocked');
+    assert.equal(result.auditId, 'audit-terminal-blocked');
+    assert.equal(result.blockedReason.includes('delete'), true);
+    assert.equal(result.exitCode, 126);
   } finally {
     globalThis.fetch = originalFetch;
   }

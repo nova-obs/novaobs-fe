@@ -124,6 +124,10 @@ test('K8s 受控终端页面展示只读策略、权限不足态和审计结果'
   assert.equal(terminalSource.includes('受控终端'), true);
   assert.equal(terminalSource.includes('/api/v1/k8s/terminal/exec'), true);
   assert.equal(terminalSource.includes('只读 kubectl'), true);
+  assert.equal(terminalSource.includes('命令模板'), true);
+  assert.equal(terminalSource.includes('accepted / blocked'), true);
+  assert.equal(terminalSource.includes('output_truncated'), true);
+  assert.equal(terminalSource.includes('策略阻断'), true);
   assert.equal(terminalSource.includes('权限不足'), true);
   assert.equal(terminalSource.includes('audit_id'), true);
   assert.equal(terminalSource.includes('delete'), true);

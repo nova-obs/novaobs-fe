@@ -192,6 +192,7 @@ export interface K8sTerminalResult {
   auditId: string;
   blockedReason: string;
   mode: string;
+  outputTruncated: boolean;
 }
 
 function mapCluster(raw: any): K8sCluster {
@@ -424,7 +425,24 @@ function mapTerminalResult(raw: any): K8sTerminalResult {
     auditId: raw.audit_id ?? raw.auditId ?? '',
     blockedReason: raw.blocked_reason ?? raw.blockedReason ?? '',
     mode: raw.mode ?? '',
+    outputTruncated: raw.output_truncated ?? raw.outputTruncated ?? false,
   };
+}
+
+async function terminalRequest(input: { clusterId: string; namespace: string; command: string }): Promise<any> {
+  const response = await fetch('/api/v1/k8s/terminal/exec', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, command: input.command }),
+  });
+  const body = await response.json();
+  if ((!response.ok || !body.success) && body.data?.status === 'blocked') {
+    return body.data;
+  }
+  if (!response.ok || !body.success) {
+    throw new Error(body.error?.message ?? `请求失败: ${response.status}`);
+  }
+  return body.data;
 }
 
 export const k8sApi = {
@@ -662,10 +680,7 @@ export const k8sApi = {
     return mapDeploymentOperationResult(raw);
   },
   async execTerminal(input: { clusterId: string; namespace: string; command: string }): Promise<K8sTerminalResult> {
-    const raw = await apiRequest<any>('/k8s/terminal/exec', {
-      method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, command: input.command }),
-    });
+    const raw = await terminalRequest(input);
     return mapTerminalResult(raw);
   },
 };
