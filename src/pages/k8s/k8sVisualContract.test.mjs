@@ -65,6 +65,9 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('Fingerprint'), true);
   assert.equal(certificateSource.includes('Not After'), true);
   assert.equal(certificateSource.includes('密钥材料留在后端受控域'), true);
+  assert.equal(certificateSource.includes('证书写操作'), true);
+  assert.equal(certificateSource.includes('操作已落审计'), true);
+  assert.equal(certificateSource.includes('删除确认摘要'), true);
   assert.equal(certificateSource.includes('privateKey'), false);
   assert.equal(certificateSource.includes('private_key'), false);
 });

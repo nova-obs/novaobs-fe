@@ -68,6 +68,7 @@ export interface K8sCertificate {
   name: string;
   commonName: string;
   fingerprint: string;
+  secretId: string;
   notAfter: string;
   status: string;
   source: string;
@@ -260,6 +261,7 @@ function mapCertificate(raw: any): K8sCertificate {
     name: raw.name ?? '',
     commonName: raw.common_name ?? raw.commonName ?? '',
     fingerprint: raw.fingerprint ?? '',
+    secretId: raw.secret_id ?? raw.secretId ?? '',
     notAfter: raw.not_after ?? raw.notAfter ?? '',
     status: raw.status ?? 'unknown',
     source: raw.source ?? '',
@@ -428,6 +430,25 @@ export const k8sApi = {
   async listCertificates(clusterId = 'prod'): Promise<K8sCertificate[]> {
     const raw = await apiRequest<any[]>(`/k8s/certificates?cluster_id=${encodeURIComponent(clusterId)}`);
     return raw.map(mapCertificate);
+  },
+  async createCertificate(input: { clusterId: string; namespace: string; name: string; commonName: string; certificatePEM: string; keyMaterialPEM: string; notAfter: string }): Promise<K8sWriteResult<K8sCertificate>> {
+    const raw = await apiRequest<any>('/k8s/certificates', {
+      method: 'POST',
+      body: JSON.stringify({
+        cluster_id: input.clusterId,
+        namespace: input.namespace,
+        name: input.name,
+        common_name: input.commonName,
+        certificate_pem: input.certificatePEM,
+        private_key_pem: input.keyMaterialPEM,
+        not_after: input.notAfter,
+      }),
+    });
+    return mapWriteResult(raw, mapCertificate);
+  },
+  async deleteCertificate(id: string): Promise<K8sWriteResult<never>> {
+    const raw = await apiRequest<any>(`/k8s/certificates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw);
   },
   async listServiceAccounts(clusterId = 'prod', namespace = 'orders'): Promise<K8sServiceAccount[]> {
     const params = new URLSearchParams();

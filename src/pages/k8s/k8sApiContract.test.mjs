@@ -132,6 +132,43 @@ test('K8s 证书中心调用统一 NovaObs API 且只映射元数据', async () 
   }
 });
 
+test('K8s 证书写操作调用统一 NovaObs API 且私钥只在提交体中出现', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (init.method === 'POST') {
+      return jsonResponse({ item: { id: 'cert-1', cluster_id: 'prod', namespace: 'ingress', name: 'wildcard-prod', common_name: '*.prod.example.com', fingerprint: 'sha256:abc', secret_id: 'secret-1', status: 'valid' }, audit_id: 'audit-create-1' });
+    }
+    if (init.method === 'DELETE') {
+      return jsonResponse({ status: 'deleted', audit_id: 'audit-delete-1' });
+    }
+    return jsonResponse([]);
+  };
+
+  try {
+    const created = await k8sApi.createCertificate({
+      clusterId: 'prod',
+      namespace: 'ingress',
+      name: 'wildcard-prod',
+      commonName: '*.prod.example.com',
+      certificatePEM: 'certificate',
+      keyMaterialPEM: 'private-key-material',
+      notAfter: '2026-08-19',
+    });
+    const deleted = await k8sApi.deleteCertificate('cert-1');
+
+    assert.equal(requests[0].path, '/api/v1/k8s/certificates');
+    assert.equal(JSON.parse(requests[0].init.body).private_key_pem, 'private-key-material');
+    assert.equal(requests[1].path, '/api/v1/k8s/certificates/cert-1');
+    assert.equal(created.item.secretId, 'secret-1');
+    assert.equal('privateKey' in created.item, false);
+    assert.equal(deleted.auditId, 'audit-delete-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('K8s ServiceAccount 写操作调用统一 NovaObs API 并传递审计上下文', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
