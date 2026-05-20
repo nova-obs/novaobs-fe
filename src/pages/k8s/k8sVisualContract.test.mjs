@@ -90,7 +90,12 @@ test('K8s 部署历史和审计页面展示追踪上下文', () => {
 
 test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('证书中心'), true);
-  assert.equal(certificateSource.includes('/api/v1/k8s/certificates'), true);
+  assert.equal(certificateSource.includes('k8sApi.listCertificates'), true);
+  assert.equal(certificateSource.includes('集群选择'), true);
+  assert.equal(certificateSource.includes('命名空间选择'), true);
+  assert.equal(certificateSource.includes('DEFAULT_CLUSTER'), false);
+  assert.equal(certificateSource.includes('DEFAULT_NAMESPACE'), false);
+  assert.equal(certificateSource.includes('DEFAULT_CERTIFICATE'), false);
   assert.equal(certificateSource.includes('Fingerprint'), true);
   assert.equal(certificateSource.includes('Not After'), true);
   assert.equal(certificateSource.includes('密钥材料留在后端受控域'), true);

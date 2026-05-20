@@ -1,34 +1,66 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CalendarClock, FileKey2, Fingerprint, Plus, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sCertificate } from './api';
 
-const DEFAULT_CLUSTER = 'prod';
-const DEFAULT_NAMESPACE = 'ingress';
-const DEFAULT_CERTIFICATE = '-----BEGIN CERTIFICATE-----\\nMIIB\\n-----END CERTIFICATE-----';
-
 export function K8sCertificatePage() {
   const queryClient = useQueryClient();
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [namespace, setNamespace] = useState('');
   const [selected, setSelected] = useState<K8sCertificate | null>(null);
-  const [name, setName] = useState('wildcard-prod');
-  const [commonName, setCommonName] = useState('*.prod.example.com');
-  const [notAfter, setNotAfter] = useState('2026-08-19');
-  const [certificatePEM, setCertificatePEM] = useState(DEFAULT_CERTIFICATE);
+  const [name, setName] = useState('');
+  const [commonName, setCommonName] = useState('');
+  const [notAfter, setNotAfter] = useState('');
+  const [certificatePEM, setCertificatePEM] = useState('');
   const [keyMaterialPEM, setKeyMaterialPEM] = useState('');
   const [lastAuditId, setLastAuditId] = useState('');
 
-  const { data = [], isLoading, error } = useQuery({
-    queryKey: ['k8s-certificates', DEFAULT_CLUSTER],
-    queryFn: () => k8sApi.listCertificates(DEFAULT_CLUSTER),
+  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => k8sApi.listClusters(),
+    retry: false,
+  });
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+
+  const { data: namespaces = [], error: namespaceError } = useQuery({
+    queryKey: ['k8s-namespaces', activeClusterId],
+    queryFn: () => k8sApi.listNamespaces(activeClusterId),
+    enabled: Boolean(activeClusterId),
     retry: false,
   });
 
-  const expiringSoon = data.filter((item) => item.status === 'expiring_soon').length;
+  useEffect(() => {
+    if (!selectedClusterId && clusters[0]?.id) {
+      setSelectedClusterId(clusters[0].id);
+    }
+  }, [clusters, selectedClusterId]);
+
+  useEffect(() => {
+    const namespaceExists = namespaces.some((item) => item.name === namespace);
+    if (namespace && !namespaceExists) {
+      setNamespace(namespaces[0]?.name ?? '');
+      setSelected(null);
+      return;
+    }
+    if (!namespace && namespaces[0]?.name) {
+      setNamespace(namespaces[0].name);
+    }
+  }, [namespace, namespaces]);
+
+  const { data = [], isLoading, error } = useQuery({
+    queryKey: ['k8s-certificates', activeClusterId, namespace],
+    queryFn: () => k8sApi.listCertificates(activeClusterId, namespace),
+    enabled: Boolean(activeClusterId && namespace),
+    retry: false,
+  });
+
+  const expiringSoon = data.filter((item) => item.status === 'warning' || item.status === 'expiring_soon').length;
   const current = selected ?? data[0];
+  const canList = Boolean(activeClusterId && namespace);
 
   const createMutation = useMutation({
-    mutationFn: () => k8sApi.createCertificate({ clusterId: DEFAULT_CLUSTER, namespace: DEFAULT_NAMESPACE, name, commonName, certificatePEM, keyMaterialPEM, notAfter }),
+    mutationFn: () => k8sApi.createCertificate({ clusterId: activeClusterId, namespace, name, commonName, certificatePEM, keyMaterialPEM, notAfter }),
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelected(result.item ?? null);
@@ -57,15 +89,55 @@ export function K8sCertificatePage() {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-[1.2fr_0.9fr_0.9fr]">
-        <CertificateMetric icon={FileKey2} label="证书资产" value={String(data.length)} meta="cluster/prod" />
-        <CertificateMetric icon={CalendarClock} label="过期风险" value={String(expiringSoon)} meta="not_after watch" />
+        <CertificateMetric icon={FileKey2} label="证书资产" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
+        <CertificateMetric icon={CalendarClock} label="过期风险" value={String(expiringSoon)} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
         <CertificateMetric icon={ShieldCheck} label="敏感字段" value="masked" meta="private material hidden" />
       </div>
+
+      <section className="console-panel px-4 py-3">
+        <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">集群选择</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={activeClusterId}
+              onChange={(event) => {
+                setSelectedClusterId(event.target.value);
+                setNamespace('');
+                setSelected(null);
+              }}
+              disabled={isLoadingClusters || !clusters.length}
+            >
+              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
+              {clusters.map((item) => (
+                <option key={item.id} value={item.id}>{item.name || item.id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">命名空间选择</span>
+            <select className="console-input mt-2 w-full" value={namespace} onChange={(event) => setNamespace(event.target.value)} disabled={!namespaces.length}>
+              {!namespaces.length ? <option value="">暂无命名空间</option> : null}
+              {namespaces.map((item) => (
+                <option key={`${item.clusterId}-${item.name}`} value={item.name}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="text-sm text-muted">
+            证书中心从 Kubernetes TLS Secret 只读提取证书元数据，不读取、不展示 `tls.key`。
+          </div>
+        </div>
+        {clusterError || namespaceError ? (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
+          </div>
+        ) : null}
+      </section>
 
       <DataPanel title="证书中心" meta={isLoading ? '加载中' : `${data.length} 张证书 · 最近 15 分钟`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            证书中心 API 暂未连接，等待后端 `/api/v1/k8s/certificates`。
+            证书中心读取失败：{errorMessage(error)}
           </div>
         ) : null}
         {permissionError ? (
@@ -86,7 +158,13 @@ export function K8sCertificatePage() {
         ) : null}
         <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
           <div className="overflow-auto">
-            {!isLoading && !error && data.length ? (
+            {!canList ? (
+              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+                <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
+                <p className="mt-2 text-sm text-muted">TLS Secret 按 namespace 读取，不做默认跨命名空间扫描。</p>
+              </div>
+            ) : null}
+            {canList && !isLoading && !error && data.length ? (
               <table className="console-table min-w-[940px] w-full">
                 <thead>
                   <tr>
@@ -119,23 +197,23 @@ export function K8sCertificatePage() {
                       <td className="font-mono text-[11px] text-muted">{item.secretId || '-'}</td>
                       <td className="font-mono text-xs">{formatDate(item.notAfter)}</td>
                       <td><StatusPill status={item.status} /></td>
-                      <td className="text-xs text-muted">{item.source || 'startorch'}</td>
+                      <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             ) : null}
-            {!isLoading && !error && !data.length ? (
+            {canList && !isLoading && !error && !data.length ? (
               <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
                 <div className="font-semibold text-on-surface">暂无证书资产</div>
-                <p className="mt-2 text-sm text-muted">后端已联通，但当前集群没有返回证书元数据。</p>
+                <p className="mt-2 text-sm text-muted">当前命名空间没有返回 TLS Secret。</p>
               </div>
             ) : null}
           </div>
 
           <aside className="console-panel px-4 py-3">
             <div className="text-sm font-semibold text-on-surface">证书写操作</div>
-            <p className="mt-1 text-xs text-muted">私钥仅作为提交输入写入 platform/secret，列表与审计不展示明文。</p>
+            <p className="mt-1 text-xs text-muted">真实集群写操作尚未启用；私钥仅作为未来提交输入，不做页面回显。</p>
             <CertInput label="name" value={name} onChange={setName} />
             <CertInput label="common_name" value={commonName} onChange={setCommonName} />
             <CertInput label="not_after" value={notAfter} onChange={setNotAfter} />
@@ -159,7 +237,7 @@ export function K8sCertificatePage() {
               <div className="font-mono">fingerprint={current?.fingerprint ?? '-'}</div>
             </div>
             <div className="mt-4 flex gap-2">
-              <button className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!name.trim() || !certificatePEM.trim() || !keyMaterialPEM.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>
+              <button className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!activeClusterId || !namespace || !name.trim() || !certificatePEM.trim() || !keyMaterialPEM.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>
                 <Plus className="h-4 w-4" />
                 创建
               </button>
@@ -226,4 +304,8 @@ function formatDate(value: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return value;
   return date.toISOString().slice(0, 10);
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。';
 }

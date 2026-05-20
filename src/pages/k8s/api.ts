@@ -620,8 +620,11 @@ export const k8sApi = {
     const raw = await apiRequest<any[]>(`/k8s/audit-events?cluster_id=${encodeURIComponent(clusterId)}`);
     return raw.map(mapAuditEvent);
   },
-  async listCertificates(clusterId = 'prod'): Promise<K8sCertificate[]> {
-    const raw = await apiRequest<any[]>(`/k8s/certificates?cluster_id=${encodeURIComponent(clusterId)}`);
+  async listCertificates(clusterId = '', namespace = ''): Promise<K8sCertificate[]> {
+    const params = new URLSearchParams();
+    if (clusterId) params.set('cluster_id', clusterId);
+    if (namespace) params.set('namespace', namespace);
+    const raw = await apiRequest<any[]>(`/k8s/certificates?${params.toString()}`);
     return raw.map(mapCertificate);
   },
   async createCertificate(input: { clusterId: string; namespace: string; name: string; commonName: string; certificatePEM: string; keyMaterialPEM: string; notAfter: string }): Promise<K8sWriteResult<K8sCertificate>> {
