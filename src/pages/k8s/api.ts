@@ -9,6 +9,17 @@ export interface K8sCluster {
   status: string;
 }
 
+export interface K8sClusterCredential {
+  secretId: string;
+  clusterId: string;
+  name: string;
+  fingerprint: string;
+  status: string;
+  createdAt: string;
+  rotatedAt: string;
+  expiresAt: string;
+}
+
 export interface K8sNamespace {
   id: string;
   clusterId: string;
@@ -203,6 +214,19 @@ function mapCluster(raw: any): K8sCluster {
     region: raw.region ?? '',
     description: raw.description ?? '',
     status: raw.status ?? 'unknown',
+  };
+}
+
+function mapClusterCredential(raw: any): K8sClusterCredential {
+  return {
+    secretId: raw.secret_id ?? raw.secretId ?? '',
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    name: raw.name ?? '',
+    fingerprint: raw.fingerprint ?? '',
+    status: raw.status ?? 'unknown',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    rotatedAt: raw.rotated_at ?? raw.rotatedAt ?? '',
+    expiresAt: raw.expires_at ?? raw.expiresAt ?? '',
   };
 }
 
@@ -450,6 +474,26 @@ export const k8sApi = {
     const search = query.trim();
     const raw = await apiRequest<any[]>(`/k8s/clusters${search ? `?q=${encodeURIComponent(search)}` : ''}`);
     return raw.map(mapCluster);
+  },
+  async listClusterCredentials(clusterId = 'prod'): Promise<K8sClusterCredential[]> {
+    const params = new URLSearchParams();
+    if (clusterId) params.set('cluster_id', clusterId);
+    const raw = await apiRequest<any[]>(`/k8s/cluster-credentials${params.toString() ? `?${params.toString()}` : ''}`);
+    return raw.map(mapClusterCredential);
+  },
+  async createClusterCredential(input: { clusterId: string; name: string; kubeconfig: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+    const raw = await apiRequest<any>('/k8s/cluster-credentials', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig }),
+    });
+    return mapWriteResult(raw, mapClusterCredential);
+  },
+  async rotateClusterCredential(input: { clusterId: string; name: string; kubeconfig: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+    const raw = await apiRequest<any>('/k8s/cluster-credentials/rotate', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig }),
+    });
+    return mapWriteResult(raw, mapClusterCredential);
   },
   async listNamespaces(clusterId = 'prod', query = ''): Promise<K8sNamespace[]> {
     const params = new URLSearchParams();

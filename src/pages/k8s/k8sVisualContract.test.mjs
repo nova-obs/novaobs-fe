@@ -37,6 +37,12 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('集群列表'), true);
   assert.equal(clusterSource.includes('startorch'), true);
   assert.equal(clusterSource.includes('/api/v1/k8s/clusters'), true);
+  assert.equal(clusterSource.includes('集群凭据'), true);
+  assert.equal(clusterSource.includes('凭据录入'), true);
+  assert.equal(clusterSource.includes('轮换'), true);
+  assert.equal(clusterSource.includes('/api/v1/k8s/cluster-credentials'), true);
+  assert.equal(clusterSource.includes('kubeconfig'), true);
+  assert.equal(clusterSource.includes('不在页面回显'), true);
 });
 
 test('K8s 命名空间页面展示集群、来源和权限上下文', () => {

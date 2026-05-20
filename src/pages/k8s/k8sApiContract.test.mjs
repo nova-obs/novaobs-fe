@@ -60,6 +60,39 @@ test('K8s 命名空间列表调用统一 NovaObs API', async () => {
   }
 });
 
+test('K8s 集群凭据调用统一 NovaObs API 且只映射元数据', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (init.method === 'POST' && String(path).endsWith('/rotate')) {
+      return jsonResponse({ item: { secret_id: 'secret-rotated', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:def', status: 'active' }, audit_id: 'audit-rotate-1' });
+    }
+    if (init.method === 'POST') {
+      return jsonResponse({ item: { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active' }, audit_id: 'audit-create-1' });
+    }
+    return jsonResponse([{ secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', kubeconfig: 'must-not-be-used' }]);
+  };
+
+  try {
+    const credentials = await k8sApi.listClusterCredentials('prod');
+    const created = await k8sApi.createClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
+    const rotated = await k8sApi.rotateClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/cluster-credentials?cluster_id=prod');
+    assert.equal(requests[1].path, '/api/v1/k8s/cluster-credentials');
+    assert.equal(JSON.parse(requests[1].init.body).kubeconfig.includes('apiVersion'), true);
+    assert.equal(requests[2].path, '/api/v1/k8s/cluster-credentials/rotate');
+    assert.equal(credentials[0].secretId, 'secret-created');
+    assert.equal(credentials[0].fingerprint, 'sha256:abc');
+    assert.equal('kubeconfig' in credentials[0], false);
+    assert.equal(created.auditId, 'audit-create-1');
+    assert.equal(rotated.item.secretId, 'secret-rotated');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('K8s 资源列表调用统一 NovaObs API 并映射完整身份', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
