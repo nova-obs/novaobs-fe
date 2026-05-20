@@ -9,6 +9,14 @@ export interface K8sCluster {
   status: string;
 }
 
+export interface K8sClusterInput {
+  id: string;
+  name: string;
+  version: string;
+  region: string;
+  description: string;
+}
+
 export interface K8sClusterCredential {
   secretId: string;
   clusterId: string;
@@ -474,6 +482,19 @@ export const k8sApi = {
     const search = query.trim();
     const raw = await apiRequest<any[]>(`/k8s/clusters${search ? `?q=${encodeURIComponent(search)}` : ''}`);
     return raw.map(mapCluster);
+  },
+  async createCluster(input: K8sClusterInput): Promise<K8sCluster> {
+    const raw = await apiRequest<any>('/k8s/clusters', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: input.id,
+        name: input.name,
+        version: input.version,
+        region: input.region,
+        description: input.description,
+      }),
+    });
+    return mapCluster(raw);
   },
   async listClusterCredentials(clusterId = 'prod'): Promise<K8sClusterCredential[]> {
     const params = new URLSearchParams();

@@ -54,7 +54,7 @@ export function K8sNamespacePage() {
                     <td className="font-mono text-xs">{item.phase || '-'}</td>
                     <td className="text-xs text-muted">{item.owner || '-'}</td>
                     <td><StatusPill status={item.status} /></td>
-                    <td className="text-xs text-muted">startorch</td>
+                    <td className="text-xs text-muted">novaobs</td>
                   </tr>
                 ))}
               </tbody>

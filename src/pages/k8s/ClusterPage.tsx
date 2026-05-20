@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, KeyRound, Network, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Database, KeyRound, Network, Plus, RotateCcw, ShieldCheck } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from './api';
 
@@ -9,10 +9,22 @@ export function K8sClusterPage() {
   const [credentialClusterId, setCredentialClusterId] = useState('prod');
   const [credentialName, setCredentialName] = useState('prod-readonly');
   const [kubeconfig, setKubeconfig] = useState('');
+  const [clusterId, setClusterId] = useState('prod');
+  const [clusterName, setClusterName] = useState('prod-core');
+  const [clusterVersion, setClusterVersion] = useState('');
+  const [clusterRegion, setClusterRegion] = useState('');
+  const [clusterDescription, setClusterDescription] = useState('');
   const { data = [], isLoading, error } = useQuery({
     queryKey: ['k8s-clusters'],
     queryFn: () => k8sApi.listClusters(),
     retry: false,
+  });
+  const createCluster = useMutation({
+    mutationFn: () => k8sApi.createCluster({ id: clusterId, name: clusterName, version: clusterVersion, region: clusterRegion, description: clusterDescription }),
+    onSuccess: (cluster) => {
+      setCredentialClusterId(cluster.id);
+      queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] });
+    },
   });
   const credentialsQuery = useQuery({
     queryKey: ['k8s-cluster-credentials', credentialClusterId],
@@ -27,27 +39,28 @@ export function K8sClusterPage() {
     mutationFn: () => k8sApi.rotateClusterCredential({ clusterId: credentialClusterId, name: credentialName, kubeconfig }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['k8s-cluster-credentials', credentialClusterId] }),
   });
-  const useFallback = isLoading || Boolean(error);
-  const displayClusters = useFallback ? fallbackClusters : data;
+  const displayClusters = data;
   const credentialResult = createCredential.data ?? rotateCredential.data;
   const credentialError = createCredential.error?.message || rotateCredential.error?.message || '';
+  const clusterError = createCluster.error?.message || '';
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-3">
-        <ClusterMetric icon={Network} label="连接集群" value={String(displayClusters.length)} meta="startorch baseline" />
-        <ClusterMetric icon={Database} label="区域" value="cn-shanghai" meta="primary region" />
+        <ClusterMetric icon={Network} label="连接集群" value={String(displayClusters.length)} meta="Mongo-backed API" />
+        <ClusterMetric icon={Database} label="区域" value={primaryRegion(displayClusters)} meta="来自集群登记" />
         <ClusterMetric icon={ShieldCheck} label="权限域" value="global" meta="NovaObs RBAC" />
       </div>
 
-      <DataPanel title="集群列表" meta={isLoading ? '加载中' : `${displayClusters.length} 个集群 · 最近 15 分钟`}>
+      <div className="grid gap-4">
+        <DataPanel title="集群列表" meta={isLoading ? '加载中' : `${displayClusters.length} 个集群 · /api/v1/k8s/clusters`}>
         {error ? (
-          <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            集群 API 暂未连接，等待后端 `/api/v1/k8s/clusters`。
+          <div className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-semibold text-danger">
+            集群 API 请求失败：{error.message}
           </div>
         ) : null}
         <div className="overflow-auto">
-          {displayClusters.length ? (
+          {!isLoading && !error && displayClusters.length ? (
             <table className="console-table min-w-[760px] w-full">
               <thead>
                 <tr>
@@ -68,21 +81,48 @@ export function K8sClusterPage() {
                     <td className="font-mono text-xs">{cluster.version || '-'}</td>
                     <td className="font-mono text-xs">{cluster.region || '-'}</td>
                     <td><StatusPill status={cluster.status} /></td>
-                    <td className="text-xs text-muted">startorch</td>
+                    <td className="text-xs text-muted">novaobs</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
+            !isLoading && !error ? (
             <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               <div className="font-semibold text-on-surface">暂无集群</div>
-              <p className="mt-2 text-sm text-muted">后端已联通，但当前筛选条件下没有返回 Kubernetes 集群。</p>
+              <p className="mt-2 text-sm text-muted">后端已联通，请先通过右侧入口登记新平台集群元数据。</p>
             </div>
+            ) : null
           )}
         </div>
-      </DataPanel>
+        </DataPanel>
 
-      <div className="grid gap-4 xl:grid-cols-[1fr_420px]">
+        <section className="console-panel px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-on-surface">集群登记</div>
+              <p className="mt-1 text-xs text-muted">写入 NovaObs 新平台数据集合，作为凭据、命名空间与资源同步的入口。</p>
+            </div>
+            <Plus className="h-4 w-4 text-primary" />
+          </div>
+          {clusterError ? <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-danger">{clusterError}</div> : null}
+          {createCluster.data ? <div className="mt-3 rounded-lg bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">已登记集群：{createCluster.data.name}</div> : null}
+          <CredentialInput label="cluster_id" value={clusterId} onChange={setClusterId} />
+          <CredentialInput label="name" value={clusterName} onChange={setClusterName} />
+          <CredentialInput label="version" value={clusterVersion} onChange={setClusterVersion} />
+          <CredentialInput label="region" value={clusterRegion} onChange={setClusterRegion} />
+          <label className="mt-3 block text-xs font-semibold text-muted">
+            description
+            <textarea className="console-input mt-2 min-h-20 w-full text-xs" value={clusterDescription} onChange={(event) => setClusterDescription(event.target.value)} />
+          </label>
+          <button className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!clusterId || !clusterName || createCluster.isPending} onClick={() => createCluster.mutate()}>
+            <Plus className="h-4 w-4" />
+            登记集群
+          </button>
+        </section>
+      </div>
+
+      <div className="grid gap-4">
         <DataPanel title="集群凭据" meta={`/api/v1/k8s/cluster-credentials · ${credentialsQuery.data?.length ?? 0} 条元数据`}>
           {credentialsQuery.error ? (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
@@ -163,17 +203,6 @@ export function K8sClusterPage() {
   );
 }
 
-const fallbackClusters = [
-  {
-    id: 'prod',
-    name: 'prod-core',
-    version: 'v1.29.4',
-    region: 'cn-shanghai',
-    description: '生产核心集群，等待 API 联通',
-    status: 'unknown',
-  },
-];
-
 function ClusterMetric({ icon: Icon, label, value, meta }: { icon: typeof Network; label: string; value: string; meta: string }) {
   return (
     <section className="console-panel px-4 py-3">
@@ -187,6 +216,10 @@ function ClusterMetric({ icon: Icon, label, value, meta }: { icon: typeof Networ
       </div>
     </section>
   );
+}
+
+function primaryRegion(clusters: Array<{ region: string }>) {
+  return clusters.find((item) => item.region)?.region || '-';
 }
 
 function CredentialInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

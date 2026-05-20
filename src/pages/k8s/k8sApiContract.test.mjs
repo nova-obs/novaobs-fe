@@ -40,6 +40,38 @@ test('K8s 集群列表调用统一 NovaObs API', async () => {
   }
 });
 
+test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({ id: 'prod', name: 'prod-core', version: 'v1.30.1', region: 'cn-shanghai', status: 'active' });
+  };
+
+  try {
+    const cluster = await k8sApi.createCluster({
+      id: 'prod',
+      name: 'prod-core',
+      version: 'v1.30.1',
+      region: 'cn-shanghai',
+      description: '生产集群',
+    });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/clusters');
+    assert.equal(requests[0].init.method, 'POST');
+    assert.deepEqual(JSON.parse(requests[0].init.body), {
+      id: 'prod',
+      name: 'prod-core',
+      version: 'v1.30.1',
+      region: 'cn-shanghai',
+      description: '生产集群',
+    });
+    assert.equal(cluster.status, 'active');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('K8s 命名空间列表调用统一 NovaObs API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
