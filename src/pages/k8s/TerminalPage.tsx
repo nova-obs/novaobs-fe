@@ -1,26 +1,104 @@
-import { useMemo, useState } from 'react';
-import { useMutation } from '@tanstack/react-query';
+import { useEffect, useMemo, useState } from 'react';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { CircleSlash2, Play, ShieldCheck, SquareTerminal } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
-import { k8sApi, type K8sTerminalResult } from './api';
+import { k8sApi, type K8sResourceSummary, type K8sTerminalResult } from './api';
 
-const SAFE_EXAMPLES = ['get pods -n orders', 'describe deployment orders-api -n orders', 'logs deployment/orders-api -n orders --tail=100'];
 const BLOCKED_EXAMPLES = ['delete', 'apply', 'exec', 'port-forward', '|', ';'];
-const COMMAND_TEMPLATES = [
-  { label: 'Pods', command: 'get pods -n orders', description: '查看命名空间 Pod 列表' },
-  { label: 'Describe', command: 'describe deployment orders-api -n orders', description: '查看工作负载事件' },
-  { label: 'Logs', command: 'logs deployment/orders-api -n orders --tail=100', description: '读取最近 100 行日志' },
-  { label: 'Blocked', command: 'delete pod orders-api', description: '验证策略阻断与审计' },
-];
 
 export function K8sTerminalPage() {
-  const [clusterId, setClusterId] = useState('prod');
-  const [namespace, setNamespace] = useState('orders');
-  const [command, setCommand] = useState('get pods -n orders');
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [selectedResourceUID, setSelectedResourceUID] = useState('');
+  const [command, setCommand] = useState('');
+  const [lastTemplateCommand, setLastTemplateCommand] = useState('');
   const [result, setResult] = useState<K8sTerminalResult | null>(null);
 
+  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => k8sApi.listClusters(),
+    retry: false,
+  });
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+
+  const { data: namespaces = [], error: namespaceError } = useQuery({
+    queryKey: ['k8s-namespaces', activeClusterId],
+    queryFn: () => k8sApi.listNamespaces(activeClusterId),
+    enabled: Boolean(activeClusterId),
+    retry: false,
+  });
+
+  const { data: resources = [], isLoading: isLoadingResources, error: resourceError } = useQuery({
+    queryKey: ['k8s-terminal-resources', activeClusterId, namespace],
+    queryFn: () => k8sApi.listResources({ clusterId: activeClusterId, namespace, kind: 'Deployment' }),
+    enabled: Boolean(activeClusterId && namespace),
+    retry: false,
+  });
+
+  useEffect(() => {
+    if (!selectedClusterId && clusters[0]?.id) {
+      setSelectedClusterId(clusters[0].id);
+    }
+  }, [clusters, selectedClusterId]);
+
+  useEffect(() => {
+    const namespaceExists = namespaces.some((item) => item.name === namespace);
+    if (namespace && !namespaceExists) {
+      setNamespace(namespaces[0]?.name ?? '');
+      setSelectedResourceUID('');
+      setCommand('');
+      setLastTemplateCommand('');
+      setResult(null);
+      return;
+    }
+    if (!namespace && namespaces[0]?.name) {
+      setNamespace(namespaces[0].name);
+    }
+  }, [namespace, namespaces]);
+
+  useEffect(() => {
+    const resourceExists = resources.some((item) => resourceOptionKey(item) === selectedResourceUID);
+    if (selectedResourceUID && !resourceExists) {
+      const nextResource = resources[0];
+      setSelectedResourceUID(nextResource ? resourceOptionKey(nextResource) : '');
+      syncTemplateCommandForTarget(namespace, nextResource);
+      setResult(null);
+      return;
+    }
+    if (!selectedResourceUID && resources[0]) {
+      setSelectedResourceUID(resourceOptionKey(resources[0]));
+      syncTemplateCommandForTarget(namespace, resources[0]);
+      setResult(null);
+    }
+  }, [resources, selectedResourceUID]);
+
+  useEffect(() => {
+    if (!command.trim() && namespace) {
+      const nextCommand = buildPodCommand(namespace);
+      setCommand(nextCommand);
+      setLastTemplateCommand(nextCommand);
+    }
+  }, [command, namespace]);
+
+  const currentResource = resources.find((item) => resourceOptionKey(item) === selectedResourceUID) ?? resources[0];
+  const commandTemplates = useMemo(() => buildCommandTemplates(namespace, currentResource), [currentResource, namespace]);
+  const safeExamples = useMemo(() => commandTemplates.filter((item) => item.tone === 'safe').map((item) => item.command), [commandTemplates]);
+
+  function syncTemplateCommandForTarget(nextNamespace: string, nextResource?: K8sResourceSummary) {
+    const matchedTemplate = commandTemplates.find((item) => item.command === command);
+    const shouldSyncTemplate = !command.trim() || command === lastTemplateCommand || Boolean(matchedTemplate);
+    if (!shouldSyncTemplate || !nextNamespace) {
+      return;
+    }
+
+    const nextTemplates = buildCommandTemplates(nextNamespace, nextResource);
+    const nextCommand = nextTemplates.find((item) => item.label === matchedTemplate?.label)?.command ?? buildPodCommand(nextNamespace);
+    setCommand(nextCommand);
+    setLastTemplateCommand(nextCommand);
+  }
+
   const mutation = useMutation({
-    mutationFn: () => k8sApi.execTerminal({ clusterId, namespace, command }),
+    mutationFn: () => k8sApi.execTerminal({ clusterId: activeClusterId, namespace, command }),
     onSuccess: (next) => setResult(next),
   });
 
@@ -35,12 +113,13 @@ export function K8sTerminalPage() {
     return message.includes('安全策略') || message.includes('blocked') ? message : '';
   }, [mutation.error, result]);
   const statusTone = result?.status === 'blocked' ? 'danger' : result?.status === 'accepted' ? 'safe' : 'idle';
+  const canExecute = Boolean(activeClusterId && namespace && command.trim());
 
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr]">
-        <TerminalMetric icon={SquareTerminal} label="执行模式" value="dry_run" meta="executor adapter pending" />
-        <TerminalMetric icon={ShieldCheck} label="权限域" value="namespace" meta="k8s.terminal:exec" />
+        <TerminalMetric icon={SquareTerminal} label="执行模式" value="dry_run" meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
+        <TerminalMetric icon={ShieldCheck} label="权限域" value="namespace" meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
         <TerminalMetric icon={CircleSlash2} label="策略" value="read-only" meta="danger verbs blocked" />
       </div>
 
@@ -55,20 +134,98 @@ export function K8sTerminalPage() {
             命令已被安全策略阻断，后端会记录阻断审计。
           </div>
         ) : null}
+        {clusterError || namespaceError || resourceError ? (
+          <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError)}
+          </div>
+        ) : null}
 
         <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
           <section className="console-panel px-4 py-3">
             <div className="text-sm font-semibold text-on-surface">运行目标</div>
-            <p className="mt-1 text-xs text-muted">第一版只接入只读 kubectl 语义，通过 `/api/v1/k8s/terminal/exec` 进入统一审计。</p>
+            <p className="mt-1 text-xs text-muted">目标来自真实 Kubernetes 只读 API；执行仍通过 `/api/v1/k8s/terminal/exec` 进入统一审计和策略网关。</p>
+            <div className="mt-4 grid gap-3">
+              <label className="block">
+                <span className="text-xs font-semibold text-muted">集群选择</span>
+                <select
+                  className="console-input mt-2 w-full"
+                  value={activeClusterId}
+                  onChange={(event) => {
+                    setSelectedClusterId(event.target.value);
+                    setNamespace('');
+                    setSelectedResourceUID('');
+                    setCommand('');
+                    setLastTemplateCommand('');
+                    setResult(null);
+                  }}
+                  disabled={isLoadingClusters || !clusters.length}
+                >
+                  {!clusters.length ? <option value="">暂无已登记集群</option> : null}
+                  {clusters.map((item) => (
+                    <option key={item.id} value={item.id}>{item.name || item.id}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-muted">命名空间选择</span>
+                <select
+                  className="console-input mt-2 w-full"
+                  value={namespace}
+                  onChange={(event) => {
+                    const nextNamespace = event.target.value;
+                    setNamespace(nextNamespace);
+                    setSelectedResourceUID('');
+                    syncTemplateCommandForTarget(nextNamespace);
+                    setResult(null);
+                  }}
+                  disabled={!namespaces.length}
+                >
+                  {!namespaces.length ? <option value="">暂无命名空间</option> : null}
+                  {namespaces.map((item) => (
+                    <option key={`${item.clusterId}-${item.name}`} value={item.name}>{item.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="block">
+                <span className="text-xs font-semibold text-muted">资源参考</span>
+                <select
+                  className="console-input mt-2 w-full"
+                  value={selectedResourceUID}
+                  onChange={(event) => {
+                    const nextResourceUID = event.target.value;
+                    const nextResource = resources.find((item) => resourceOptionKey(item) === nextResourceUID);
+                    setSelectedResourceUID(nextResourceUID);
+                    syncTemplateCommandForTarget(namespace, nextResource);
+                    setResult(null);
+                  }}
+                  disabled={!resources.length}
+                >
+                  {!resources.length ? <option value="">暂无 Deployment 资源</option> : null}
+                  {resources.map((item) => (
+                    <option key={resourceOptionKey(item)} value={resourceOptionKey(item)}>{item.identity.kind}/{item.identity.name}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+            <div className="mt-3 grid grid-cols-2 gap-2 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <TargetItem label="cluster_id" value={activeClusterId || '-'} />
+              <TargetItem label="namespace" value={namespace || '-'} />
+              <TargetItem label="resource" value={currentResource ? `${currentResource.identity.kind}/${currentResource.identity.name}` : '-'} />
+              <TargetItem label="source" value={isLoadingResources ? 'loading' : 'Kubernetes API'} />
+            </div>
             <div className="mt-4">
               <div className="text-xs font-semibold text-muted">命令模板</div>
               <div className="mt-2 grid grid-cols-2 gap-2">
-                {COMMAND_TEMPLATES.map((item) => (
+                {commandTemplates.map((item) => (
                   <button
                     key={item.label}
-                    className="rounded-lg bg-white/55 px-3 py-2 text-left text-xs font-semibold text-on-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:bg-white/75 active:scale-[0.98]"
+                    className={`rounded-lg px-3 py-2 text-left text-xs font-semibold shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition hover:bg-white/75 active:scale-[0.98] ${item.tone === 'danger' ? 'bg-rose-50/80 text-danger' : 'bg-white/55 text-on-surface'}`}
                     title={item.description}
-                    onClick={() => setCommand(item.command)}
+                    onClick={() => {
+                      setCommand(item.command);
+                      setLastTemplateCommand(item.command);
+                      setResult(null);
+                    }}
                   >
                     {item.label}
                     <span className="mt-1 block truncate font-mono text-[11px] font-medium text-muted">{item.command}</span>
@@ -76,15 +233,18 @@ export function K8sTerminalPage() {
                 ))}
               </div>
             </div>
-            <TerminalInput label="cluster_id" value={clusterId} onChange={setClusterId} />
-            <TerminalInput label="namespace" value={namespace} onChange={setNamespace} />
             <label className="mt-3 block text-xs font-semibold text-muted">
               command
               <textarea className="console-input mt-2 min-h-28 w-full font-mono text-xs" value={command} onChange={(event) => setCommand(event.target.value)} />
             </label>
+            {!canExecute ? (
+              <div className="mt-3 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+                请先选择集群和命名空间；终端只开放只读 kubectl 语义，危险动词会进入策略阻断。
+              </div>
+            ) : null}
             <button
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-              disabled={!clusterId.trim() || !namespace.trim() || !command.trim() || mutation.isPending}
+              disabled={!canExecute || mutation.isPending}
               onClick={() => mutation.mutate()}
             >
               <Play className="h-4 w-4" />
@@ -125,7 +285,7 @@ export function K8sTerminalPage() {
 
       <section className="console-panel px-4 py-3">
         <div className="grid gap-4 md:grid-cols-2">
-          <PolicyList title="只读示例" items={SAFE_EXAMPLES} tone="safe" />
+          <PolicyList title="只读示例" items={safeExamples} tone="safe" />
           <PolicyList title="阻断示例" items={BLOCKED_EXAMPLES} tone="danger" />
         </div>
       </section>
@@ -133,12 +293,12 @@ export function K8sTerminalPage() {
   );
 }
 
-function TerminalInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
+function TargetItem({ label, value }: { label: string; value: string }) {
   return (
-    <label className="mt-3 block text-xs font-semibold text-muted">
-      {label}
-      <input className="console-input mt-2 w-full" value={value} onChange={(event) => onChange(event.target.value)} />
-    </label>
+    <div className="min-w-0">
+      <div className="text-[11px] font-semibold uppercase text-muted">{label}</div>
+      <div className="mt-1 truncate font-mono text-[11px] font-semibold text-on-surface">{value}</div>
+    </div>
   );
 }
 
@@ -179,4 +339,27 @@ function PolicyList({ title, items, tone }: { title: string; items: string[]; to
       </div>
     </div>
   );
+}
+
+function buildCommandTemplates(namespace: string, resource?: K8sResourceSummary) {
+  const targetNamespace = namespace || 'default';
+  const workloadName = resource?.identity.name || '<deployment>';
+  return [
+    { label: 'Pods', command: buildPodCommand(targetNamespace), description: '查看命名空间 Pod 列表', tone: 'safe' as const },
+    { label: 'Describe', command: `describe deployment ${workloadName} -n ${targetNamespace}`, description: '查看工作负载事件', tone: 'safe' as const },
+    { label: 'Logs', command: `logs deployment/${workloadName} -n ${targetNamespace} --tail=100`, description: '读取最近 100 行日志', tone: 'safe' as const },
+    { label: 'Blocked', command: `delete pod ${workloadName}`, description: '验证策略阻断与审计', tone: 'danger' as const },
+  ];
+}
+
+function buildPodCommand(namespace: string) {
+  return `get pods -n ${namespace || 'default'}`;
+}
+
+function resourceOptionKey(resource: K8sResourceSummary) {
+  return resource.identity.uid || `${resource.identity.kind}/${resource.identity.namespace}/${resource.identity.name}`;
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error ? error.message : '读取失败';
 }
