@@ -149,6 +149,49 @@ test('K8s 资源列表调用统一 NovaObs API 并映射完整身份', async () 
   }
 });
 
+test('K8s 资源详情、YAML 和 Pod 日志调用统一 NovaObs API', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  const identity = { clusterId: 'prod', namespace: 'orders', apiVersion: 'v1', kind: 'Pod', name: 'orders-api-7d9', uid: 'uid-pod' };
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (String(path).includes('/resources/detail')) {
+      return jsonResponse({
+        identity: { cluster_id: 'prod', namespace: 'orders', api_version: 'v1', kind: 'Pod', name: 'orders-api-7d9', uid: 'uid-pod' },
+        status: 'healthy',
+        labels: { app: 'orders-api' },
+        spec: { containers: [{ name: 'api', image: 'orders:v1' }] },
+      });
+    }
+    if (String(path).includes('/resources/yaml')) {
+      return jsonResponse({
+        identity: { cluster_id: 'prod', namespace: 'orders', api_version: 'v1', kind: 'Pod', name: 'orders-api-7d9', uid: 'uid-pod' },
+        yaml: 'apiVersion: v1\nkind: Pod\nmetadata:\n  name: orders-api-7d9\n',
+      });
+    }
+    return jsonResponse({
+      identity: { cluster_id: 'prod', namespace: 'orders', api_version: 'v1', kind: 'Pod', name: 'orders-api-7d9' },
+      container: 'api',
+      lines: ['line-1', 'line-2'],
+    });
+  };
+
+  try {
+    const detail = await k8sApi.getResourceDetail(identity);
+    const yaml = await k8sApi.getResourceYAML(identity);
+    const logs = await k8sApi.getPodLogs({ clusterId: 'prod', namespace: 'orders', pod: 'orders-api-7d9', container: 'api' });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/resources/detail?cluster_id=prod&namespace=orders&api_version=v1&kind=Pod&name=orders-api-7d9&uid=uid-pod');
+    assert.equal(requests[1].path, '/api/v1/k8s/resources/yaml?cluster_id=prod&namespace=orders&api_version=v1&kind=Pod&name=orders-api-7d9&uid=uid-pod');
+    assert.equal(requests[2].path, '/api/v1/k8s/pod-logs?cluster_id=prod&namespace=orders&pod=orders-api-7d9&container=api');
+    assert.equal(detail.spec.containers[0].image, 'orders:v1');
+    assert.equal(yaml.yaml.includes('kind: Pod'), true);
+    assert.equal(logs.lines.length, 2);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('K8s 部署历史和审计事件调用统一 NovaObs API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;

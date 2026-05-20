@@ -54,6 +54,25 @@ export interface K8sResourceSummary {
   updatedAt: string;
 }
 
+export interface K8sResourceDetail {
+  identity: K8sResourceIdentity;
+  status: string;
+  labels: Record<string, string>;
+  spec: Record<string, any>;
+  updatedAt: string;
+}
+
+export interface K8sResourceYAML {
+  identity: K8sResourceIdentity;
+  yaml: string;
+}
+
+export interface K8sPodLogs {
+  identity: K8sResourceIdentity;
+  container: string;
+  lines: string[];
+}
+
 export interface K8sDeploymentHistory {
   id: string;
   clusterId: string;
@@ -268,6 +287,42 @@ function mapResource(raw: any): K8sResourceSummary {
     labels: raw.labels ?? {},
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
+}
+
+function mapResourceDetail(raw: any): K8sResourceDetail {
+  return {
+    identity: mapResourceIdentity(raw.identity ?? {}),
+    status: raw.status ?? 'unknown',
+    labels: raw.labels ?? {},
+    spec: raw.spec ?? {},
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapResourceYAML(raw: any): K8sResourceYAML {
+  return {
+    identity: mapResourceIdentity(raw.identity ?? {}),
+    yaml: raw.yaml ?? '',
+  };
+}
+
+function mapPodLogs(raw: any): K8sPodLogs {
+  return {
+    identity: mapResourceIdentity(raw.identity ?? {}),
+    container: raw.container ?? '',
+    lines: Array.isArray(raw.lines) ? raw.lines.map(String) : [],
+  };
+}
+
+function resourceIdentityParams(identity: K8sResourceIdentity): URLSearchParams {
+  const params = new URLSearchParams();
+  params.set('cluster_id', identity.clusterId);
+  params.set('namespace', identity.namespace);
+  params.set('api_version', identity.apiVersion);
+  params.set('kind', identity.kind);
+  params.set('name', identity.name);
+  params.set('uid', identity.uid);
+  return params;
 }
 
 function mapDeploymentHistory(raw: any): K8sDeploymentHistory {
@@ -531,6 +586,23 @@ export const k8sApi = {
     if (filter.query?.trim()) params.set('q', filter.query.trim());
     const raw = await apiRequest<any[]>(`/k8s/resources?${params.toString()}`);
     return raw.map(mapResource);
+  },
+  async getResourceDetail(identity: K8sResourceIdentity): Promise<K8sResourceDetail> {
+    const raw = await apiRequest<any>(`/k8s/resources/detail?${resourceIdentityParams(identity).toString()}`);
+    return mapResourceDetail(raw);
+  },
+  async getResourceYAML(identity: K8sResourceIdentity): Promise<K8sResourceYAML> {
+    const raw = await apiRequest<any>(`/k8s/resources/yaml?${resourceIdentityParams(identity).toString()}`);
+    return mapResourceYAML(raw);
+  },
+  async getPodLogs(input: { clusterId: string; namespace: string; pod: string; container?: string }): Promise<K8sPodLogs> {
+    const params = new URLSearchParams();
+    params.set('cluster_id', input.clusterId);
+    params.set('namespace', input.namespace);
+    params.set('pod', input.pod);
+    if (input.container) params.set('container', input.container);
+    const raw = await apiRequest<any>(`/k8s/pod-logs?${params.toString()}`);
+    return mapPodLogs(raw);
   },
   async listDeploymentHistory(clusterId = 'prod'): Promise<K8sDeploymentHistory[]> {
     const raw = await apiRequest<any[]>(`/k8s/deployment-history?cluster_id=${encodeURIComponent(clusterId)}`);

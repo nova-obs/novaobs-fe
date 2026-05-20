@@ -1,13 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Boxes, FileCode2, Layers3 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { Boxes, FileCode2, Layers3, ScrollText, TerminalSquare } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import type { K8sResourceIdentity, K8sResourceSummary } from './api';
 import { k8sApi } from './api';
+
+type ResourceTab = 'detail' | 'yaml' | 'logs';
 
 export function K8sResourcePage() {
   const [selectedClusterId, setSelectedClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [kind, setKind] = useState('');
+  const [selected, setSelected] = useState<K8sResourceSummary | null>(null);
+  const [activeTab, setActiveTab] = useState<ResourceTab>('detail');
   const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
     queryKey: ['k8s-clusters'],
     queryFn: () => k8sApi.listClusters(),
@@ -15,7 +21,7 @@ export function K8sResourcePage() {
   });
   const activeClusterId = selectedClusterId || clusters[0]?.id || '';
 
-  const { data: namespaces = [] } = useQuery({
+  const { data: namespaces = [], error: namespaceError } = useQuery({
     queryKey: ['k8s-namespaces', activeClusterId],
     queryFn: () => k8sApi.listNamespaces(activeClusterId),
     enabled: Boolean(activeClusterId),
@@ -46,6 +52,40 @@ export function K8sResourcePage() {
     retry: false,
   });
   const canReadResources = Boolean(activeClusterId && namespace);
+  const selectedIdentity = selected?.identity;
+
+  useEffect(() => {
+    if (!selected) {
+      return;
+    }
+    const stillExists = data.some((item) => identityKey(item.identity) === identityKey(selected.identity));
+    if (!stillExists) {
+      setSelected(null);
+    }
+  }, [data, selected]);
+
+  const detailQuery = useQuery({
+    queryKey: ['k8s-resource-detail', selectedIdentity],
+    queryFn: () => k8sApi.getResourceDetail(selectedIdentity as K8sResourceIdentity),
+    enabled: Boolean(selectedIdentity),
+    retry: false,
+  });
+  const yamlQuery = useQuery({
+    queryKey: ['k8s-resource-yaml', selectedIdentity],
+    queryFn: () => k8sApi.getResourceYAML(selectedIdentity as K8sResourceIdentity),
+    enabled: Boolean(selectedIdentity && activeTab === 'yaml'),
+    retry: false,
+  });
+  const logsQuery = useQuery({
+    queryKey: ['k8s-pod-logs', selectedIdentity],
+    queryFn: () => k8sApi.getPodLogs({
+      clusterId: selectedIdentity?.clusterId ?? '',
+      namespace: selectedIdentity?.namespace ?? '',
+      pod: selectedIdentity?.name ?? '',
+    }),
+    enabled: Boolean(selectedIdentity && selectedIdentity.kind === 'Pod' && activeTab === 'logs'),
+    retry: false,
+  });
 
   return (
     <div className="space-y-4">
@@ -97,12 +137,17 @@ export function K8sResourcePage() {
             资源身份按 cluster/ns/api/kind/name/uid 固定展示，详情和 YAML 读取要求 UID 精确匹配。
           </div>
         </div>
+        {namespaceError ? (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            命名空间读取失败：{errorMessage(namespaceError)}
+          </div>
+        ) : null}
       </section>
 
       <DataPanel title="资源视图" meta={isLoading ? '加载中' : `${data.length} 个资源 · 最近 15 分钟`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            资源读取失败，请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。
+            资源读取失败：{errorMessage(error)}
           </div>
         ) : null}
         {isLoading ? (
@@ -132,7 +177,14 @@ export function K8sResourcePage() {
               </thead>
               <tbody>
                 {data.map((item) => (
-                  <tr key={`${item.identity.clusterId}-${item.identity.namespace}-${item.identity.kind}-${item.identity.name}-${item.identity.uid}`} className="bg-white/35 hover:bg-white/60">
+                  <tr
+                    key={identityKey(item.identity)}
+                    className={`bg-white/35 hover:bg-white/60 ${selected && identityKey(selected.identity) === identityKey(item.identity) ? 'shadow-[inset_3px_0_0_rgba(31,122,118,0.72)]' : ''}`}
+                    onClick={() => {
+                      setSelected(item);
+                      setActiveTab('detail');
+                    }}
+                  >
                     <td>
                       <div className="font-semibold text-primary">{item.identity.name}</div>
                       <div className="text-[11px] text-muted">{Object.entries(item.labels).map(([key, value]) => `${key}=${value}`).join(', ') || 'no labels'}</div>
@@ -155,6 +207,40 @@ export function K8sResourcePage() {
             <p className="mt-2 text-sm text-muted">后端已联通，但当前过滤条件下没有返回 Kubernetes 资源。</p>
           </div>
         ) : null}
+      </DataPanel>
+
+      <DataPanel title="资源详情" meta={selected ? `${selected.identity.kind} · ${selected.identity.namespace}/${selected.identity.name}` : '等待选择资源'}>
+        {!selected ? (
+          <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+            <div className="font-semibold text-on-surface">选择资源后查看详情</div>
+            <p className="mt-2 text-sm text-muted">详情、YAML 预览与 Pod 日志都会通过 NovaObs 后端实时读取。</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-start">
+              <div className="min-w-0">
+                <div className="font-semibold text-on-surface">{selected.identity.name}</div>
+                <div className="mt-1 break-all font-mono text-xs text-muted">
+                  {selected.identity.clusterId}/{selected.identity.namespace}/{selected.identity.apiVersion}/{selected.identity.kind}/{selected.identity.uid || '-'}
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <TabButton active={activeTab === 'detail'} icon={ScrollText} label="详情" onClick={() => setActiveTab('detail')} />
+                <TabButton active={activeTab === 'yaml'} icon={FileCode2} label="YAML 预览" onClick={() => setActiveTab('yaml')} />
+                <TabButton active={activeTab === 'logs'} icon={TerminalSquare} label="Pod 日志" onClick={() => setActiveTab('logs')} disabled={selected.identity.kind !== 'Pod'} />
+              </div>
+            </div>
+
+            {activeTab === 'detail' ? <ResourceDetailView isLoading={detailQuery.isLoading} error={detailQuery.error} spec={detailQuery.data?.spec} labels={detailQuery.data?.labels ?? selected.labels} /> : null}
+            {activeTab === 'yaml' ? <CodePreview isLoading={yamlQuery.isLoading} error={yamlQuery.error} emptyText="暂无 YAML" content={yamlQuery.data?.yaml ?? ''} /> : null}
+            {activeTab === 'logs' && selected.identity.kind !== 'Pod' ? (
+              <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">仅 Pod 支持日志读取</div>
+            ) : null}
+            {activeTab === 'logs' && selected.identity.kind === 'Pod' ? (
+              <CodePreview isLoading={logsQuery.isLoading} error={logsQuery.error} emptyText="暂无 Pod 日志" content={(logsQuery.data?.lines ?? []).join('\n')} />
+            ) : null}
+          </div>
+        )}
       </DataPanel>
     </div>
   );
@@ -182,4 +268,63 @@ function StatusPill({ status }: { status: string }) {
       {warning ? '警告' : status || 'unknown'}
     </span>
   );
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。';
+}
+
+function identityKey(identity: K8sResourceIdentity) {
+  return `${identity.clusterId}-${identity.namespace}-${identity.apiVersion}-${identity.kind}-${identity.name}-${identity.uid}`;
+}
+
+function TabButton({ active, disabled = false, icon: Icon, label, onClick }: { active: boolean; disabled?: boolean; icon: LucideIcon; label: string; onClick: () => void }) {
+  return (
+    <button
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${active ? 'bg-primary text-white' : 'bg-white/70 text-primary shadow-[inset_0_0_0_1px_rgba(17,94,89,0.18)]'}`}
+      disabled={disabled}
+      onClick={onClick}
+    >
+      <Icon className="h-3.5 w-3.5" />
+      {label}
+    </button>
+  );
+}
+
+function ResourceDetailView({ isLoading, error, spec, labels }: { isLoading: boolean; error: unknown; spec?: Record<string, any>; labels: Record<string, string> }) {
+  if (isLoading) {
+    return <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">正在读取资源详情。</div>;
+  }
+  if (error) {
+    return <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">资源详情读取失败：{errorMessage(error)}</div>;
+  }
+  return (
+    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
+      <section className="rounded-lg bg-white/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+        <div className="text-xs font-semibold text-muted">Labels</div>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {Object.entries(labels).length ? Object.entries(labels).map(([key, value]) => (
+            <span key={key} className="rounded-lg bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{key}={value}</span>
+          )) : <span className="text-sm text-muted">无标签</span>}
+        </div>
+      </section>
+      <section className="rounded-lg bg-white/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+        <div className="text-xs font-semibold text-muted">Spec</div>
+        <pre className="mt-3 max-h-[360px] overflow-auto rounded-lg bg-[#10201f] p-4 text-xs leading-6 text-[#d7ebe8]">{JSON.stringify(spec ?? {}, null, 2)}</pre>
+      </section>
+    </div>
+  );
+}
+
+function CodePreview({ isLoading, error, emptyText, content }: { isLoading: boolean; error: unknown; emptyText: string; content: string }) {
+  if (isLoading) {
+    return <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">正在读取内容。</div>;
+  }
+  if (error) {
+    return <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">内容读取失败：{errorMessage(error)}</div>;
+  }
+  if (!content.trim()) {
+    return <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">{emptyText}</div>;
+  }
+  return <pre className="max-h-[460px] overflow-auto rounded-lg bg-[#10201f] p-4 text-xs leading-6 text-[#d7ebe8]">{content}</pre>;
 }

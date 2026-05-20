@@ -64,6 +64,10 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('API Version'), true);
   assert.equal(resourceSource.includes('UID'), true);
   assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), true);
+  assert.equal(resourceSource.includes('资源详情'), true);
+  assert.equal(resourceSource.includes('YAML 预览'), true);
+  assert.equal(resourceSource.includes('Pod 日志'), true);
+  assert.equal(resourceSource.includes('命名空间读取失败'), true);
   assert.equal(resourceSource.includes('资源 API 暂未连接'), false);
 });
 

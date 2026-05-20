@@ -65,7 +65,7 @@ export function K8sNamespacePage() {
         ) : null}
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            命名空间读取失败，请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。
+            命名空间读取失败：{errorMessage(error)}
           </div>
         ) : null}
         {!isLoading && !error && namespaces.length ? (
@@ -138,4 +138,8 @@ function StatusPill({ status }: { status: string }) {
       {active ? '运行中' : status || 'unknown'}
     </span>
   );
+}
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。';
 }
