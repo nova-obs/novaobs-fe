@@ -152,6 +152,13 @@ test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导
 test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () => {
   assert.equal(templateSource.includes('模板管理'), true);
   assert.equal(templateSource.includes('/api/v1/k8s/templates'), true);
+  assert.equal(templateSource.includes('k8sApi.listResources'), true);
+  assert.equal(templateSource.includes('集群选择'), true);
+  assert.equal(templateSource.includes('命名空间选择'), true);
+  assert.equal(templateSource.includes('资源参考'), true);
+  assert.equal(templateSource.includes("useState('orders-deployment')"), false);
+  assert.equal(templateSource.includes("return 'orders-api'"), false);
+  assert.equal(templateSource.includes("return 'orders'"), false);
   assert.equal(templateSource.includes('变量摘要'), true);
   assert.equal(templateSource.includes('权限不足'), true);
   assert.equal(templateSource.includes('操作已落审计'), true);

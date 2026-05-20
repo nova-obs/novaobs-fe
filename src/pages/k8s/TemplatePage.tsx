@@ -1,8 +1,8 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileCode2, Play, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
-import { k8sApi, type K8sTemplate } from './api';
+import { k8sApi, type K8sResourceSummary, type K8sTemplate } from './api';
 
 const DEFAULT_YAML = `apiVersion: apps/v1
 kind: Deployment
@@ -14,12 +14,36 @@ spec:
 
 export function K8sTemplatePage() {
   const queryClient = useQueryClient();
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const [namespace, setNamespace] = useState('');
+  const [selectedResourceUID, setSelectedResourceUID] = useState('');
   const [selected, setSelected] = useState<K8sTemplate | null>(null);
-  const [name, setName] = useState('orders-deployment');
+  const [name, setName] = useState('deployment-baseline');
   const [templateType, setTemplateType] = useState('Deployment');
   const [yamlContent, setYamlContent] = useState(DEFAULT_YAML);
   const [renderedYAML, setRenderedYAML] = useState('');
   const [lastAuditId, setLastAuditId] = useState('');
+
+  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => k8sApi.listClusters(),
+    retry: false,
+  });
+  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+
+  const { data: namespaces = [], error: namespaceError } = useQuery({
+    queryKey: ['k8s-namespaces', activeClusterId],
+    queryFn: () => k8sApi.listNamespaces(activeClusterId),
+    enabled: Boolean(activeClusterId),
+    retry: false,
+  });
+
+  const { data: resources = [], isLoading: isLoadingResources, error: resourceError } = useQuery({
+    queryKey: ['k8s-template-resources', activeClusterId, namespace, templateType],
+    queryFn: () => k8sApi.listResources({ clusterId: activeClusterId, namespace, kind: templateType }),
+    enabled: Boolean(activeClusterId && namespace),
+    retry: false,
+  });
 
   const { data = [], isLoading, error } = useQuery({
     queryKey: ['k8s-templates'],
@@ -27,8 +51,41 @@ export function K8sTemplatePage() {
     retry: false,
   });
 
-  const variables = useMemo(() => extractVariables(yamlContent), [yamlContent]);
-  const variableValues = useMemo(() => Object.fromEntries(variables.map((item) => [item.name, item.defaultValue || defaultVariableValue(item.name)])), [variables]);
+  useEffect(() => {
+    if (!selectedClusterId && clusters[0]?.id) {
+      setSelectedClusterId(clusters[0].id);
+    }
+  }, [clusters, selectedClusterId]);
+
+  useEffect(() => {
+    const namespaceExists = namespaces.some((item) => item.name === namespace);
+    if (namespace && !namespaceExists) {
+      setNamespace(namespaces[0]?.name ?? '');
+      setSelectedResourceUID('');
+      return;
+    }
+    if (!namespace && namespaces[0]?.name) {
+      setNamespace(namespaces[0].name);
+    }
+  }, [namespace, namespaces]);
+
+  useEffect(() => {
+    const resourceExists = resources.some((item) => item.identity.uid === selectedResourceUID);
+    if (selectedResourceUID && !resourceExists) {
+      setSelectedResourceUID(resources[0]?.identity.uid ?? '');
+      return;
+    }
+    if (!selectedResourceUID && resources[0]?.identity.uid) {
+      setSelectedResourceUID(resources[0].identity.uid);
+    }
+  }, [resources, selectedResourceUID]);
+
+  const currentResource = resources.find((item) => item.identity.uid === selectedResourceUID) ?? resources[0];
+  const variables = useMemo(
+    () => extractVariables(yamlContent, { clusterId: activeClusterId, namespace, resource: currentResource, templateType }),
+    [activeClusterId, currentResource, namespace, templateType, yamlContent],
+  );
+  const variableValues = useMemo(() => Object.fromEntries(variables.map((item) => [item.name, item.defaultValue || 'value'])), [variables]);
 
   const createMutation = useMutation({
     mutationFn: () => k8sApi.createTemplate({ name, type: templateType, yamlContent, variables, description: 'NovaObs 发布模板' }),
@@ -75,10 +132,67 @@ export function K8sTemplatePage() {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.8fr]">
-        <TemplateMetric label="模板" value={String(data.length)} meta="k8s.template" />
-        <TemplateMetric label="变量" value={String(variables.length)} meta="render preview" />
+        <TemplateMetric label="模板" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
+        <TemplateMetric label="变量" value={String(variables.length)} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
         <TemplateMetric label="审计" value={lastAuditId ? 'recorded' : 'pending'} meta="global scope" />
       </div>
+
+      <section className="console-panel px-4 py-3">
+        <div className="grid gap-3 xl:grid-cols-[minmax(180px,260px)_minmax(180px,240px)_minmax(220px,280px)_1fr] xl:items-end">
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">集群选择</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={activeClusterId}
+              onChange={(event) => {
+                setSelectedClusterId(event.target.value);
+                setNamespace('');
+                setSelectedResourceUID('');
+              }}
+              disabled={isLoadingClusters || !clusters.length}
+            >
+              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
+              {clusters.map((item) => (
+                <option key={item.id} value={item.id}>{item.name || item.id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">命名空间选择</span>
+            <select
+              className="console-input mt-2 w-full"
+              value={namespace}
+              onChange={(event) => {
+                setNamespace(event.target.value);
+                setSelectedResourceUID('');
+              }}
+              disabled={!namespaces.length}
+            >
+              {!namespaces.length ? <option value="">暂无命名空间</option> : null}
+              {namespaces.map((item) => (
+                <option key={`${item.clusterId}-${item.name}`} value={item.name}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs font-semibold text-muted">资源参考</span>
+            <select className="console-input mt-2 w-full" value={selectedResourceUID} onChange={(event) => setSelectedResourceUID(event.target.value)} disabled={!resources.length}>
+              {!resources.length ? <option value="">暂无同类型资源</option> : null}
+              {resources.map((item) => (
+                <option key={item.identity.uid} value={item.identity.uid}>{item.identity.kind}/{item.identity.name}</option>
+              ))}
+            </select>
+          </label>
+          <div className="text-sm text-muted">
+            变量默认值从真实 Kubernetes 资源上下文派生；模板本身仍由 NovaObs 管理，渲染和变更受 RBAC 与审计控制。
+          </div>
+        </div>
+        {clusterError || namespaceError || resourceError ? (
+          <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError)}
+          </div>
+        ) : null}
+      </section>
 
       <DataPanel title="模板管理" meta={isLoading ? '加载中' : `${data.length} 个模板 · 渲染和变更受 RBAC 控制`}>
         {error ? (
@@ -95,6 +209,11 @@ export function K8sTemplatePage() {
         {lastAuditId ? (
           <div className="mb-3 rounded-lg bg-primary-soft px-3 py-2 text-sm font-semibold text-primary">
             操作已落审计：<span className="font-mono">{lastAuditId}</span>
+          </div>
+        ) : null}
+        {isLoadingResources ? (
+          <div className="mb-3 rounded-lg bg-white/45 px-3 py-2 text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+            正在读取当前命名空间的资源参考。
           </div>
         ) : null}
 
@@ -121,6 +240,7 @@ export function K8sTemplatePage() {
                           setSelected(item);
                           setName(item.name);
                           setTemplateType(item.type);
+                          setSelectedResourceUID('');
                           setYamlContent(item.yamlContent);
                           setRenderedYAML('');
                         }}
@@ -215,14 +335,17 @@ function TemplateMetric({ label, value, meta }: { label: string; value: string; 
   );
 }
 
-function extractVariables(value: string) {
+function extractVariables(value: string, context: TemplateContext) {
   const names = Array.from(new Set(Array.from(value.matchAll(/<<([a-zA-Z0-9_-]+)>>/g)).map((match) => match[1])));
-  return names.map((name) => ({ name, description: '', defaultValue: defaultVariableValue(name), required: true }));
+  return names.map((name) => ({ name, description: '', defaultValue: defaultVariableValue(name, context), required: true }));
 }
 
-function defaultVariableValue(name: string) {
-  if (name === 'name') return 'orders-api';
-  if (name === 'namespace') return 'orders';
+function defaultVariableValue(name: string, context: TemplateContext) {
+  const resource = context.resource?.identity;
+  if (name === 'cluster' || name === 'cluster_id') return context.clusterId || 'cluster';
+  if (name === 'namespace') return context.namespace || 'namespace';
+  if (name === 'name') return resource?.name || `${context.templateType.toLowerCase()}-sample`;
+  if (name === 'kind') return resource?.kind || context.templateType;
   if (name === 'replicas') return '2';
   return 'value';
 }
@@ -233,3 +356,14 @@ function formatDate(value: string) {
   if (Number.isNaN(date.getTime())) return value;
   return date.toISOString().slice(0, 10);
 }
+
+function errorMessage(error: unknown) {
+  return error instanceof Error && error.message ? error.message : '请检查集群凭据、平台 RBAC 与 Kubernetes API 连通性。';
+}
+
+type TemplateContext = {
+  clusterId: string;
+  namespace: string;
+  resource?: K8sResourceSummary;
+  templateType: string;
+};
