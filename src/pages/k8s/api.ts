@@ -17,6 +17,10 @@ export interface K8sClusterInput {
   description: string;
 }
 
+export interface K8sDeleteResult {
+  deleted: boolean;
+}
+
 export interface K8sClusterCredential {
   secretId: string;
   clusterId: string;
@@ -551,7 +555,11 @@ export const k8sApi = {
     });
     return mapCluster(raw);
   },
-  async listClusterCredentials(clusterId = 'prod'): Promise<K8sClusterCredential[]> {
+  async deleteCluster(id: string): Promise<K8sDeleteResult> {
+    const raw = await apiRequest<any>(`/k8s/clusters/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return { deleted: Boolean(raw.deleted) };
+  },
+  async listClusterCredentials(clusterId = ''): Promise<K8sClusterCredential[]> {
     const params = new URLSearchParams();
     if (clusterId) params.set('cluster_id', clusterId);
     const raw = await apiRequest<any[]>(`/k8s/cluster-credentials${params.toString() ? `?${params.toString()}` : ''}`);

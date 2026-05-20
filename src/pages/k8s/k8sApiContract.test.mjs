@@ -72,6 +72,25 @@ test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async 
   }
 });
 
+test('K8s 集群删除只调用 NovaObs 元数据 API', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({ deleted: true });
+  };
+
+  try {
+    const result = await k8sApi.deleteCluster('stage');
+
+    assert.equal(requests[0].path, '/api/v1/k8s/clusters/stage');
+    assert.equal(requests[0].init.method, 'DELETE');
+    assert.equal(result.deleted, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('K8s 命名空间列表调用统一 NovaObs API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;

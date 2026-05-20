@@ -1,16 +1,16 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, KeyRound, Network, Plus, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Database, KeyRound, Network, Plus, RotateCcw, ShieldCheck, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from './api';
 
 export function K8sClusterPage() {
   const queryClient = useQueryClient();
-  const [credentialClusterId, setCredentialClusterId] = useState('prod');
-  const [credentialName, setCredentialName] = useState('prod-readonly');
+  const [credentialClusterId, setCredentialClusterId] = useState('');
+  const [credentialName, setCredentialName] = useState('');
   const [kubeconfig, setKubeconfig] = useState('');
-  const [clusterId, setClusterId] = useState('prod');
-  const [clusterName, setClusterName] = useState('prod-core');
+  const [clusterId, setClusterId] = useState('');
+  const [clusterName, setClusterName] = useState('');
   const [clusterVersion, setClusterVersion] = useState('');
   const [clusterRegion, setClusterRegion] = useState('');
   const [clusterDescription, setClusterDescription] = useState('');
@@ -26,9 +26,19 @@ export function K8sClusterPage() {
       queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] });
     },
   });
+  const deleteCluster = useMutation({
+    mutationFn: (id: string) => k8sApi.deleteCluster(id),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] });
+      if (credentialClusterId) {
+        queryClient.invalidateQueries({ queryKey: ['k8s-cluster-credentials', credentialClusterId] });
+      }
+    },
+  });
   const credentialsQuery = useQuery({
     queryKey: ['k8s-cluster-credentials', credentialClusterId],
     queryFn: () => k8sApi.listClusterCredentials(credentialClusterId),
+    enabled: Boolean(credentialClusterId),
     retry: false,
   });
   const createCredential = useMutation({
@@ -42,7 +52,20 @@ export function K8sClusterPage() {
   const displayClusters = data;
   const credentialResult = createCredential.data ?? rotateCredential.data;
   const credentialError = createCredential.error?.message || rotateCredential.error?.message || '';
-  const clusterError = createCluster.error?.message || '';
+  const clusterError = createCluster.error?.message || deleteCluster.error?.message || '';
+
+  useEffect(() => {
+    if (!displayClusters.length) {
+      if (credentialClusterId) {
+        setCredentialClusterId('');
+      }
+      return;
+    }
+    const exists = displayClusters.some((cluster) => cluster.id === credentialClusterId);
+    if (!credentialClusterId || !exists) {
+      setCredentialClusterId(displayClusters[0].id);
+    }
+  }, [credentialClusterId, displayClusters]);
 
   return (
     <div className="space-y-4">
@@ -69,6 +92,7 @@ export function K8sClusterPage() {
                   <th>区域</th>
                   <th>状态</th>
                   <th>来源</th>
+                  <th>操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -82,6 +106,16 @@ export function K8sClusterPage() {
                     <td className="font-mono text-xs">{cluster.region || '-'}</td>
                     <td><StatusPill status={cluster.status} /></td>
                     <td className="text-xs text-muted">novaobs</td>
+                    <td>
+                      <button
+                        className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-1.5 text-xs font-semibold text-danger shadow-[inset_0_0_0_1px_rgba(169,68,66,0.18)] transition active:scale-[0.98] disabled:opacity-60"
+                        disabled={deleteCluster.isPending}
+                        onClick={() => deleteCluster.mutate(cluster.id)}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        删除元数据
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -127,6 +161,11 @@ export function K8sClusterPage() {
           {credentialsQuery.error ? (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
               集群凭据 API 暂未连接，等待后端 `/api/v1/k8s/cluster-credentials`。
+            </div>
+          ) : null}
+          {!credentialClusterId ? (
+            <div className="mb-3 rounded-lg bg-white/45 px-3 py-2 text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              请先登记或选择集群，再录入 kubeconfig。
             </div>
           ) : null}
           <div className="overflow-auto">
