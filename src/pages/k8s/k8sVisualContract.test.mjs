@@ -49,16 +49,22 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
 
 test('K8s 命名空间页面展示集群、来源和权限上下文', () => {
   assert.equal(namespaceSource.includes('命名空间列表'), true);
-  assert.equal(namespaceSource.includes('cluster/prod'), true);
+  assert.equal(namespaceSource.includes('集群选择'), true);
+  assert.equal(namespaceSource.includes('请先在集群管理中登记集群'), true);
+  assert.equal(namespaceSource.includes('cluster/prod'), false);
   assert.equal(namespaceSource.includes('NovaObs RBAC'), true);
   assert.equal(namespaceSource.includes('/api/v1/k8s/namespaces'), true);
 });
 
 test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('资源视图'), true);
+  assert.equal(resourceSource.includes('集群选择'), true);
+  assert.equal(resourceSource.includes('命名空间选择'), true);
+  assert.equal(resourceSource.includes('请先选择集群和命名空间'), true);
   assert.equal(resourceSource.includes('API Version'), true);
   assert.equal(resourceSource.includes('UID'), true);
   assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), true);
+  assert.equal(resourceSource.includes('资源 API 暂未连接'), false);
 });
 
 test('K8s 部署历史和审计页面展示追踪上下文', () => {
