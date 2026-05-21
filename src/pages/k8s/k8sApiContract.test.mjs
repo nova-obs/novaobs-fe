@@ -493,21 +493,25 @@ test('K8s 发布部署调用统一 NovaObs API 并传递预览确认与完整资
   try {
     const preview = await k8sApi.previewDeployment({ clusterId: 'prod', yamlContent: 'kind: Deployment' });
     const applied = await k8sApi.applyDeployment({ clusterId: 'prod', yamlContent: 'kind: Deployment', previewId: preview.previewId, confirmationToken: preview.confirmationToken });
-    const deleted = await k8sApi.deleteDeployment({ clusterId: 'prod', namespace: 'orders', apiVersion: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders-api' }, { previewId: 'delete-preview', confirmationToken: 'delete-confirm' });
+    const deletePreview = await k8sApi.previewDeleteDeployment({ clusterId: 'prod', namespace: 'orders', apiVersion: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders-api' });
+    const deleted = await k8sApi.deleteDeployment({ clusterId: 'prod', namespace: 'orders', apiVersion: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders-api' }, { previewId: deletePreview.previewId, confirmationToken: deletePreview.confirmationToken });
     const rollback = await k8sApi.rollbackDeployment({ historyId: 'deploy-1', identity: { clusterId: 'prod', namespace: 'orders', apiVersion: 'apps/v1', kind: 'Deployment', name: 'orders-api', uid: 'uid-orders-api' } });
 
     assert.equal(requests[0].path, '/api/v1/k8s/deployments/preview');
     assert.equal(requests[1].path, '/api/v1/k8s/deployments');
     assert.equal(JSON.parse(requests[1].init.body).preview_id, 'preview-8f13');
     assert.equal(JSON.parse(requests[1].init.body).confirmation_token, 'confirm-7c2a');
-    assert.equal(requests[2].path, '/api/v1/k8s/deployments');
-    assert.equal(requests[2].init.method, 'DELETE');
+    assert.equal(requests[2].path, '/api/v1/k8s/deployments/delete-preview');
     assert.equal(JSON.parse(requests[2].init.body).identity.uid, 'uid-orders-api');
-    assert.equal(JSON.parse(requests[2].init.body).preview_id, 'delete-preview');
-    assert.equal(JSON.parse(requests[2].init.body).confirmation_token, 'delete-confirm');
-    assert.equal(requests[3].path, '/api/v1/k8s/deployments/rollback');
-    assert.equal(JSON.parse(requests[3].init.body).history_id, 'deploy-1');
+    assert.equal(requests[3].path, '/api/v1/k8s/deployments');
+    assert.equal(requests[3].init.method, 'DELETE');
+    assert.equal(JSON.parse(requests[3].init.body).identity.uid, 'uid-orders-api');
+    assert.equal(JSON.parse(requests[3].init.body).preview_id, 'preview-8f13');
+    assert.equal(JSON.parse(requests[3].init.body).confirmation_token, 'confirm-7c2a');
+    assert.equal(requests[4].path, '/api/v1/k8s/deployments/rollback');
+    assert.equal(JSON.parse(requests[4].init.body).history_id, 'deploy-1');
     assert.equal(preview.resources[0].apiVersion, 'apps/v1');
+    assert.equal(deletePreview.diffs[0].operation, 'update');
     assert.equal(preview.previewId, 'preview-8f13');
     assert.equal(preview.confirmationToken, 'confirm-7c2a');
     assert.equal(preview.diffs[0].operation, 'update');

@@ -14,6 +14,7 @@ export function K8sDeploymentPage() {
   const [historyId, setHistoryId] = useState('');
   const [lastResult, setLastResult] = useState<K8sDeploymentOperationResult | null>(null);
   const [previewPlan, setPreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
+  const [deletePreviewPlan, setDeletePreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
 
   const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
     queryKey: ['k8s-clusters'],
@@ -56,6 +57,7 @@ export function K8sDeploymentPage() {
       setSelectedResourceUID('');
       setLastResult(null);
       setPreviewPlan(null);
+      setDeletePreviewPlan(null);
       return;
     }
     if (!namespace && namespaces[0]?.name) {
@@ -82,6 +84,7 @@ export function K8sDeploymentPage() {
     syncDeploymentYAML(namespace, currentResource);
     setLastResult(null);
     setPreviewPlan(null);
+    setDeletePreviewPlan(null);
   }, [activeClusterId, currentResource, namespace]);
 
   useEffect(() => {
@@ -124,9 +127,22 @@ export function K8sDeploymentPage() {
       setPreviewPlan(null);
     },
   });
+  const previewDeleteMutation = useMutation({
+    mutationFn: () => k8sApi.previewDeleteDeployment(identity),
+    onSuccess: (result) => {
+      setDeletePreviewPlan(result);
+      setLastResult(result);
+    },
+  });
   const deleteMutation = useMutation({
-    mutationFn: () => k8sApi.deleteDeployment(identity),
-    onSuccess: setLastResult,
+    mutationFn: () => k8sApi.deleteDeployment(identity, {
+      previewId: deletePreviewPlan?.previewId,
+      confirmationToken: deletePreviewPlan?.confirmationToken,
+    }),
+    onSuccess: (result) => {
+      setLastResult(result);
+      setDeletePreviewPlan(null);
+    },
   });
   const rollbackMutation = useMutation({
     mutationFn: () => k8sApi.rollbackDeployment({ identity, historyId }),
@@ -134,17 +150,25 @@ export function K8sDeploymentPage() {
   });
 
   const permissionError = useMemo(() => {
-    const message = previewMutation.error?.message || applyMutation.error?.message || deleteMutation.error?.message || rollbackMutation.error?.message || '';
+    const message = previewMutation.error?.message || applyMutation.error?.message || previewDeleteMutation.error?.message || deleteMutation.error?.message || rollbackMutation.error?.message || '';
     return message.includes('无权') || message.includes('permission_denied') ? message : '';
-  }, [previewMutation.error, applyMutation.error, deleteMutation.error, rollbackMutation.error]);
+  }, [previewMutation.error, applyMutation.error, previewDeleteMutation.error, deleteMutation.error, rollbackMutation.error]);
 
-  const operationError = previewMutation.error?.message || applyMutation.error?.message || deleteMutation.error?.message || rollbackMutation.error?.message || '';
+  const operationError = previewMutation.error?.message || applyMutation.error?.message || previewDeleteMutation.error?.message || deleteMutation.error?.message || rollbackMutation.error?.message || '';
   const resourceCount = lastResult?.resources.length ?? extractResourceCount(yamlContent);
   const canPreview = Boolean(activeClusterId && yamlContent.trim());
   const canApplyConfirmedPreview = Boolean(canPreview && previewPlan?.previewId && previewPlan?.confirmationToken && !applyMutation.isPending);
   const hasCompleteIdentity = completeIdentity(identity);
-  const previewDiffs = previewPlan?.diffs ?? lastResult?.diffs ?? [];
-  const previewWarnings = previewPlan?.warnings ?? lastResult?.warnings ?? [];
+  const canDeleteConfirmedPreview = Boolean(hasCompleteIdentity && deletePreviewPlan?.previewId && deletePreviewPlan?.confirmationToken && !deleteMutation.isPending);
+  const displayedPlan = deletePreviewPlan ?? previewPlan ?? lastResult;
+  const previewDiffs = displayedPlan?.diffs ?? [];
+  const previewWarnings = displayedPlan?.warnings ?? [];
+
+  function updateIdentity(next: K8sDeploymentIdentity) {
+    setIdentity(next);
+    setDeletePreviewPlan(null);
+    setLastResult(null);
+  }
 
   return (
     <div className="space-y-4">
@@ -170,6 +194,7 @@ export function K8sDeploymentPage() {
                 setHistoryId('');
                 setLastResult(null);
                 setPreviewPlan(null);
+                setDeletePreviewPlan(null);
               }}
               disabled={isLoadingClusters || !clusters.length}
             >
@@ -190,6 +215,7 @@ export function K8sDeploymentPage() {
                 setHistoryId('');
                 setLastResult(null);
                 setPreviewPlan(null);
+                setDeletePreviewPlan(null);
               }}
               disabled={!namespaces.length}
             >
@@ -208,6 +234,7 @@ export function K8sDeploymentPage() {
                 setSelectedResourceUID(event.target.value);
                 setLastResult(null);
                 setPreviewPlan(null);
+                setDeletePreviewPlan(null);
               }}
               disabled={!resources.length}
             >
@@ -262,6 +289,7 @@ export function K8sDeploymentPage() {
                 onChange={(event) => {
                   setYamlContent(event.target.value);
                   setPreviewPlan(null);
+                  setDeletePreviewPlan(null);
                   setLastResult(null);
                 }}
               />
@@ -321,11 +349,11 @@ export function K8sDeploymentPage() {
           <aside className="console-panel px-4 py-3">
             <div className="text-sm font-semibold text-on-surface">高风险确认</div>
             <p className="mt-1 text-xs text-muted">删除和回滚必须带完整资源身份：cluster / namespace / api_version / kind / name / uid。</p>
-            <IdentityInput label="namespace" value={identity.namespace} onChange={(value) => setIdentity({ ...identity, namespace: value })} />
-            <IdentityInput label="api_version" value={identity.apiVersion} onChange={(value) => setIdentity({ ...identity, apiVersion: value })} />
-            <IdentityInput label="kind" value={identity.kind} onChange={(value) => setIdentity({ ...identity, kind: value })} />
-            <IdentityInput label="name" value={identity.name} onChange={(value) => setIdentity({ ...identity, name: value })} />
-            <IdentityInput label="uid" value={identity.uid || ''} onChange={(value) => setIdentity({ ...identity, uid: value })} />
+            <IdentityInput label="namespace" value={identity.namespace} onChange={(value) => updateIdentity({ ...identity, namespace: value })} />
+            <IdentityInput label="api_version" value={identity.apiVersion} onChange={(value) => updateIdentity({ ...identity, apiVersion: value })} />
+            <IdentityInput label="kind" value={identity.kind} onChange={(value) => updateIdentity({ ...identity, kind: value })} />
+            <IdentityInput label="name" value={identity.name} onChange={(value) => updateIdentity({ ...identity, name: value })} />
+            <IdentityInput label="uid" value={identity.uid || ''} onChange={(value) => updateIdentity({ ...identity, uid: value })} />
             <label className="mt-3 block text-xs font-semibold text-muted">
               history_id
               <select className="console-input mt-2 w-full" value={historyId} onChange={(event) => setHistoryId(event.target.value)} disabled={!histories.length}>
@@ -339,14 +367,16 @@ export function K8sDeploymentPage() {
             <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               <div className="flex items-center justify-between gap-3">
                 <div className="font-semibold text-on-surface">确认摘要</div>
-                {previewPlan?.confirmationToken ? <CheckCircle2 className="h-4 w-4 text-primary" /> : null}
+                {previewPlan?.confirmationToken || deletePreviewPlan?.confirmationToken ? <CheckCircle2 className="h-4 w-4 text-primary" /> : null}
               </div>
               <div className="mt-2 font-mono">cluster={activeClusterId || '-'}</div>
               <div className="font-mono">namespace={identity.namespace || '-'}</div>
               <div className="font-mono">resource={identity.kind || '-'}/{identity.name || '-'}</div>
               <div className="font-mono">uid={identity.uid || '-'}</div>
-              <div className="mt-2 border-t border-white/70 pt-2 font-mono">preview_id={previewPlan?.previewId || '-'}</div>
-              <div className="break-all font-mono">confirmation={maskToken(previewPlan?.confirmationToken)}</div>
+              <div className="mt-2 border-t border-white/70 pt-2 font-mono">apply_preview_id={previewPlan?.previewId || '-'}</div>
+              <div className="break-all font-mono">apply_confirmation={maskToken(previewPlan?.confirmationToken)}</div>
+              <div className="mt-2 font-mono">delete_preview_id={deletePreviewPlan?.previewId || '-'}</div>
+              <div className="break-all font-mono">delete_confirmation={maskToken(deletePreviewPlan?.confirmationToken)}</div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -358,9 +388,19 @@ export function K8sDeploymentPage() {
                 <CloudUpload className="h-4 w-4" />
                 发布
               </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!hasCompleteIdentity || deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>
+              <button
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                disabled={!hasCompleteIdentity || previewDeleteMutation.isPending || deleteMutation.isPending}
+                onClick={() => {
+                  if (canDeleteConfirmedPreview) {
+                    deleteMutation.mutate();
+                    return;
+                  }
+                  previewDeleteMutation.mutate();
+                }}
+              >
                 <Trash2 className="h-4 w-4" />
-                删除
+                {canDeleteConfirmedPreview ? '确认删除' : '预览删除'}
               </button>
               <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!hasCompleteIdentity || !historyId.trim() || rollbackMutation.isPending} onClick={() => rollbackMutation.mutate()}>
                 <RotateCcw className="h-4 w-4" />

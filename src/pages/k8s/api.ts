@@ -837,6 +837,22 @@ export const k8sApi = {
     });
     return mapDeploymentOperationResult(raw);
   },
+  async previewDeleteDeployment(identity: K8sDeploymentIdentity): Promise<K8sDeploymentOperationResult> {
+    const raw = await apiRequest<any>('/k8s/deployments/delete-preview', {
+      method: 'POST',
+      body: JSON.stringify({
+        identity: {
+          cluster_id: identity.clusterId,
+          namespace: identity.namespace,
+          api_version: identity.apiVersion,
+          kind: identity.kind,
+          name: identity.name,
+          uid: identity.uid,
+        },
+      }),
+    });
+    return mapDeploymentOperationResult(raw);
+  },
   async deleteDeployment(identity: K8sDeploymentIdentity, confirmation: { previewId?: string; confirmationToken?: string } = {}): Promise<K8sDeploymentOperationResult> {
     const raw = await apiRequest<any>('/k8s/deployments', {
       method: 'DELETE',
