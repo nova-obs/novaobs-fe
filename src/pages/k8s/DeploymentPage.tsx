@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { CloudUpload, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
+import { CheckCircle2, CloudUpload, GitCompareArrows, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
-import { k8sApi, type K8sDeploymentIdentity, type K8sDeploymentOperationResult, type K8sResourceSummary } from './api';
+import { k8sApi, type K8sDeploymentDiff, type K8sDeploymentIdentity, type K8sDeploymentOperationResult, type K8sResourceSummary } from './api';
 
 export function K8sDeploymentPage() {
   const [selectedClusterId, setSelectedClusterId] = useState('');
@@ -13,6 +13,7 @@ export function K8sDeploymentPage() {
   const [identity, setIdentity] = useState<K8sDeploymentIdentity>(emptyIdentity());
   const [historyId, setHistoryId] = useState('');
   const [lastResult, setLastResult] = useState<K8sDeploymentOperationResult | null>(null);
+  const [previewPlan, setPreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
 
   const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
     queryKey: ['k8s-clusters'],
@@ -54,6 +55,7 @@ export function K8sDeploymentPage() {
       setNamespace(namespaces[0]?.name ?? '');
       setSelectedResourceUID('');
       setLastResult(null);
+      setPreviewPlan(null);
       return;
     }
     if (!namespace && namespaces[0]?.name) {
@@ -79,6 +81,7 @@ export function K8sDeploymentPage() {
     setIdentity(nextIdentity);
     syncDeploymentYAML(namespace, currentResource);
     setLastResult(null);
+    setPreviewPlan(null);
   }, [activeClusterId, currentResource, namespace]);
 
   useEffect(() => {
@@ -104,11 +107,22 @@ export function K8sDeploymentPage() {
 
   const previewMutation = useMutation({
     mutationFn: () => k8sApi.previewDeployment({ clusterId: activeClusterId, yamlContent }),
-    onSuccess: setLastResult,
+    onSuccess: (result) => {
+      setPreviewPlan(result);
+      setLastResult(result);
+    },
   });
   const applyMutation = useMutation({
-    mutationFn: () => k8sApi.applyDeployment({ clusterId: activeClusterId, yamlContent }),
-    onSuccess: setLastResult,
+    mutationFn: () => k8sApi.applyDeployment({
+      clusterId: activeClusterId,
+      yamlContent,
+      previewId: previewPlan?.previewId,
+      confirmationToken: previewPlan?.confirmationToken,
+    }),
+    onSuccess: (result) => {
+      setLastResult(result);
+      setPreviewPlan(null);
+    },
   });
   const deleteMutation = useMutation({
     mutationFn: () => k8sApi.deleteDeployment(identity),
@@ -124,9 +138,13 @@ export function K8sDeploymentPage() {
     return message.includes('无权') || message.includes('permission_denied') ? message : '';
   }, [previewMutation.error, applyMutation.error, deleteMutation.error, rollbackMutation.error]);
 
+  const operationError = previewMutation.error?.message || applyMutation.error?.message || deleteMutation.error?.message || rollbackMutation.error?.message || '';
   const resourceCount = lastResult?.resources.length ?? extractResourceCount(yamlContent);
   const canPreview = Boolean(activeClusterId && yamlContent.trim());
+  const canApplyConfirmedPreview = Boolean(canPreview && previewPlan?.previewId && previewPlan?.confirmationToken && !applyMutation.isPending);
   const hasCompleteIdentity = completeIdentity(identity);
+  const previewDiffs = previewPlan?.diffs ?? lastResult?.diffs ?? [];
+  const previewWarnings = previewPlan?.warnings ?? lastResult?.warnings ?? [];
 
   return (
     <div className="space-y-4">
@@ -151,6 +169,7 @@ export function K8sDeploymentPage() {
                 setLastTemplateYAML('');
                 setHistoryId('');
                 setLastResult(null);
+                setPreviewPlan(null);
               }}
               disabled={isLoadingClusters || !clusters.length}
             >
@@ -170,6 +189,7 @@ export function K8sDeploymentPage() {
                 setSelectedResourceUID('');
                 setHistoryId('');
                 setLastResult(null);
+                setPreviewPlan(null);
               }}
               disabled={!namespaces.length}
             >
@@ -187,6 +207,7 @@ export function K8sDeploymentPage() {
               onChange={(event) => {
                 setSelectedResourceUID(event.target.value);
                 setLastResult(null);
+                setPreviewPlan(null);
               }}
               disabled={!resources.length}
             >
@@ -214,6 +235,12 @@ export function K8sDeploymentPage() {
             权限不足：当前用户缺少 `k8s.deployment` 对应操作权限。
           </div>
         ) : null}
+        {operationError && !permissionError ? (
+          <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+            <ShieldAlert className="h-4 w-4" />
+            {operationError}
+          </div>
+        ) : null}
         {isLoadingResources ? (
           <div className="mb-3 rounded-lg bg-white/45 px-3 py-2 text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
             正在读取当前命名空间的 Deployment 参考。
@@ -229,7 +256,15 @@ export function K8sDeploymentPage() {
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="console-panel px-4 py-3">
               <div className="text-sm font-semibold text-on-surface">部署 YAML</div>
-              <textarea className="console-input mt-3 min-h-[430px] w-full font-mono text-xs" value={yamlContent} onChange={(event) => setYamlContent(event.target.value)} />
+              <textarea
+                className="console-input mt-3 min-h-[430px] w-full font-mono text-xs"
+                value={yamlContent}
+                onChange={(event) => {
+                  setYamlContent(event.target.value);
+                  setPreviewPlan(null);
+                  setLastResult(null);
+                }}
+              />
             </section>
             <section className="console-panel px-4 py-3">
               <div className="text-sm font-semibold text-on-surface">执行结果</div>
@@ -237,6 +272,31 @@ export function K8sDeploymentPage() {
                 <div className="font-semibold text-on-surface">{lastResult?.message || '等待预览或发布动作'}</div>
                 <div className="mt-2 font-mono text-xs text-muted">status={lastResult?.status || '-'}</div>
                 <div className="font-mono text-xs text-muted">audit={lastResult?.auditId || '-'}</div>
+              </div>
+              <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+                    <GitCompareArrows className="h-4 w-4 text-primary" />
+                    预览差异
+                  </div>
+                  <span className="rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{previewDiffs.length} diff</span>
+                </div>
+                {previewDiffs.length ? (
+                  <div className="mt-3 space-y-2">
+                    {previewDiffs.map((diff) => (
+                      <PreviewDiffRow key={`${diff.clusterId}-${diff.namespace}-${diff.kind}-${diff.name}-${diff.operation}`} diff={diff} />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="mt-3 rounded-lg bg-surface-lowest/60 px-3 py-3 text-xs font-medium text-muted">
+                    先执行预览，NovaObs 会展示 create / update / delete、解析后的 API 版本和确认指纹。
+                  </div>
+                )}
+                {previewWarnings.length ? (
+                  <div className="mt-3 space-y-1 rounded-lg bg-amber-50/80 px-3 py-2 text-xs font-semibold text-warning">
+                    {previewWarnings.map((warning) => <div key={warning}>{warning}</div>)}
+                  </div>
+                ) : null}
               </div>
               <div className="mt-4 space-y-3">
                 {(lastResult?.resources ?? [identity]).map((item) => (
@@ -277,11 +337,16 @@ export function K8sDeploymentPage() {
             </label>
 
             <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-semibold text-on-surface">确认摘要</div>
+              <div className="flex items-center justify-between gap-3">
+                <div className="font-semibold text-on-surface">确认摘要</div>
+                {previewPlan?.confirmationToken ? <CheckCircle2 className="h-4 w-4 text-primary" /> : null}
+              </div>
               <div className="mt-2 font-mono">cluster={activeClusterId || '-'}</div>
               <div className="font-mono">namespace={identity.namespace || '-'}</div>
               <div className="font-mono">resource={identity.kind || '-'}/{identity.name || '-'}</div>
               <div className="font-mono">uid={identity.uid || '-'}</div>
+              <div className="mt-2 border-t border-white/70 pt-2 font-mono">preview_id={previewPlan?.previewId || '-'}</div>
+              <div className="break-all font-mono">confirmation={maskToken(previewPlan?.confirmationToken)}</div>
             </div>
 
             <div className="mt-4 grid grid-cols-2 gap-2">
@@ -289,7 +354,7 @@ export function K8sDeploymentPage() {
                 <CloudUpload className="h-4 w-4" />
                 预览
               </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!canPreview || applyMutation.isPending} onClick={() => applyMutation.mutate()}>
+              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!canApplyConfirmedPreview} onClick={() => applyMutation.mutate()}>
                 <CloudUpload className="h-4 w-4" />
                 发布
               </button>
@@ -316,6 +381,29 @@ function DeployMetric({ label, value, meta }: { label: string; value: string; me
       <div className="mt-3 break-all font-mono text-2xl font-semibold text-on-surface">{value}</div>
       <div className="mt-2 truncate text-xs text-muted">{meta}</div>
     </section>
+  );
+}
+
+function PreviewDiffRow({ diff }: { diff: K8sDeploymentDiff }) {
+  const tone = diff.operation === 'delete'
+    ? 'bg-red-50 text-danger'
+    : diff.operation === 'create'
+      ? 'bg-primary-soft text-primary'
+      : 'bg-amber-50 text-warning';
+  return (
+    <div className="rounded-lg bg-surface-lowest/70 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="truncate text-sm font-semibold text-on-surface">{diff.kind}/{diff.name}</div>
+          <div className="mt-1 truncate text-[11px] font-medium text-muted">{diff.namespace || 'cluster-scope'} · {diff.apiVersion}</div>
+        </div>
+        <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{diff.operation || 'apply'}</span>
+      </div>
+      <div className="mt-3 grid gap-1 text-[11px] text-muted">
+        <div className="truncate font-mono">before={shortHash(diff.beforeHash)}</div>
+        <div className="truncate font-mono">after={shortHash(diff.afterHash)}</div>
+      </div>
+    </div>
   );
 }
 
@@ -367,6 +455,14 @@ function resourceOptionKey(resource: K8sResourceSummary) {
 
 function extractResourceCount(value: string) {
   return Math.max(1, value.split('---').filter((item) => item.trim()).length);
+}
+
+function shortHash(value = '') {
+  return value ? `${value.slice(0, 12)}...` : '-';
+}
+
+function maskToken(value = '') {
+  return value ? `${value.slice(0, 10)}...${value.slice(-6)}` : '-';
 }
 
 function errorMessage(error: unknown) {
