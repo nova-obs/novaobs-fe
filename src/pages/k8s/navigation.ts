@@ -4,6 +4,7 @@ import {
   FileKey2,
   Folder,
   Gauge,
+  GitBranch,
   Grid3X3,
   History,
   KeyRound,
@@ -13,7 +14,7 @@ import {
   ShieldCheck,
   ShieldUser,
   SquareTerminal,
-  UserRound,
+  UserRoundCog,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -43,7 +44,8 @@ export const k8sNavigationItems: K8sNavigationItem[] = [
   { id: 'dashboard', label: 'Dashboard', path: '/k8s', group: 'overview', icon: Gauge, description: '集群态势与同步状态' },
   { id: 'clusters', label: '集群管理', path: '/k8s/clusters', group: 'resources', icon: Network, description: '集群连接与健康检查' },
   { id: 'namespaces', label: '命名空间', path: '/k8s/namespaces', group: 'resources', icon: Folder, description: '租户边界与资源域' },
-  { id: 'users', label: '用户管理', path: '/k8s/users', group: 'access', icon: UserRound, description: '平台用户映射' },
+  { id: 'runtime-topology', label: '运行时拓扑', path: '/k8s/runtime-topology', group: 'resources', icon: GitBranch, description: 'Service、Workload 与 Istio 治理关系' },
+  { id: 'platform-access', label: '访问授权', path: '/k8s/platform-access', group: 'access', icon: UserRoundCog, description: '消费平台 IAM 主体并授予 K8s 权限' },
   { id: 'service-accounts', label: 'ServiceAccount', path: '/k8s/service-accounts', group: 'access', icon: ShieldUser, description: '服务身份与权限' },
   { id: 'rbac', label: 'RBAC', path: '/k8s/rbac', group: 'access', icon: ShieldCheck, description: 'Role 与 Binding' },
   { id: 'kubeconfig', label: 'Kubeconfig', path: '/k8s/kubeconfig', group: 'access', icon: KeyRound, description: '访问凭据托管' },

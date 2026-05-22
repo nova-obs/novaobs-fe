@@ -201,6 +201,14 @@ export interface K8sTemplate {
   updatedAt: string;
 }
 
+export interface K8sBaseTemplate {
+  type: string;
+  yamlContent: string;
+  variables: K8sTemplateVariable[];
+  description: string;
+  source: string;
+}
+
 export interface K8sTemplateRender {
   renderedYAML: string;
   auditId: string;
@@ -250,6 +258,208 @@ export interface K8sTerminalResult {
   blockedReason: string;
   mode: string;
   outputTruncated: boolean;
+}
+
+export interface K8sRuntimeGroupsResponse {
+  clusterId: string;
+  namespace: string;
+  groups: K8sRuntimeGroup[];
+  summary: K8sRuntimeGroupsSummary;
+}
+
+export interface K8sPlatformAccessScope {
+  global: boolean;
+  clusterId: string;
+  namespace: string;
+}
+
+export interface K8sPlatformAccessPermission {
+  id: string;
+  label: string;
+  description: string;
+  resource: string;
+  action: string;
+  scopeMode: string;
+}
+
+export interface K8sPlatformAccessBinding {
+  id: string;
+  subjectId: string;
+  subjectType: string;
+  roleId: string;
+  roleName: string;
+  scope: K8sPlatformAccessScope;
+  permissionIds: string[];
+  permissions: Array<{ resource: string; action: string; scopeMode: string }>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface K8sPlatformSubject {
+  id: string;
+  subjectId: string;
+  subjectType: string;
+  displayName: string;
+  email: string;
+  source: string;
+  bindingRefs: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface K8sRuntimeGroupsSummary {
+  groupCount: number;
+  serviceCount: number;
+  workloadCount: number;
+  podCount: number;
+  pvcCount: number;
+  virtualServiceCount: number;
+  gatewayCount: number;
+  destinationRuleCount: number;
+  securityPolicyCount: number;
+}
+
+export interface K8sRuntimeGroup {
+  key: string;
+  displayName: string;
+  isVirtual: boolean;
+  exposures: K8sRuntimeExposureNode[];
+  services: K8sRuntimeServiceNode[];
+  workloads: K8sRuntimeWorkloadNode[];
+  summary: K8sRuntimeGroupSummary;
+}
+
+export interface K8sRuntimeGroupSummary {
+  servicesTotal: number;
+  workloadsTotal: number;
+  podsTotal: number;
+  runningPods: number;
+  pendingPods: number;
+  failedPods: number;
+  restartCount: number;
+  persistentVolumeClaimsTotal: number;
+  virtualServicesTotal: number;
+  gatewaysTotal: number;
+  destinationRulesTotal: number;
+  securityPoliciesTotal: number;
+}
+
+export interface K8sRuntimeExposureNode {
+  key: string;
+  name: string;
+  kind: string;
+  hosts: string[];
+  gateways: string[];
+  serviceRefs: string[];
+  routeTargets: K8sRuntimeRouteTarget[];
+  routeRules: K8sRuntimeVirtualServiceRouteNode[];
+}
+
+export interface K8sRuntimeServiceNode {
+  name: string;
+  serviceType: string;
+  clusterIP: string;
+  selectors: Record<string, string>;
+  ports: K8sRuntimeServicePort[];
+  hosts: string[];
+  virtualServices: string[];
+  virtualServiceDetails: K8sRuntimeVirtualServiceNode[];
+  gateways: string[];
+  destinationRules: string[];
+  destinationRuleDetails: K8sRuntimeDestinationRuleNode[];
+}
+
+export interface K8sRuntimeRouteTarget {
+  host: string;
+  subset: string;
+  port: string;
+  weight?: number;
+}
+
+export interface K8sRuntimeStringMatchNode {
+  matchType: string;
+  value: string;
+}
+
+export interface K8sRuntimeHeaderMatchNode {
+  name: string;
+  matcher: K8sRuntimeStringMatchNode;
+}
+
+export interface K8sRuntimeVirtualServiceMatchNode {
+  summary: string;
+  uri?: K8sRuntimeStringMatchNode;
+  scheme?: K8sRuntimeStringMatchNode;
+  method?: K8sRuntimeStringMatchNode;
+  authority?: K8sRuntimeStringMatchNode;
+  headers: K8sRuntimeHeaderMatchNode[];
+  gateways: string[];
+  sourceLabels: string[];
+  sourceNamespace?: string;
+  sourceSubnets: string[];
+  port?: string;
+  sniHosts: string[];
+}
+
+export interface K8sRuntimeVirtualServiceRouteNode {
+  name: string;
+  protocol: string;
+  rewriteURI: string;
+  matches: K8sRuntimeVirtualServiceMatchNode[];
+  targets: K8sRuntimeRouteTarget[];
+}
+
+export interface K8sRuntimeVirtualServiceNode {
+  name: string;
+  hosts: string[];
+  gateways: string[];
+  routeTargets: K8sRuntimeRouteTarget[];
+  routes: K8sRuntimeVirtualServiceRouteNode[];
+}
+
+export interface K8sRuntimeServicePort {
+  name: string;
+  port: number;
+  targetPort: string;
+  protocol: string;
+  nodePort?: number;
+}
+
+export interface K8sRuntimeDestinationRuleSubsetNode {
+  name: string;
+  labels: Record<string, string>;
+}
+
+export interface K8sRuntimeDestinationRuleNode {
+  name: string;
+  host: string;
+  subsets: string[];
+  subsetDetails: K8sRuntimeDestinationRuleSubsetNode[];
+  hasTrafficPolicy: boolean;
+  exportTo: string[];
+}
+
+export interface K8sRuntimeWorkloadNode {
+  key: string;
+  name: string;
+  kind: string;
+  selector: Record<string, string>;
+  templateLabels: Record<string, string>;
+  serviceAccounts: string[];
+  configMaps: string[];
+  persistentVolumeClaims: string[];
+  hpas: Array<{ name: string }>;
+  securityPolicies: Array<{ name: string; kind: string; summary: string }>;
+  podsSummary: {
+    total: number;
+    running: number;
+    pending: number;
+    failed: number;
+    succeeded: number;
+    readyContainers: number;
+    totalContainers: number;
+    restartCount: number;
+  };
 }
 
 function mapCluster(raw: any): K8sCluster {
@@ -491,6 +701,16 @@ function mapTemplate(raw: any): K8sTemplate {
   };
 }
 
+function mapBaseTemplate(raw: any): K8sBaseTemplate {
+  return {
+    type: raw.type ?? '',
+    yamlContent: raw.yaml_content ?? raw.yamlContent ?? '',
+    variables: Array.isArray(raw.variables) ? raw.variables.map(mapTemplateVariable) : [],
+    description: raw.description ?? '',
+    source: raw.source ?? '',
+  };
+}
+
 function mapTemplateRender(raw: any): K8sTemplateRender {
   return {
     renderedYAML: raw.rendered_yaml ?? raw.renderedYAML ?? '',
@@ -550,6 +770,254 @@ function mapTerminalResult(raw: any): K8sTerminalResult {
     mode: raw.mode ?? '',
     outputTruncated: raw.output_truncated ?? raw.outputTruncated ?? false,
   };
+}
+
+function mapRuntimeGroups(raw: any): K8sRuntimeGroupsResponse {
+  const summary = raw.summary ?? {};
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    groups: Array.isArray(raw.groups) ? raw.groups.map(mapRuntimeGroup) : [],
+    summary: {
+      groupCount: summary.group_count ?? summary.groupCount ?? 0,
+      serviceCount: summary.service_count ?? summary.serviceCount ?? 0,
+      workloadCount: summary.workload_count ?? summary.workloadCount ?? 0,
+      podCount: summary.pod_count ?? summary.podCount ?? 0,
+      pvcCount: summary.pvc_count ?? summary.pvcCount ?? 0,
+      virtualServiceCount: summary.virtual_service_count ?? summary.virtualServiceCount ?? 0,
+      gatewayCount: summary.gateway_count ?? summary.gatewayCount ?? 0,
+      destinationRuleCount: summary.destination_rule_count ?? summary.destinationRuleCount ?? 0,
+      securityPolicyCount: summary.security_policy_count ?? summary.securityPolicyCount ?? 0,
+    },
+  };
+}
+
+function mapPlatformAccessScope(raw: any): K8sPlatformAccessScope {
+  return {
+    global: Boolean(raw.global),
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+  };
+}
+
+function mapPlatformAccessPermission(raw: any): K8sPlatformAccessPermission {
+  return {
+    id: raw.id ?? '',
+    label: raw.label ?? '',
+    description: raw.description ?? '',
+    resource: raw.resource ?? '',
+    action: raw.action ?? '',
+    scopeMode: raw.scope_mode ?? raw.scopeMode ?? '',
+  };
+}
+
+function mapPlatformAccessBinding(raw: any): K8sPlatformAccessBinding {
+  return {
+    id: String(raw.id ?? ''),
+    subjectId: raw.subject_id ?? raw.subjectId ?? '',
+    subjectType: raw.subject_type ?? raw.subjectType ?? '',
+    roleId: raw.role_id ?? raw.roleId ?? '',
+    roleName: raw.role_name ?? raw.roleName ?? '',
+    scope: mapPlatformAccessScope(raw.scope ?? {}),
+    permissionIds: arrayOfStrings(raw.permission_ids ?? raw.permissionIds),
+    permissions: mapArray(raw.permissions, (item: any) => ({
+      resource: item.resource ?? '',
+      action: item.action ?? '',
+      scopeMode: item.scope_mode ?? item.scopeMode ?? '',
+    })),
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapPlatformSubject(raw: any): K8sPlatformSubject {
+  return {
+    id: String(raw.id ?? ''),
+    subjectId: raw.subject_id ?? raw.subjectId ?? '',
+    subjectType: raw.subject_type ?? raw.subjectType ?? '',
+    displayName: raw.display_name ?? raw.displayName ?? '',
+    email: raw.email ?? '',
+    source: raw.source ?? '',
+    bindingRefs: raw.binding_refs ?? raw.bindingRefs ?? 0,
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapRuntimeGroup(raw: any): K8sRuntimeGroup {
+  const summary = raw.summary ?? {};
+  return {
+    key: raw.key ?? '',
+    displayName: raw.display_name ?? raw.displayName ?? '',
+    isVirtual: Boolean(raw.is_virtual ?? raw.isVirtual),
+    exposures: Array.isArray(raw.exposures) ? raw.exposures.map(mapRuntimeExposure) : [],
+    services: Array.isArray(raw.services) ? raw.services.map(mapRuntimeService) : [],
+    workloads: Array.isArray(raw.workloads) ? raw.workloads.map(mapRuntimeWorkload) : [],
+    summary: {
+      servicesTotal: summary.services_total ?? summary.servicesTotal ?? 0,
+      workloadsTotal: summary.workloads_total ?? summary.workloadsTotal ?? 0,
+      podsTotal: summary.pods_total ?? summary.podsTotal ?? 0,
+      runningPods: summary.running_pods ?? summary.runningPods ?? 0,
+      pendingPods: summary.pending_pods ?? summary.pendingPods ?? 0,
+      failedPods: summary.failed_pods ?? summary.failedPods ?? 0,
+      restartCount: summary.restart_count ?? summary.restartCount ?? 0,
+      persistentVolumeClaimsTotal: summary.persistent_volume_claims_total ?? summary.persistentVolumeClaimsTotal ?? 0,
+      virtualServicesTotal: summary.virtual_services_total ?? summary.virtualServicesTotal ?? 0,
+      gatewaysTotal: summary.gateways_total ?? summary.gatewaysTotal ?? 0,
+      destinationRulesTotal: summary.destination_rules_total ?? summary.destinationRulesTotal ?? 0,
+      securityPoliciesTotal: summary.security_policies_total ?? summary.securityPoliciesTotal ?? 0,
+    },
+  };
+}
+
+function mapRuntimeExposure(raw: any): K8sRuntimeExposureNode {
+  return {
+    key: raw.key ?? '',
+    name: raw.name ?? '',
+    kind: raw.kind ?? '',
+    hosts: arrayOfStrings(raw.hosts),
+    gateways: arrayOfStrings(raw.gateways),
+    serviceRefs: arrayOfStrings(raw.service_refs ?? raw.serviceRefs),
+    routeTargets: mapArray(raw.route_targets ?? raw.routeTargets, mapRuntimeRouteTarget),
+    routeRules: mapArray(raw.route_rules ?? raw.routeRules, mapRuntimeVirtualServiceRoute),
+  };
+}
+
+function mapRuntimeService(raw: any): K8sRuntimeServiceNode {
+  return {
+    name: raw.name ?? '',
+    serviceType: raw.service_type ?? raw.serviceType ?? '',
+    clusterIP: raw.cluster_ip ?? raw.clusterIP ?? '',
+    selectors: raw.selectors ?? {},
+    ports: mapArray(raw.ports, mapRuntimeServicePort),
+    hosts: arrayOfStrings(raw.hosts),
+    virtualServices: arrayOfStrings(raw.virtual_services ?? raw.virtualServices),
+    virtualServiceDetails: mapArray(raw.virtual_service_details ?? raw.virtualServiceDetails, mapRuntimeVirtualService),
+    gateways: arrayOfStrings(raw.gateways),
+    destinationRules: arrayOfStrings(raw.destination_rules ?? raw.destinationRules),
+    destinationRuleDetails: mapArray(raw.destination_rule_details ?? raw.destinationRuleDetails, mapRuntimeDestinationRule),
+  };
+}
+
+function mapRuntimeRouteTarget(raw: any): K8sRuntimeRouteTarget {
+  return {
+    host: raw.host ?? '',
+    subset: raw.subset ?? '',
+    port: raw.port ?? '',
+    weight: raw.weight,
+  };
+}
+
+function mapRuntimeStringMatch(raw: any): K8sRuntimeStringMatchNode | undefined {
+  if (!raw) return undefined;
+  return {
+    matchType: raw.match_type ?? raw.matchType ?? '',
+    value: raw.value ?? '',
+  };
+}
+
+function mapRuntimeHeaderMatch(raw: any): K8sRuntimeHeaderMatchNode {
+  return {
+    name: raw.name ?? '',
+    matcher: mapRuntimeStringMatch(raw.matcher) ?? { matchType: '', value: '' },
+  };
+}
+
+function mapRuntimeVirtualServiceMatch(raw: any): K8sRuntimeVirtualServiceMatchNode {
+  return {
+    summary: raw.summary ?? '',
+    uri: mapRuntimeStringMatch(raw.uri),
+    scheme: mapRuntimeStringMatch(raw.scheme),
+    method: mapRuntimeStringMatch(raw.method),
+    authority: mapRuntimeStringMatch(raw.authority),
+    headers: mapArray(raw.headers, mapRuntimeHeaderMatch),
+    gateways: arrayOfStrings(raw.gateways),
+    sourceLabels: arrayOfStrings(raw.source_labels ?? raw.sourceLabels),
+    sourceNamespace: raw.source_namespace ?? raw.sourceNamespace,
+    sourceSubnets: arrayOfStrings(raw.source_subnets ?? raw.sourceSubnets),
+    port: raw.port,
+    sniHosts: arrayOfStrings(raw.sni_hosts ?? raw.sniHosts),
+  };
+}
+
+function mapRuntimeVirtualServiceRoute(raw: any): K8sRuntimeVirtualServiceRouteNode {
+  return {
+    name: raw.name ?? '',
+    protocol: raw.protocol ?? '',
+    rewriteURI: raw.rewrite_uri ?? raw.rewriteURI ?? '',
+    matches: mapArray(raw.matches, mapRuntimeVirtualServiceMatch),
+    targets: mapArray(raw.targets, mapRuntimeRouteTarget),
+  };
+}
+
+function mapRuntimeVirtualService(raw: any): K8sRuntimeVirtualServiceNode {
+  return {
+    name: raw.name ?? '',
+    hosts: arrayOfStrings(raw.hosts),
+    gateways: arrayOfStrings(raw.gateways),
+    routeTargets: mapArray(raw.route_targets ?? raw.routeTargets, mapRuntimeRouteTarget),
+    routes: mapArray(raw.routes, mapRuntimeVirtualServiceRoute),
+  };
+}
+
+function mapRuntimeServicePort(raw: any): K8sRuntimeServicePort {
+  return {
+    name: raw.name ?? '',
+    port: raw.port ?? 0,
+    targetPort: raw.target_port ?? raw.targetPort ?? '',
+    protocol: raw.protocol ?? '',
+    nodePort: raw.node_port ?? raw.nodePort,
+  };
+}
+
+function mapRuntimeDestinationRule(raw: any): K8sRuntimeDestinationRuleNode {
+  return {
+    name: raw.name ?? '',
+    host: raw.host ?? '',
+    subsets: arrayOfStrings(raw.subsets),
+    subsetDetails: mapArray(raw.subset_details ?? raw.subsetDetails, (item: any) => ({
+      name: item.name ?? '',
+      labels: item.labels ?? {},
+    })),
+    hasTrafficPolicy: Boolean(raw.has_traffic_policy ?? raw.hasTrafficPolicy),
+    exportTo: arrayOfStrings(raw.export_to ?? raw.exportTo),
+  };
+}
+
+function mapRuntimeWorkload(raw: any): K8sRuntimeWorkloadNode {
+  const podsSummary = raw.pods_summary ?? raw.podsSummary ?? {};
+  return {
+    key: raw.key ?? '',
+    name: raw.name ?? '',
+    kind: raw.kind ?? '',
+    selector: raw.selector ?? {},
+    templateLabels: raw.template_labels ?? raw.templateLabels ?? {},
+    serviceAccounts: arrayOfStrings(raw.service_accounts ?? raw.serviceAccounts),
+    configMaps: arrayOfStrings(raw.config_maps ?? raw.configMaps),
+    persistentVolumeClaims: arrayOfStrings(raw.persistent_volume_claims ?? raw.persistentVolumeClaims),
+    hpas: Array.isArray(raw.hpas) ? raw.hpas.map((item: any) => ({ name: item.name ?? '' })) : [],
+    securityPolicies: Array.isArray(raw.security_policies ?? raw.securityPolicies)
+      ? (raw.security_policies ?? raw.securityPolicies).map((item: any) => ({ name: item.name ?? '', kind: item.kind ?? '', summary: item.summary ?? '' }))
+      : [],
+    podsSummary: {
+      total: podsSummary.total ?? 0,
+      running: podsSummary.running ?? 0,
+      pending: podsSummary.pending ?? 0,
+      failed: podsSummary.failed ?? 0,
+      succeeded: podsSummary.succeeded ?? 0,
+      readyContainers: podsSummary.ready_containers ?? podsSummary.readyContainers ?? 0,
+      totalContainers: podsSummary.total_containers ?? podsSummary.totalContainers ?? 0,
+      restartCount: podsSummary.restart_count ?? podsSummary.restartCount ?? 0,
+    },
+  };
+}
+
+function arrayOfStrings(value: any): string[] {
+  return Array.isArray(value) ? value.map(String).filter(Boolean) : [];
+}
+
+function mapArray<T>(value: any, mapper: (item: any) => T): T[] {
+  return Array.isArray(value) ? value.map(mapper) : [];
 }
 
 async function terminalRequest(input: { clusterId: string; namespace: string; command: string }): Promise<any> {
@@ -643,6 +1111,43 @@ export const k8sApi = {
     if (input.container) params.set('container', input.container);
     const raw = await apiRequest<any>(`/k8s/pod-logs?${params.toString()}`);
     return mapPodLogs(raw);
+  },
+  async listRuntimeGroups(input: { clusterId: string; namespace: string }): Promise<K8sRuntimeGroupsResponse> {
+    const params = new URLSearchParams();
+    params.set('cluster_id', input.clusterId);
+    params.set('namespace', input.namespace);
+    const raw = await apiRequest<any>(`/k8s/runtime-groups?${params.toString()}`);
+    return mapRuntimeGroups(raw);
+  },
+  async listPlatformAccessBindings(): Promise<K8sPlatformAccessBinding[]> {
+    const raw = await apiRequest<any[]>('/k8s/platform-access/bindings');
+    return raw.map(mapPlatformAccessBinding);
+  },
+  async listPlatformAccessPermissions(): Promise<K8sPlatformAccessPermission[]> {
+    const raw = await apiRequest<any[]>('/k8s/platform-access/permissions');
+    return raw.map(mapPlatformAccessPermission);
+  },
+  async createPlatformAccessBinding(input: { subjectId: string; subjectType: string; clusterId: string; namespace: string; global?: boolean; permissionIds: string[] }): Promise<K8sWriteResult<K8sPlatformAccessBinding>> {
+    const raw = await apiRequest<any>('/k8s/platform-access/bindings', {
+      method: 'POST',
+      body: JSON.stringify({
+        subject_id: input.subjectId,
+        subject_type: input.subjectType,
+        cluster_id: input.clusterId,
+        namespace: input.namespace,
+        global: Boolean(input.global),
+        permission_ids: input.permissionIds,
+      }),
+    });
+    return mapWriteResult(raw, mapPlatformAccessBinding);
+  },
+  async deletePlatformAccessBinding(id: string): Promise<K8sWriteResult<never>> {
+    const raw = await apiRequest<any>(`/k8s/platform-access/bindings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw);
+  },
+  async listPlatformSubjects(): Promise<K8sPlatformSubject[]> {
+    const raw = await apiRequest<any[]>('/k8s/platform-access/subjects');
+    return raw.map(mapPlatformSubject);
   },
   async listDeploymentHistory(clusterId = '', namespace = ''): Promise<K8sDeploymentHistory[]> {
     const params = new URLSearchParams();
@@ -779,6 +1284,11 @@ export const k8sApi = {
     if (type) params.set('type', type);
     const raw = await apiRequest<any[]>(`/k8s/templates${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapTemplate);
+  },
+  async getBaseTemplate(type: string): Promise<K8sBaseTemplate> {
+    const params = new URLSearchParams({ type });
+    const raw = await apiRequest<any>(`/k8s/templates/base?${params.toString()}`);
+    return mapBaseTemplate(raw);
   },
   async createTemplate(input: { name: string; type: string; yamlContent: string; variables: K8sTemplateVariable[]; description?: string }): Promise<K8sWriteResult<K8sTemplate>> {
     const raw = await apiRequest<any>('/k8s/templates', {

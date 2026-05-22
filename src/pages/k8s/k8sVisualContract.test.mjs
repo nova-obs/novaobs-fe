@@ -17,12 +17,14 @@ const kubeconfigSource = readFileSync(new URL('./KubeconfigPage.tsx', import.met
 const templateSource = readFileSync(new URL('./TemplatePage.tsx', import.meta.url), 'utf8');
 const deploymentSource = readFileSync(new URL('./DeploymentPage.tsx', import.meta.url), 'utf8');
 const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.url), 'utf8');
-const userSource = readFileSync(new URL('./UserPage.tsx', import.meta.url), 'utf8');
+const platformAccessSource = readFileSync(new URL('./PlatformAccessPage.tsx', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
   assert.equal(layoutSource.includes('Prod / CN-SHANGHAI-A'), true);
+  assert.equal(layoutSource.includes('k8s-account-session'), false);
+  assert.equal(layoutSource.includes('AccountSessionPanel'), false);
   assert.equal(navigationSource.includes('访问控制'), true);
   assert.equal(navigationSource.includes('证书中心'), true);
   assert.equal(navigationSource.includes('受控终端'), true);
@@ -57,15 +59,14 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('不在页面回显'), true);
 });
 
-test('K8s 用户管理页面接入真实 RBAC subject 数据面', () => {
+test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => {
   assert.equal(routeSource.includes('K8sPlaceholderPage'), false);
-  assert.equal(userSource.includes('用户管理'), true);
-  assert.equal(userSource.includes('k8sApi.listClusters'), true);
-  assert.equal(userSource.includes('k8sApi.listNamespaces'), true);
-  assert.equal(userSource.includes('k8sApi.listRBACBindings'), true);
-  assert.equal(userSource.includes('平台用户映射'), true);
-  assert.equal(userSource.includes('RoleBinding'), true);
-  assert.equal(userSource.includes('后续会按 startorch'), false);
+  assert.equal(routeSource.includes("path: 'users'"), false);
+  assert.equal(navigationSource.includes('访问授权'), true);
+  assert.equal(platformAccessSource.includes('k8sApi.listPlatformSubjects'), true);
+  assert.equal(platformAccessSource.includes('k8sApi.createPlatformAccessBinding'), true);
+  assert.equal(platformAccessSource.includes('Subject ID'), true);
+  assert.equal(platformAccessSource.includes('终端、资源只读、发布和 K8s RBAC 可拆开授权'), true);
 });
 
 test('K8s 命名空间页面展示集群、来源和权限上下文', () => {
@@ -91,6 +92,15 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('容器选择'), true);
   assert.equal(resourceSource.includes('containerOptions'), true);
   assert.equal(resourceSource.includes('命名空间读取失败'), true);
+  assert.equal(resourceSource.includes('受控操作闭环'), true);
+  assert.equal(resourceSource.includes('apply-preview → confirmation-token → apply'), true);
+  assert.equal(resourceSource.includes('delete-preview → confirmation-token → delete'), true);
+  assert.equal(resourceSource.includes('高风险确认'), true);
+  assert.equal(resourceSource.includes('预览差异'), true);
+  assert.equal(resourceSource.includes('操作已落审计'), true);
+  assert.equal(resourceSource.includes('k8sApi.previewDeployment'), true);
+  assert.equal(resourceSource.includes('k8sApi.applyDeployment'), true);
+  assert.equal(resourceSource.includes('k8sApi.previewDeleteDeployment'), true);
   assert.equal(resourceSource.includes('资源 API 暂未连接'), false);
 });
 
@@ -175,6 +185,7 @@ test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () =
   assert.equal(templateSource.includes('模板管理'), true);
   assert.equal(templateSource.includes('/api/v1/k8s/templates'), true);
   assert.equal(templateSource.includes('k8sApi.listResources'), true);
+  assert.equal(templateSource.includes('k8sApi.getBaseTemplate'), true);
   assert.equal(templateSource.includes('集群选择'), true);
   assert.equal(templateSource.includes('命名空间选择'), true);
   assert.equal(templateSource.includes('资源参考'), true);
@@ -186,6 +197,7 @@ test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () =
   assert.equal(templateSource.includes('sample'), false);
   assert.equal(templateSource.includes('模板 API 暂未连接'), false);
   assert.equal(templateSource.includes('变量摘要'), true);
+  assert.equal(templateSource.includes('novaobs-base'), true);
   assert.equal(templateSource.includes('权限不足'), true);
   assert.equal(templateSource.includes('操作已落审计'), true);
   assert.equal(templateSource.includes('删除确认摘要'), true);

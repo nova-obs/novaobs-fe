@@ -43,6 +43,9 @@ interface Envelope<T> {
   error?: { message?: string } | null;
 }
 
+const signedOutStorageKey = 'novaobs_signed_out';
+const clientSessionKeys = ['novaobs_session', 'novaobs_token', 'novaobs_subject', 'auth_token', 'access_token', 'refresh_token'];
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
     headers: { 'Content-Type': 'application/json', ...(init?.headers ?? {}) },
@@ -63,12 +66,30 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error('响应 JSON 无效');
   }
   if (!response.ok || !body.success) {
+    if (response.status === 401) {
+      redirectToLogin();
+    }
     throw new Error(body.error?.message ?? `请求失败: ${response.status}`);
   }
   return body.data;
 }
 
 export const apiRequest = request;
+
+function redirectToLogin() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  for (const key of clientSessionKeys) {
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  }
+  window.sessionStorage.setItem(signedOutStorageKey, '1');
+  const target = '/?signed_out=1';
+  if (window.location.pathname + window.location.search !== target) {
+    window.location.replace(target);
+  }
+}
 
 function computeRuntimeStatus(lastSeenAt: string): { runtimeStatus: 'online' | 'stale' | 'offline'; lastSeenAgeSeconds: number } {
   if (!lastSeenAt) return { runtimeStatus: 'offline', lastSeenAgeSeconds: Infinity };

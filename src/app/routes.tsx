@@ -9,17 +9,19 @@ import { K8sDeploymentHistoryPage } from '../pages/k8s/DeploymentHistoryPage';
 import { K8sDeploymentPage } from '../pages/k8s/DeploymentPage';
 import { K8sOpsLayout } from '../pages/k8s/K8sOpsLayout';
 import { K8sNamespacePage } from '../pages/k8s/NamespacePage';
+import { K8sPlatformAccessPage } from '../pages/k8s/PlatformAccessPage';
 import { K8sResourcePage } from '../pages/k8s/ResourcePage';
 import { K8sRbacPage } from '../pages/k8s/RbacPage';
+import { K8sRuntimeTopologyPage } from '../pages/k8s/RuntimeTopologyPage';
 import { K8sServiceAccountPage } from '../pages/k8s/ServiceAccountPage';
 import { K8sKubeconfigPage } from '../pages/k8s/KubeconfigPage';
 import { K8sTemplatePage } from '../pages/k8s/TemplatePage';
 import { K8sTerminalPage } from '../pages/k8s/TerminalPage';
-import { K8sUserPage } from '../pages/k8s/UserPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { OnboardingPage } from '../pages/onboarding/OnboardingPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
 import { PipelinesPage } from '../pages/pipelines/PipelinesPage';
+import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
 
 export interface RouteDefinition {
@@ -35,7 +37,8 @@ const k8sChildRoutes: RouteDefinition[] = [
   { path: 'clusters', title: 'K8s 运维', element: <K8sClusterPage /> },
   { path: 'namespaces', title: 'K8s 运维', element: <K8sNamespacePage /> },
   { path: 'resource-view', title: 'K8s 运维', element: <K8sResourcePage /> },
-  { path: 'users', title: 'K8s 运维', element: <K8sUserPage /> },
+  { path: 'runtime-topology', title: 'K8s 运维', element: <K8sRuntimeTopologyPage /> },
+  { path: 'platform-access', title: 'K8s 运维', element: <K8sPlatformAccessPage /> },
   { path: 'deploy-history', title: 'K8s 运维', element: <K8sDeploymentHistoryPage /> },
   { path: 'audit', title: 'K8s 运维', element: <K8sAuditPage /> },
   { path: 'certificates', title: 'K8s 运维', element: <K8sCertificatePage /> },
@@ -53,6 +56,7 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/onboarding', title: '服务接入', element: <OnboardingPage /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace /> },
   { path: '/pipelines', title: '日志 Pipeline', element: <PipelinesPage /> },
+  { path: '/platform/access', title: '平台管理', element: <PlatformAccessAdminPage /> },
   { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },
   { path: '/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },
   { path: '/alerts', title: '告警中心', element: <AlertsPage /> },

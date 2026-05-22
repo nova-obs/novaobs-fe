@@ -17,7 +17,8 @@ test('K8s 运维二级导航保留 startorch 支持能力入口', () => {
     '/k8s',
     '/k8s/clusters',
     '/k8s/namespaces',
-    '/k8s/users',
+    '/k8s/runtime-topology',
+    '/k8s/platform-access',
     '/k8s/service-accounts',
     '/k8s/rbac',
     '/k8s/kubeconfig',
@@ -34,6 +35,7 @@ test('K8s 运维二级导航保留 startorch 支持能力入口', () => {
 test('K8s 运维可按子路径定位当前二级导航', () => {
   assert.equal(getK8sNavigationByPath('/k8s')?.id, 'dashboard');
   assert.equal(getK8sNavigationByPath('/k8s/namespaces')?.id, 'namespaces');
+  assert.equal(getK8sNavigationByPath('/k8s/platform-access')?.id, 'platform-access');
   assert.equal(getK8sNavigationByPath('/k8s/rbac/roles')?.id, 'rbac');
   assert.equal(getK8sNavigationByPath('/k8s/terminal')?.id, 'terminal');
 });

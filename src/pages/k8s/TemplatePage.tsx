@@ -2,7 +2,21 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { FileCode2, Play, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
-import { k8sApi, type K8sResourceSummary, type K8sTemplate } from './api';
+import { k8sApi, type K8sBaseTemplate, type K8sResourceSummary, type K8sTemplate } from './api';
+
+const templateTypeOptions = [
+  'Deployment',
+  'StatefulSet',
+  'DaemonSet',
+  'Service',
+  'ConfigMap',
+  'Ingress',
+  'HorizontalPodAutoscaler',
+  'Gateway',
+  'VirtualService',
+  'DestinationRule',
+  'EnvoyFilter',
+];
 
 export function K8sTemplatePage() {
   const queryClient = useQueryClient();
@@ -45,6 +59,13 @@ export function K8sTemplatePage() {
     retry: false,
   });
 
+  const { data: baseTemplate, error: baseTemplateError } = useQuery({
+    queryKey: ['k8s-template-base', templateType],
+    queryFn: () => k8sApi.getBaseTemplate(templateType),
+    enabled: Boolean(templateType),
+    retry: false,
+  });
+
   useEffect(() => {
     if (!selectedClusterId && clusters[0]?.id) {
       setSelectedClusterId(clusters[0].id);
@@ -82,10 +103,10 @@ export function K8sTemplatePage() {
   const variableValues = useMemo(() => Object.fromEntries(variables.map((item) => [item.name, item.defaultValue ?? ''])), [variables]);
 
   useEffect(() => {
-    syncTemplateDraft(namespace, templateType, currentResource);
-  }, [currentResource, namespace, templateType]);
+    syncTemplateDraft(namespace, templateType, currentResource, baseTemplate);
+  }, [baseTemplate, currentResource, namespace, templateType]);
 
-  function syncTemplateDraft(nextNamespace: string, nextType: string, resource?: K8sResourceSummary) {
+  function syncTemplateDraft(nextNamespace: string, nextType: string, resource?: K8sResourceSummary, builtIn?: K8sBaseTemplate) {
     if (!nextNamespace) {
       return;
     }
@@ -94,7 +115,7 @@ export function K8sTemplatePage() {
       setName(generatedName);
       setLastTemplateName(generatedName);
     }
-    const generatedYAML = buildTemplateYAML(nextNamespace, nextType, resource);
+    const generatedYAML = buildTemplateYAML(nextNamespace, nextType, resource, builtIn);
     if (!yamlContent.trim() || yamlContent === lastTemplateYAML) {
       setYamlContent(generatedYAML);
       setLastTemplateYAML(generatedYAML);
@@ -203,9 +224,9 @@ export function K8sTemplatePage() {
             变量默认值从真实 Kubernetes 资源上下文派生；模板本身仍由 NovaObs 管理，渲染和变更受 RBAC 与审计控制。
           </div>
         </div>
-        {clusterError || namespaceError || resourceError ? (
+        {clusterError || namespaceError || resourceError || baseTemplateError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError || baseTemplateError)}
           </div>
         ) : null}
       </section>
@@ -284,7 +305,10 @@ export function K8sTemplatePage() {
 
             <section className="grid gap-4 lg:grid-cols-2">
               <div className="console-panel px-4 py-3">
-                <div className="text-sm font-semibold text-on-surface">YAML</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-sm font-semibold text-on-surface">YAML</div>
+                  <span className="rounded-md bg-white/60 px-2 py-1 text-[11px] font-semibold text-muted">{baseTemplate?.source || 'novaobs-base'}</span>
+                </div>
                 <textarea className="console-input mt-3 min-h-[260px] w-full font-mono text-xs" value={yamlContent} onChange={(event) => setYamlContent(event.target.value)} />
               </div>
               <div className="console-panel px-4 py-3">
@@ -314,7 +338,7 @@ export function K8sTemplatePage() {
                 setRenderedYAML('');
               }}
             >
-              {['Deployment', 'Service', 'StatefulSet', 'ConfigMap', 'Ingress', 'HorizontalPodAutoscaler'].map((item) => (
+              {templateTypeOptions.map((item) => (
                 <option key={item} value={item}>{item}</option>
               ))}
             </select>
@@ -384,9 +408,12 @@ function templateNameFromResource(templateType: string, resource?: K8sResourceSu
   return `${resource.identity.name}-${templateType.toLowerCase()}-template`;
 }
 
-function buildTemplateYAML(namespace: string, templateType: string, resource?: K8sResourceSummary) {
+function buildTemplateYAML(namespace: string, templateType: string, resource?: K8sResourceSummary, builtIn?: K8sBaseTemplate) {
   const kind = templateType || resource?.identity.kind || 'Deployment';
   const apiVersion = apiVersionForKind(kind, resource);
+  if (builtIn?.yamlContent?.trim()) {
+    return applyBaseTemplateDefaults(builtIn.yamlContent, namespace, kind, resource);
+  }
   return `apiVersion: ${apiVersion}
 kind: ${kind}
 metadata:
@@ -396,11 +423,34 @@ spec:
   replicas: <<replicas>>`;
 }
 
+function applyBaseTemplateDefaults(baseYAML: string, namespace: string, kind: string, resource?: K8sResourceSummary) {
+  const name = templateNameFromResource(kind, resource).replace(/-template$/, '') || resource?.identity.name || 'app';
+  const replacements: Record<string, string> = {
+    namespace,
+    name,
+    app: resource?.labels?.app || name,
+    container: name,
+    service: resource?.identity.kind === 'Service' ? resource.identity.name : name,
+    target: resource?.identity.name || name,
+    replicas: '1',
+    port: '80',
+    target_port: '80',
+    image: 'example/app:latest',
+    host: 'example.internal',
+    gateway: 'default-gateway',
+    path: '/',
+    value: 'value',
+    min_replicas: '1',
+    max_replicas: '3',
+  };
+  return baseYAML.replace(/<<([a-zA-Z0-9_]+)>>/g, (match, key) => replacements[key] ?? match);
+}
+
 function apiVersionForKind(kind: string, resource?: K8sResourceSummary) {
   if (resource?.identity.apiVersion) {
     return resource.identity.apiVersion;
   }
-  if (kind === 'Deployment' || kind === 'StatefulSet') {
+  if (kind === 'Deployment' || kind === 'StatefulSet' || kind === 'DaemonSet' || kind === 'ReplicaSet') {
     return 'apps/v1';
   }
   if (kind === 'Ingress') {
@@ -408,6 +458,9 @@ function apiVersionForKind(kind: string, resource?: K8sResourceSummary) {
   }
   if (kind === 'HorizontalPodAutoscaler') {
     return 'autoscaling/v2';
+  }
+  if (kind === 'Gateway' || kind === 'VirtualService' || kind === 'DestinationRule' || kind === 'EnvoyFilter') {
+    return 'networking.istio.io/v1';
   }
   return 'v1';
 }

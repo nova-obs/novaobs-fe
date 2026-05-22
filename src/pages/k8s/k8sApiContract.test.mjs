@@ -439,6 +439,9 @@ test('K8s 模板管理调用统一 NovaObs API 并单独渲染', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
+    if (String(path).includes('/base')) {
+      return jsonResponse({ type: 'Deployment', yaml_content: 'apiVersion: apps/v1\nkind: Deployment', variables: [{ name: 'name', required: true }], source: 'novaobs-base' });
+    }
     if (init.method === 'POST' && String(path).endsWith('/render')) {
       return jsonResponse({ rendered_yaml: 'kind: Deployment\nmetadata:\n  name: orders-api', audit_id: 'audit-render-1' });
     }
@@ -453,17 +456,21 @@ test('K8s 模板管理调用统一 NovaObs API 并单独渲染', async () => {
 
   try {
     const templates = await k8sApi.listTemplates();
+    const base = await k8sApi.getBaseTemplate('Deployment');
     const created = await k8sApi.createTemplate({ name: 'orders-deploy', type: 'Deployment', yamlContent: 'kind: Deployment', variables: [{ name: 'image', description: '', required: true }] });
     const rendered = await k8sApi.renderTemplate('tpl-1', { image: 'orders:v2' });
     const deleted = await k8sApi.deleteTemplate('tpl-1');
 
     assert.equal(requests[0].path, '/api/v1/k8s/templates');
-    assert.equal(requests[1].path, '/api/v1/k8s/templates');
-    assert.equal(JSON.parse(requests[1].init.body).yaml_content, 'kind: Deployment');
-    assert.equal(requests[2].path, '/api/v1/k8s/templates/render');
-    assert.equal(JSON.parse(requests[2].init.body).variables.image, 'orders:v2');
-    assert.equal(requests[3].path, '/api/v1/k8s/templates/tpl-1');
+    assert.equal(requests[1].path, '/api/v1/k8s/templates/base?type=Deployment');
+    assert.equal(requests[2].path, '/api/v1/k8s/templates');
+    assert.equal(JSON.parse(requests[2].init.body).yaml_content, 'kind: Deployment');
+    assert.equal(requests[3].path, '/api/v1/k8s/templates/render');
+    assert.equal(JSON.parse(requests[3].init.body).variables.image, 'orders:v2');
+    assert.equal(requests[4].path, '/api/v1/k8s/templates/tpl-1');
     assert.equal(templates[0].yamlContent, 'kind: Deployment');
+    assert.equal(base.yamlContent.includes('kind: Deployment'), true);
+    assert.equal(base.variables[0].name, 'name');
     assert.equal(created.auditId, 'audit-create-1');
     assert.equal(rendered.auditId, 'audit-render-1');
     assert.equal(deleted.auditId, 'audit-delete-1');
