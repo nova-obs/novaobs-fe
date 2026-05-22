@@ -11,6 +11,8 @@ test('平台总览使用服务拓扑作为主视觉', () => {
   assert.equal(source.includes('订单中心'), true);
   assert.equal(source.includes('库存中心'), true);
   assert.equal(source.includes('消息中心'), true);
+  assert.equal(source.includes('UHost'), false);
+  assert.equal(source.includes('PathX'), false);
 });
 
 test('平台总览展示审计级指标元信息', () => {

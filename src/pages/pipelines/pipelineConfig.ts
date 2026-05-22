@@ -35,7 +35,7 @@ export function describeApplyMatrix(agents: Pick<CollectorConfigAgentStatus, 're
 }
 
 export function configStatusColor(status: string) {
-  if (status === 'applied') return 'text-emerald-400';
+  if (status === 'applied') return 'text-primary';
   if (status === 'failed' || status === 'partial_failed') return 'text-red-400';
   if (status === 'pending' || status === 'applying' || status === 'draft') return 'text-amber-400';
   return 'text-muted';

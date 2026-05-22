@@ -83,7 +83,7 @@ export function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="console-panel relative min-h-[330px] overflow-hidden p-5">
-          <div className="absolute inset-0 opacity-80 [background-image:radial-gradient(circle_at_24%_22%,rgba(31,122,118,0.12),transparent_28%),radial-gradient(circle_at_72%_64%,rgba(88,127,67,0.1),transparent_32%),linear-gradient(120deg,rgba(255,255,255,0.52),transparent_52%)]" />
+          <div className="absolute inset-0 opacity-80 [background-image:radial-gradient(circle_at_24%_22%,rgba(13,91,215,0.12),transparent_28%),radial-gradient(circle_at_72%_64%,rgba(0,164,255,0.1),transparent_32%),linear-gradient(120deg,rgba(255,255,255,0.52),transparent_52%)]" />
           <div className="relative flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -215,7 +215,7 @@ export function DashboardPage() {
 
 function ClusterNode({ className, icon: Icon, label, meta }: { className: string; icon: typeof Network; label: string; meta: string }) {
   return (
-    <div className={`absolute flex min-w-32 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5 rounded-lg bg-white/78 px-2.5 py-2 shadow-[0_18px_42px_-28px_rgba(29,36,38,0.55),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-primary/10 ${className}`}>
+    <div className={`absolute flex min-w-32 -translate-x-1/2 -translate-y-1/2 items-center gap-2.5 rounded-lg bg-white/78 px-2.5 py-2 shadow-[0_18px_42px_-28px_rgba(16,32,55,0.46),inset_0_1px_0_rgba(255,255,255,0.85)] ring-1 ring-primary/10 ${className}`}>
       <div className="flex h-8 w-8 items-center justify-center rounded-full bg-primary-soft text-primary">
         <Icon className="h-4 w-4" />
       </div>

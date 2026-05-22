@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { AlertTriangle, Boxes, CheckCircle2, Copy, Database, GitBranch, Layers3, Server, ShieldCheck } from 'lucide-react';
+import { AlertTriangle, Boxes, Copy, Database, GitBranch, Server, ShieldCheck } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { api } from '../../services/api';
 
@@ -83,18 +83,18 @@ export function OverviewPage() {
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="font-display text-lg font-semibold tracking-tight">服务拓扑</h2>
-                <span className="rounded-full bg-primary-soft/70 px-2 py-0.5 text-[11px] font-semibold text-primary">实时</span>
+                <span className="rounded-full bg-primary-soft/80 px-2 py-0.5 text-[11px] font-semibold text-primary">实时</span>
               </div>
               <p className="mt-1 text-xs text-muted">节点健康状态、服务依赖与日志流向。</p>
             </div>
             <div className="flex items-center gap-2 text-xs">
-              <span className="rounded-lg bg-white/65 px-2.5 py-1.5 font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">视图：拓扑图</span>
-              <span className="rounded-lg bg-white/65 px-2.5 py-1.5 font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">全屏</span>
+              <span className="rounded-lg border border-outline/70 bg-white/75 px-2.5 py-1.5 font-semibold text-muted">视图：拓扑图</span>
+              <span className="rounded-lg border border-outline/70 bg-white/75 px-2.5 py-1.5 font-semibold text-muted">全屏</span>
             </div>
           </div>
 
-          <div className="relative mt-4 min-h-[245px] overflow-hidden rounded-lg bg-white/42">
-            <div className="absolute inset-0 opacity-70 [background-image:radial-gradient(circle_at_50%_50%,rgba(31,122,118,0.08),transparent_36%),repeating-radial-gradient(ellipse_at_center,rgba(31,122,118,0.08)_0,rgba(31,122,118,0.08)_1px,transparent_1px,transparent_24px)]" />
+          <div className="relative mt-4 min-h-[245px] overflow-hidden rounded-lg border border-outline/70 bg-white/70">
+            <div className="absolute inset-0 opacity-80 [background-image:radial-gradient(circle_at_50%_50%,rgba(13,91,215,0.08),transparent_36%),linear-gradient(rgba(13,91,215,0.055)_1px,transparent_1px),linear-gradient(90deg,rgba(13,91,215,0.055)_1px,transparent_1px)] [background-size:auto,28px_28px,28px_28px]" />
             <svg className="absolute inset-0 h-full w-full text-primary/40" viewBox="0 0 100 100" aria-hidden="true">
               <path d="M18 42 C28 32 34 31 42 22 C47 32 48 42 54 55 C63 50 70 42 78 40" fill="none" stroke="currentColor" strokeWidth="0.55" strokeDasharray="1.2 2" />
               <path d="M18 42 C30 46 42 50 54 55 C48 62 44 68 36 72" fill="none" stroke="currentColor" strokeWidth="0.55" strokeDasharray="1.2 2" />
@@ -104,7 +104,7 @@ export function OverviewPage() {
             {topologyNodes.map((node) => (
               <TopologyNode key={node.name} {...node} />
             ))}
-            <div className="absolute bottom-3 right-3 flex items-center gap-3 rounded-lg bg-white/70 px-3 py-2 text-[11px] font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
+            <div className="absolute bottom-3 right-3 flex items-center gap-3 rounded-lg border border-outline/70 bg-white/85 px-3 py-2 text-[11px] font-semibold text-muted">
               <LegendDot tone="healthy" />健康
               <LegendDot tone="warning" />警告
               <LegendDot tone="unknown" />未知
@@ -115,7 +115,7 @@ export function OverviewPage() {
         <div className="space-y-4">
           <DataPanel title="平台健康度" meta="updated 10:24:15">
             <div className="flex items-center gap-5">
-              <div className="relative flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-[conic-gradient(#1f7a76_0_82%,#dcefeb_82%_100%)]">
+              <div className="relative flex h-32 w-32 shrink-0 items-center justify-center rounded-full bg-[conic-gradient(#0d5bd7_0_82%,#e5f0ff_82%_100%)]">
                 <div className="flex h-24 w-24 flex-col items-center justify-center rounded-full bg-surface-lowest/95">
                   <div className="font-mono text-2xl font-semibold">98.2%</div>
                   <div className="text-[11px] text-muted">健康评分</div>
@@ -221,7 +221,7 @@ function TopologyNode({ name, meta, status, x, y }: { name: string; meta: string
   const warning = status === 'warning';
   return (
     <div
-      className={`absolute flex min-w-36 items-center gap-3 rounded-lg bg-white/78 px-3 py-2 shadow-[0_18px_42px_-28px_rgba(29,36,38,0.55),inset_0_1px_0_rgba(255,255,255,0.85)] ${warning ? 'ring-1 ring-warning/25' : 'ring-1 ring-primary/10'}`}
+      className={`absolute flex min-w-40 items-center gap-3 rounded-lg border bg-white/90 px-3 py-2 shadow-[0_18px_42px_-30px_rgba(16,32,55,0.5),inset_0_1px_0_rgba(255,255,255,0.95)] ${warning ? 'border-warning/25' : 'border-primary/15'}`}
       style={{ left: `${x}%`, top: `${y}%`, transform: 'translate(-50%, -50%)' }}
     >
       <div className={`flex h-9 w-9 items-center justify-center rounded-full ${warning ? 'bg-amber-100 text-warning' : 'bg-primary-soft text-primary'}`}>
@@ -258,7 +258,7 @@ function MetricCard({ label, value, detail, source, icon: Icon, path, warning }:
         <Icon className={`h-4 w-4 ${warning ? 'text-warning' : 'text-primary'}`} />
       </div>
       <MiniTrend path={path} warning={warning} />
-      <div className="mt-3 flex items-center justify-between border-t border-outline/45 pt-2 text-[11px] text-muted">
+      <div className="mt-3 flex items-center justify-between border-t border-outline/60 pt-2 text-[11px] text-muted">
         <span>来源：{source}</span>
         <Copy className="h-3.5 w-3.5" />
       </div>

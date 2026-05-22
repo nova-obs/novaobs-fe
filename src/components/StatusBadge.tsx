@@ -18,11 +18,11 @@ type StatusValue =
   | 'unmatched';
 
 const statusClass: Record<string, string> = {
-  active: 'border-green-200 bg-green-50 text-green-700',
-  enabled: 'border-green-200 bg-green-50 text-green-700',
-  parsed: 'border-green-200 bg-green-50 text-green-700',
-  matched: 'border-green-200 bg-green-50 text-green-700',
-  info: 'border-green-200 bg-green-50 text-green-700',
+  active: 'border-primary/25 bg-primary-soft text-primary',
+  enabled: 'border-primary/25 bg-primary-soft text-primary',
+  parsed: 'border-primary/25 bg-primary-soft text-primary',
+  matched: 'border-primary/25 bg-primary-soft text-primary',
+  info: 'border-primary/25 bg-primary-soft text-primary',
   debug: 'border-outline bg-surface-low text-muted',
   warn: 'border-amber-200 bg-amber-50 text-amber-700',
   error: 'border-red-200 bg-red-50 text-red-700',

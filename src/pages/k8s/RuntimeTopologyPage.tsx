@@ -129,7 +129,7 @@ export function K8sRuntimeTopologyPage() {
               <button
                 key={group.key}
                 type="button"
-                className={`w-full rounded-lg px-3 py-3 text-left transition ${selectedGroup?.key === group.key ? 'bg-primary-soft text-primary shadow-[inset_3px_0_0_rgba(31,122,118,0.72)]' : 'bg-white/45 text-on-surface hover:bg-white/70'}`}
+                className={`w-full rounded-lg px-3 py-3 text-left transition ${selectedGroup?.key === group.key ? 'bg-primary-soft text-primary shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : 'bg-white/45 text-on-surface hover:bg-white/70'}`}
                 onClick={() => setSelectedGroupKey(group.key)}
               >
                 <div className="flex items-center justify-between gap-3">
@@ -263,11 +263,11 @@ function TopologyNode({ kind, title, meta, accent = 'route', children }: { kind:
   const accentClass = {
     route: 'border-l-sky-400',
     service: 'border-l-primary',
-    workload: 'border-l-emerald-500',
+    workload: 'border-l-secondary',
     warning: 'border-l-amber-500',
   }[accent];
   return (
-    <div className={`rounded-lg border-l-4 ${accentClass} bg-white/62 px-3 py-2.5 shadow-[0_8px_18px_rgba(42,66,80,0.06)]`}>
+    <div className={`rounded-lg border-l-4 ${accentClass} bg-white/62 px-3 py-2.5 shadow-[0_8px_18px_rgba(16,32,55,0.06)]`}>
       <div className="flex items-center justify-between gap-2">
         <span className="truncate font-semibold text-on-surface">{title}</span>
         <span className="rounded bg-surface-low px-1.5 py-0.5 text-[10px] font-semibold text-muted">{kind}</span>

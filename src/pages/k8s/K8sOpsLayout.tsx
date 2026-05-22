@@ -9,7 +9,7 @@ export function K8sOpsLayout() {
   return (
     <div className="grid gap-4 xl:grid-cols-[248px_minmax(0,1fr)]">
       <aside className="console-panel relative overflow-hidden p-3">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(ellipse_at_20%_10%,rgba(31,122,118,0.13),transparent_58%),radial-gradient(ellipse_at_86%_20%,rgba(88,127,67,0.12),transparent_48%)]" />
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-44 bg-[radial-gradient(ellipse_at_20%_10%,rgba(13,91,215,0.13),transparent_58%),radial-gradient(ellipse_at_86%_20%,rgba(0,164,255,0.12),transparent_48%)]" />
         <div className="relative rounded-lg bg-white/42 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
           <div className="flex items-center justify-between gap-3">
             <div>

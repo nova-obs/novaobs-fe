@@ -40,6 +40,8 @@ test('顶层框架使用柔和观测控制面视觉语言', () => {
   assert.equal(source.includes('border-r border-outline'), false);
   assert.equal(source.includes('bg-app-radial'), true);
   assert.equal(source.includes('Telemetry Atlas'), true);
+  assert.equal(source.includes('NovaObs for UCloud'), false);
+  assert.equal(source.includes('UCloud Ops'), false);
   assert.equal(source.includes('atlas-sidebar-panel'), true);
   assert.equal(source.includes('atlas-nav-active'), true);
 });

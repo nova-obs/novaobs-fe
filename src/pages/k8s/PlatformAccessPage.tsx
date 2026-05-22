@@ -218,7 +218,7 @@ export function K8sPlatformAccessPage() {
                 {bindings.map((item) => (
                   <tr
                     key={item.id}
-                    className={`cursor-pointer bg-white/35 hover:bg-white/60 ${currentTarget?.id === item.id ? 'shadow-[inset_3px_0_0_rgba(31,122,118,0.72)]' : ''}`}
+                    className={`cursor-pointer bg-white/35 hover:bg-white/60 ${currentTarget?.id === item.id ? 'shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : ''}`}
                     onClick={() => setSelected(item)}
                   >
                     <td>
@@ -261,7 +261,7 @@ export function K8sPlatformAccessPage() {
                 <span className="text-xs font-semibold text-muted">Subject ID</span>
                 <input className="console-input mt-2 w-full" value={subjectId} onChange={(event) => setSubjectId(event.target.value)} />
               </label>
-              <div className="mt-3 border-t border-[rgba(17,94,89,0.12)] pt-3">
+              <div className="mt-3 border-t border-[rgba(13,91,215,0.12)] pt-3">
               <div className="font-mono">subject={subjectType}/{subjectId || '-'}</div>
               <div className="font-mono">cluster={activeClusterId || '-'}</div>
               <div className="font-mono">namespace={namespace || '-'}</div>

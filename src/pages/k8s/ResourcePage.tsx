@@ -266,7 +266,7 @@ export function K8sResourcePage() {
                 {data.map((item) => (
                   <tr
                     key={identityKey(item.identity)}
-                    className={`bg-white/35 hover:bg-white/60 ${selected && identityKey(selected.identity) === identityKey(item.identity) ? 'shadow-[inset_3px_0_0_rgba(31,122,118,0.72)]' : ''}`}
+                    className={`bg-white/35 hover:bg-white/60 ${selected && identityKey(selected.identity) === identityKey(item.identity) ? 'shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : ''}`}
                     onClick={() => {
                       setSelected(item);
                       setActiveTab('detail');
@@ -342,7 +342,7 @@ export function K8sResourcePage() {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <button
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(17,94,89,0.18)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(13,91,215,0.18)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
                     disabled={!selectedIdentity || applyPreviewMutation.isPending || applyMutation.isPending}
                     onClick={() => applyPreviewMutation.mutate()}
                   >
@@ -547,7 +547,7 @@ function extractContainerOptions(spec?: Record<string, any>) {
 function TabButton({ active, disabled = false, icon: Icon, label, onClick }: { active: boolean; disabled?: boolean; icon: LucideIcon; label: string; onClick: () => void }) {
   return (
     <button
-      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${active ? 'bg-primary text-white' : 'bg-white/70 text-primary shadow-[inset_0_0_0_1px_rgba(17,94,89,0.18)]'}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 ${active ? 'bg-primary text-white' : 'bg-white/70 text-primary shadow-[inset_0_0_0_1px_rgba(13,91,215,0.18)]'}`}
       disabled={disabled}
       onClick={onClick}
     >

@@ -231,7 +231,7 @@ export function K8sClusterPage() {
               <KeyRound className="h-4 w-4" />
               录入
             </button>
-            <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(17,94,89,0.18)] transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || rotateCredential.isPending} onClick={() => rotateCredential.mutate()}>
+            <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(13,91,215,0.18)] transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || rotateCredential.isPending} onClick={() => rotateCredential.mutate()}>
               <RotateCcw className="h-4 w-4" />
               轮换
             </button>

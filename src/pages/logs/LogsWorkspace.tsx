@@ -42,7 +42,7 @@ function LogsWorkspace() {
             key={t.key}
             className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all active:translate-y-px ${
               tab === t.key
-                ? 'bg-primary text-white shadow-[0_10px_24px_-18px_rgba(31,122,118,0.9)]'
+                ? 'bg-primary text-white shadow-[0_10px_24px_-18px_rgba(13,91,215,0.72)]'
                 : 'text-muted hover:bg-white/70 hover:text-on-surface'
             }`}
             onClick={() => setTab(t.key)}

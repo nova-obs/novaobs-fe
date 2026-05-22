@@ -494,7 +494,7 @@ function Notice({ tone, title, message }: { tone: 'amber' | 'red' | 'green'; tit
   const color = tone === 'red'
     ? 'border-red-500/30 bg-red-900/10 text-red-400'
     : tone === 'green'
-      ? 'border-emerald-500/30 bg-emerald-900/10 text-emerald-500'
+      ? 'border-primary/25 bg-primary-soft text-primary'
       : 'border-amber-500/30 bg-amber-900/10 text-amber-500';
   const Icon = tone === 'red' ? AlertTriangle : CheckCircle;
   return (

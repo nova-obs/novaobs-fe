@@ -259,7 +259,7 @@ export function ServicesPage() {
                         <td className="font-mono text-xs">{svc.cluster || '-'}{svc.namespace ? ` / ${svc.namespace}` : ''}</td>
                         <td className="text-sm">{svc.ownerTeam}{svc.owner ? ` · ${svc.owner}` : ''}</td>
                         <td><span className={`text-xs ${svc.source === 'cmdb' ? 'text-info' : 'text-muted'}`}>{sourceLabel(svc.source)}</span></td>
-                        <td><span className={`text-xs ${svc.syncStatus === 'synced' ? 'text-emerald-400' : 'text-muted'}`}>{syncLabel(svc.syncStatus)}</span></td>
+                        <td><span className={`text-xs ${svc.syncStatus === 'synced' ? 'text-primary' : 'text-muted'}`}>{syncLabel(svc.syncStatus)}</span></td>
                         <td className="font-mono text-xs text-muted">{svc.alertRoute || '-'}</td>
                         <td className="font-mono text-xs text-muted">{svc.identityType || 'k8s_workload'}</td>
                         <td><StatusBadge value={svc.status} /></td>

@@ -12,7 +12,7 @@ function runtimeStatusLabel(status: string) {
 }
 
 function runtimeStatusColor(status: string) {
-  if (status === 'online') return 'text-emerald-500';
+  if (status === 'online') return 'text-primary';
   if (status === 'stale') return 'text-amber-500';
   return 'text-muted';
 }
@@ -81,8 +81,8 @@ export function AgentDetailPage() {
           </div>
           <h1 className="truncate font-display text-2xl font-semibold text-on-surface">{detail.instanceUid}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-            <span className={`font-semibold ${runtime.online ? 'text-emerald-500' : 'text-muted'}`}>{runtime.online ? 'online' : 'offline'}</span>
-            <span className={`font-semibold ${runtime.healthy ? 'text-emerald-500' : 'text-amber-500'}`}>{runtime.healthy ? 'healthy' : 'unhealthy'}</span>
+            <span className={`font-semibold ${runtime.online ? 'text-primary' : 'text-muted'}`}>{runtime.online ? 'online' : 'offline'}</span>
+            <span className={`font-semibold ${runtime.healthy ? 'text-primary' : 'text-amber-500'}`}>{runtime.healthy ? 'healthy' : 'unhealthy'}</span>
             <span className={`font-semibold ${runtimeStatusColor(runtime.runtimeStatus)}`}>{runtimeStatusLabel(runtime.runtimeStatus)}</span>
             <span className="text-muted">last seen: {ageText(runtime.lastSeenAt)}</span>
           </div>
@@ -239,7 +239,7 @@ function Notice({ tone, title, message }: { tone: 'amber' | 'red' | 'green'; tit
   const color = tone === 'red'
     ? 'border-red-500/30 bg-red-900/10 text-red-400'
     : tone === 'green'
-      ? 'border-emerald-500/30 bg-emerald-900/10 text-emerald-500'
+      ? 'border-primary/25 bg-primary-soft text-primary'
       : 'border-amber-500/30 bg-amber-900/10 text-amber-500';
   const Icon = tone === 'red' ? XCircle : tone === 'green' ? CheckCircle : AlertTriangle;
   return (
