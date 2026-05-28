@@ -1,4 +1,5 @@
 import type { ReactNode } from 'react';
+import { Navigate } from 'react-router-dom';
 import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
 import { K8sAuditPage } from '../pages/k8s/AuditPage';
@@ -33,21 +34,37 @@ export interface RouteDefinition {
 }
 
 const k8sChildRoutes: RouteDefinition[] = [
-  { index: true, title: 'K8s 运维', element: <DashboardPage /> },
-  { path: 'clusters', title: 'K8s 运维', element: <K8sClusterPage /> },
-  { path: 'namespaces', title: 'K8s 运维', element: <K8sNamespacePage /> },
-  { path: 'resource-view', title: 'K8s 运维', element: <K8sResourcePage /> },
-  { path: 'runtime-topology', title: 'K8s 运维', element: <K8sRuntimeTopologyPage /> },
-  { path: 'platform-access', title: 'K8s 运维', element: <K8sPlatformAccessPage /> },
-  { path: 'deploy-history', title: 'K8s 运维', element: <K8sDeploymentHistoryPage /> },
-  { path: 'audit', title: 'K8s 运维', element: <K8sAuditPage /> },
-  { path: 'certificates', title: 'K8s 运维', element: <K8sCertificatePage /> },
-  { path: 'service-accounts', title: 'K8s 运维', element: <K8sServiceAccountPage /> },
-  { path: 'rbac', title: 'K8s 运维', element: <K8sRbacPage /> },
-  { path: 'kubeconfig', title: 'K8s 运维', element: <K8sKubeconfigPage /> },
-  { path: 'templates', title: 'K8s 运维', element: <K8sTemplatePage /> },
-  { path: 'releases', title: 'K8s 运维', element: <K8sDeploymentPage /> },
-  { path: 'terminal', title: 'K8s 运维', element: <K8sTerminalPage /> },
+  { index: true, title: 'K8s 运维', element: <K8sClusterPage /> },
+  { path: 'access', title: 'K8s 运维', element: <K8sClusterPage /> },
+  { path: 'clusters', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'namespaces', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'resource-view', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'runtime-topology', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'platform-access', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'deploy-history', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'audit', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'certificates', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'service-accounts', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'rbac', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'kubeconfig', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'templates', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'releases', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'terminal', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
+  { path: 'clusters/:clusterId', title: 'K8s 运维', element: <DashboardPage /> },
+  { path: 'clusters/:clusterId/namespaces', title: 'K8s 运维', element: <K8sNamespacePage /> },
+  { path: 'clusters/:clusterId/resource-view', title: 'K8s 运维', element: <K8sResourcePage /> },
+  { path: 'clusters/:clusterId/runtime-topology', title: 'K8s 运维', element: <K8sRuntimeTopologyPage /> },
+  { path: 'clusters/:clusterId/credentials', title: 'K8s 运维', element: <K8sClusterPage /> },
+  { path: 'clusters/:clusterId/platform-access', title: 'K8s 运维', element: <K8sPlatformAccessPage /> },
+  { path: 'clusters/:clusterId/deploy-history', title: 'K8s 运维', element: <K8sDeploymentHistoryPage /> },
+  { path: 'clusters/:clusterId/audit', title: 'K8s 运维', element: <K8sAuditPage /> },
+  { path: 'clusters/:clusterId/certificates', title: 'K8s 运维', element: <K8sCertificatePage /> },
+  { path: 'clusters/:clusterId/service-accounts', title: 'K8s 运维', element: <K8sServiceAccountPage /> },
+  { path: 'clusters/:clusterId/rbac', title: 'K8s 运维', element: <K8sRbacPage /> },
+  { path: 'clusters/:clusterId/kubeconfig', title: 'K8s 运维', element: <K8sKubeconfigPage /> },
+  { path: 'clusters/:clusterId/templates', title: 'K8s 运维', element: <K8sTemplatePage /> },
+  { path: 'clusters/:clusterId/releases', title: 'K8s 运维', element: <K8sDeploymentPage /> },
+  { path: 'clusters/:clusterId/terminal', title: 'K8s 运维', element: <K8sTerminalPage /> },
 ];
 
 export const routeDefinitions: RouteDefinition[] = [

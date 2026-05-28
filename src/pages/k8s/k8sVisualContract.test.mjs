@@ -22,7 +22,16 @@ const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url
 
 test('K8s 运维模块使用专业二级导航和运维信号', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
-  assert.equal(layoutSource.includes('Prod / CN-SHANGHAI-A'), true);
+  assert.equal(layoutSource.includes('Fleet / registered clusters'), true);
+  assert.equal(layoutSource.includes('useParams'), true);
+  assert.equal(layoutSource.includes('k8sApi.listClusters'), true);
+  assert.equal(layoutSource.includes('hasClusterContext'), true);
+  assert.equal(layoutSource.includes('FleetTabs'), true);
+  assert.equal(layoutSource.includes('ClusterWorkspaceBar'), true);
+  assert.equal(layoutSource.includes('返回集群列表'), true);
+  assert.equal(layoutSource.includes('切换集群'), true);
+  assert.equal(layoutSource.includes("item.id === 'fleet' || item.requiresCluster"), false);
+  assert.equal(layoutSource.includes('.filter((item) => item.requiresCluster)'), true);
   assert.equal(layoutSource.includes('k8s-account-session'), false);
   assert.equal(layoutSource.includes('AccountSessionPanel'), false);
   assert.equal(navigationSource.includes('访问控制'), true);
@@ -31,29 +40,64 @@ test('K8s 运维模块使用专业二级导航和运维信号', () => {
 });
 
 test('K8s Dashboard 展示来源、时间窗口、同步和审计上下文', () => {
-  assert.equal(dashboardSource.includes('startorch'), true);
+  assert.equal(dashboardSource.includes('startorch'), false);
   assert.equal(dashboardSource.includes('最近 15 分钟'), true);
   assert.equal(dashboardSource.includes('配置状态'), true);
   assert.equal(dashboardSource.includes('操作审计'), true);
-  assert.equal(dashboardSource.includes('k8sApi.listClusters'), true);
+  assert.equal(dashboardSource.includes('集群策略'), true);
+  assert.equal(dashboardSource.includes('useK8sOpsContext'), true);
   assert.equal(dashboardSource.includes('k8sApi.listAuditEvents'), true);
   assert.equal(dashboardSource.includes('resourceRows'), false);
   assert.equal(dashboardSource.includes('eventRows'), false);
 });
 
 test('K8s 集群页面展示集群连接和来源上下文', () => {
-  assert.equal(clusterSource.includes('集群列表'), true);
+  assert.equal(clusterSource.includes('集群总览'), true);
+  assert.equal(clusterSource.includes('当前集群元数据'), false);
+  assert.equal(clusterSource.includes('职责边界'), false);
+  assert.equal(clusterSource.includes('登记入口'), false);
+  assert.equal(clusterSource.includes('凭据入口'), false);
+  assert.equal(clusterSource.includes('isNewAccessView'), true);
+  assert.equal(clusterSource.includes('isCredentialView'), true);
+  assert.equal(clusterSource.includes('接入页只处理新集群登记'), true);
+  assert.equal(clusterSource.includes('已登记集群的凭据维护'), true);
+  assert.equal(clusterSource.includes('进入凭据维护'), true);
+  assert.equal(clusterSource.includes('只读探测'), false);
+  assert.equal(clusterSource.includes('ClusterOverviewCard'), true);
+  assert.equal(clusterSource.includes('AccessProbeStrip'), false);
+  assert.equal(clusterSource.includes('接入验证'), false);
+  assert.equal(clusterSource.includes('测试连接'), true);
+  assert.equal(clusterSource.includes('删除登记'), true);
+  assert.equal(clusterSource.includes('useQueries'), true);
+  assert.equal(clusterSource.includes('clusterProbeStaleTimeMs'), true);
+  assert.equal(clusterSource.includes('clusterProbeQueryKey(cluster.id)'), true);
+  assert.equal(clusterSource.includes('probeByClusterId'), true);
+  assert.equal(clusterSource.includes('optionalErrorMessage'), true);
+  assert.equal(clusterSource.includes('probeError={optionalErrorMessage'), true);
+  assert.equal(clusterSource.includes("probeCluster.data?.clusterId === cluster.id"), false);
+  assert.equal(clusterSource.includes('quiet-button bg-primary px-3 text-white hover:bg-primary/90'), false);
   assert.equal(clusterSource.includes('集群登记'), true);
-  assert.equal(clusterSource.includes('删除元数据'), true);
+  assert.equal(clusterSource.includes('删除元数据'), false);
+  assert.equal(clusterSource.includes('useK8sOpsContext'), true);
+  assert.equal(clusterSource.includes('k8sApi.listClusters'), false);
   assert.equal(clusterSource.includes('fallbackClusters'), false);
   assert.equal(clusterSource.includes('startorch baseline'), false);
   assert.equal(clusterSource.includes("useState('prod')"), false);
   assert.equal(clusterSource.includes("useState('prod-core')"), false);
-  assert.equal(clusterSource.includes('/api/v1/k8s/clusters'), true);
+  assert.equal(clusterSource.includes('/api/v1/k8s/clusters'), false);
   assert.equal(clusterSource.includes('集群凭据'), true);
   assert.equal(clusterSource.includes('凭据录入'), true);
+  assert.equal(clusterSource.includes('当前生效版本'), true);
+  assert.equal(clusterSource.includes('历史版本'), true);
+  assert.equal(clusterSource.includes('回滚为当前'), true);
+  assert.equal(clusterSource.includes('凭据即将过期'), true);
+  assert.equal(clusterSource.includes('rollbackClusterCredential'), true);
+  assert.equal(clusterSource.includes('credentialResult?.probe'), true);
   assert.equal(clusterSource.includes('轮换'), true);
   assert.equal(clusterSource.includes('/api/v1/k8s/cluster-credentials'), true);
+  assert.equal(routeSource.includes("path: 'clusters/:clusterId/credentials'"), true);
+  assert.equal(navigationSource.includes("id: 'cluster-credentials'"), true);
+  assert.equal(navigationSource.includes("segment: 'credentials'"), true);
   assert.equal(clusterSource.includes('集群凭据 API 暂未连接'), false);
   assert.equal(clusterSource.includes('kubeconfig'), true);
   assert.equal(clusterSource.includes('不在页面回显'), true);
@@ -64,23 +108,52 @@ test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => 
   assert.equal(routeSource.includes("path: 'users'"), false);
   assert.equal(navigationSource.includes('访问授权'), true);
   assert.equal(platformAccessSource.includes('k8sApi.listPlatformSubjects'), true);
+  assert.equal(platformAccessSource.includes('k8sApi.listPlatformAccessProfiles'), true);
   assert.equal(platformAccessSource.includes('k8sApi.createPlatformAccessBinding'), true);
-  assert.equal(platformAccessSource.includes('Subject ID'), true);
-  assert.equal(platformAccessSource.includes('终端、资源只读、发布和 K8s RBAC 可拆开授权'), true);
+  assert.equal(platformAccessSource.includes('权限包'), true);
+  assert.equal(platformAccessSource.includes('有效变更预览'), true);
+  assert.equal(platformAccessSource.includes('只读观察者'), true);
+  assert.equal(platformAccessSource.includes('自定义权限'), true);
+  assert.equal(platformAccessSource.includes('accessTabs'), true);
+  assert.equal(platformAccessSource.includes("key: 'grant'"), true);
+  assert.equal(platformAccessSource.includes("key: 'bindings'"), true);
+  assert.equal(platformAccessSource.includes('新增授权'), true);
+  assert.equal(platformAccessSource.includes('已授权绑定'), true);
+  assert.equal(platformAccessSource.includes('授权流程'), true);
+  assert.equal(platformAccessSource.includes('选择授权主体'), true);
+  assert.equal(platformAccessSource.includes('选择权限包'), true);
+  assert.equal(platformAccessSource.includes('选择授权范围'), true);
+  assert.equal(platformAccessSource.includes('命名空间多选'), true);
+  assert.equal(platformAccessSource.includes('整个集群全部命名空间'), true);
+  assert.equal(platformAccessSource.includes('高危授权确认'), true);
+  assert.equal(platformAccessSource.includes('selectedNamespaces'), true);
+  assert.equal(platformAccessSource.includes('allNamespaces'), true);
+  assert.equal(platformAccessSource.includes('riskAccepted'), true);
+  assert.equal(platformAccessSource.includes('确认授权'), true);
+  assert.equal(platformAccessSource.includes('授权摘要'), true);
+  assert.equal(platformAccessSource.includes('GrantStep'), true);
+  assert.equal(platformAccessSource.includes('isGlobalGrant'), true);
+  assert.equal(platformAccessSource.includes('全局授权'), true);
+  assert.equal(platformAccessSource.includes('customProfileId'), true);
+  assert.equal(platformAccessSource.includes("profiles.find((item) => item.id === selectedProfileId) ?? profiles[0]"), false);
+  assert.equal(platformAccessSource.includes('Subject ID'), false);
 });
 
 test('K8s 命名空间页面展示集群、来源和权限上下文', () => {
   assert.equal(namespaceSource.includes('命名空间列表'), true);
-  assert.equal(namespaceSource.includes('集群选择'), true);
-  assert.equal(namespaceSource.includes('请先在集群管理中登记集群'), true);
+  assert.equal(namespaceSource.includes('当前集群'), true);
+  assert.equal(namespaceSource.includes('k8sApi.listClusters'), false);
+  assert.equal(namespaceSource.includes('请先从集群总览进入工作台'), true);
   assert.equal(namespaceSource.includes('cluster/prod'), false);
-  assert.equal(namespaceSource.includes('NovaObs RBAC'), true);
+  assert.equal(namespaceSource.includes('createNamespace'), true);
+  assert.equal(namespaceSource.includes('deleteNamespace'), true);
   assert.equal(namespaceSource.includes('/api/v1/k8s/namespaces'), true);
 });
 
 test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('资源视图'), true);
-  assert.equal(resourceSource.includes('集群选择'), true);
+  assert.equal(resourceSource.includes('当前集群'), true);
+  assert.equal(resourceSource.includes('k8sApi.listClusters'), false);
   assert.equal(resourceSource.includes('命名空间选择'), true);
   assert.equal(resourceSource.includes('请先选择集群和命名空间'), true);
   assert.equal(resourceSource.includes('API Version'), true);
@@ -107,14 +180,14 @@ test('K8s 资源页面展示完整资源身份字段', () => {
 test('K8s 部署历史和审计页面展示追踪上下文', () => {
   assert.equal(deploymentHistorySource.includes('部署历史'), true);
   assert.equal(deploymentHistorySource.includes('/api/v1/k8s/deployment-history'), true);
-  assert.equal(deploymentHistorySource.includes('k8sApi.listClusters'), true);
+  assert.equal(deploymentHistorySource.includes('useK8sOpsContext'), true);
   assert.equal(deploymentHistorySource.includes('k8sApi.listNamespaces'), true);
   assert.equal(deploymentHistorySource.includes("listDeploymentHistory('prod')"), false);
   assert.equal(deploymentHistorySource.includes('cluster/prod'), false);
   assert.equal(auditSource.includes('操作审计'), true);
   assert.equal(auditSource.includes('Trace'), true);
   assert.equal(auditSource.includes('/api/v1/k8s/audit-events'), true);
-  assert.equal(auditSource.includes('k8sApi.listClusters'), true);
+  assert.equal(auditSource.includes('useK8sOpsContext'), true);
   assert.equal(auditSource.includes('k8sApi.listNamespaces'), true);
   assert.equal(auditSource.includes("listAuditEvents('prod')"), false);
   assert.equal(auditSource.includes('cluster/prod'), false);
@@ -123,7 +196,8 @@ test('K8s 部署历史和审计页面展示追踪上下文', () => {
 test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('证书中心'), true);
   assert.equal(certificateSource.includes('k8sApi.listCertificates'), true);
-  assert.equal(certificateSource.includes('集群选择'), true);
+  assert.equal(certificateSource.includes('当前集群'), true);
+  assert.equal(certificateSource.includes('k8sApi.listClusters'), false);
   assert.equal(certificateSource.includes('命名空间选择'), true);
   assert.equal(certificateSource.includes('DEFAULT_CLUSTER'), false);
   assert.equal(certificateSource.includes('DEFAULT_NAMESPACE'), false);
@@ -141,7 +215,8 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
 test('K8s ServiceAccount 页面展示 RBAC 权限不足态和审计结果', () => {
   assert.equal(serviceAccountSource.includes('ServiceAccount'), true);
   assert.equal(serviceAccountSource.includes('k8sApi.listServiceAccounts'), true);
-  assert.equal(serviceAccountSource.includes('集群选择'), true);
+  assert.equal(serviceAccountSource.includes('当前集群'), true);
+  assert.equal(serviceAccountSource.includes('k8sApi.listClusters'), false);
   assert.equal(serviceAccountSource.includes('命名空间选择'), true);
   assert.equal(serviceAccountSource.includes('DEFAULT_CLUSTER'), false);
   assert.equal(serviceAccountSource.includes('DEFAULT_NAMESPACE'), false);
@@ -156,7 +231,8 @@ test('K8s RBAC 页面展示确认摘要、权限不足态和审计结果', () =>
   assert.equal(rbacPageSource.includes('RBAC'), true);
   assert.equal(rbacPageSource.includes('k8sApi.listRBACRoles'), true);
   assert.equal(rbacPageSource.includes('k8sApi.listRBACBindings'), true);
-  assert.equal(rbacPageSource.includes('集群选择'), true);
+  assert.equal(rbacPageSource.includes('当前集群'), true);
+  assert.equal(rbacPageSource.includes('k8sApi.listClusters'), false);
   assert.equal(rbacPageSource.includes('命名空间选择'), true);
   assert.equal(rbacPageSource.includes('DEFAULT_CLUSTER'), false);
   assert.equal(rbacPageSource.includes('DEFAULT_NAMESPACE'), false);
@@ -169,7 +245,8 @@ test('K8s RBAC 页面展示确认摘要、权限不足态和审计结果', () =>
 test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导出', () => {
   assert.equal(kubeconfigSource.includes('Kubeconfig'), true);
   assert.equal(kubeconfigSource.includes('k8sApi.listServiceAccounts'), true);
-  assert.equal(kubeconfigSource.includes('集群选择'), true);
+  assert.equal(kubeconfigSource.includes('当前集群'), true);
+  assert.equal(kubeconfigSource.includes('k8sApi.listClusters'), false);
   assert.equal(kubeconfigSource.includes('命名空间选择'), true);
   assert.equal(kubeconfigSource.includes('ServiceAccount 选择'), true);
   assert.equal(kubeconfigSource.includes('DEFAULT_CLUSTER'), false);
@@ -181,12 +258,22 @@ test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导
   assert.equal(kubeconfigSource.includes('普通响应只返回 Secret 元数据'), true);
 });
 
+test('K8s Kubeconfig 明文导出支持复制且限制长 token 溢出', () => {
+  assert.equal(kubeconfigSource.includes('copyKubeconfigToClipboard'), true);
+  assert.equal(kubeconfigSource.includes('navigator.clipboard.writeText'), true);
+  assert.equal(kubeconfigSource.includes('whitespace-pre-wrap'), true);
+  assert.equal(kubeconfigSource.includes('break-all'), true);
+  assert.equal(kubeconfigSource.includes('max-h-[420px]'), true);
+  assert.equal(kubeconfigSource.includes('min-w-0'), true);
+});
+
 test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () => {
   assert.equal(templateSource.includes('模板管理'), true);
   assert.equal(templateSource.includes('/api/v1/k8s/templates'), true);
   assert.equal(templateSource.includes('k8sApi.listResources'), true);
   assert.equal(templateSource.includes('k8sApi.getBaseTemplate'), true);
-  assert.equal(templateSource.includes('集群选择'), true);
+  assert.equal(templateSource.includes('当前集群'), true);
+  assert.equal(templateSource.includes('k8sApi.listClusters'), false);
   assert.equal(templateSource.includes('命名空间选择'), true);
   assert.equal(templateSource.includes('资源参考'), true);
   assert.equal(templateSource.includes("useState('orders-deployment')"), false);
@@ -206,7 +293,7 @@ test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () =
 
 test('K8s 发布部署页面展示完整资源身份、高风险确认和审计结果', () => {
   assert.equal(deploymentSource.includes('发布部署'), true);
-  assert.equal(deploymentSource.includes('k8sApi.listClusters'), true);
+  assert.equal(deploymentSource.includes('useK8sOpsContext'), true);
   assert.equal(deploymentSource.includes('k8sApi.listNamespaces'), true);
   assert.equal(deploymentSource.includes('k8sApi.listResources'), true);
   assert.equal(deploymentSource.includes('k8sApi.listDeploymentHistory'), true);
@@ -231,11 +318,11 @@ test('K8s 发布部署页面展示完整资源身份、高风险确认和审计�
 
 test('K8s 受控终端页面展示只读策略、权限不足态和审计结果', () => {
   assert.equal(terminalSource.includes('受控终端'), true);
-  assert.equal(terminalSource.includes('/api/v1/k8s/terminal/exec'), true);
-  assert.equal(terminalSource.includes('k8sApi.listClusters'), true);
+  assert.equal(terminalSource.includes('k8sApi.execTerminal'), true);
+  assert.equal(terminalSource.includes('useK8sOpsContext'), true);
   assert.equal(terminalSource.includes('k8sApi.listNamespaces'), true);
   assert.equal(terminalSource.includes('k8sApi.listResources'), true);
-  assert.equal(terminalSource.includes('集群选择'), true);
+  assert.equal(terminalSource.includes('当前集群'), true);
   assert.equal(terminalSource.includes('命名空间选择'), true);
   assert.equal(terminalSource.includes('资源参考'), true);
   assert.equal(terminalSource.includes("useState('prod')"), false);

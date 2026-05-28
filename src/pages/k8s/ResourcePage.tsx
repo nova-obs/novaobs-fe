@@ -5,6 +5,7 @@ import { AlertTriangle, Boxes, CheckCircle2, FileCode2, Layers3, Play, ScrollTex
 import { DataPanel } from '../../components/DataPanel';
 import type { K8sDeploymentIdentity, K8sDeploymentOperationResult, K8sResourceIdentity, K8sResourceSummary } from './api';
 import { k8sApi } from './api';
+import { useK8sOpsContext } from './context';
 
 type ResourceTab = 'detail' | 'yaml' | 'logs';
 
@@ -17,7 +18,6 @@ const resourceKindGroups = [
 
 export function K8sResourcePage() {
   const queryClient = useQueryClient();
-  const [selectedClusterId, setSelectedClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [kind, setKind] = useState('');
   const [selected, setSelected] = useState<K8sResourceSummary | null>(null);
@@ -26,12 +26,7 @@ export function K8sResourcePage() {
   const [applyPreviewPlan, setApplyPreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
   const [deletePreviewPlan, setDeletePreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
   const [lastOperation, setLastOperation] = useState<K8sDeploymentOperationResult | null>(null);
-  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
-    queryKey: ['k8s-clusters'],
-    queryFn: () => k8sApi.listClusters(),
-    retry: false,
-  });
-  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  const { activeClusterId, activeCluster, clusterError } = useK8sOpsContext();
 
   const { data: namespaces = [], error: namespaceError } = useQuery({
     queryKey: ['k8s-namespaces', activeClusterId],
@@ -39,12 +34,6 @@ export function K8sResourcePage() {
     enabled: Boolean(activeClusterId),
     retry: false,
   });
-
-  useEffect(() => {
-    if (!selectedClusterId && clusters[0]?.id) {
-      setSelectedClusterId(clusters[0].id);
-    }
-  }, [clusters, selectedClusterId]);
 
   useEffect(() => {
     const namespaceExists = namespaces.some((item) => item.name === namespace);
@@ -181,23 +170,10 @@ export function K8sResourcePage() {
 
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_minmax(160px,220px)_1fr] md:items-end">
-          <label className="block">
-            <span className="text-xs font-semibold text-muted">集群选择</span>
-            <select
-              className="console-input mt-2 w-full"
-              value={activeClusterId}
-              onChange={(event) => {
-                setSelectedClusterId(event.target.value);
-                setNamespace('');
-              }}
-              disabled={isLoadingClusters || !clusters.length}
-            >
-              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
-              {clusters.map((item) => (
-                <option key={item.id} value={item.id}>{item.name || item.id}</option>
-              ))}
-            </select>
-          </label>
+          <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <div className="text-xs font-semibold text-muted">当前集群</div>
+            <div className="mt-1 font-mono text-sm font-semibold text-on-surface">{activeCluster?.name || activeClusterId || '未选择'}</div>
+          </div>
           <label className="block">
             <span className="text-xs font-semibold text-muted">命名空间选择</span>
             <select className="console-input mt-2 w-full" value={namespace} onChange={(event) => setNamespace(event.target.value)} disabled={!namespaces.length}>

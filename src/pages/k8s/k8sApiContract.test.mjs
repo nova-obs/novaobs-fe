@@ -26,7 +26,7 @@ test('K8s 集群列表调用统一 NovaObs API', async () => {
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
     return jsonResponse([
-      { id: 'prod', name: 'prod-core', version: 'v1.29.4', region: 'cn-shanghai', status: 'active' },
+      { id: 'prod', name: 'prod-core', version: 'v1.29.4', region: 'cn-shanghai', status: 'active', access_mode: 'direct', read_only: true },
     ]);
   };
 
@@ -35,6 +35,8 @@ test('K8s 集群列表调用统一 NovaObs API', async () => {
     assert.equal(requests[0].path, '/api/v1/k8s/clusters?q=prod');
     assert.equal(clusters[0].id, 'prod');
     assert.equal(clusters[0].status, 'active');
+    assert.equal(clusters[0].accessMode, 'direct');
+    assert.equal(clusters[0].readOnly, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -45,7 +47,7 @@ test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
-    return jsonResponse({ id: 'prod', name: 'prod-core', version: 'v1.30.1', region: 'cn-shanghai', status: 'active' });
+    return jsonResponse({ id: 'prod', name: 'prod-core', version: 'v1.30.1', region: 'cn-shanghai', status: 'active', access_mode: 'agent', read_only: true });
   };
 
   try {
@@ -55,6 +57,8 @@ test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async 
       version: 'v1.30.1',
       region: 'cn-shanghai',
       description: '生产集群',
+      accessMode: 'agent',
+      readOnly: true,
     });
 
     assert.equal(requests[0].path, '/api/v1/k8s/clusters');
@@ -65,8 +69,43 @@ test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async 
       version: 'v1.30.1',
       region: 'cn-shanghai',
       description: '生产集群',
+      access_mode: 'agent',
+      read_only: true,
     });
     assert.equal(cluster.status, 'active');
+    assert.equal(cluster.accessMode, 'agent');
+    assert.equal(cluster.readOnly, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('K8s 集群连接探测调用只读 probe API 并映射策略状态', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({
+      cluster_id: 'test03',
+      status: 'connected',
+      access_mode: 'direct',
+      read_only: true,
+      server_version: 'v1.30.2',
+      resource_count: 42,
+      warnings: ['partial discovery'],
+      checked_at: '2026-05-22T10:00:00Z',
+    });
+  };
+
+  try {
+    const probe = await k8sApi.probeCluster('test03');
+
+    assert.equal(requests[0].path, '/api/v1/k8s/clusters/test03/probe');
+    assert.equal(requests[0].init.method, 'POST');
+    assert.equal(probe.clusterId, 'test03');
+    assert.equal(probe.readOnly, true);
+    assert.equal(probe.resourceCount, 42);
+    assert.equal(probe.warnings[0], 'partial discovery');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -135,29 +174,52 @@ test('K8s 集群凭据调用统一 NovaObs API 且只映射元数据', async () 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
+    if (init.method === 'POST' && String(path).endsWith('/rollback')) {
+      return jsonResponse({
+        item: { secret_id: 'secret-rollback', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', active: true, version: 3 },
+        audit_id: 'audit-rollback-1',
+        probe: { cluster_id: 'prod', status: 'connected', server_version: 'v1.30.2', resource_count: 42, warnings: [], checked_at: '2026-05-27T10:00:00Z' },
+      });
+    }
     if (init.method === 'POST' && String(path).endsWith('/rotate')) {
-      return jsonResponse({ item: { secret_id: 'secret-rotated', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:def', status: 'active' }, audit_id: 'audit-rotate-1' });
+      return jsonResponse({
+        item: { secret_id: 'secret-rotated', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:def', status: 'active', active: true, version: 2 },
+        audit_id: 'audit-rotate-1',
+        probe: { cluster_id: 'prod', status: 'connected', server_version: 'v1.30.2', resource_count: 42, warnings: [], checked_at: '2026-05-27T10:00:00Z' },
+      });
     }
     if (init.method === 'POST') {
-      return jsonResponse({ item: { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active' }, audit_id: 'audit-create-1' });
+      return jsonResponse({ item: { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', active: true, version: 1 }, audit_id: 'audit-create-1' });
     }
-    return jsonResponse([{ secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', kubeconfig: 'must-not-be-used' }]);
+    return jsonResponse([
+      { secret_id: 'secret-rotated', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:def', status: 'active', active: true, version: 2, expires_soon: true, expired: false, kubeconfig: 'must-not-be-used' },
+      { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'superseded', active: false, version: 1, expires_soon: false, expired: false },
+    ]);
   };
 
   try {
     const credentials = await k8sApi.listClusterCredentials('prod');
     const created = await k8sApi.createClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
     const rotated = await k8sApi.rotateClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
+    const rollback = await k8sApi.rollbackClusterCredential({ clusterId: 'prod', secretId: 'secret-created' });
 
     assert.equal(requests[0].path, '/api/v1/k8s/cluster-credentials?cluster_id=prod');
     assert.equal(requests[1].path, '/api/v1/k8s/cluster-credentials');
     assert.equal(JSON.parse(requests[1].init.body).kubeconfig.includes('apiVersion'), true);
     assert.equal(requests[2].path, '/api/v1/k8s/cluster-credentials/rotate');
-    assert.equal(credentials[0].secretId, 'secret-created');
-    assert.equal(credentials[0].fingerprint, 'sha256:abc');
+    assert.equal(requests[3].path, '/api/v1/k8s/cluster-credentials/rollback');
+    assert.deepEqual(JSON.parse(requests[3].init.body), { cluster_id: 'prod', secret_id: 'secret-created' });
+    assert.equal(credentials[0].secretId, 'secret-rotated');
+    assert.equal(credentials[0].fingerprint, 'sha256:def');
+    assert.equal(credentials[0].active, true);
+    assert.equal(credentials[0].version, 2);
+    assert.equal(credentials[0].expiresSoon, true);
     assert.equal('kubeconfig' in credentials[0], false);
     assert.equal(created.auditId, 'audit-create-1');
     assert.equal(rotated.item.secretId, 'secret-rotated');
+    assert.equal(rotated.probe.serverVersion, 'v1.30.2');
+    assert.equal(rollback.item.secretId, 'secret-rollback');
+    assert.equal(rollback.probe.resourceCount, 42);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -429,6 +491,94 @@ test('K8s Kubeconfig 生成只返回元数据，导出单独调用', async () =>
     assert.equal(metadata.auditId, 'audit-create-1');
     assert.equal(exported.kubeconfig.includes('apiVersion'), true);
     assert.equal(exported.auditId, 'audit-export-1');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('K8s 平台授权权限包调用统一 NovaObs API 并映射风险与推荐主体', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse([
+      {
+        id: 'k8s-readonly',
+        label: '只读观察者',
+        description: '查看资源',
+        risk: 'low',
+        scope_mode: 'namespace',
+        recommended_subject_type: 'group',
+        permission_ids: ['k8s.namespace:read', 'k8s.resource:read'],
+      },
+    ]);
+  };
+
+  try {
+    const profiles = await k8sApi.listPlatformAccessProfiles();
+
+    assert.equal(requests[0].path, '/api/v1/k8s/platform-access/profiles');
+    assert.equal(profiles[0].id, 'k8s-readonly');
+    assert.equal(profiles[0].risk, 'low');
+    assert.equal(profiles[0].scopeMode, 'namespace');
+    assert.equal(profiles[0].recommendedSubjectType, 'group');
+    assert.deepEqual(profiles[0].permissionIds, ['k8s.namespace:read', 'k8s.resource:read']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('K8s 平台授权创建支持多命名空间、全命名空间和风险确认契约', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({
+      item: {
+        id: 'binding-prod-sre',
+        subject_id: 'sre',
+        subject_type: 'group',
+        role_id: 'role-k8s-platform-access',
+        role_name: 'K8s 平台授权组合',
+        scope: { cluster_id: 'prod', namespaces: ['orders', 'payments'] },
+        permission_ids: ['k8s.resource:read'],
+        permissions: [{ resource: 'k8s.resource', action: 'read', scope_mode: 'namespace' }],
+      },
+      items: [
+        {
+          id: 'binding-prod-sre',
+          subject_id: 'sre',
+          subject_type: 'group',
+          role_id: 'role-k8s-platform-access',
+          role_name: 'K8s 平台授权组合',
+          scope: { cluster_id: 'prod', namespaces: ['orders', 'payments'] },
+          permission_ids: ['k8s.resource:read'],
+          permissions: [{ resource: 'k8s.resource', action: 'read', scope_mode: 'namespace' }],
+        },
+      ],
+      audit_id: 'audit-grant-1',
+    });
+  };
+
+  try {
+    const result = await k8sApi.createPlatformAccessBinding({
+      subjectId: 'sre',
+      subjectType: 'group',
+      clusterId: 'prod',
+      namespaces: ['orders', 'payments'],
+      allNamespaces: false,
+      riskAccepted: true,
+      permissionIds: ['k8s.resource:read'],
+    });
+
+    assert.equal(requests[0].path, '/api/v1/k8s/platform-access/bindings');
+    const payload = JSON.parse(requests[0].init.body);
+    assert.deepEqual(payload.namespaces, ['orders', 'payments']);
+    assert.equal(payload.all_namespaces, false);
+    assert.equal(payload.risk_accepted, true);
+    assert.equal(payload.namespace, '');
+    assert.equal(result.items.length, 1);
+    assert.deepEqual(result.items[0].scope.namespaces, ['orders', 'payments']);
   } finally {
     globalThis.fetch = originalFetch;
   }

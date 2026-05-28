@@ -1,13 +1,14 @@
 import type { FormEvent, PropsWithChildren } from 'react';
 import { useEffect, useState } from 'react';
-import { NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { Bell, CheckCircle2, ChevronDown, CircleHelp, Clock3, KeyRound, LogIn, LogOut, RadioTower, Search, Settings, ShieldCheck, Sparkles, UserCircle2 } from 'lucide-react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
+import { ArrowLeft, Bell, CheckCircle2, ChevronDown, CircleHelp, Clock3, KeyRound, LogIn, LogOut, RadioTower, Search, Settings, ShieldCheck, Sparkles, UserCircle2 } from 'lucide-react';
 import { primaryNavigation } from './navigation';
 import { fetchPlatformSession, isSignedOutLocation, loginPlatformUser, resetClientSignedOut, sessionDisplayName, type PlatformSession, type SessionStatus, useLogoutAction } from './session';
 
 export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const navigate = useNavigate();
+  const isK8sClusterFocus = /^\/k8s\/clusters\/[^/]+/.test(location.pathname);
   const [session, setSession] = useState<PlatformSession | null>(null);
   const [authStatus, setAuthStatus] = useState<SessionStatus>('checking');
   const logoutAction = useLogoutAction({
@@ -62,6 +63,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const logoutStatus = logoutAction.status;
   const activeSubject = session?.subject ?? null;
   const activeDisplayName = sessionDisplayName(activeSubject);
+  const activeK8sClusterName = getK8sFocusClusterName(location.pathname);
 
   function logoutFailedMessage() {
     if (logoutStatus !== 'server_failed') {
@@ -71,9 +73,17 @@ export function AppShell({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="relative flex min-h-[100dvh] overflow-hidden bg-app-radial text-on-surface">
+    <div className="relative flex h-[100dvh] overflow-hidden bg-app-radial text-on-surface">
       <div className="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(115deg,transparent_0%,rgba(13,91,215,0.12)_38%,transparent_64%),linear-gradient(25deg,transparent_12%,rgba(0,164,255,0.1)_46%,transparent_72%)]" />
-      <aside className="relative hidden w-64 shrink-0 flex-col p-4 md:flex">
+      <aside className={['relative hidden h-[100dvh] max-h-[100dvh] shrink-0 flex-col md:flex', isK8sClusterFocus ? 'w-[72px] p-2' : 'w-64 p-4'].join(' ')}>
+        {isK8sClusterFocus ? (
+          <K8sFocusRail
+            activeDisplayName={activeDisplayName}
+            clusterName={activeK8sClusterName}
+            logoutStatus={logoutStatus}
+            onLogout={handleLogout}
+          />
+        ) : (
         <div className="atlas-sidebar-panel flex min-h-0 flex-1 flex-col overflow-hidden">
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-80 opacity-70 [background-image:radial-gradient(ellipse_at_16%_92%,rgba(13,91,215,0.14),transparent_42%),radial-gradient(ellipse_at_78%_96%,rgba(0,164,255,0.1),transparent_38%)]" />
           <div className="pointer-events-none absolute -bottom-16 -left-14 h-72 w-72 rounded-full border border-primary/10 opacity-70" />
@@ -149,8 +159,9 @@ export function AppShell({ children }: PropsWithChildren) {
             </div>
           </div>
         </div>
+        )}
       </aside>
-      <main className="relative flex min-w-0 flex-1 flex-col p-3 md:pl-0">
+      <main className="relative flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden p-3 md:pl-0">
         <header className="console-panel mb-3 grid min-h-14 shrink-0 grid-cols-[minmax(220px,420px)_1fr] items-center gap-4 px-4 py-2 md:px-6">
           <div className="relative min-w-0">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted" />
@@ -172,7 +183,9 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
         </header>
         <nav className="mb-2 flex gap-2 overflow-x-auto px-1 md:hidden">
-          {primaryNavigation.map((item) => (
+          {isK8sClusterFocus ? (
+            <K8sMobileFocusNavigation clusterName={activeK8sClusterName} />
+          ) : primaryNavigation.map((item) => (
             <NavLink
               key={item.id}
               to={item.path}
@@ -204,10 +217,82 @@ export function AppShell({ children }: PropsWithChildren) {
             {logoutStatus === 'pending' ? '退出中' : '退出登录'}
           </button>
         </div>
-        <section className="min-h-0 flex-1 overflow-y-auto rounded-lg px-1 py-2 md:px-3 md:py-4">{children}</section>
+        <section
+          key={location.pathname}
+          className="route-transition-page min-h-0 flex-1 overflow-y-auto rounded-lg px-1 py-2 md:px-3 md:py-4"
+        >
+          {children}
+        </section>
       </main>
     </div>
   );
+}
+
+function K8sFocusRail({
+  activeDisplayName,
+  clusterName,
+  logoutStatus,
+  onLogout,
+}: {
+  activeDisplayName: string;
+  clusterName: string;
+  logoutStatus: ReturnType<typeof useLogoutAction>['status'];
+  onLogout: () => void;
+}) {
+  return (
+    <div className="k8s-focus-mode atlas-sidebar-panel flex min-h-0 flex-1 flex-col items-center overflow-hidden px-2 py-3">
+      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 opacity-70 [background-image:radial-gradient(ellipse_at_48%_92%,rgba(13,91,215,0.16),transparent_46%),radial-gradient(ellipse_at_72%_14%,rgba(0,164,255,0.1),transparent_36%)]" />
+      <Link
+        className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-white/78 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_10px_24px_rgba(13,91,215,0.12)] transition hover:bg-white active:translate-y-px"
+        title="返回 K8s 集群总览"
+        aria-label="返回 K8s 集群总览"
+        to="/k8s"
+      >
+        <ArrowLeft className="h-4 w-4" />
+      </Link>
+      <div className="relative mt-3 flex w-11 shrink-0 justify-center rounded-lg border border-outline/80 bg-white/62 px-1 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+        <span className="max-h-36 min-h-20 overflow-hidden break-all font-mono text-[10px] font-semibold leading-4 text-on-surface [writing-mode:vertical-rl]" title={clusterName}>
+          {clusterName}
+        </span>
+      </div>
+      <div className="relative mt-auto grid gap-2">
+        <div
+          className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]"
+          title={activeDisplayName}
+          aria-label={`当前用户 ${activeDisplayName}`}
+        >
+          <UserCircle2 className="h-4 w-4" />
+        </div>
+        <button
+          className="platform-account-session sidebar-account-dock platform-logout-action flex h-10 w-10 items-center justify-center rounded-lg bg-white/70 text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.14)] transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
+          disabled={logoutStatus === 'pending'}
+          onClick={onLogout}
+          title="退出登录"
+          aria-label="退出登录"
+        >
+          <LogOut className="h-4 w-4" />
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function K8sMobileFocusNavigation({ clusterName }: { clusterName: string }) {
+  return (
+    <span className="shrink-0 rounded-lg bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">K8s 工作台 · {clusterName}</span>
+  );
+}
+
+function getK8sFocusClusterName(pathname: string) {
+  const match = /^\/k8s\/clusters\/([^/]+)/.exec(pathname);
+  if (!match?.[1]) {
+    return 'cluster';
+  }
+  try {
+    return decodeURIComponent(match[1]);
+  } catch {
+    return match[1];
+  }
 }
 
 function SessionLoadingView() {

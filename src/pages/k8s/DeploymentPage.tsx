@@ -3,9 +3,9 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { CheckCircle2, CloudUpload, GitCompareArrows, RotateCcw, ShieldAlert, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sDeploymentDiff, type K8sDeploymentIdentity, type K8sDeploymentOperationResult, type K8sResourceSummary } from './api';
+import { useK8sOpsContext } from './context';
 
 export function K8sDeploymentPage() {
-  const [selectedClusterId, setSelectedClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [selectedResourceUID, setSelectedResourceUID] = useState('');
   const [yamlContent, setYamlContent] = useState('');
@@ -16,12 +16,7 @@ export function K8sDeploymentPage() {
   const [previewPlan, setPreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
   const [deletePreviewPlan, setDeletePreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
 
-  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
-    queryKey: ['k8s-clusters'],
-    queryFn: () => k8sApi.listClusters(),
-    retry: false,
-  });
-  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  const { activeClusterId, activeCluster, clusterError } = useK8sOpsContext();
 
   const { data: namespaces = [], error: namespaceError } = useQuery({
     queryKey: ['k8s-namespaces', activeClusterId],
@@ -43,12 +38,6 @@ export function K8sDeploymentPage() {
     enabled: Boolean(activeClusterId),
     retry: false,
   });
-
-  useEffect(() => {
-    if (!selectedClusterId && clusters[0]?.id) {
-      setSelectedClusterId(clusters[0].id);
-    }
-  }, [clusters, selectedClusterId]);
 
   useEffect(() => {
     const namespaceExists = namespaces.some((item) => item.name === namespace);
@@ -180,30 +169,10 @@ export function K8sDeploymentPage() {
 
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(180px,260px)_minmax(180px,240px)_minmax(220px,280px)_1fr] xl:items-end">
-          <label className="block">
-            <span className="text-xs font-semibold text-muted">集群选择</span>
-            <select
-              className="console-input mt-2 w-full"
-              value={activeClusterId}
-              onChange={(event) => {
-                setSelectedClusterId(event.target.value);
-                setNamespace('');
-                setSelectedResourceUID('');
-                setYamlContent('');
-                setLastTemplateYAML('');
-                setHistoryId('');
-                setLastResult(null);
-                setPreviewPlan(null);
-                setDeletePreviewPlan(null);
-              }}
-              disabled={isLoadingClusters || !clusters.length}
-            >
-              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
-              {clusters.map((item) => (
-                <option key={item.id} value={item.id}>{item.name || item.id}</option>
-              ))}
-            </select>
-          </label>
+          <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <div className="text-xs font-semibold text-muted">当前集群</div>
+            <div className="mt-1 font-mono text-sm font-semibold text-on-surface">{activeCluster?.name || activeClusterId || '未选择'}</div>
+          </div>
           <label className="block">
             <span className="text-xs font-semibold text-muted">命名空间选择</span>
             <select

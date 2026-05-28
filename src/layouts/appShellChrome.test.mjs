@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('./AppShell.tsx', import.meta.url), 'utf8');
 const sessionSource = readFileSync(new URL('./session.tsx', import.meta.url), 'utf8');
+const styleSource = readFileSync(new URL('../styles/index.css', import.meta.url), 'utf8');
 
 test('顶层框架展示专业指挥中心状态条', () => {
   assert.equal(source.includes('搜索服务、指标、日志、告警'), true);
@@ -26,6 +27,17 @@ test('顶层框架引入搜索和用户入口', () => {
   assert.equal(source.includes('mobile-account-session'), true);
   assert.equal(source.includes('AccountSessionPanel'), false);
   assert.equal(source.includes('platform-account-session relative flex items-center gap-1.5'), false);
+  assert.equal(source.includes('isK8sClusterFocus'), true);
+  assert.equal(source.includes('k8s-focus-mode'), true);
+  assert.equal(source.includes('w-[72px] p-2'), true);
+  assert.equal(source.includes('K8sFocusRail'), true);
+  assert.equal(source.includes('getK8sFocusClusterName'), true);
+  assert.equal(source.includes('返回 K8s 集群总览'), true);
+  assert.equal(source.includes('[writing-mode:vertical-rl]'), true);
+  assert.equal(source.includes('平台级模块入口暂时收起'), false);
+  assert.equal(source.includes('K8s</div>'), false);
+  assert.equal(source.includes('Focus</div>'), false);
+  assert.equal(source.includes('>N<'), false);
   assert.equal(source.includes('LoginView'), true);
   assert.equal(sessionSource.includes('/api/v1/auth/session'), true);
   assert.equal(sessionSource.includes('/api/v1/auth/login'), true);
@@ -35,8 +47,21 @@ test('顶层框架引入搜索和用户入口', () => {
   assert.equal(sessionSource.includes('signed_out=1'), true);
 });
 
+test('顶层框架提供轻量路由切换过渡', () => {
+  assert.equal(source.includes('key={location.pathname}'), true);
+  assert.equal(source.includes('route-transition-page'), true);
+  assert.equal(styleSource.includes('@keyframes route-enter'), true);
+  assert.equal(styleSource.includes('translate3d(0, 8px, 0)'), true);
+  assert.equal(styleSource.includes('cubic-bezier(0.16, 1, 0.3, 1)'), true);
+  assert.equal(styleSource.includes('prefers-reduced-motion: reduce'), true);
+  assert.equal(styleSource.includes('will-change: opacity, transform'), true);
+});
+
 test('顶层框架使用柔和观测控制面视觉语言', () => {
-  assert.equal(source.includes('min-h-[100dvh]'), true);
+  assert.equal(source.includes('h-[100dvh] overflow-hidden bg-app-radial'), true);
+  assert.equal(source.includes('h-[100dvh] max-h-[100dvh]'), true);
+  assert.equal(source.includes('relative flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden'), true);
+  assert.equal(source.includes('min-h-0 flex-1 overflow-y-auto'), true);
   assert.equal(source.includes('border-r border-outline'), false);
   assert.equal(source.includes('bg-app-radial'), true);
   assert.equal(source.includes('Telemetry Atlas'), true);

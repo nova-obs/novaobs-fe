@@ -82,6 +82,29 @@ export interface PlatformBinding {
   updatedAt: string;
 }
 
+export interface PlatformMembership {
+  id: string;
+  groupId: string;
+  groupName: string;
+  subjectId: string;
+  subjectType: string;
+  subjectDisplayName: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PlatformEffectivePermission {
+  bindingId: string;
+  roleId: string;
+  roleName: string;
+  grantedToSubjectId: string;
+  grantedToType: string;
+  grantedVia: string;
+  permissions: PlatformPermission[];
+  scope: PlatformScope;
+  createdAt: string;
+}
+
 export interface PlatformWriteResult<T> {
   item?: T;
   status: string;
@@ -185,6 +208,33 @@ function mapBinding(raw: any): PlatformBinding {
   };
 }
 
+function mapMembership(raw: any): PlatformMembership {
+  return {
+    id: String(raw.id ?? ''),
+    groupId: raw.group_id ?? raw.groupId ?? '',
+    groupName: raw.group_name ?? raw.groupName ?? '',
+    subjectId: raw.subject_id ?? raw.subjectId ?? '',
+    subjectType: raw.subject_type ?? raw.subjectType ?? '',
+    subjectDisplayName: raw.subject_display_name ?? raw.subjectDisplayName ?? '',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapEffectivePermission(raw: any): PlatformEffectivePermission {
+  return {
+    bindingId: String(raw.binding_id ?? raw.bindingId ?? ''),
+    roleId: raw.role_id ?? raw.roleId ?? '',
+    roleName: raw.role_name ?? raw.roleName ?? '',
+    grantedToSubjectId: raw.granted_to_subject_id ?? raw.grantedToSubjectId ?? '',
+    grantedToType: raw.granted_to_type ?? raw.grantedToType ?? '',
+    grantedVia: raw.granted_via ?? raw.grantedVia ?? '',
+    permissions: Array.isArray(raw.permissions) ? raw.permissions.map(mapPermission) : [],
+    scope: mapScope(raw.scope ?? {}),
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+  };
+}
+
 function mapWriteResult<T>(raw: any, mapper: (value: any) => T): PlatformWriteResult<T> {
   return {
     item: raw.item ? mapper(raw.item) : undefined,
@@ -212,6 +262,10 @@ export const platformApi = {
     });
     return mapWriteResult(raw, mapUser);
   },
+  async deleteUser(id: string): Promise<PlatformWriteResult<PlatformUser>> {
+    const raw = await apiRequest<any>(`/platform/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw, mapUser);
+  },
   async listGroups(): Promise<PlatformGroup[]> {
     const raw = await apiRequest<any[]>('/platform/groups');
     return raw.map(mapGroup);
@@ -222,6 +276,25 @@ export const platformApi = {
       body: JSON.stringify({ name: input.name, display_name: input.displayName, description: input.description ?? '' }),
     });
     return mapWriteResult(raw, mapGroup);
+  },
+  async deleteGroup(id: string): Promise<PlatformWriteResult<PlatformGroup>> {
+    const raw = await apiRequest<any>(`/platform/groups/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw, mapGroup);
+  },
+  async listMemberships(): Promise<PlatformMembership[]> {
+    const raw = await apiRequest<any[]>('/platform/group-memberships');
+    return raw.map(mapMembership);
+  },
+  async createMembership(input: { groupId: string; subjectId: string; subjectType: string }): Promise<PlatformWriteResult<PlatformMembership>> {
+    const raw = await apiRequest<any>('/platform/group-memberships', {
+      method: 'POST',
+      body: JSON.stringify({ group_id: input.groupId, subject_id: input.subjectId, subject_type: input.subjectType }),
+    });
+    return mapWriteResult(raw, mapMembership);
+  },
+  async deleteMembership(id: string): Promise<PlatformWriteResult<PlatformMembership>> {
+    const raw = await apiRequest<any>(`/platform/group-memberships/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw, mapMembership);
   },
   async listServiceAccounts(): Promise<PlatformServiceAccount[]> {
     const raw = await apiRequest<any[]>('/platform/service-accounts');
@@ -234,9 +307,33 @@ export const platformApi = {
     });
     return mapWriteResult(raw, mapServiceAccount);
   },
+  async deleteServiceAccount(id: string): Promise<PlatformWriteResult<PlatformServiceAccount>> {
+    const raw = await apiRequest<any>(`/platform/service-accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw, mapServiceAccount);
+  },
   async listRoles(): Promise<PlatformRole[]> {
     const raw = await apiRequest<any[]>('/platform/roles');
     return raw.map(mapRole);
+  },
+  async createRole(input: { id?: string; name: string; description?: string; permissions: PlatformPermission[] }): Promise<PlatformWriteResult<PlatformRole>> {
+    const raw = await apiRequest<any>('/platform/roles', {
+      method: 'POST',
+      body: JSON.stringify({
+        id: input.id ?? '',
+        name: input.name,
+        description: input.description ?? '',
+        permissions: input.permissions.map((permission) => ({
+          resource: permission.resource,
+          action: permission.action,
+          scope_mode: permission.scopeMode,
+        })),
+      }),
+    });
+    return mapWriteResult(raw, mapRole);
+  },
+  async deleteRole(id: string): Promise<PlatformWriteResult<PlatformRole>> {
+    const raw = await apiRequest<any>(`/platform/roles/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw, mapRole);
   },
   async listBindings(): Promise<PlatformBinding[]> {
     const raw = await apiRequest<any[]>('/platform/bindings');
@@ -259,5 +356,14 @@ export const platformApi = {
       }),
     });
     return mapWriteResult(raw, mapBinding);
+  },
+  async deleteBinding(id: string): Promise<PlatformWriteResult<PlatformBinding>> {
+    const raw = await apiRequest<any>(`/platform/bindings/${encodeURIComponent(id)}`, { method: 'DELETE' });
+    return mapWriteResult(raw, mapBinding);
+  },
+  async effectivePermissions(input: { subjectId: string; subjectType: string }): Promise<PlatformEffectivePermission[]> {
+    const params = new URLSearchParams({ subject_id: input.subjectId, subject_type: input.subjectType });
+    const raw = await apiRequest<any[]>(`/platform/effective-permissions?${params.toString()}`);
+    return raw.map(mapEffectivePermission);
   },
 };

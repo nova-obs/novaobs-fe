@@ -40,7 +40,21 @@ import type {
 interface Envelope<T> {
   success: boolean;
   data: T;
-  error?: { message?: string } | null;
+  error?: { code?: string; message?: string } | null;
+}
+
+export class ApiRequestError<T = unknown> extends Error {
+  status: number;
+  code?: string;
+  data?: T;
+
+  constructor(message: string, status: number, code?: string, data?: T) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+    this.data = data;
+  }
 }
 
 const signedOutStorageKey = 'novaobs_signed_out';
@@ -69,7 +83,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     if (response.status === 401) {
       redirectToLogin();
     }
-    throw new Error(body.error?.message ?? `请求失败: ${response.status}`);
+    throw new ApiRequestError(body.error?.message ?? `请求失败: ${response.status}`, response.status, body.error?.code, body.data);
   }
   return body.data;
 }

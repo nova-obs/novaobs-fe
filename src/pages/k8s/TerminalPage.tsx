@@ -3,23 +3,18 @@ import { useMutation, useQuery } from '@tanstack/react-query';
 import { CircleSlash2, Play, ShieldCheck, SquareTerminal } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sResourceSummary, type K8sTerminalResult } from './api';
+import { useK8sOpsContext } from './context';
 
 const BLOCKED_EXAMPLES = ['delete', 'apply', 'exec', 'port-forward', '|', ';'];
 
 export function K8sTerminalPage() {
-  const [selectedClusterId, setSelectedClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [selectedResourceUID, setSelectedResourceUID] = useState('');
   const [command, setCommand] = useState('');
   const [lastTemplateCommand, setLastTemplateCommand] = useState('');
   const [result, setResult] = useState<K8sTerminalResult | null>(null);
 
-  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
-    queryKey: ['k8s-clusters'],
-    queryFn: () => k8sApi.listClusters(),
-    retry: false,
-  });
-  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
+  const { activeClusterId, activeCluster, clusterError } = useK8sOpsContext();
 
   const { data: namespaces = [], error: namespaceError } = useQuery({
     queryKey: ['k8s-namespaces', activeClusterId],
@@ -34,12 +29,6 @@ export function K8sTerminalPage() {
     enabled: Boolean(activeClusterId && namespace),
     retry: false,
   });
-
-  useEffect(() => {
-    if (!selectedClusterId && clusters[0]?.id) {
-      setSelectedClusterId(clusters[0].id);
-    }
-  }, [clusters, selectedClusterId]);
 
   useEffect(() => {
     const namespaceExists = namespaces.some((item) => item.name === namespace);
@@ -118,12 +107,12 @@ export function K8sTerminalPage() {
   return (
     <div className="space-y-4">
       <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr]">
-        <TerminalMetric icon={SquareTerminal} label="执行模式" value="dry_run" meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
+        <TerminalMetric icon={SquareTerminal} label="执行模式" value={result?.mode || 'kubectl'} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
         <TerminalMetric icon={ShieldCheck} label="权限域" value="namespace" meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
         <TerminalMetric icon={CircleSlash2} label="策略" value="read-only" meta="danger verbs blocked" />
       </div>
 
-      <DataPanel title="受控终端" meta="NovaObs terminal · RBAC + audit + policy guard">
+      <DataPanel title="受控终端" meta={result?.auditId ? `audit/${result.auditId}` : '等待执行'}>
         {permissionError ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             权限不足：当前用户缺少 `k8s.terminal:exec` 命名空间权限。
@@ -143,28 +132,13 @@ export function K8sTerminalPage() {
         <div className="grid gap-4 xl:grid-cols-[420px_1fr]">
           <section className="console-panel px-4 py-3">
             <div className="text-sm font-semibold text-on-surface">运行目标</div>
-            <p className="mt-1 text-xs text-muted">目标来自真实 Kubernetes 只读 API；执行仍通过 `/api/v1/k8s/terminal/exec` 进入统一审计和策略网关。</p>
+            <p className="mt-1 text-xs text-muted">选择命名空间和 Pod 后执行只读命令。</p>
             <div className="mt-4 grid gap-3">
               <label className="block">
-                <span className="text-xs font-semibold text-muted">集群选择</span>
-                <select
-                  className="console-input mt-2 w-full"
-                  value={activeClusterId}
-                  onChange={(event) => {
-                    setSelectedClusterId(event.target.value);
-                    setNamespace('');
-                    setSelectedResourceUID('');
-                    setCommand('');
-                    setLastTemplateCommand('');
-                    setResult(null);
-                  }}
-                  disabled={isLoadingClusters || !clusters.length}
-                >
-                  {!clusters.length ? <option value="">暂无已登记集群</option> : null}
-                  {clusters.map((item) => (
-                    <option key={item.id} value={item.id}>{item.name || item.id}</option>
-                  ))}
-                </select>
+                <span className="text-xs font-semibold text-muted">当前集群</span>
+                <div className="mt-2 rounded-lg bg-white/55 px-3 py-2 font-mono text-sm font-semibold text-on-surface shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+                  {activeCluster?.name || activeClusterId || '未选择'}
+                </div>
               </label>
               <label className="block">
                 <span className="text-xs font-semibold text-muted">命名空间选择</span>

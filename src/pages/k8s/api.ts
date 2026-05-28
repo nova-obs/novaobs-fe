@@ -1,4 +1,4 @@
-import { apiRequest } from '../../services/api';
+import { ApiRequestError, apiRequest } from '../../services/api';
 
 export interface K8sCluster {
   id: string;
@@ -7,6 +7,8 @@ export interface K8sCluster {
   region: string;
   description: string;
   status: string;
+  accessMode: string;
+  readOnly: boolean;
 }
 
 export interface K8sClusterInput {
@@ -15,6 +17,19 @@ export interface K8sClusterInput {
   version: string;
   region: string;
   description: string;
+  accessMode?: string;
+  readOnly?: boolean;
+}
+
+export interface K8sClusterProbe {
+  clusterId: string;
+  status: string;
+  accessMode: string;
+  readOnly: boolean;
+  serverVersion: string;
+  resourceCount: number;
+  warnings: string[];
+  checkedAt: string;
 }
 
 export interface K8sDeleteResult {
@@ -27,9 +42,13 @@ export interface K8sClusterCredential {
   name: string;
   fingerprint: string;
   status: string;
+  active: boolean;
+  version: number;
   createdAt: string;
   rotatedAt: string;
   expiresAt: string;
+  expired: boolean;
+  expiresSoon: boolean;
 }
 
 export interface K8sNamespace {
@@ -129,8 +148,10 @@ export interface K8sServiceAccount {
 
 export interface K8sWriteResult<T> {
   item?: T;
+  items?: T[];
   status?: string;
   auditId: string;
+  probe?: K8sClusterProbe;
 }
 
 export interface K8sRBACRule {
@@ -271,6 +292,8 @@ export interface K8sPlatformAccessScope {
   global: boolean;
   clusterId: string;
   namespace: string;
+  namespaces: string[];
+  allNamespaces: boolean;
 }
 
 export interface K8sPlatformAccessPermission {
@@ -280,6 +303,16 @@ export interface K8sPlatformAccessPermission {
   resource: string;
   action: string;
   scopeMode: string;
+}
+
+export interface K8sPlatformAccessProfile {
+  id: string;
+  label: string;
+  description: string;
+  risk: string;
+  scopeMode: string;
+  recommendedSubjectType: string;
+  permissionIds: string[];
 }
 
 export interface K8sPlatformAccessBinding {
@@ -470,6 +503,21 @@ function mapCluster(raw: any): K8sCluster {
     region: raw.region ?? '',
     description: raw.description ?? '',
     status: raw.status ?? 'unknown',
+    accessMode: raw.access_mode ?? raw.accessMode ?? 'direct',
+    readOnly: Boolean(raw.read_only ?? raw.readOnly ?? true),
+  };
+}
+
+function mapClusterProbe(raw: any): K8sClusterProbe {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    status: raw.status ?? 'unknown',
+    accessMode: raw.access_mode ?? raw.accessMode ?? 'direct',
+    readOnly: Boolean(raw.read_only ?? raw.readOnly ?? true),
+    serverVersion: raw.server_version ?? raw.serverVersion ?? '',
+    resourceCount: Number(raw.resource_count ?? raw.resourceCount ?? 0),
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+    checkedAt: raw.checked_at ?? raw.checkedAt ?? '',
   };
 }
 
@@ -480,9 +528,13 @@ function mapClusterCredential(raw: any): K8sClusterCredential {
     name: raw.name ?? '',
     fingerprint: raw.fingerprint ?? '',
     status: raw.status ?? 'unknown',
+    active: Boolean(raw.active),
+    version: Number(raw.version ?? 0),
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     rotatedAt: raw.rotated_at ?? raw.rotatedAt ?? '',
     expiresAt: raw.expires_at ?? raw.expiresAt ?? '',
+    expired: Boolean(raw.expired),
+    expiresSoon: Boolean(raw.expires_soon ?? raw.expiresSoon),
   };
 }
 
@@ -615,8 +667,10 @@ function mapServiceAccount(raw: any): K8sServiceAccount {
 function mapWriteResult<T>(raw: any, mapItem?: (value: any) => T): K8sWriteResult<T> {
   return {
     item: raw.item && mapItem ? mapItem(raw.item) : undefined,
+    items: Array.isArray(raw.items) && mapItem ? raw.items.map(mapItem) : undefined,
     status: raw.status ?? undefined,
     auditId: raw.audit_id ?? raw.auditId ?? '',
+    probe: raw.probe ? mapClusterProbe(raw.probe) : undefined,
   };
 }
 
@@ -797,6 +851,8 @@ function mapPlatformAccessScope(raw: any): K8sPlatformAccessScope {
     global: Boolean(raw.global),
     clusterId: raw.cluster_id ?? raw.clusterId ?? '',
     namespace: raw.namespace ?? '',
+    namespaces: arrayOfStrings(raw.namespaces),
+    allNamespaces: Boolean(raw.all_namespaces ?? raw.allNamespaces),
   };
 }
 
@@ -808,6 +864,18 @@ function mapPlatformAccessPermission(raw: any): K8sPlatformAccessPermission {
     resource: raw.resource ?? '',
     action: raw.action ?? '',
     scopeMode: raw.scope_mode ?? raw.scopeMode ?? '',
+  };
+}
+
+function mapPlatformAccessProfile(raw: any): K8sPlatformAccessProfile {
+  return {
+    id: raw.id ?? '',
+    label: raw.label ?? '',
+    description: raw.description ?? '',
+    risk: raw.risk ?? '',
+    scopeMode: raw.scope_mode ?? raw.scopeMode ?? '',
+    recommendedSubjectType: raw.recommended_subject_type ?? raw.recommendedSubjectType ?? '',
+    permissionIds: arrayOfStrings(raw.permission_ids ?? raw.permissionIds),
   };
 }
 
@@ -1021,19 +1089,17 @@ function mapArray<T>(value: any, mapper: (item: any) => T): T[] {
 }
 
 async function terminalRequest(input: { clusterId: string; namespace: string; command: string }): Promise<any> {
-  const response = await fetch('/api/v1/k8s/terminal/exec', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, command: input.command }),
-  });
-  const body = await response.json();
-  if ((!response.ok || !body.success) && body.data?.status === 'blocked') {
-    return body.data;
+  try {
+    return await apiRequest<any>('/k8s/terminal/exec', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, command: input.command }),
+    });
+  } catch (error) {
+    if (error instanceof ApiRequestError && (error.data as any)?.status === 'blocked') {
+      return error.data;
+    }
+    throw error;
   }
-  if (!response.ok || !body.success) {
-    throw new Error(body.error?.message ?? `请求失败: ${response.status}`);
-  }
-  return body.data;
 }
 
 export const k8sApi = {
@@ -1051,9 +1117,15 @@ export const k8sApi = {
         version: input.version,
         region: input.region,
         description: input.description,
+        access_mode: input.accessMode ?? 'direct',
+        read_only: input.readOnly ?? true,
       }),
     });
     return mapCluster(raw);
+  },
+  async probeCluster(id: string): Promise<K8sClusterProbe> {
+    const raw = await apiRequest<any>(`/k8s/clusters/${encodeURIComponent(id)}/probe`, { method: 'POST' });
+    return mapClusterProbe(raw);
   },
   async deleteCluster(id: string): Promise<K8sDeleteResult> {
     const raw = await apiRequest<any>(`/k8s/clusters/${encodeURIComponent(id)}`, { method: 'DELETE' });
@@ -1065,17 +1137,24 @@ export const k8sApi = {
     const raw = await apiRequest<any[]>(`/k8s/cluster-credentials${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapClusterCredential);
   },
-  async createClusterCredential(input: { clusterId: string; name: string; kubeconfig: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+  async createClusterCredential(input: { clusterId: string; name: string; kubeconfig: string; expiresAt?: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
     const raw = await apiRequest<any>('/k8s/cluster-credentials', {
       method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig }),
+      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig, expires_at: input.expiresAt ?? '' }),
     });
     return mapWriteResult(raw, mapClusterCredential);
   },
-  async rotateClusterCredential(input: { clusterId: string; name: string; kubeconfig: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+  async rotateClusterCredential(input: { clusterId: string; name: string; kubeconfig: string; expiresAt?: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
     const raw = await apiRequest<any>('/k8s/cluster-credentials/rotate', {
       method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig }),
+      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig, expires_at: input.expiresAt ?? '' }),
+    });
+    return mapWriteResult(raw, mapClusterCredential);
+  },
+  async rollbackClusterCredential(input: { clusterId: string; secretId: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+    const raw = await apiRequest<any>('/k8s/cluster-credentials/rollback', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, secret_id: input.secretId }),
     });
     return mapWriteResult(raw, mapClusterCredential);
   },
@@ -1085,6 +1164,21 @@ export const k8sApi = {
     if (query.trim()) params.set('q', query.trim());
     const raw = await apiRequest<any[]>(`/k8s/namespaces${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapNamespace);
+  },
+  async createNamespace(input: { clusterId: string; name: string; owner?: string }): Promise<K8sWriteResult<K8sNamespace>> {
+    const raw = await apiRequest<any>('/k8s/namespaces', {
+      method: 'POST',
+      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, owner: input.owner ?? '' }),
+    });
+    return mapWriteResult(raw, mapNamespace);
+  },
+  async deleteNamespace(target: K8sNamespace): Promise<K8sWriteResult<never>> {
+    const params = new URLSearchParams();
+    params.set('cluster_id', target.clusterId);
+    params.set('name', target.name);
+    params.set('uid', target.id);
+    const raw = await apiRequest<any>(`/k8s/namespaces?${params.toString()}`, { method: 'DELETE' });
+    return mapWriteResult(raw);
   },
   async listResources(filter: { clusterId?: string; namespace?: string; kind?: string; query?: string } = {}): Promise<K8sResourceSummary[]> {
     const params = new URLSearchParams();
@@ -1127,15 +1221,22 @@ export const k8sApi = {
     const raw = await apiRequest<any[]>('/k8s/platform-access/permissions');
     return raw.map(mapPlatformAccessPermission);
   },
-  async createPlatformAccessBinding(input: { subjectId: string; subjectType: string; clusterId: string; namespace: string; global?: boolean; permissionIds: string[] }): Promise<K8sWriteResult<K8sPlatformAccessBinding>> {
+  async listPlatformAccessProfiles(): Promise<K8sPlatformAccessProfile[]> {
+    const raw = await apiRequest<any[]>('/k8s/platform-access/profiles');
+    return raw.map(mapPlatformAccessProfile);
+  },
+  async createPlatformAccessBinding(input: { subjectId: string; subjectType: string; clusterId: string; namespace?: string; namespaces?: string[]; allNamespaces?: boolean; global?: boolean; riskAccepted?: boolean; permissionIds: string[] }): Promise<K8sWriteResult<K8sPlatformAccessBinding>> {
     const raw = await apiRequest<any>('/k8s/platform-access/bindings', {
       method: 'POST',
       body: JSON.stringify({
         subject_id: input.subjectId,
         subject_type: input.subjectType,
         cluster_id: input.clusterId,
-        namespace: input.namespace,
+        namespace: input.namespace ?? '',
+        namespaces: input.namespaces ?? [],
+        all_namespaces: Boolean(input.allNamespaces),
         global: Boolean(input.global),
+        risk_accepted: Boolean(input.riskAccepted),
         permission_ids: input.permissionIds,
       }),
     });
@@ -1185,8 +1286,15 @@ export const k8sApi = {
     });
     return mapWriteResult(raw, mapCertificate);
   },
-  async deleteCertificate(id: string): Promise<K8sWriteResult<never>> {
-    const raw = await apiRequest<any>(`/k8s/certificates/${encodeURIComponent(id)}`, { method: 'DELETE' });
+  async deleteCertificate(target: string | K8sCertificate): Promise<K8sWriteResult<never>> {
+    const id = typeof target === 'string' ? target : target.id;
+    const params = new URLSearchParams();
+    if (typeof target !== 'string') {
+      if (target.clusterId) params.set('cluster_id', target.clusterId);
+      if (target.namespace) params.set('namespace', target.namespace);
+      if (target.name) params.set('name', target.name);
+    }
+    const raw = await apiRequest<any>(`/k8s/certificates/${encodeURIComponent(id)}${params.toString() ? `?${params.toString()}` : ''}`, { method: 'DELETE' });
     return mapWriteResult(raw);
   },
   async listServiceAccounts(clusterId = '', namespace = ''): Promise<K8sServiceAccount[]> {

@@ -1,31 +1,12 @@
-import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, Boxes, Database, GitBranch, KeyRound, Layers3, Network, ShieldCheck } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { api } from '../../services/api';
 import { k8sApi } from './api';
-
-const lifecycle = [
-  ['接入来源', 'startorch', '能力基线已合并'],
-  ['权限模型', 'NovaObs RBAC', '租户 / 集群 / 命名空间'],
-  ['凭据托管', 'Secret Store', 'kubeconfig 加密落库'],
-  ['操作审计', 'Audit Event', 'trace_id 已预留'],
-];
+import { useK8sOpsContext } from './context';
 
 export function DashboardPage() {
-  const [selectedClusterId, setSelectedClusterId] = useState('');
-  const { data: clusters = [], isLoading: isLoadingClusters, error: clusterError } = useQuery({
-    queryKey: ['k8s-clusters'],
-    queryFn: () => k8sApi.listClusters(),
-    retry: false,
-  });
-  const activeClusterId = selectedClusterId || clusters[0]?.id || '';
-
-  useEffect(() => {
-    if (!selectedClusterId && clusters[0]?.id) {
-      setSelectedClusterId(clusters[0].id);
-    }
-  }, [clusters, selectedClusterId]);
+  const { activeClusterId, activeCluster, clusters, clusterError } = useK8sOpsContext();
 
   const { data, error, isLoading } = useQuery({
     queryKey: ['k8s-dashboard', activeClusterId],
@@ -51,23 +32,11 @@ export function DashboardPage() {
     <div className="space-y-4">
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(220px,320px)_1fr_auto] md:items-center">
-          <label className="block">
-            <span className="text-xs font-semibold text-muted">集群选择</span>
-            <select
-              className="console-input mt-2 w-full"
-              value={activeClusterId}
-              onChange={(event) => setSelectedClusterId(event.target.value)}
-              disabled={isLoadingClusters || !clusters.length}
-            >
-              {!clusters.length ? <option value="">暂无已登记集群</option> : null}
-              {clusters.map((item) => (
-                <option key={item.id} value={item.id}>{item.name || item.id}</option>
-              ))}
-            </select>
-          </label>
-          <div className="text-sm text-muted">
-            Dashboard 使用 NovaObs 后端实时只读 Kubernetes API 快照，不再回退到本地占位资源表。
+          <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <div className="text-xs font-semibold text-muted">当前集群</div>
+            <div className="mt-1 font-mono text-sm font-semibold text-on-surface">{activeCluster?.name || activeClusterId || '未选择'}</div>
           </div>
+          <div className="text-sm font-semibold text-on-surface">{stats?.health ?? activeCluster?.status ?? 'unknown'}</div>
           <div className="rounded-lg bg-white/60 px-3 py-2 font-mono text-xs font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
             {sync?.timeWindow ?? '最近 15 分钟'}
           </div>
@@ -103,7 +72,7 @@ export function DashboardPage() {
                 ['API Server', signalMeta(signals, 'api-server')],
                 ['Workloads', `${stats?.workloads ?? 0} active`],
                 ['Namespaces', `${stats?.namespaces ?? 0} domains`],
-                ['RBAC Sync', 'NovaObs policy'],
+                ['RBAC', activeCluster?.readOnly ? 'read-only' : 'write-enabled'],
               ].map(([label, meta]) => (
                 <div key={label} className="flex items-center justify-between rounded-lg bg-white/52 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
                   <span className="text-sm font-semibold text-on-surface">{label}</span>
@@ -121,28 +90,23 @@ export function DashboardPage() {
               <ClusterNode className="left-[24%] top-[42%]" icon={Network} label="API Server" meta={signalMeta(signals, 'api-server')} />
               <ClusterNode className="left-[58%] top-[28%]" icon={Boxes} label="Workloads" meta={`${stats?.workloads ?? 0} active`} />
               <ClusterNode className="left-[75%] top-[62%]" icon={Database} label="Namespaces" meta={`${stats?.namespaces ?? 0} domains`} />
-              <ClusterNode className="left-[38%] top-[76%]" icon={GitBranch} label="RBAC Sync" meta="NovaObs policy" />
+              <ClusterNode className="left-[38%] top-[76%]" icon={GitBranch} label="RBAC" meta={activeCluster?.readOnly ? 'read-only' : 'write-enabled'} />
             </div>
 
             <div className="grid gap-3">
               <Metric label="Pod Ready" value={`${readyPods} / ${totalPods}`} meta={`${warningPods} warning`} />
               <Metric label="Health" value={stats?.health ?? 'unknown'} meta="API aggregation" />
-              <Metric label="Sync" value={sync?.status ?? 'unknown'} meta={sync?.source ?? 'startorch'} />
+              <Metric label="Sync" value={sync?.status ?? 'unknown'} meta={sync?.source ?? 'Kubernetes API'} />
             </div>
           </div>
         </section>
 
-        <DataPanel title="迁移闭环" meta={isLoading ? '加载 K8sOps Dashboard' : '权限、凭据、审计统一入口'}>
+        <DataPanel title="集群策略" meta={activeCluster?.id ?? activeClusterId ?? '-'}>
           <div className="space-y-2">
-            {lifecycle.map(([label, value, meta]) => (
-              <div key={label} className="rounded-lg bg-white/45 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-xs font-semibold text-muted">{label}</span>
-                  <span className="font-mono text-xs font-semibold text-on-surface">{value}</span>
-                </div>
-                <div className="mt-1 text-[11px] text-muted">{meta}</div>
-              </div>
-            ))}
+            <PolicyRow label="接入模式" value={activeCluster?.accessMode || '-'} />
+            <PolicyRow label="写入保护" value={activeCluster?.readOnly ? '只读' : '允许写入'} />
+            <PolicyRow label="K8s 版本" value={activeCluster?.version || '-'} />
+            <PolicyRow label="区域" value={activeCluster?.region || '-'} />
           </div>
         </DataPanel>
       </div>
@@ -188,7 +152,7 @@ export function DashboardPage() {
           ) : null}
         </DataPanel>
 
-        <DataPanel title="操作审计" meta={auditError ? 'Audit Event 读取失败' : 'Audit Event · trace 预留'}>
+        <DataPanel title="操作审计" meta={auditError ? '读取失败' : `${auditEvents.length} 条`}>
           <div className="space-y-2">
             {auditEvents.map((event) => (
               <div key={event.id} className="rounded-lg bg-white/45 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
@@ -222,6 +186,17 @@ function ClusterNode({ className, icon: Icon, label, meta }: { className: string
       <div className="min-w-0">
         <div className="text-sm font-semibold text-on-surface">{label}</div>
         <div className="mt-0.5 text-[11px] text-muted">{meta}</div>
+      </div>
+    </div>
+  );
+}
+
+function PolicyRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-white/45 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-muted">{label}</span>
+        <span className="font-mono text-xs font-semibold text-on-surface">{value}</span>
       </div>
     </div>
   );
