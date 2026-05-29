@@ -1,8 +1,7 @@
-import type { PipelineStatus, ServiceStatus, Severity } from '../services/types';
+import type { ServiceStatus, Severity } from '../services/types';
 
 type StatusValue =
   | ServiceStatus
-  | PipelineStatus
   | Severity
   | 'debug'
   | 'info'

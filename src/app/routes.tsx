@@ -18,10 +18,12 @@ import { K8sServiceAccountPage } from '../pages/k8s/ServiceAccountPage';
 import { K8sKubeconfigPage } from '../pages/k8s/KubeconfigPage';
 import { K8sTemplatePage } from '../pages/k8s/TemplatePage';
 import { K8sTerminalPage } from '../pages/k8s/TerminalPage';
+import { LogsAgentsPage } from '../pages/logs/LogsAgentsPage';
+import { LogsAlertsPage } from '../pages/logs/LogsAlertsPage';
+import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
+import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
-import { OnboardingPage } from '../pages/onboarding/OnboardingPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
-import { PipelinesPage } from '../pages/pipelines/PipelinesPage';
 import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
 
@@ -67,12 +69,19 @@ const k8sChildRoutes: RouteDefinition[] = [
   { path: 'clusters/:clusterId/terminal', title: 'K8s 运维', element: <K8sTerminalPage /> },
 ];
 
+const logsChildRoutes: RouteDefinition[] = [
+  { index: true, title: 'Logs 日志分析', element: <Navigate to="/logs/explore" replace /> },
+  { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
+  { path: 'onboarding', title: 'Logs 接入配置', element: <LogsOnboardingPage /> },
+  { path: 'agents', title: 'Logs 采集 Agent', element: <LogsAgentsPage /> },
+  { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
+];
+
 export const routeDefinitions: RouteDefinition[] = [
   { path: '/', title: '平台总览', element: <OverviewPage /> },
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
-  { path: '/onboarding', title: '服务接入', element: <OnboardingPage /> },
-  { path: '/logs', title: 'Logs', element: <LogsWorkspace /> },
-  { path: '/pipelines', title: '日志 Pipeline', element: <PipelinesPage /> },
+  { path: '/onboarding', title: '服务接入', element: <Navigate to="/logs/onboarding" replace /> },
+  { path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
   { path: '/platform/access', title: '平台管理', element: <PlatformAccessAdminPage /> },
   { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },
   { path: '/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },
@@ -82,15 +91,24 @@ export const routeDefinitions: RouteDefinition[] = [
 export const getRouteTitle = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
   if (normalizedPath.startsWith('/agents/')) return 'Agent Detail';
-  const route = routeDefinitions.find((item) => {
-    if (!item.path) {
-      return false;
-    }
-    return item.path === '/'
-      ? normalizedPath === '/'
-      : normalizedPath === item.path || normalizedPath.startsWith(`${item.path}/`);
-  });
+  const route = findRouteTitle(routeDefinitions, normalizedPath);
   return route?.title ?? '平台总览';
 };
 
 export const getDocumentTitle = (path: string) => `${getRouteTitle(path)} - NovaObs`;
+
+function findRouteTitle(routes: RouteDefinition[], normalizedPath: string, basePath = ''): RouteDefinition | undefined {
+  for (const route of routes) {
+    const fullPath = route.index ? basePath : route.path?.startsWith('/') ? route.path : `${basePath}/${route.path ?? ''}`.replace(/\/+/g, '/');
+    if (!fullPath) continue;
+    const matched = route.index
+      ? normalizedPath === fullPath
+      : fullPath === '/'
+        ? normalizedPath === '/'
+        : normalizedPath === fullPath || normalizedPath.startsWith(`${fullPath}/`);
+    if (!matched) continue;
+    const child = route.children ? findRouteTitle(route.children, normalizedPath, fullPath) : undefined;
+    return child ?? route;
+  }
+  return undefined;
+}

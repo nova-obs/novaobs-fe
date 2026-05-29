@@ -1,94 +1,61 @@
-import { useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
-import { PipelinesPage } from '../pipelines/PipelinesPage';
-import { LogsPage } from './LogsPage';
+import { NavLink, Outlet } from 'react-router-dom';
+import { Activity, Bell, Clock, Database, RadioTower, Search, ServerCog } from 'lucide-react';
 
-type LogsTab = 'explorer' | 'pipelines' | 'views';
-type PipelinesSection = 'config' | 'history';
+const logsNav = [
+  { to: '/logs/explore', label: '日志分析', meta: 'VMUI / VictoriaLogs', icon: Search },
+  { to: '/logs/onboarding', label: '接入配置', icon: RadioTower },
+  { to: '/logs/agents', label: '采集 Agent', icon: ServerCog },
+  { to: '/logs/alerts', label: '日志告警', icon: Bell },
+];
 
 function LogsWorkspace() {
-  const [searchParams] = useSearchParams();
-  const [tab, setTab] = useState<LogsTab>(() => (searchParams.get('tab') as LogsTab) || 'explorer');
-  const [section, setSection] = useState<PipelinesSection>(() => {
-    const requested = searchParams.get('section');
-    return requested === 'history' ? 'history' : 'config';
-  });
-
-  const tabs: { key: LogsTab; label: string }[] = [
-    { key: 'explorer', label: 'Explorer' },
-    { key: 'pipelines', label: 'Pipelines' },
-    { key: 'views', label: 'Views' },
-  ];
-
-  const pipelineSections: { key: PipelinesSection; label: string }[] = [
-    { key: 'config', label: 'Config' },
-    { key: 'history', label: 'Change History' },
-  ];
-
   return (
-    <div className="space-y-4">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-on-surface">Logs</h1>
-        <p className="mt-1 text-sm text-muted">
-          {tab === 'explorer' && '按时间、服务、环境、级别与关键字查询日志。'}
-          {tab === 'pipelines' && '按服务管理日志 Pipeline 片段、发布配置并跟踪 Agent 应用状态。'}
-          {tab === 'views' && '保存的日志查询视图。'}
-        </p>
-      </div>
-
-      <div className="inline-flex gap-1 rounded-lg bg-white/60 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.8)]">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition-all active:translate-y-px ${
-              tab === t.key
-                ? 'bg-primary text-white shadow-[0_10px_24px_-18px_rgba(13,91,215,0.72)]'
-                : 'text-muted hover:bg-white/70 hover:text-on-surface'
-            }`}
-            onClick={() => setTab(t.key)}
-          >
-            {t.label}
-          </button>
-        ))}
-      </div>
-
-      {tab === 'explorer' && <LogsPage />}
-
-      {tab === 'pipelines' && (
-        <div className="space-y-4">
-          <div className="inline-flex gap-1 rounded-lg bg-white/60 p-1">
-            {pipelineSections.map((s) => (
-              <button
-                key={s.key}
-                className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition-all ${
-                  section === s.key
-                    ? 'bg-primary text-white'
-                    : 'text-muted hover:bg-white/70 hover:text-on-surface'
-                }`}
-                onClick={() => setSection(s.key)}
-              >
-                {s.label}
-              </button>
-            ))}
+    <div className="space-y-4 route-transition-page">
+      <div className="console-panel overflow-hidden">
+        <div className="flex flex-col gap-3 px-4 py-4 lg:flex-row lg:items-start lg:justify-between">
+          <div>
+            <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Logs</div>
+            <h1 className="mt-1 font-display text-2xl font-semibold tracking-tight text-on-surface">日志控制台</h1>
           </div>
-
-          {section === 'config' && <PipelinesPage embedded />}
-
-          {section === 'history' && (
-            <div className="flex flex-col items-center gap-3 py-12">
-              <p className="text-sm text-muted">暂无变更历史记录。</p>
-              <p className="text-xs text-muted">保存片段或发布服务配置后，变更记录将显示在此处。</p>
-            </div>
-          )}
+          <div className="flex flex-wrap items-center gap-2 text-xs">
+            <span className="inline-flex items-center gap-1.5 rounded border border-primary/20 bg-primary-soft px-2.5 py-1.5 font-semibold text-primary">
+              <Activity className="h-3.5 w-3.5" />
+              采集策略同步
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded border border-outline bg-white/85 px-2.5 py-1.5 font-semibold text-muted">
+              <Database className="h-3.5 w-3.5" />
+              VictoriaLogs
+            </span>
+            <span className="inline-flex items-center gap-1.5 rounded border border-outline bg-white/85 px-2.5 py-1.5 font-semibold text-muted">
+              <Clock className="h-3.5 w-3.5" />
+              最近 15 分钟
+            </span>
+          </div>
         </div>
-      )}
-
-      {tab === 'views' && (
-        <div className="flex flex-col items-center gap-3 py-12">
-          <p className="text-sm text-muted">暂无保存的日志视图。</p>
-          <p className="text-xs text-muted">在 Explorer 中执行查询后可保存为视图，方便快速复用。</p>
+        <div className="border-t border-outline/70 bg-white/62 px-2">
+          <nav className="flex gap-1 overflow-x-auto" aria-label="Logs 模块导航">
+          {logsNav.map((item) => {
+            const Icon = item.icon;
+            return (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={({ isActive }) => `relative inline-flex min-w-max items-center gap-2 border-b-2 px-4 py-3 text-sm font-semibold transition-all active:translate-y-px ${
+                  isActive ? 'border-primary bg-primary-soft/70 text-primary' : 'border-transparent text-muted hover:bg-surface-low/80 hover:text-on-surface'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span>{item.label}</span>
+                {'meta' in item ? <span className="hidden font-mono text-[11px] font-medium text-primary/70 md:inline">{item.meta}</span> : null}
+              </NavLink>
+            );
+          })}
+          </nav>
         </div>
-      )}
+      </div>
+      <div className="route-transition-page">
+        <Outlet />
+      </div>
     </div>
   );
 }

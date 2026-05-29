@@ -1,7 +1,7 @@
 import type { FormEvent, PropsWithChildren } from 'react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, Bell, CheckCircle2, ChevronDown, CircleHelp, Clock3, KeyRound, LogIn, LogOut, RadioTower, Search, Settings, ShieldCheck, Sparkles, UserCircle2 } from 'lucide-react';
+import { ArrowLeft, Bell, CheckCircle2, ChevronDown, CircleHelp, Clock3, KeyRound, LogIn, LogOut, PanelLeftClose, PanelLeftOpen, RadioTower, Search, Settings, ShieldCheck, Sparkles, UserCircle2, X } from 'lucide-react';
 import { primaryNavigation } from './navigation';
 import { fetchPlatformSession, isSignedOutLocation, loginPlatformUser, resetClientSignedOut, sessionDisplayName, type PlatformSession, type SessionStatus, useLogoutAction } from './session';
 
@@ -9,6 +9,14 @@ export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const navigate = useNavigate();
   const isK8sClusterFocus = /^\/k8s\/clusters\/[^/]+/.test(location.pathname);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      return window.localStorage.getItem('novaobs.sidebar.collapsed') === '1';
+    } catch {
+      return false;
+    }
+  });
   const [session, setSession] = useState<PlatformSession | null>(null);
   const [authStatus, setAuthStatus] = useState<SessionStatus>('checking');
   const logoutAction = useLogoutAction({
@@ -17,6 +25,7 @@ export function AppShell({ children }: PropsWithChildren) {
       setAuthStatus('anonymous');
     },
   });
+  const logoutStatus = logoutAction.status;
 
   useEffect(() => {
     let cancelled = false;
@@ -44,6 +53,14 @@ export function AppShell({ children }: PropsWithChildren) {
     };
   }, [location.search]);
 
+  useEffect(() => {
+    try {
+      window.localStorage.setItem('novaobs.sidebar.collapsed', isSidebarCollapsed ? '1' : '0');
+    } catch {
+      // 浏览器禁用 storage 时，不影响主导航交互。
+    }
+  }, [isSidebarCollapsed]);
+
   function handleLoginSuccess(value: PlatformSession) {
     resetClientSignedOut();
     setSession(value);
@@ -60,7 +77,6 @@ export function AppShell({ children }: PropsWithChildren) {
   }
 
   const handleLogout = logoutAction.logout;
-  const logoutStatus = logoutAction.status;
   const activeSubject = session?.subject ?? null;
   const activeDisplayName = sessionDisplayName(activeSubject);
   const activeK8sClusterName = getK8sFocusClusterName(location.pathname);
@@ -75,7 +91,7 @@ export function AppShell({ children }: PropsWithChildren) {
   return (
     <div className="relative flex h-[100dvh] overflow-hidden bg-app-radial text-on-surface">
       <div className="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(115deg,transparent_0%,rgba(13,91,215,0.12)_38%,transparent_64%),linear-gradient(25deg,transparent_12%,rgba(0,164,255,0.1)_46%,transparent_72%)]" />
-      <aside className={['relative hidden h-[100dvh] max-h-[100dvh] shrink-0 flex-col md:flex', isK8sClusterFocus ? 'w-[72px] p-2' : 'w-64 p-4'].join(' ')}>
+      <aside className={['relative hidden h-[100dvh] max-h-[100dvh] shrink-0 flex-col transition-[width,padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:flex', isK8sClusterFocus ? 'w-[72px] p-2' : isSidebarCollapsed ? 'w-[84px] p-2' : 'w-64 p-4'].join(' ')}>
         {isK8sClusterFocus ? (
           <K8sFocusRail
             activeDisplayName={activeDisplayName}
@@ -88,31 +104,40 @@ export function AppShell({ children }: PropsWithChildren) {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 h-80 opacity-70 [background-image:radial-gradient(ellipse_at_16%_92%,rgba(13,91,215,0.14),transparent_42%),radial-gradient(ellipse_at_78%_96%,rgba(0,164,255,0.1),transparent_38%)]" />
           <div className="pointer-events-none absolute -bottom-16 -left-14 h-72 w-72 rounded-full border border-primary/10 opacity-70" />
           <div className="pointer-events-none absolute bottom-10 left-2 h-40 w-52 rotate-[-12deg] rounded-[55%] bg-primary/[0.055] blur-2xl" />
-          <div className="relative px-5 py-6">
-            <div className="inline-flex items-center gap-2 rounded-lg bg-primary-soft/80 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              Telemetry Atlas
+          <div className={isSidebarCollapsed ? 'relative flex flex-col items-center gap-3 px-2 py-4' : 'relative px-4 py-4'}>
+            <div className={isSidebarCollapsed ? 'flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft/80 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]' : 'flex min-w-0 items-center gap-3 pr-10'} title="NovaObs">
+              <span className={isSidebarCollapsed ? '' : 'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft/85 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]'}>
+                <Sparkles className={isSidebarCollapsed ? 'h-4 w-4' : 'h-4 w-4'} />
+              </span>
+              {isSidebarCollapsed ? null : (
+                <span className="min-w-0">
+                  <span className="block truncate font-display text-base font-semibold tracking-tight text-on-surface">NovaObs</span>
+                  <span className="mt-0.5 block truncate font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">OBS Console</span>
+                </span>
+              )}
             </div>
-            <div className="mt-4 font-display text-xl font-semibold tracking-tight text-on-surface">NovaObs</div>
-            <div className="mt-1 text-xs font-medium text-muted">统一可观测性控制面</div>
+            <button
+              className={['sidebar-collapse-toggle flex h-8 w-8 items-center justify-center rounded-lg bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(13,91,215,0.12)] transition hover:bg-white hover:text-primary active:translate-y-px', isSidebarCollapsed ? '' : 'absolute right-3 top-4'].join(' ')}
+              onClick={() => setIsSidebarCollapsed((value) => !value)}
+              title={isSidebarCollapsed ? '展开主导航' : '收起主导航'}
+              aria-label={isSidebarCollapsed ? '展开主导航' : '收起主导航'}
+            >
+              {isSidebarCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
+            </button>
           </div>
-          <div className="relative mx-4 mb-4 rounded-lg border border-outline/70 bg-white/70 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.9)] backdrop-blur">
-            <div className="flex items-center gap-2 text-xs font-semibold text-primary">
-              <span className="h-2 w-2 rounded-full bg-primary/70" />
-              生产观测域
-            </div>
-            <div className="mt-1 font-mono text-[11px] text-muted">Prod / CN-SHANGHAI-A</div>
-          </div>
-          <nav className="relative flex-1 space-y-1 overflow-y-auto px-3">
+          <nav className={['relative flex-1 space-y-1.5 overflow-y-auto pt-1', isSidebarCollapsed ? 'px-2' : 'px-3'].join(' ')}>
             {primaryNavigation.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
                   key={item.id}
                   to={item.path}
+                  title={isSidebarCollapsed ? item.label : undefined}
+                  aria-label={item.label}
                   className={({ isActive }) =>
                     [
-                      'group flex h-10 items-center gap-3 rounded-lg px-3 text-sm transition-all active:translate-y-px',
+                      'group flex items-center rounded-lg text-sm transition-all active:translate-y-px',
+                      isSidebarCollapsed ? 'h-10 justify-center px-0' : 'h-9 gap-3 px-3',
                       isActive
                         ? 'atlas-nav-active text-primary'
                         : 'text-muted hover:bg-white/45 hover:text-on-surface',
@@ -120,42 +145,44 @@ export function AppShell({ children }: PropsWithChildren) {
                   }
                 >
                   <Icon className="h-4 w-4" />
-                  <span>{item.label}</span>
+                  <span className={isSidebarCollapsed ? 'sr-only' : ''}>{item.label}</span>
                 </NavLink>
               );
             })}
           </nav>
-          <div className="relative mx-4 mb-4">
-            <div className="rounded-lg bg-white/40 px-4 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
-              <div className="font-semibold text-on-surface">System Health</div>
-              <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[11px]">
-                <span>API 42ms</span>
-                <span>1.2k/s</span>
+          <div className={isSidebarCollapsed ? 'relative mb-3 mt-3 flex flex-col items-center gap-2' : 'relative mx-4 mb-4'}>
+            {isSidebarCollapsed ? null : (
+              <div className="rounded-lg bg-white/40 px-4 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.65)]">
+                <div className="font-semibold text-on-surface">System Health</div>
+                <div className="mt-2 grid grid-cols-2 gap-2 font-mono text-[11px]">
+                  <span>API 42ms</span>
+                  <span>1.2k/s</span>
+                </div>
               </div>
-            </div>
-            <div className="platform-account-session sidebar-account-dock mt-2 rounded-lg bg-white/48 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur">
+            )}
+            <div className={isSidebarCollapsed ? 'platform-account-session sidebar-account-dock flex flex-col items-center gap-2' : 'platform-account-session sidebar-account-dock mt-2 rounded-lg bg-white/48 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] backdrop-blur'}>
               <div className="flex items-center gap-2">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                <div className={isSidebarCollapsed ? 'flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]' : 'flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-soft text-primary'} title={activeDisplayName}>
                   <UserCircle2 className="h-4 w-4" />
                 </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-xs font-semibold text-on-surface">{activeDisplayName}</div>
-                  <div className="mt-0.5 truncate font-mono text-[10px] text-muted">{activeSubject?.id || '-'} / {activeSubject?.type || 'platform'}</div>
-                </div>
-                <button
-                  className="platform-logout-action flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/70 text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.14)] transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-                  disabled={logoutStatus === 'pending'}
-                  onClick={handleLogout}
-                  title="退出登录"
-                  aria-label="退出登录"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                </button>
+                {isSidebarCollapsed ? null : (
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-semibold text-on-surface">{activeDisplayName}</div>
+                    <div className="mt-0.5 truncate font-mono text-[10px] text-muted">{activeSubject?.id || '-'} / {activeSubject?.type || 'platform'}</div>
+                  </div>
+                )}
+                {isSidebarCollapsed ? null : (
+                  <LogoutConfirmDetails status={logoutStatus} onLogout={handleLogout} variant="sidebar" />
+                )}
               </div>
-              {logoutFailedMessage()}
-              {logoutStatus === 'done' ? (
-                <div className="mt-2 rounded-lg bg-primary-soft px-2 py-1.5 text-[11px] font-semibold text-primary">已清理本地会话。</div>
-              ) : null}
+              {isSidebarCollapsed ? <span className="sr-only">收起状态下展开主导航后可退出登录</span> : (
+                <>
+                  {logoutFailedMessage()}
+                  {logoutStatus === 'done' ? (
+                    <div className="mt-2 rounded-lg bg-primary-soft px-2 py-1.5 text-[11px] font-semibold text-primary">已清理本地会话。</div>
+                  ) : null}
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -208,14 +235,7 @@ export function AppShell({ children }: PropsWithChildren) {
               <div className="truncate text-xs font-semibold text-on-surface">{activeDisplayName}</div>
             </div>
           </div>
-          <button
-            className="ml-3 inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg bg-white/75 px-3 text-xs font-semibold text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.14)] disabled:opacity-60"
-            disabled={logoutStatus === 'pending'}
-            onClick={handleLogout}
-          >
-            <LogOut className="h-3.5 w-3.5" />
-            {logoutStatus === 'pending' ? '退出中' : '退出登录'}
-          </button>
+          <LogoutConfirmDetails status={logoutStatus} onLogout={handleLogout} variant="mobile" />
         </div>
         <section
           key={location.pathname}
@@ -263,15 +283,7 @@ function K8sFocusRail({
         >
           <UserCircle2 className="h-4 w-4" />
         </div>
-        <button
-          className="platform-account-session sidebar-account-dock platform-logout-action flex h-10 w-10 items-center justify-center rounded-lg bg-white/70 text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.14)] transition hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={logoutStatus === 'pending'}
-          onClick={onLogout}
-          title="退出登录"
-          aria-label="退出登录"
-        >
-          <LogOut className="h-4 w-4" />
-        </button>
+        <LogoutConfirmDetails status={logoutStatus} onLogout={onLogout} variant="rail" />
       </div>
     </div>
   );
@@ -340,7 +352,7 @@ function LoginView({ onSuccess }: { onSuccess: (session: PlatformSession) => voi
           <div>
             <div className="inline-flex items-center gap-2 rounded-lg bg-primary-soft/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
               <Sparkles className="h-3.5 w-3.5" />
-              Telemetry Atlas
+              OBS Console
             </div>
             <h1 className="mt-6 max-w-sm font-display text-4xl font-semibold tracking-tight text-on-surface">NovaObs 平台统一登录</h1>
             <p className="mt-4 max-w-md text-sm leading-6 text-muted">登录态由平台 IAM 统一签发，K8s 运维、服务目录、监控、告警和日志模块共享同一会话主体与 RBAC 权限。</p>
@@ -408,5 +420,79 @@ function IconButton({ label, children }: PropsWithChildren<{ label: string }>) {
     <button className="quiet-button h-9 w-9 p-0 text-muted hover:bg-white/70 hover:text-primary" title={label} aria-label={label}>
       {children}
     </button>
+  );
+}
+
+function LogoutConfirmDetails({ status, onLogout, variant }: { status: ReturnType<typeof useLogoutAction>['status']; onLogout: () => void; variant: 'sidebar' | 'rail' | 'mobile' }) {
+  const pending = status === 'pending';
+  const confirmLabel = pending ? '退出中' : '确认退出';
+
+  function cancel(event: { currentTarget: HTMLButtonElement }) {
+    const details = event.currentTarget.closest('details');
+    if (details) details.open = false;
+  }
+
+  if (variant === 'rail') {
+    return (
+      <details className="platform-account-session sidebar-account-dock flex flex-col-reverse gap-1">
+        <summary
+          className="platform-logout-action flex h-10 w-10 cursor-pointer list-none items-center justify-center rounded-lg bg-white/70 text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.14)] transition hover:bg-rose-50 [&::-webkit-details-marker]:hidden"
+          title="退出登录需要确认"
+          aria-label="退出登录需要确认"
+        >
+          <LogOut className="h-4 w-4" />
+        </summary>
+        <div className="grid gap-1 rounded-lg border border-danger/20 bg-white/78 p-1 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-danger text-white transition hover:bg-danger/90 disabled:cursor-not-allowed disabled:opacity-60"
+            disabled={pending}
+            onClick={onLogout}
+            title="确认退出登录"
+            aria-label="确认退出登录"
+          >
+            <LogOut className="h-4 w-4" />
+          </button>
+          <button
+            className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/70 text-muted transition hover:text-on-surface"
+            onClick={cancel}
+            title="取消退出"
+            aria-label="取消退出"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </details>
+    );
+  }
+
+  if (variant === 'mobile') {
+    return (
+      <details className="relative ml-3 shrink-0">
+        <summary className="platform-logout-action inline-flex h-8 cursor-pointer list-none items-center gap-1.5 rounded-lg bg-white/75 px-3 text-xs font-semibold text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.14)] [&::-webkit-details-marker]:hidden">
+          <LogOut className="h-3.5 w-3.5" />
+          {pending ? '退出中' : '退出登录'}
+        </summary>
+        <div className="absolute bottom-full right-0 z-[3] mb-2 flex items-center gap-2 rounded-lg border border-danger/20 bg-white/95 p-2 shadow-[0_12px_30px_rgba(24,52,96,0.16)]">
+          <button className="h-8 whitespace-nowrap rounded-lg bg-danger px-3 text-xs font-semibold text-white disabled:opacity-60" disabled={pending} onClick={onLogout}>{confirmLabel}</button>
+          <button className="h-8 whitespace-nowrap rounded-lg border border-outline bg-white px-3 text-xs font-semibold text-muted" onClick={cancel} title="取消退出">取消</button>
+        </div>
+      </details>
+    );
+  }
+
+  return (
+    <details className="relative shrink-0">
+      <summary
+        className="platform-logout-action flex h-8 w-8 cursor-pointer list-none items-center justify-center rounded-lg bg-white/70 text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.14)] transition hover:bg-rose-50 [&::-webkit-details-marker]:hidden"
+        title="退出登录需要确认"
+        aria-label="退出登录需要确认"
+      >
+        <LogOut className="h-3.5 w-3.5" />
+      </summary>
+      <div className="absolute bottom-full right-0 z-[3] mb-2 grid w-36 grid-cols-[1fr_auto] gap-2 rounded-lg border border-danger/20 bg-white/95 p-2 shadow-[0_12px_30px_rgba(24,52,96,0.16)]">
+        <button className="h-8 rounded-lg bg-danger px-3 text-xs font-semibold text-white transition hover:bg-danger/90 disabled:opacity-60" disabled={pending} onClick={onLogout}>{confirmLabel}</button>
+        <button className="h-8 rounded-lg border border-outline bg-white px-3 text-xs font-semibold text-muted transition hover:text-on-surface" onClick={cancel} title="取消退出">取消</button>
+      </div>
+    </details>
   );
 }

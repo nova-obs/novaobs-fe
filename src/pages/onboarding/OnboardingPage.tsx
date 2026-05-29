@@ -59,7 +59,7 @@ export function OnboardingPage() {
 
       <DataPanel title="接入域边界" meta="service onboarding model">
         <div className="grid gap-3 text-sm md:grid-cols-2">
-          <Boundary title="日志接入" body="负责日志采集入口、解析、字段标准化、Pipeline 配置发布和 Agent 应用状态。" />
+          <Boundary title="日志接入" body="负责日志采集入口、服务绑定、路由预览、Agent 发布和应用状态。" />
           <Boundary title="告警规则" body="当前在告警中心维护规则模型和路由字段；告警接入向导不在主 UI 占位展示。" />
         </div>
       </DataPanel>

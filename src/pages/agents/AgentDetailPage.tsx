@@ -4,7 +4,21 @@ import { AlertTriangle, ArrowLeft, CheckCircle, RefreshCw, XCircle } from 'lucid
 import { DataPanel } from '../../components/DataPanel';
 import { api } from '../../services/api';
 import type { AgentDetail } from '../../services/types';
-import { shortHash, sourceTypeLabel } from '../pipelines/pipelineConfig';
+
+function shortHash(value?: string) {
+  if (!value) return '-';
+  return value.length > 12 ? value.slice(0, 12) : value;
+}
+
+function sourceTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    platform_template: '平台模板',
+    group_override: 'Group Override',
+    service_enrichment_patch: '服务属性补齐',
+    service_pipeline_patch: '服务解析规则',
+  };
+  return labels[value] ?? value;
+}
 
 function runtimeStatusLabel(status: string) {
   const labels: Record<string, string> = { online: '在线', stale: '心跳超时', offline: '离线' };
@@ -75,7 +89,7 @@ export function AgentDetailPage() {
               <ArrowLeft className="h-3 w-3" />返回
             </button>
             <span>/</span>
-            <Link className="hover:text-primary" to="/logs?tab=pipelines&section=config">Logs Pipeline</Link>
+            <Link className="hover:text-primary" to="/logs/agents">采集 Agent</Link>
             <span>/</span>
             <span className="text-primary">Agent Detail</span>
           </div>

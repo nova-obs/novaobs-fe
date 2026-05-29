@@ -7,9 +7,7 @@ test('主导航包含第一阶段全部模块且路径唯一', () => {
   assert.deepEqual(items.map((item) => item.path), [
     '/',
     '/services',
-    '/onboarding',
     '/logs',
-    '/pipelines',
     '/platform/access',
     '/k8s',
     '/alerts',
@@ -18,7 +16,7 @@ test('主导航包含第一阶段全部模块且路径唯一', () => {
 });
 
 test('根据路径解析当前导航项', () => {
-  assert.equal(getNavigationByPath('/logs?level=error')?.id, 'logs');
+  assert.equal(getNavigationByPath('/logs/onboarding')?.id, 'logs');
   assert.equal(getNavigationByPath('/platform/access')?.id, 'platform-access');
   assert.equal(getNavigationByPath('/k8s/namespaces')?.id, 'k8s');
   assert.equal(getNavigationByPath('/unknown'), undefined);

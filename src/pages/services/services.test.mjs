@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 function sourceLabel(source) {
+  if (source === 'k8s') return 'K8s 同步';
   return source === 'cmdb' ? 'CMDB' : '本地录入';
 }
 
@@ -19,6 +20,10 @@ test('source=manual 显示为本地录入', () => {
 
 test('source=cmdb 显示为 CMDB', () => {
   assert.equal(sourceLabel('cmdb'), 'CMDB');
+});
+
+test('source=k8s 显示为 K8s 同步', () => {
+  assert.equal(sourceLabel('k8s'), 'K8s 同步');
 });
 
 test('sync_status=local 显示为本地', () => {

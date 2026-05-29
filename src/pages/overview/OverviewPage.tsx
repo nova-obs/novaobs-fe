@@ -31,7 +31,7 @@ export function OverviewPage() {
   const { data } = useQuery({ queryKey: ['overview'], queryFn: api.getOverview });
   const serviceCount = data?.serviceCount ?? 0;
   const logThroughput = data?.logThroughputPerMinute ?? 0;
-  const healthyPipelineCount = data?.healthyPipelineCount ?? 0;
+  const healthyLogRouteCount = data?.healthyLogRouteCount ?? 0;
   const activeAlertCount = data?.activeAlertCount ?? 0;
 
   const metrics = [
@@ -52,8 +52,8 @@ export function OverviewPage() {
       path: 'M4 26 C16 26 20 15 32 18 C44 21 48 10 60 14 C70 17 72 8 78 6',
     },
     {
-      label: '健康 Pipeline',
-      value: `${healthyPipelineCount} / 118`,
+      label: '健康日志路由',
+      value: `${healthyLogRouteCount} / 118`,
       source: 'OTel Collector',
       detail: 'config a1b2c3d4',
       icon: GitBranch,
@@ -124,7 +124,7 @@ export function OverviewPage() {
               <div className="grid flex-1 gap-2 text-xs">
                 {[
                   ['服务健康', '98.2%'],
-                  ['Pipeline 健康', '95.6%'],
+                  ['日志路由健康', '95.6%'],
                   ['数据采集', '99.1%'],
                   ['配置同步', '100%'],
                 ].map(([label, value]) => (

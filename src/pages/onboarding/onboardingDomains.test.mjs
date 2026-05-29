@@ -6,9 +6,9 @@ test('服务接入总入口只展示当前可用接入域', () => {
   assert.deepEqual(getOnboardingDomains().map((domain) => domain.id), ['logs']);
 });
 
-test('日志接入入口归属 Logs / Pipelines / Config', () => {
+test('日志接入入口归属 Logs 接入配置', () => {
   const logs = getOnboardingDomains().find((domain) => domain.id === 'logs');
-  assert.equal(logs?.path, '/logs?tab=pipelines&section=config');
+  assert.equal(logs?.path, '/logs/onboarding');
   assert.equal(logs?.status, 'available');
 });
 

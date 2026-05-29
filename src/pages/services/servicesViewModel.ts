@@ -16,7 +16,7 @@ export function targetTypeLabel(type: ServiceTargetType | string) {
 export function targetPurposeLabel(type: ServiceTargetType | string) {
   switch (type) {
     case 'cloud_native_workload':
-      return '用于 Kubernetes 拓扑、Pod 日志归属和工作负载级 Pipeline 下发';
+      return '用于 Kubernetes 拓扑、Pod 日志归属和工作负载级日志接入';
     case 'host_process':
       return '用于 VM / 物理机进程采集、主机日志归属和端口级排障';
     case 'physical_or_network_device':
@@ -34,7 +34,7 @@ export function runningTargetPurposeItems() {
     },
     {
       title: '绑定采集与配置下发',
-      description: '为 Agent、Collector Group 和 Pipeline 提供匹配字段，决定哪些采集规则应该作用到这个服务。',
+      description: '为 Agent、Collector Group 和日志路由提供匹配字段，决定哪些采集规则应该作用到这个服务。',
     },
     {
       title: '支撑排障和告警归因',
@@ -57,11 +57,11 @@ export function targetLocationSummary(target: Pick<ServiceTarget, 'targetType' |
   return compactJoin(Object.values(attrs).slice(0, 3));
 }
 
-export function graphStatItems(graph: Pick<ServiceObservabilityGraph, 'targets' | 'agents' | 'pipelines' | 'alertRules'>) {
+export function graphStatItems(graph: Pick<ServiceObservabilityGraph, 'targets' | 'agents' | 'logRoutes' | 'alertRules'>) {
   return [
     { label: '运行目标', value: graph.targets.length },
     { label: 'Agent', value: graph.agents.length },
-    { label: 'Pipeline 片段', value: graph.pipelines.sourceBreakdown.length },
+    { label: '日志路由', value: graph.logRoutes.total },
     { label: '告警规则', value: graph.alertRules.length },
   ];
 }

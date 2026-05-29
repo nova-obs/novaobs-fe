@@ -47,6 +47,7 @@ const emptyTargetForm = {
 };
 
 function sourceLabel(source: string) {
+  if (source === 'k8s') return 'K8s 同步';
   return source === 'cmdb' ? 'CMDB' : '本地录入';
 }
 
@@ -192,6 +193,7 @@ export function ServicesPage() {
                   <option value="">全部</option>
                   <option value="manual">本地录入</option>
                   <option value="cmdb">CMDB</option>
+                  <option value="k8s">K8s 同步</option>
                 </select>
               </label>
             </div>
@@ -329,7 +331,7 @@ function ServiceGraphPanel({
               <div>
                 <div className="font-display text-sm font-semibold text-on-surface">运行目标的作用</div>
                 <p className="mt-1 text-xs leading-5 text-muted">
-                  运行目标把服务目录里的业务服务映射到真实运行实体，是日志归属、Agent 绑定、Pipeline 下发和告警定位的共同锚点。
+                  运行目标把服务目录里的业务服务映射到真实运行实体，是日志归属、Agent 绑定、日志路由和告警定位的共同锚点。
                 </p>
               </div>
             </div>
@@ -405,7 +407,7 @@ function ServiceGraphPanel({
 
           <div className="grid gap-4 lg:grid-cols-3">
             <RelationList icon={<Cpu className="h-4 w-4 text-primary" />} title="Agent" empty="暂无 Agent" items={graph.agents.map((agent) => ({ id: agent.instanceUid, title: agent.instanceUid, meta: `${agent.runtimeStatus} · ${agent.remoteConfigStatus || 'unset'}` }))} />
-            <RelationList icon={<GitBranch className="h-4 w-4 text-primary" />} title="Pipeline" empty="暂无 Pipeline 片段" items={graph.pipelines.sourceBreakdown.map((source) => ({ id: source.id || source.name, title: source.name || source.type, meta: `${source.type} · ${source.status || 'unknown'}` }))} />
+            <RelationList icon={<GitBranch className="h-4 w-4 text-primary" />} title="日志路由" empty="暂无日志路由" items={graph.logRoutes.routes.map((item) => ({ id: item.route.id, title: item.source?.sourceType === 'vm_file' ? item.source.pathPattern : `${item.source?.workloadKind || '-'} / ${item.source?.workloadName || '-'}`, meta: `${item.route.sourceType} · ${item.route.lastPublishStatus || item.route.status || 'unknown'}` }))} />
             <RelationList icon={<Bell className="h-4 w-4 text-primary" />} title="告警规则" empty="暂无告警规则" items={graph.alertRules.map((rule) => ({ id: rule.id, title: rule.name, meta: `${rule.severity} · ${rule.status}` }))} />
           </div>
         </div>

@@ -39,7 +39,7 @@ test('设备目标显示设备和地址', () => {
 });
 
 test('不同运行目标说明它在观测闭环中的作用', () => {
-  assert.equal(targetPurposeLabel('cloud_native_workload'), '用于 Kubernetes 拓扑、Pod 日志归属和工作负载级 Pipeline 下发');
+  assert.equal(targetPurposeLabel('cloud_native_workload'), '用于 Kubernetes 拓扑、Pod 日志归属和工作负载级日志接入');
   assert.equal(targetPurposeLabel('host_process'), '用于 VM / 物理机进程采集、主机日志归属和端口级排障');
   assert.equal(targetPurposeLabel('physical_or_network_device'), '用于网络设备、Syslog 来源和边缘节点告警定位');
 });
@@ -56,9 +56,9 @@ test('关系统计只包含已落地关系类型', () => {
   const items = graphStatItems({
     targets: [{ id: 't1' }],
     agents: [{ instanceUid: 'a1' }, { instanceUid: 'a2' }],
-    pipelines: { sourceBreakdown: [{ id: 'p1' }, { id: 'p2' }] },
+    logRoutes: { total: 2, routes: [{ route: { id: 'p1' } }, { route: { id: 'p2' } }] },
     alertRules: [{ id: 'r1' }],
   });
-  assert.deepEqual(items.map((item) => item.label), ['运行目标', 'Agent', 'Pipeline 片段', '告警规则']);
+  assert.deepEqual(items.map((item) => item.label), ['运行目标', 'Agent', '日志路由', '告警规则']);
   assert.deepEqual(items.map((item) => item.value), [1, 2, 2, 1]);
 });

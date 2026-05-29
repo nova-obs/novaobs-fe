@@ -47,6 +47,23 @@ test('顶层框架引入搜索和用户入口', () => {
   assert.equal(sessionSource.includes('signed_out=1'), true);
 });
 
+test('主侧边导航支持桌面端收起和展开', () => {
+  assert.equal(source.includes('sidebar-collapse-toggle'), true);
+  assert.equal(source.includes('isSidebarCollapsed'), true);
+  assert.equal(source.includes('novaobs.sidebar.collapsed'), true);
+  assert.equal(source.includes('w-[84px] p-2'), true);
+  assert.equal(source.includes('展开主导航'), true);
+  assert.equal(source.includes('收起主导航'), true);
+});
+
+test('平台退出登录需要二次确认以降低误操作', () => {
+  assert.equal(source.includes('LogoutConfirmDetails'), true);
+  assert.equal(source.includes('确认退出'), true);
+  assert.equal(source.includes('取消退出'), true);
+  assert.equal(source.includes('退出登录需要确认'), true);
+  assert.equal(source.includes('收起状态下展开主导航后可退出登录'), true);
+});
+
 test('顶层框架提供轻量路由切换过渡', () => {
   assert.equal(source.includes('key={location.pathname}'), true);
   assert.equal(source.includes('route-transition-page'), true);
@@ -64,7 +81,14 @@ test('顶层框架使用柔和观测控制面视觉语言', () => {
   assert.equal(source.includes('min-h-0 flex-1 overflow-y-auto'), true);
   assert.equal(source.includes('border-r border-outline'), false);
   assert.equal(source.includes('bg-app-radial'), true);
-  assert.equal(source.includes('Telemetry Atlas'), true);
+  assert.equal(source.includes('OBS Console'), true);
+  assert.equal(source.includes('Telemetry Atlas'), false);
+  assert.equal(source.includes('统一可观测性控制面'), false);
+  assert.equal(source.includes('Prod / CN-SHANGHAI-A'), false);
+  assert.equal(source.includes('生产观测域'), false);
+  assert.equal(source.includes('cn-sh-a'), false);
+  assert.equal(source.includes('space-y-1.5 overflow-y-auto pt-1'), true);
+  assert.equal(source.includes('h-9 gap-3 px-3'), true);
   assert.equal(source.includes('NovaObs for UCloud'), false);
   assert.equal(source.includes('UCloud Ops'), false);
   assert.equal(source.includes('atlas-sidebar-panel'), true);

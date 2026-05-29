@@ -1,0 +1,855 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NovaObs Logs 大模块布局</title>
+  <style>
+    :root {
+      --bg: #eef3fb;
+      --paper: #ffffff;
+      --paper-2: #f7faff;
+      --soft: #edf4ff;
+      --line: #d8e2ef;
+      --line-strong: #c3d2e7;
+      --ink: #122033;
+      --muted: #637083;
+      --blue: #0d5bd7;
+      --cyan: #00a4ff;
+      --amber: #cc6b1e;
+      --red: #b4232f;
+      --green: #138a58;
+      --navy: #101a32;
+      font-family: Geist, Satoshi, Aptos, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      color: var(--ink);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 1440px;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(13, 91, 215, 0.15), transparent 30%),
+        radial-gradient(circle at 86% 0%, rgba(0, 164, 255, 0.13), transparent 32%),
+        linear-gradient(135deg, #f9fbff 0%, var(--bg) 52%, #f8fbff 100%);
+    }
+
+    .page {
+      padding: 24px 28px 40px;
+    }
+
+    .intro {
+      max-width: 1560px;
+      margin: 0 auto 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .intro p {
+      margin: 8px 0 0;
+      max-width: 920px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .legend {
+      display: grid;
+      grid-template-columns: repeat(4, auto);
+      gap: 8px;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.82);
+      box-shadow: 0 22px 50px -38px rgba(16, 32, 55, 0.55);
+    }
+
+    .legend span {
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 10px;
+      border-radius: 7px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .legend span:first-child {
+      color: var(--blue);
+      background: var(--soft);
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(19, 138, 88, 0.1);
+    }
+
+    .dot.blue {
+      background: var(--blue);
+      box-shadow: 0 0 0 4px rgba(13, 91, 215, 0.1);
+    }
+
+    .dot.amber {
+      background: var(--amber);
+      box-shadow: 0 0 0 4px rgba(204, 107, 30, 0.12);
+    }
+
+    .console {
+      max-width: 1560px;
+      height: 900px;
+      margin: 0 auto;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--paper);
+      box-shadow: 0 28px 70px -44px rgba(16, 32, 55, 0.62);
+      display: grid;
+      grid-template-columns: 70px 226px minmax(0, 1fr);
+    }
+
+    .global-rail {
+      background: linear-gradient(180deg, var(--navy), #0b1326);
+      color: white;
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      font-weight: 900;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.3);
+    }
+
+    .rail-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: rgba(255,255,255,0.64);
+      border: 1px solid transparent;
+    }
+
+    .rail-icon.active {
+      color: white;
+      background: rgba(13, 91, 215, 0.28);
+      border-color: rgba(0, 164, 255, 0.34);
+    }
+
+    .glyph {
+      width: 17px;
+      height: 17px;
+      border: 1.7px solid currentColor;
+      border-radius: 5px;
+      position: relative;
+    }
+
+    .glyph::after {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border-radius: 99px;
+      background: currentColor;
+    }
+
+    .module-nav {
+      border-right: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(245,249,255,0.96)),
+        radial-gradient(circle at 20% 0%, rgba(13,91,215,0.1), transparent 34%);
+      padding: 16px 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 14px;
+    }
+
+    .module-title {
+      padding: 0 4px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .module-title strong {
+      display: block;
+      font-size: 17px;
+      line-height: 1.1;
+    }
+
+    .module-title code {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font: 760 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .scope-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.82);
+      padding: 10px;
+    }
+
+    .scope-card span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .scope-card strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .subnav {
+      display: grid;
+      align-content: start;
+      gap: 7px;
+    }
+
+    .subnav a {
+      min-height: 42px;
+      border-radius: 8px;
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 9px;
+      align-items: center;
+      padding: 8px 10px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 820;
+    }
+
+    .subnav a.active {
+      color: var(--blue);
+      background: linear-gradient(135deg, var(--soft), rgba(255,255,255,0.88));
+      box-shadow: inset 3px 0 0 var(--blue);
+    }
+
+    .nav-symbol {
+      width: 16px;
+      height: 16px;
+      border: 1.6px solid currentColor;
+      border-radius: 4px;
+    }
+
+    .subnav small {
+      display: block;
+      margin-top: 2px;
+      color: #7c8a9d;
+      font-size: 10px;
+      font-weight: 720;
+    }
+
+    .user-box {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .workspace {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: 58px 1fr;
+      background:
+        linear-gradient(180deg, rgba(247,250,255,0.74), rgba(238,243,251,0.88));
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 390px 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+    }
+
+    .search {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper-2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      color: #778497;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .kbd {
+      padding: 3px 6px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: white;
+      color: #8a98aa;
+      font: 760 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .crumbs {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .crumbs span:last-child { color: var(--ink); }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chip {
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.9);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .chip.primary {
+      color: var(--blue);
+      border-color: #bfdbff;
+      background: #edf5ff;
+    }
+
+    .content {
+      min-width: 0;
+      padding: 14px;
+      display: grid;
+      grid-template-rows: 54px minmax(0, 1fr);
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .querybar {
+      display: grid;
+      grid-template-columns: minmax(280px, 1.2fr) 180px 170px 170px auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+    }
+
+    .select-like {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 10px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 0;
+    }
+
+    .select-like span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 820;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .select-like strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .select-caret {
+      width: 8px;
+      height: 8px;
+      border-right: 1.6px solid #718096;
+      border-bottom: 1.6px solid #718096;
+      transform: rotate(45deg) translateY(-2px);
+      flex: 0 0 auto;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 18px 44px -38px rgba(16, 32, 55, 0.56);
+      overflow: hidden;
+    }
+
+    .overview {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr 0.9fr 0.9fr 0.9fr;
+      gap: 10px;
+      padding: 10px;
+    }
+
+    .summary-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 10px 12px;
+      display: grid;
+      align-content: center;
+      gap: 7px;
+    }
+
+    .summary-card.active {
+      border-color: #b8d4ff;
+      background: #edf5ff;
+    }
+
+    .summary-card span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 840;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .summary-card strong {
+      font-size: 16px;
+      letter-spacing: 0;
+    }
+
+    .summary-card code {
+      color: #718096;
+      font-size: 10px;
+    }
+
+    .main-grid {
+      display: grid;
+      grid-template-columns: 272px minmax(0, 1fr) 340px;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .panel-head {
+      min-height: 46px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-title {
+      display: grid;
+      gap: 2px;
+    }
+
+    .panel-title strong {
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    .panel-title span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 680;
+    }
+
+    .btn {
+      height: 30px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .btn.primary {
+      color: white;
+      border-color: var(--blue);
+      background: var(--blue);
+    }
+
+    .service-list {
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+      align-content: start;
+    }
+
+    .service-card {
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      display: grid;
+      gap: 8px;
+    }
+
+    .service-card.active {
+      border-color: #b8d4ff;
+      background: linear-gradient(135deg, #edf5ff, #ffffff);
+      box-shadow: inset 3px 0 0 var(--blue);
+    }
+
+    .service-card strong {
+      font-size: 12px;
+      letter-spacing: 0;
+    }
+
+    .service-card small {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 760;
+    }
+
+    .tags {
+      display: flex;
+      gap: 5px;
+      flex-wrap: wrap;
+    }
+
+    .tag {
+      height: 20px;
+      padding: 0 7px;
+      display: inline-flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      color: #637083;
+      background: #f8fbff;
+      font-size: 10px;
+      font-weight: 780;
+    }
+
+    .tag.blue {
+      color: var(--blue);
+      background: #edf5ff;
+      border-color: #c6dcff;
+    }
+
+    .explore {
+      display: grid;
+      grid-template-rows: 42px 1fr;
+      min-height: 0;
+    }
+
+    .vmui-toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .vmui-body {
+      padding: 12px;
+      display: grid;
+      grid-template-columns: 1fr 0.62fr;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .chart {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        repeating-linear-gradient(0deg, transparent 0 31px, rgba(216,226,239,0.7) 32px),
+        linear-gradient(180deg, #ffffff, #f4f8ff);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .chart svg {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+    }
+
+    .logs {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #0f172a;
+      color: #d5e1f2;
+      padding: 10px;
+      display: grid;
+      gap: 7px;
+      align-content: start;
+      font: 650 10px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow: hidden;
+    }
+
+    .logs span {
+      display: block;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .inspector-body {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 104px 1fr;
+      gap: 8px;
+      font-size: 11px;
+      align-items: baseline;
+    }
+
+    .kv span {
+      color: var(--muted);
+      font-weight: 760;
+    }
+
+    .kv strong, .kv code {
+      font-size: 11px;
+      font-weight: 820;
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      letter-spacing: 0;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .status.warn { color: var(--amber); }
+    .status.fail { color: var(--red); }
+
+    .bottom-grid {
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr 0.9fr;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    th {
+      color: #738197;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 840;
+      padding: 8px 10px;
+      background: #f6f9fe;
+      border-bottom: 1px solid var(--line);
+    }
+
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #e6edf7;
+      vertical-align: top;
+    }
+
+    tr.selected td {
+      background: #edf5ff;
+      box-shadow: inset 3px 0 0 var(--blue);
+    }
+
+    @media (max-width: 900px) {
+      body { min-width: 0; }
+      .page { padding: 14px; }
+      .intro, .console, .main-grid, .bottom-grid, .overview { grid-template-columns: 1fr; }
+      .console { height: auto; }
+      .legend { grid-template-columns: 1fr; }
+      .content { grid-template-rows: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <div>
+        <h1>NovaObs Logs 大模块布局</h1>
+        <p>这版把入口压到四个：日志分析负责服务到 VMUI 检索，采集 Agent 负责状态与配置，日志告警负责规则闭环，接入配置负责来源、路由和 VL 端点。少入口、强任务、能点就能懂。</p>
+      </div>
+      <div class="legend">
+        <span><i class="dot blue"></i> 日志分析</span>
+        <span>采集 Agent</span>
+        <span>日志告警</span>
+        <span>接入配置</span>
+      </div>
+    </section>
+
+    <section class="console">
+      <aside class="global-rail">
+        <div class="mark">N</div>
+        <div class="rail-icon"><span class="glyph"></span></div>
+        <div class="rail-icon active"><span class="glyph"></span></div>
+        <div class="rail-icon"><span class="glyph"></span></div>
+        <div class="rail-icon"><span class="glyph"></span></div>
+        <div style="flex:1"></div>
+        <div class="rail-icon"><span class="glyph"></span></div>
+      </aside>
+
+      <aside class="module-nav">
+        <div class="module-title">
+          <strong>Logs</strong>
+          <code>explore / agent / alert / config</code>
+        </div>
+
+        <div class="scope-card">
+          <span>当前视角</span>
+          <strong>服务日志分析</strong>
+        </div>
+
+        <nav class="subnav">
+          <a class="active" href="#">
+            <i class="nav-symbol"></i>
+            <span>日志分析<small>服务选择与 VMUI 检索</small></span>
+          </a>
+          <a href="#">
+            <i class="nav-symbol"></i>
+            <span>采集 Agent<small>状态、配置、实例与影响服务</small></span>
+          </a>
+          <a href="#">
+            <i class="nav-symbol"></i>
+            <span>日志告警<small>规则、预览、启停与审计</small></span>
+          </a>
+          <a href="#">
+            <i class="nav-symbol"></i>
+            <span>接入配置<small>来源、路由、端点与验证</small></span>
+          </a>
+        </nav>
+
+        <div class="user-box">
+          <div>dev-admin</div>
+          <div class="mono">logs:manage</div>
+        </div>
+      </aside>
+
+      <section class="workspace">
+        <header class="topbar">
+          <div class="search">搜索服务、Agent、VL 端点、日志告警 <span class="kbd">⌘K</span></div>
+          <div class="crumbs"><span>NovaObs</span><span>/</span><span>Logs</span><span>/</span><span>日志分析</span></div>
+          <div class="top-actions">
+            <span class="chip primary"><i class="dot blue"></i> VictoriaLogs ready</span>
+            <span class="chip">最近 15 分钟</span>
+            <span class="chip">prod / cn-bj</span>
+          </div>
+        </header>
+
+        <div class="content">
+          <section class="panel querybar">
+            <div class="select-like">
+              <div>
+                <span>服务</span>
+                <strong>logplatform-api</strong>
+              </div>
+              <i class="select-caret"></i>
+            </div>
+            <div class="select-like">
+              <div>
+                <span>Namespace</span>
+                <strong>logplatform</strong>
+              </div>
+              <i class="select-caret"></i>
+            </div>
+            <div class="select-like">
+              <div>
+                <span>VL 端点</span>
+                <strong>vl-shared-prod</strong>
+              </div>
+              <i class="select-caret"></i>
+            </div>
+            <div class="select-like">
+              <div>
+                <span>时间</span>
+                <strong>最近 15 分钟</strong>
+              </div>
+              <i class="select-caret"></i>
+            </div>
+            <div class="top-actions">
+              <button class="btn">刷新</button>
+              <button class="btn primary">打开 VMUI</button>
+            </div>
+          </section>
+
+          <main class="panel explore">
+            <div class="vmui-toolbar">
+              <span class="mono">{service="logplatform-api", namespace="logplatform"} | vl-shared-prod</span>
+              <span>服务状态、Agent 与告警详情在服务详情页查看</span>
+            </div>
+            <div class="vmui-body">
+              <div class="chart">
+                <svg viewBox="0 0 700 360" preserveAspectRatio="none">
+                  <polyline points="0,292 48,260 96,270 144,232 190,242 236,154 286,168 334,132 384,176 430,112 486,128 532,86 586,112 642,74 700,96" fill="none" stroke="#0d5bd7" stroke-width="4"/>
+                  <polyline points="0,320 48,306 96,314 144,300 190,280 236,276 286,252 334,270 384,248 430,238 486,248 532,220 586,228 642,210 700,216" fill="none" stroke="#00a4ff" stroke-width="3" opacity="0.65"/>
+                </svg>
+              </div>
+              <div class="logs">
+                <span>12:41:08.392 INFO route=/v1/query latency=42ms trace=6a13f662</span>
+                <span>12:41:09.014 WARN collector lag namespace=logplatform lag=2.8s</span>
+                <span>12:41:10.221 INFO vm_insert rows=4821 stream=service</span>
+                <span>12:41:11.876 INFO enrich cmdb.business=obs-platform env=prod</span>
+                <span>12:41:12.053 ERROR status=503 upstream=vl-shared-prod retry=1</span>
+                <span>12:41:13.404 INFO opamp config_hash=a1b2c3d4 applied=true</span>
+              </div>
+            </div>
+          </main>
+        </div>
+      </section>
+    </section>
+  </main>
+</body>
+</html>
