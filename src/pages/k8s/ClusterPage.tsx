@@ -159,7 +159,7 @@ export function K8sClusterPage() {
           <ClusterMetric icon={ShieldCheck} label="只读保护" value={String(displayClusters.filter((cluster) => cluster.readOnly).length)} meta="read-only policy" />
         </div>
 
-        <DataPanel title="集群总览" meta="Fleet 入口，只负责选择集群与查看接入态势">
+        <DataPanel title="集群总览" meta="registered clusters · probe cache">
           {error ? (
             <div className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-semibold text-danger">
               集群 API 请求失败：{error.message}
@@ -168,7 +168,6 @@ export function K8sClusterPage() {
           {isLoading ? (
             <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               <div className="font-semibold text-on-surface">正在读取集群</div>
-              <p className="mt-2 text-sm text-muted">正在同步已登记集群。</p>
             </div>
           ) : null}
           {!isLoading && !error && displayClusters.length ? (
@@ -193,8 +192,7 @@ export function K8sClusterPage() {
           ) : null}
           {!isLoading && !error && !displayClusters.length ? (
             <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-semibold text-on-surface">暂无集群</div>
-              <p className="mt-2 text-sm text-muted">登记集群后即可进入工作台。</p>
+              <div className="font-semibold text-on-surface">集群清单为空</div>
             </div>
           ) : null}
         </DataPanel>
@@ -208,8 +206,8 @@ export function K8sClusterPage() {
         <section className="console-panel px-4 py-3">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
-              <div className="text-xs font-semibold text-primary">接入页只处理新集群登记</div>
-              <div className="mt-1 text-sm text-muted">已登记集群的凭据维护从集群总览卡片进入，包含探测、轮换和回滚。</div>
+              <div className="text-xs font-semibold text-primary">新集群登记</div>
+              <div className="mt-1 text-sm text-muted">凭据维护在集群卡片内处理。</div>
             </div>
             <Link className="quiet-button h-9 justify-center bg-white/70 px-3 text-xs text-primary" to="/k8s">
               返回集群总览
@@ -222,7 +220,6 @@ export function K8sClusterPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-on-surface">集群登记</div>
-                <p className="mt-1 text-xs text-muted">第一步：写入 NovaObs 集群元数据，形成后续资源和权限操作的 cluster 上下文。</p>
               </div>
               <Plus className="h-4 w-4 text-primary" />
             </div>
@@ -245,7 +242,7 @@ export function K8sClusterPage() {
             <label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-outline/70 bg-white/50 px-3 py-2 text-xs font-semibold text-muted">
               <span>
                 只读接入
-                <span className="mt-0.5 block font-normal text-muted/80">默认开启，避免测试集群误执行写操作。</span>
+                <span className="mt-0.5 block font-normal text-muted/80">默认只读</span>
               </span>
               <input className="h-4 w-4 accent-primary" type="checkbox" checked={clusterReadOnly} onChange={(event) => setClusterReadOnly(event.target.checked)} />
             </label>
@@ -263,7 +260,7 @@ export function K8sClusterPage() {
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="text-sm font-semibold text-on-surface">初始凭据录入</div>
-                <p className="mt-1 text-xs text-muted">第二步：提交 kubeconfig，后端完成连接校验后才会保存 Secret 版本。</p>
+                <p className="mt-1 text-xs text-muted">probe passed · Secret version</p>
               </div>
               <KeyRound className="h-4 w-4 text-primary" />
             </div>
@@ -289,7 +286,7 @@ export function K8sClusterPage() {
                 onChange={(event) => setKubeconfig(event.target.value)}
               />
             </label>
-            <p className="mt-2 text-[11px] text-muted">kubeconfig 仅随请求提交，不在页面回显；保存前会做连接校验。</p>
+            <p className="mt-2 text-[11px] text-muted">kubeconfig 不在页面回显；保存前执行 probe。</p>
             <button className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || createCredential.isPending} onClick={() => createCredential.mutate()}>
               <KeyRound className="h-4 w-4" />
               录入初始凭据
@@ -350,8 +347,8 @@ export function K8sClusterPage() {
             ) : null}
           </div>
           <div className="rounded-lg border border-outline/70 bg-primary-soft/35 p-3">
-            <div className="text-xs font-semibold text-on-surface">只读连接检查</div>
-            <div className="mt-1 text-[11px] leading-5 text-muted">仅发现 API 版本和资源类型，不执行集群写入。</div>
+            <div className="text-xs font-semibold text-on-surface">连接检查</div>
+            <div className="mt-1 text-[11px] leading-5 text-muted">API discovery · resource count</div>
             <button
               className="quiet-button mt-3 h-10 w-full bg-primary text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={!credentialClusterId || isCredentialProbing}
@@ -373,7 +370,7 @@ export function K8sClusterPage() {
           ) : null}
           {!credentialClusterId ? (
             <div className="mb-3 rounded-lg bg-white/45 px-3 py-2 text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              请先登记或选择集群，再录入 kubeconfig。
+              未选择集群
             </div>
           ) : null}
           {activeCredential ? (
@@ -499,7 +496,7 @@ export function K8sClusterPage() {
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-sm font-semibold text-on-surface">凭据录入</div>
-              <p className="mt-1 text-xs text-muted">用于真实 API 环境联调；提交后进入 platform/secret，列表和审计不展示明文。</p>
+              <p className="mt-1 text-xs text-muted">Secret Store · metadata only</p>
             </div>
             <KeyRound className="h-4 w-4 text-primary" />
           </div>
@@ -525,7 +522,7 @@ export function K8sClusterPage() {
               onChange={(event) => setKubeconfig(event.target.value)}
             />
           </label>
-          <p className="mt-2 text-[11px] text-muted">kubeconfig 仅随请求提交，不在页面回显；轮换会创建新的 Secret 版本。</p>
+          <p className="mt-2 text-[11px] text-muted">kubeconfig 不在页面回显；轮换创建新的 Secret 版本。</p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || createCredential.isPending} onClick={() => createCredential.mutate()}>
               <KeyRound className="h-4 w-4" />

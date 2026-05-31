@@ -196,8 +196,9 @@ export function K8sResourcePage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            资源身份按 cluster/ns/api/kind/name/uid 固定展示，详情和 YAML 读取要求 UID 精确匹配。
+          <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-muted">
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">cluster/ns/api/kind/name/uid</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">UID required</span>
           </div>
         </div>
         {namespaceError ? (
@@ -215,13 +216,13 @@ export function K8sResourcePage() {
         ) : null}
         {isLoading ? (
           <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-            正在读取 Kubernetes 资源对象。
+            正在读取 Kubernetes 资源对象
           </div>
         ) : null}
         {!canReadResources ? (
           <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-            <div className="font-semibold text-on-surface">{clusterError ? '集群列表读取失败' : '请先选择集群和命名空间'}</div>
-            <p className="mt-2 text-sm text-muted">{clusterError ? '请检查 NovaObs 后端连接后重试。' : '资源读取按 namespace 级 RBAC 执行，不进行默认全命名空间扫描。'}</p>
+            <div className="font-semibold text-on-surface">{clusterError ? '集群列表读取失败' : '未选择集群或命名空间'}</div>
+            <p className="mt-2 text-sm text-muted">{clusterError ? 'NovaObs API unavailable' : 'namespace RBAC'}</p>
           </div>
         ) : null}
         {canReadResources && !isLoading && !error && data.length ? (
@@ -266,8 +267,7 @@ export function K8sResourcePage() {
         ) : null}
         {canReadResources && !isLoading && !error && !data.length ? (
           <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-            <div className="font-semibold text-on-surface">暂无资源</div>
-            <p className="mt-2 text-sm text-muted">后端已联通，但当前过滤条件下没有返回 Kubernetes 资源。</p>
+            <div className="font-semibold text-on-surface">资源清单为空</div>
           </div>
         ) : null}
       </DataPanel>
@@ -275,8 +275,7 @@ export function K8sResourcePage() {
       <DataPanel title="资源详情" meta={selected ? `${selected.identity.kind} · ${resourceNamespaceLabel(selected.identity.namespace)}/${selected.identity.name}` : '等待选择资源'}>
         {!selected ? (
           <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-            <div className="font-semibold text-on-surface">选择资源后查看详情</div>
-            <p className="mt-2 text-sm text-muted">详情、YAML 预览与 Pod 日志都会通过 NovaObs 后端实时读取。</p>
+            <div className="font-semibold text-on-surface">未选择资源</div>
           </div>
         ) : (
           <div className="space-y-4">
@@ -379,7 +378,7 @@ export function K8sResourcePage() {
                     </select>
                   </label>
                   <div className="text-xs text-muted">
-                    多容器 Pod 可指定 container 参数，后端仍按 tailLines=200、limitBytes=1MiB 执行只读日志读取。
+                    tailLines=200 · limitBytes=1MiB
                   </div>
                 </div>
                 <CodePreview isLoading={logsQuery.isLoading} error={logsQuery.error} emptyText="暂无 Pod 日志" content={(logsQuery.data?.lines ?? []).join('\n')} />

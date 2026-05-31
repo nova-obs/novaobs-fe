@@ -107,7 +107,7 @@ export function AgentDetailPage() {
       </div>
 
       {!runtime.remoteConfigCapable ? (
-        <Notice tone="amber" title="该 Agent 不支持 Remote Config" message="需要使用支持 AcceptsRemoteConfig 的 OpAMP Agent 或 Supervisor，才能接收平台下发的服务级配置。" />
+        <Notice tone="amber" title="Remote Config 不可用" message="AcceptsRemoteConfig=false" />
       ) : null}
       {configuration.expectedConfigHash && inSync ? (
         <Notice tone="green" title="配置已对齐" message={`发布目标与 Agent effective config 一致，hash ${shortHash(configuration.effectiveConfigHash)}`} />
@@ -137,7 +137,7 @@ export function AgentDetailPage() {
           </DataPanel>
 
           <DataPanel title="服务绑定" meta={`${services.length} 个服务 · ${onboardings.length} 条接入记录`}>
-            {services.length === 0 ? <p className="py-3 text-sm text-muted">暂无服务绑定。</p> : (
+            {services.length === 0 ? <p className="py-3 text-sm text-muted">服务绑定为空</p> : (
               <div className="space-y-2">
                 {services.map((item) => (
                   <div key={item.id} className="rounded border border-outline bg-surface-lowest p-3">
@@ -231,7 +231,7 @@ function AttributeList({ title, items }: { title: string; items: Array<{ key: st
 function SourceBreakdown({ detail }: { detail: AgentDetail }) {
   const sources = detail.configuration.configSources;
   if (!sources || sources.sourceBreakdown.length === 0) {
-    return <p className="py-3 text-sm text-muted">暂无服务级配置来源。</p>;
+    return <p className="py-3 text-sm text-muted">配置来源为空</p>;
   }
   return (
     <div className="space-y-2">

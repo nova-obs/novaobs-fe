@@ -4,8 +4,10 @@ import { readFileSync } from 'node:fs';
 
 const source = readFileSync(new URL('./ServicesPage.tsx', import.meta.url), 'utf8');
 
-test('服务目录展示运行目标及其作用说明', () => {
-  assert.equal(source.includes('运行目标的作用'), true);
-  assert.equal(source.includes('runningTargetPurposeItems().map'), true);
-  assert.equal(source.includes('targetPurposeLabel(target.targetType)'), true);
+test('服务目录展示业务关系，不展示运行目标说明卡', () => {
+  assert.equal(source.includes('观测关系'), true);
+  assert.equal(source.includes('运行目标的作用'), false);
+  assert.equal(source.includes('runningTargetPurposeItems().map'), false);
+  assert.equal(source.includes('targetPurposeLabel(target.targetType)'), false);
+  assert.equal(source.includes('服务清单为空'), true);
 });

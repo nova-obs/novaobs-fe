@@ -653,7 +653,7 @@ export const api = {
     if (params?.source) search.set('source', params.source);
     const qs = search.toString();
     const raw = await request<any[]>(`/services${qs ? `?${qs}` : ''}`);
-    return raw.map(mapService);
+    return Array.isArray(raw) ? raw.map(mapService) : [];
   },
   async createService(input: CreateServiceInput): Promise<Service> {
     const raw = await request<any>('/services', {
@@ -906,7 +906,7 @@ export const api = {
   },
   async getAlertRules(): Promise<AlertRule[]> {
     const raw = await request<any[]>('/alert-rules');
-    return raw.map(mapAlertRule);
+    return Array.isArray(raw) ? raw.map(mapAlertRule) : [];
   },
   async getK8sDashboard(clusterId = 'prod'): Promise<K8sDashboardSnapshot> {
     const raw = await request<any>(`/k8sops/dashboard?cluster_id=${encodeURIComponent(clusterId)}`);

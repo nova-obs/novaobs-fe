@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Bell, Cpu, Edit3, Eye, GitBranch, Link2, Plus, RefreshCw, Search, Server, ShieldCheck, XCircle } from 'lucide-react';
+import { Bell, Cpu, Edit3, Eye, GitBranch, Plus, RefreshCw, Search, Server, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
 import type { CreateServiceInput, Service, ServiceObservabilityGraph, ServiceTargetType, UpdateServiceInput } from '../../services/types';
-import { graphStatItems, runningTargetPurposeItems, targetLocationSummary, targetPurposeLabel, targetTypeLabel } from './servicesViewModel';
+import { graphStatItems, targetLocationSummary, targetTypeLabel } from './servicesViewModel';
 
 const emptyForm: CreateServiceInput & { description?: string } = {
   name: '',
@@ -143,7 +143,12 @@ export function ServicesPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold text-on-surface">服务目录</h1>
-          <p className="mt-1 text-sm text-muted">业务、应用、环境、负责人和告警路由的统一控制面。</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted">
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">服务</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">运行目标</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">日志路由</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">告警规则</span>
+          </div>
         </div>
         <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={openCreate}>
           <Plus className="mr-1 inline h-3.5 w-3.5" />新增服务
@@ -204,7 +209,7 @@ export function ServicesPage() {
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm font-semibold">服务名称 *<input className="console-input mt-2 w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
                 <label className="text-sm font-semibold">环境 *<select className="console-input mt-2 w-full" value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })}><option value="prod">prod</option><option value="staging">staging</option><option value="dev">dev</option></select></label>
-                <label className="text-sm font-semibold">展示名称<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
+                <label className="text-sm font-semibold">别名<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
                 <label className="text-sm font-semibold">集群<input className="console-input mt-2 w-full" value={form.cluster ?? ''} onChange={(e) => setForm({ ...form, cluster: e.target.value })} /></label>
                 <label className="text-sm font-semibold">Namespace<input className="console-input mt-2 w-full" value={form.namespace ?? ''} onChange={(e) => setForm({ ...form, namespace: e.target.value })} /></label>
                 <label className="text-sm font-semibold">Owner Team<input className="console-input mt-2 w-full" value={form.ownerTeam ?? ''} onChange={(e) => setForm({ ...form, ownerTeam: e.target.value })} /></label>
@@ -230,7 +235,7 @@ export function ServicesPage() {
               <div className="flex items-center gap-2 py-4 text-sm text-muted"><RefreshCw className="h-4 w-4 animate-spin" />加载中...</div>
             ) : data.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-8">
-                <p className="text-sm text-muted">暂无服务，请手工录入服务。</p>
+                <p className="text-sm text-muted">服务清单为空</p>
                 <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={openCreate}><Plus className="mr-1 inline h-3.5 w-3.5" />新增服务</button>
               </div>
             ) : (
@@ -240,7 +245,7 @@ export function ServicesPage() {
                     <tr>
                       <th>服务</th>
                       <th>环境</th>
-                      <th>默认定位</th>
+                      <th>定位</th>
                       <th>Owner</th>
                       <th>来源</th>
                       <th>同步</th>
@@ -323,31 +328,6 @@ function ServiceGraphPanel({
         <div className="flex items-center gap-2 py-4 text-sm text-red-400"><XCircle className="h-4 w-4" />{error.message}</div>
       ) : graph ? (
         <div className="space-y-5">
-          <div className="rounded-lg bg-primary-soft/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-            <div className="flex items-start gap-3">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-white/70 text-primary">
-                <Link2 className="h-4 w-4" />
-              </div>
-              <div>
-                <div className="font-display text-sm font-semibold text-on-surface">运行目标的作用</div>
-                <p className="mt-1 text-xs leading-5 text-muted">
-                  运行目标把服务目录里的业务服务映射到真实运行实体，是日志归属、Agent 绑定、日志路由和告警定位的共同锚点。
-                </p>
-              </div>
-            </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {runningTargetPurposeItems().map((item) => (
-                <div key={item.title} className="rounded-lg bg-white/58 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
-                  <div className="flex items-center gap-2 text-xs font-semibold text-on-surface">
-                    <ShieldCheck className="h-3.5 w-3.5 text-primary" />
-                    {item.title}
-                  </div>
-                  <p className="mt-1 text-[11px] leading-4 text-muted">{item.description}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-
           <div className="grid gap-3 md:grid-cols-4">
             {graphStatItems(graph).map((item) => (
               <div key={item.label} className="rounded border border-outline bg-surface-lowest px-3 py-2">
@@ -371,7 +351,6 @@ function ServiceGraphPanel({
                       <span className="rounded bg-surface-low px-2 py-1 text-[11px] text-muted">{targetTypeLabel(target.targetType)}</span>
                     </div>
                     <div className="mt-1 font-mono text-xs text-muted">{targetLocationSummary(target)}</div>
-                    <div className="mt-2 text-[11px] leading-4 text-muted">{targetPurposeLabel(target.targetType)}</div>
                   </div>
                 ))}
               </div>
@@ -385,7 +364,7 @@ function ServiceGraphPanel({
                   <option value="host_process">VM / 物理机进程</option>
                   <option value="physical_or_network_device">物理设备 / 网络设备</option>
                 </select>
-                <input className="console-input w-full" placeholder="展示名称" value={targetForm.displayName} onChange={(e) => setTargetForm({ ...targetForm, displayName: e.target.value })} />
+                <input className="console-input w-full" placeholder="别名" value={targetForm.displayName} onChange={(e) => setTargetForm({ ...targetForm, displayName: e.target.value })} />
                 <input className="console-input w-full" placeholder="环境" value={targetForm.environment} onChange={(e) => setTargetForm({ ...targetForm, environment: e.target.value })} />
                 {fields.map((field) => (
                   <input

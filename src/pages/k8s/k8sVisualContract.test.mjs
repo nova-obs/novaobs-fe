@@ -59,8 +59,8 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('凭据入口'), false);
   assert.equal(clusterSource.includes('isNewAccessView'), true);
   assert.equal(clusterSource.includes('isCredentialView'), true);
-  assert.equal(clusterSource.includes('接入页只处理新集群登记'), true);
-  assert.equal(clusterSource.includes('已登记集群的凭据维护'), true);
+  assert.equal(clusterSource.includes('新集群登记'), true);
+  assert.equal(clusterSource.includes('凭据维护在集群卡片内处理'), true);
   assert.equal(clusterSource.includes('进入凭据维护'), true);
   assert.equal(clusterSource.includes('只读探测'), false);
   assert.equal(clusterSource.includes('ClusterOverviewCard'), true);
@@ -155,7 +155,7 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('当前集群'), true);
   assert.equal(resourceSource.includes('k8sApi.listClusters'), false);
   assert.equal(resourceSource.includes('命名空间选择'), true);
-  assert.equal(resourceSource.includes('请先选择集群和命名空间'), true);
+  assert.equal(resourceSource.includes('未选择集群或命名空间'), true);
   assert.equal(resourceSource.includes('API Version'), true);
   assert.equal(resourceSource.includes('UID'), true);
   assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), true);

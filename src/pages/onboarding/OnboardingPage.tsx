@@ -11,67 +11,70 @@ export function OnboardingPage() {
   const domains = getOnboardingDomains();
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="font-display text-2xl font-semibold text-on-surface">服务接入</h1>
-        <p className="mt-1 text-sm text-muted">
-          服务接入是服务进入统一可观测性平台的总入口，当前聚焦日志采集、解析和发布闭环。
-        </p>
+    <div className="space-y-4">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div>
+          <h1 className="font-display text-2xl font-semibold text-on-surface">服务接入</h1>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted">
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">K8s</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">VM</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">VictoriaLogs</span>
+          </div>
+        </div>
       </div>
 
-      <div className="grid gap-4 xl:grid-cols-2">
-        {domains.map((domain) => {
-          const Icon = icons[domain.id];
-          const available = domain.status === 'available';
-          return (
-            <DataPanel key={domain.id} title={domain.title} meta={domain.statusLabel}>
-              <div className="flex h-full min-h-64 flex-col justify-between gap-5">
-                <div>
-                  <div className={`mb-4 flex h-11 w-11 items-center justify-center rounded-lg ${available ? 'bg-primary-soft text-primary' : 'bg-surface-low text-muted'}`}>
-                    <Icon className="h-5 w-5" />
-                  </div>
-                  <p className="text-sm leading-6 text-muted">{domain.description}</p>
-                  <div className="mt-4 space-y-2">
-                    {domain.highlights.map((item) => (
-                      <div key={item} className="rounded border border-outline bg-surface-lowest px-3 py-2 text-xs font-semibold text-on-surface">
-                        {item}
+      <DataPanel title="接入域" meta={`${domains.length} available`}>
+        <div className="overflow-auto">
+          <table className="console-table min-w-[760px] w-full">
+            <thead>
+              <tr>
+                <th>域</th>
+                <th>状态</th>
+                <th>采集对象</th>
+                <th>存储</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {domains.map((domain) => {
+                const Icon = icons[domain.id];
+                return (
+                  <tr key={domain.id} className="bg-white/35 hover:bg-white/60">
+                    <td>
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-soft text-primary">
+                          <Icon className="h-4 w-4" />
+                        </span>
+                        <div>
+                          <div className="font-semibold text-primary">{domain.title}</div>
+                          <div className="text-[11px] text-muted">{domain.description}</div>
+                        </div>
                       </div>
-                    ))}
-                  </div>
-                </div>
-
-                <Link
-                  to={domain.path}
-                  className={`inline-flex items-center justify-center gap-2 rounded px-3 py-2 text-sm font-semibold ${
-                    available
-                      ? 'bg-primary text-white hover:bg-primary/90'
-                      : 'border border-outline text-muted hover:bg-surface-low hover:text-on-surface'
-                  }`}
-                >
-                  {available ? '进入配置' : '查看入口'}
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </DataPanel>
-          );
-        })}
-      </div>
-
-      <DataPanel title="接入域边界" meta="service onboarding model">
-        <div className="grid gap-3 text-sm md:grid-cols-2">
-          <Boundary title="日志接入" body="负责日志采集入口、服务绑定、路由预览、Agent 发布和应用状态。" />
-          <Boundary title="告警规则" body="当前在告警中心维护规则模型和路由字段；告警接入向导不在主 UI 占位展示。" />
+                    </td>
+                    <td><StateChip value={domain.statusLabel} /></td>
+                    <td className="text-xs text-muted">{domain.highlights.slice(0, 2).join(' / ')}</td>
+                    <td className="font-mono text-xs text-muted">VictoriaLogs</td>
+                    <td>
+                      <Link className="quiet-button h-9 justify-center bg-primary px-3 text-xs text-white hover:bg-primary/90" to={domain.path}>
+                        打开
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </Link>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </DataPanel>
     </div>
   );
 }
 
-function Boundary({ title, body }: { title: string; body: string }) {
+function StateChip({ value }: { value: string }) {
   return (
-    <div className="rounded border border-outline bg-surface-lowest p-4">
-      <div className="font-semibold text-on-surface">{title}</div>
-      <p className="mt-2 leading-6 text-muted">{body}</p>
-    </div>
+    <span className="inline-flex rounded-lg bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary">
+      {value}
+    </span>
   );
 }

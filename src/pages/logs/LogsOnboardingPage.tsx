@@ -254,49 +254,44 @@ export function LogsOnboardingPage() {
     <div className="relative pb-24">
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <div className="space-y-4">
-        <DataPanel title="选择日志来源" meta={isLoading ? '加载中...' : `${services.length} services · ${routes.length} routes`}>
-          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_260px]">
-            <div className="grid gap-3 md:grid-cols-2">
+        <section className="logs-onboarding-toolbar console-panel overflow-hidden">
+          <div className="grid gap-3 border-b border-outline/70 bg-white/74 px-3 py-3 xl:grid-cols-[220px_minmax(0,1fr)_auto] xl:items-center">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-on-surface">接入配置</div>
+              <div className="mt-0.5 font-mono text-[11px] text-muted">{isLoading ? 'loading' : `${services.length} services · ${routes.length} routes`}</div>
+            </div>
+            <div className="flex min-w-0 flex-wrap gap-1.5">
               {sourceTabs.map((item) => (
-                <SourceCard
+                <button
                   key={item.value}
-                  active={sourceMode === item.value}
-                  title={item.label}
-                  meta={item.value === 'k8s' ? 'K8s 运维 kubeconfig' : 'host group / path'}
-                  description={item.value === 'k8s' ? '复用 K8s 运维已登记集群，按 namespace 同步 Deployment。' : '选择 VM 主机组或标签，登记统一日志路径。'}
+                  className={`inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold transition-all active:translate-y-px ${
+                    sourceMode === item.value ? 'border-primary bg-primary-soft text-primary' : 'border-outline bg-white/82 text-muted hover:border-primary/40 hover:text-on-surface'
+                  }`}
                   onClick={() => setSourceMode(item.value)}
-                />
+                >
+                  {item.label}
+                </button>
               ))}
+              <span className="inline-flex h-8 items-center rounded-md border border-outline bg-white/68 px-2.5 font-mono text-[11px] text-muted">
+                {sourceType === 'vm_file' ? 'host group / path' : 'kubeconfig / namespace / workload'}
+              </span>
             </div>
-            <div className="rounded-lg border border-primary/20 bg-primary-soft p-3">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <div className="text-sm font-semibold text-on-surface">下一步动作</div>
-                  <div className="mt-1 text-xs text-muted">{sourceType === 'vm_file' ? '先登记 VM 范围和日志路径。' : '先从已登记集群同步服务。'}</div>
-                </div>
-                <span className="rounded border border-primary/20 bg-white px-2 py-1 text-[11px] font-semibold text-primary">当前可执行</span>
-              </div>
-              <button
-                className="mt-3 inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60"
-                disabled={sourceType === 'vm_file' || !clusterId || !namespace || syncK8sServicesMutation.isPending}
-                onClick={() => syncK8sServicesMutation.mutate()}
-              >
-                {syncK8sServicesMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                同步 Namespace 服务
-              </button>
-              {sourceType === 'vm_file' ? <div className="mt-2 text-xs text-muted">VM 接入保存路由后进入 Agent 状态。</div> : null}
-            </div>
+            <button
+              className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-white transition-all active:translate-y-px disabled:opacity-60"
+              disabled={sourceType === 'vm_file' || !clusterId || !namespace || syncK8sServicesMutation.isPending}
+              onClick={() => syncK8sServicesMutation.mutate()}
+            >
+              {syncK8sServicesMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              同步服务
+            </button>
           </div>
-        </DataPanel>
-
-        <DataPanel title="接入步骤" meta="source / scope / policy / publish">
-          <div className="grid gap-3 md:grid-cols-4">
-            <StepCard index={1} title="采集范围" description={sourceType === 'vm_file' ? '主机组、标签和日志路径。' : '集群、Namespace、Workload。'} active={activeStep === 1} done={activeStep > 1} />
-            <StepCard index={2} title="服务绑定" description="服务、AgentGroup、VL 端点。" active={activeStep === 2} done={activeStep > 2} />
-            <StepCard index={3} title="解析策略" description="默认 raw，按需启用 JSON 或 Regex。" active={activeStep === 3} done={activeStep > 3} />
-            <StepCard index={4} title="预览发布" description="生成 YAML，确认后执行。" active={activeStep === 4} done={Boolean(createdRoute)} />
+          <div className="grid divide-y divide-outline/70 md:grid-cols-4 md:divide-x md:divide-y-0">
+            <StepCard index={1} title="采集范围" description={sourceType === 'vm_file' ? '主机组 / 标签 / 路径' : '集群 / Namespace / Workload'} active={activeStep === 1} done={activeStep > 1} />
+            <StepCard index={2} title="服务绑定" description="服务 / AgentGroup / VL" active={activeStep === 2} done={activeStep > 2} />
+            <StepCard index={3} title="解析策略" description={parseMode === 'none' ? 'raw' : parseMode} active={activeStep === 3} done={activeStep > 3} />
+            <StepCard index={4} title="预览发布" description={preview ? shortHash(preview.configHash) : '等待预览'} active={activeStep === 4} done={Boolean(createdRoute)} />
           </div>
-        </DataPanel>
+        </section>
 
         <DataPanel title="绑定关系" meta="service / agent / endpoint">
           <div className="grid gap-3 lg:grid-cols-3">
@@ -404,7 +399,7 @@ export function LogsOnboardingPage() {
                   <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_150px_150px_150px] lg:items-end">
                     <div>
                       <div className="text-sm font-semibold text-on-surface">同步 Namespace 服务</div>
-                      <div className="mt-1 text-xs text-muted">从 K8s 运维已纳管集群读取 Workload，服务名默认取 Deployment 名称。</div>
+                      <div className="mt-1 text-xs text-muted">K8s Ops workload sync</div>
                     </div>
                     <label className="text-xs font-semibold text-muted">
                       环境
@@ -488,7 +483,7 @@ export function LogsOnboardingPage() {
                 {preview.agentYAML}
               </pre>
             </div>
-          ) : <Empty label="完成采集范围、服务绑定和端点选择后，在底部操作条生成配置预览" />}
+          ) : <Empty label="配置预览为空" />}
         </DataPanel>
 
         <DataPanel title="已登记路由" meta={`${routes.length} routes`}>
@@ -503,7 +498,7 @@ export function LogsOnboardingPage() {
                     <th>VL</th>
                     <th>Hash</th>
                     <th>发布</th>
-                    <th>下一步</th>
+                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -590,40 +585,20 @@ function parseSelector(text: string) {
   }).filter(([key, value]) => key && value));
 }
 
-function SourceCard({ active, title, meta, description, onClick }: { active: boolean; title: string; meta: string; description: string; onClick: () => void }) {
-  return (
-    <button
-      className={`min-h-[112px] rounded-lg border px-4 py-3 text-left transition-all active:translate-y-px ${
-        active ? 'border-primary bg-primary-soft text-primary shadow-[inset_3px_0_0_#0d5bd7]' : 'border-outline bg-white text-on-surface hover:border-primary/40 hover:bg-surface-low'
-      }`}
-      onClick={onClick}
-      aria-pressed={active}
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="text-base font-semibold">{title}</span>
-        <span className={`rounded border px-2 py-0.5 text-[10px] font-semibold ${active ? 'border-primary/20 bg-white text-primary' : 'border-outline bg-surface-lowest text-muted'}`}>
-          {meta}
-        </span>
-      </div>
-      <p className="mt-3 text-xs leading-5 text-muted">{description}</p>
-    </button>
-  );
-}
-
 function StepCard({ index, title, description, active, done }: { index: number; title: string; description: string; active: boolean; done: boolean }) {
   return (
-    <div className={`rounded-lg border px-3 py-3 transition-all ${
-      active ? 'border-primary bg-primary-soft' : done ? 'border-primary/20 bg-white' : 'border-outline bg-surface-lowest'
+    <div className={`px-3 py-2.5 transition-colors ${
+      active ? 'bg-primary-soft/70' : done ? 'bg-white/68' : 'bg-white/36'
     }`}>
       <div className="flex items-center gap-2">
-        <span className={`inline-flex h-6 w-6 items-center justify-center rounded-full border text-xs font-semibold ${
+        <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold ${
           done ? 'border-primary bg-primary text-white' : active ? 'border-primary bg-white text-primary' : 'border-outline bg-white text-muted'
         }`}>
-          {done ? <CheckCircle className="h-3.5 w-3.5" /> : index}
+          {done ? <CheckCircle className="h-3 w-3" /> : index}
         </span>
-        <span className={`text-sm font-semibold ${active || done ? 'text-on-surface' : 'text-muted'}`}>{title}</span>
+        <span className={`text-xs font-semibold ${active || done ? 'text-on-surface' : 'text-muted'}`}>{title}</span>
       </div>
-      <p className="mt-2 min-h-[34px] text-xs leading-5 text-muted">{description}</p>
+      <p className="mt-1 truncate pl-7 font-mono text-[11px] text-muted">{description}</p>
     </div>
   );
 }

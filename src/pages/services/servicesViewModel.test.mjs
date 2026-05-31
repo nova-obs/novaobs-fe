@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { graphStatItems, runningTargetPurposeItems, targetLocationSummary, targetPurposeLabel, targetTypeLabel } from './servicesViewModel.ts';
+import { graphStatItems, targetLocationSummary, targetTypeLabel } from './servicesViewModel.ts';
 
 test('云原生目标显示 cluster/namespace/workload 位置', () => {
   assert.equal(targetTypeLabel('cloud_native_workload'), '云原生工作负载');
@@ -36,20 +36,6 @@ test('设备目标显示设备和地址', () => {
       vendor: 'Acme',
     },
   }), 'edge-fw-01 / 10.0.0.8 / Acme');
-});
-
-test('不同运行目标说明它在观测闭环中的作用', () => {
-  assert.equal(targetPurposeLabel('cloud_native_workload'), '用于 Kubernetes 拓扑、Pod 日志归属和工作负载级日志接入');
-  assert.equal(targetPurposeLabel('host_process'), '用于 VM / 物理机进程采集、主机日志归属和端口级排障');
-  assert.equal(targetPurposeLabel('physical_or_network_device'), '用于网络设备、Syslog 来源和边缘节点告警定位');
-});
-
-test('服务目录解释运行目标的统一作用', () => {
-  assert.deepEqual(runningTargetPurposeItems().map((item) => item.title), [
-    '定位真实运行实体',
-    '绑定采集与配置下发',
-    '支撑排障和告警归因',
-  ]);
 });
 
 test('关系统计只包含已落地关系类型', () => {

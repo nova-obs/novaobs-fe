@@ -8,9 +8,10 @@ const styleSource = readFileSync(new URL('../styles/index.css', import.meta.url)
 
 test('顶层框架展示专业指挥中心状态条', () => {
   assert.equal(source.includes('搜索服务、指标、日志、告警'), true);
-  assert.equal(source.includes('平台运行正常'), true);
-  assert.equal(source.includes('配置已同步'), true);
+  assert.equal(source.includes('平台运行正常'), false);
+  assert.equal(source.includes('配置已同步'), false);
   assert.equal(source.includes('最近 15 分钟'), true);
+  assert.equal(source.includes('采集状态'), false);
 });
 
 test('顶层框架引入搜索和用户入口', () => {
@@ -51,6 +52,9 @@ test('主侧边导航支持桌面端收起和展开', () => {
   assert.equal(source.includes('sidebar-collapse-toggle'), true);
   assert.equal(source.includes('isSidebarCollapsed'), true);
   assert.equal(source.includes('novaobs.sidebar.collapsed'), true);
+  assert.equal(source.includes('w-52 p-2.5'), true);
+  assert.equal(source.includes('w-56 p-3'), false);
+  assert.equal(source.includes('w-64 p-4'), false);
   assert.equal(source.includes('w-[84px] p-2'), true);
   assert.equal(source.includes('展开主导航'), true);
   assert.equal(source.includes('收起主导航'), true);
@@ -62,6 +66,9 @@ test('平台退出登录需要二次确认以降低误操作', () => {
   assert.equal(source.includes('取消退出'), true);
   assert.equal(source.includes('退出登录需要确认'), true);
   assert.equal(source.includes('收起状态下展开主导航后可退出登录'), true);
+  assert.equal(source.includes('已清理本地会话'), false);
+  assert.equal(source.includes('<div className="font-semibold text-on-surface">Platform IAM</div>'), false);
+  assert.equal(source.includes('session active'), false);
 });
 
 test('顶层框架提供轻量路由切换过渡', () => {

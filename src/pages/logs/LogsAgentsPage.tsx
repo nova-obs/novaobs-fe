@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, ServerCog, XCircle } from 'lucide-react';
-import { DataPanel } from '../../components/DataPanel';
+import { RefreshCw, ShieldCheck, WifiOff, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
 import { logSourceLabel, logsApi } from './api';
+import { LogsEmptyState, LogsInfoCell, LogsSection, LogsToolbarButton } from './LogsPrimitives';
 
 export function LogsAgentsPage() {
   const [params] = useSearchParams();
@@ -24,102 +24,101 @@ export function LogsAgentsPage() {
   });
   const selectedRouteId = params.get('route_id') ?? '';
   const selectedRoute = useMemo(() => (workspace?.routes ?? []).find((item) => item.route.id === selectedRouteId) ?? null, [selectedRouteId, workspace]);
+  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
+  const onlineCount = instances.filter((item) => item.healthy).length;
 
   return (
-    <div className="grid items-start gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <DataPanel title="AgentGroup" meta={workspaceLoading ? '加载中...' : `${groups.length} groups`}>
+    <div className="logs-agents-workbench grid min-h-[720px] gap-3 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
+      <LogsSection title="AgentGroup" meta={workspaceLoading ? 'loading' : `${groups.length} groups`} bodyClassName="p-0">
         {workspaceError ? <ErrorLine message={(workspaceError as Error).message} /> : null}
-        {groups.length === 0 ? <Empty label="暂无 AgentGroup" /> : (
-          <div className="space-y-2">
-            {groups.map((group) => (
-              <button
-                key={group.id}
-                className={`w-full rounded border px-3 py-3 text-left ${group.id === activeGroupId ? 'border-primary bg-primary-soft text-primary' : 'border-outline bg-white text-on-surface hover:bg-surface-low'}`}
-                onClick={() => setSelectedGroupId(group.id)}
-              >
-                <div className="font-semibold">{group.displayName || group.name}</div>
-                <div className="mt-1 text-xs text-muted">{group.environment || '-'} · {group.cluster || '-'} · {group.namespace || '-'}</div>
-                <div className="mt-2 font-mono text-[11px] text-muted">{group.status} · online {group.onlineInstances}</div>
-              </button>
-            ))}
+        {groups.length === 0 ? <LogsEmptyState title="AgentGroup 为空" /> : (
+          <div className="max-h-[720px] overflow-y-auto">
+            {groups.map((group) => {
+              const active = group.id === activeGroupId;
+              return (
+                <button
+                  key={group.id}
+                  className={`w-full border-b border-outline/60 px-3 py-2.5 text-left transition-colors ${
+                    active ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_#0d5bd7]' : 'bg-white/46 text-on-surface hover:bg-surface-low/70'
+                  }`}
+                  onClick={() => setSelectedGroupId(group.id)}
+                >
+                  <div className="truncate text-sm font-semibold">{group.displayName || group.name}</div>
+                  <div className="mt-1 truncate font-mono text-[11px] text-muted">{group.mode || '-'} · {group.environment || '-'}</div>
+                  <div className="mt-1 truncate font-mono text-[11px] text-muted">{group.status || '-'} · online {group.onlineInstances}</div>
+                </button>
+              );
+            })}
           </div>
         )}
-      </DataPanel>
+      </LogsSection>
 
-      <div className="space-y-4">
-        {selectedRoute ? (
-          <DataPanel title="接入路由" meta={selectedRoute.route.id}>
-            <div className="grid gap-3 md:grid-cols-4">
-              <Info label="来源" value={logSourceLabel(selectedRoute.route.sourceType)} />
-              <Info label="范围" value={selectedRoute.source?.sourceType === 'vm_file' ? selectedRoute.source.pathPattern : `${selectedRoute.source?.clusterId}/${selectedRoute.source?.namespace}/${selectedRoute.source?.workloadName}`} />
-              <Info label="端点" value={selectedRoute.endpoint?.name ?? '-'} />
-              <Info label="发布" value={selectedRoute.route.lastPublishStatus || selectedRoute.route.status} />
-            </div>
-          </DataPanel>
-        ) : null}
-
-        <DataPanel title="实例状态" meta={instancesLoading ? '加载中...' : `${instances.length} instances`}>
-          <div className="mb-3 flex justify-end">
-            <button className="rounded p-2 text-muted hover:bg-surface-low hover:text-on-surface" onClick={() => refetch()} title="刷新">
-              <RefreshCw className="h-4 w-4" />
-            </button>
-          </div>
-          {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
-          {!activeGroupId ? <Empty label="请选择 AgentGroup" /> : instances.length === 0 ? <Empty label="暂无实例心跳" /> : (
-            <div className="overflow-auto">
-              <table className="console-table min-w-[900px] w-full">
-                <thead>
-                  <tr>
-                    <th>Instance UID</th>
-                    <th>运行态</th>
-                    <th>Remote Config</th>
-                    <th>Hash</th>
-                    <th>节点</th>
-                    <th>最后心跳</th>
+      <LogsSection
+        title="实例状态"
+        meta={instancesLoading ? 'loading' : `${instances.length} instances · ${onlineCount} healthy`}
+        bodyClassName="p-0"
+        action={<LogsToolbarButton onClick={() => refetch()} disabled={!activeGroupId}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
+      >
+        {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
+        {!activeGroupId ? <LogsEmptyState title="未选择 AgentGroup" /> : instances.length === 0 ? <LogsEmptyState title="实例心跳为空" /> : (
+          <div className="overflow-auto">
+            <table className="console-table min-w-[960px] w-full">
+              <thead>
+                <tr>
+                  <th>Instance UID</th>
+                  <th>运行态</th>
+                  <th>Remote Config</th>
+                  <th>Hash</th>
+                  <th>节点</th>
+                  <th>最后心跳</th>
+                </tr>
+              </thead>
+              <tbody>
+                {instances.map((item) => (
+                  <tr key={item.instanceUid}>
+                    <td><Link className="font-mono text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.instanceUid}</Link></td>
+                    <td>
+                      <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-semibold ${item.healthy ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-500/30 bg-amber-50 text-amber-700'}`}>
+                        {item.healthy ? <ShieldCheck className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+                        {item.runtimeStatus || '-'}
+                      </span>
+                    </td>
+                    <td>{item.remoteConfigStatus}</td>
+                    <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
+                    <td className="font-mono text-xs">{item.nodeName || item.hostname || item.ip || '-'}</td>
+                    <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {instances.map((item) => (
-                    <tr key={item.instanceUid}>
-                      <td><Link className="font-mono text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.instanceUid}</Link></td>
-                      <td>{item.runtimeStatus} · {item.healthy ? 'healthy' : 'unhealthy'}</td>
-                      <td>{item.remoteConfigStatus}</td>
-                      <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
-                      <td className="font-mono text-xs">{item.nodeName || item.hostname || item.ip || '-'}</td>
-                      <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </DataPanel>
-      </div>
-    </div>
-  );
-}
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </LogsSection>
 
-function Info({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-outline bg-surface-lowest px-3 py-2">
-      <div className="text-[11px] text-muted">{label}</div>
-      <div className="mt-1 break-all font-mono text-xs text-on-surface">{value || '-'}</div>
+      <LogsSection title="上下文" meta={activeGroup?.id || 'agent context'} bodyClassName="p-0">
+        <LogsInfoCell label="AgentGroup" value={activeGroup?.displayName || activeGroup?.name || '-'} tone="primary" />
+        <LogsInfoCell label="Mode" value={activeGroup?.mode || '-'} />
+        <LogsInfoCell label="Cluster / Namespace" value={`${activeGroup?.cluster || '-'} / ${activeGroup?.namespace || '-'}`} />
+        <LogsInfoCell label="Online" value={String(activeGroup?.onlineInstances ?? '-')} />
+        {selectedRoute ? (
+          <>
+            <LogsInfoCell label="接入路由" value={selectedRoute.route.id} />
+            <LogsInfoCell label="来源" value={logSourceLabel(selectedRoute.route.sourceType)} />
+            <LogsInfoCell label="端点" value={selectedRoute.endpoint?.name ?? '-'} />
+            <LogsInfoCell label="发布" value={selectedRoute.route.lastPublishStatus || selectedRoute.route.status} />
+          </>
+        ) : (
+          <div className="border-t border-outline/70 p-3 text-xs leading-5 text-muted">route context empty</div>
+        )}
+      </LogsSection>
     </div>
   );
 }
 
 function ErrorLine({ message }: { message: string }) {
   return (
-    <div className="flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
+    <div className="m-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
       <XCircle className="h-4 w-4" />{message}
-    </div>
-  );
-}
-
-function Empty({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 py-8 text-sm text-muted">
-      <ServerCog className="h-4 w-4" />{label}
     </div>
   );
 }

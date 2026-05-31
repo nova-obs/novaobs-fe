@@ -181,6 +181,18 @@ test('getServices 支持查询参数', async () => {
   assert.ok(request.path.includes('status=active'));
 });
 
+test('列表接口返回 null 时按空列表处理', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse(null);
+
+  try {
+    assert.deepEqual(await api.getServices(), []);
+    assert.deepEqual(await api.getAlertRules(), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('获取 K8s Dashboard 时调用统一 K8sOps API', async () => {
   const request = await captureRequest(
     () => api.getK8sDashboard('prod'),
