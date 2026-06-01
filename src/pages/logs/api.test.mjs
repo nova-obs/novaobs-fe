@@ -102,6 +102,7 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
         workloadName: 'api',
         workloadSelector: { app: 'api' },
         parseRules: [{ name: 'text', ruleType: 'regex', pattern: '^(?P<level>[A-Z]+) (?P<message>.*)$' }],
+        collectorYAML: 'receivers:\n  filelog/custom:\n',
       },
     }),
     {
@@ -124,7 +125,29 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
   assert.equal(request.body.k8s.cluster_id, 'test03');
   assert.deepEqual(request.body.k8s.workload_selector, { app: 'api' });
   assert.equal(request.body.k8s.parse_rules[0].rule_type, 'regex');
+  assert.equal(request.body.k8s.collector_yaml, 'receivers:\n  filelog/custom:\n');
   assert.equal(result.configHash, 'abc123');
+});
+
+test('预览 Logs 解析规则时调用 parse-preview 接口并映射字段', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.previewParseRules('WARN payment timeout', [
+      { name: 'text', ruleType: 'regex', pattern: '^(?P<level>[A-Z]+) (?P<message>.*)$', enabled: true },
+    ]),
+    {
+      status: 'ok',
+      fields: { level: 'WARN', message: 'payment timeout' },
+      warnings: [],
+      errors: [],
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/logs/parse-preview');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.body.sample, 'WARN payment timeout');
+  assert.equal(request.body.parse_rules[0].rule_type, 'regex');
+  assert.equal(result.status, 'ok');
+  assert.equal(result.fields.level, 'WARN');
 });
 
 test('发布 Logs route 时传递 preview confirmation token', async () => {

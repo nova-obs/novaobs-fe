@@ -45,6 +45,7 @@ export interface LogSource {
   hostSelector: Record<string, string>;
   pathPattern: string;
   parseRules: LogParseRule[];
+  collectorYAML: string;
 }
 
 export interface LogRoute {
@@ -149,12 +150,14 @@ export interface LogRouteInput {
     workloadSelector?: Record<string, string>;
     pathPattern?: string;
     parseRules?: LogParseRule[];
+    collectorYAML?: string;
   };
   vm?: {
     hostGroup?: string;
     hostSelector?: Record<string, string>;
     pathPattern?: string;
     parseRules?: LogParseRule[];
+    collectorYAML?: string;
   };
 }
 
@@ -220,6 +223,13 @@ export interface LogProbeResult {
   warnings: string[];
 }
 
+export interface LogParsePreviewResult {
+  status: string;
+  fields: Record<string, unknown>;
+  warnings: string[];
+  errors: string[];
+}
+
 function mapEndpoint(raw: any): LogEndpoint {
   return {
     id: String(raw.id ?? ''),
@@ -252,6 +262,7 @@ function mapSource(raw: any): LogSource {
     hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
     parseRules: mapParseRules(raw.parse_rules ?? raw.parseRules),
+    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
   };
 }
 
@@ -401,6 +412,15 @@ function mapPreview(raw: any): LogRoutePreview {
   };
 }
 
+function mapParsePreview(raw: any): LogParsePreviewResult {
+  return {
+    status: raw.status ?? '',
+    fields: raw.fields ?? {},
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+    errors: Array.isArray(raw.errors) ? raw.errors.map(String) : [],
+  };
+}
+
 function mapPublish(raw: any): LogPublishResult {
   return {
     status: raw.status ?? '',
@@ -443,12 +463,14 @@ function toRoutePayload(input: LogRouteInput) {
       workload_selector: input.k8s?.workloadSelector ?? {},
       path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
+      collector_yaml: input.k8s?.collectorYAML,
     },
     vm: {
       host_group: input.vm?.hostGroup,
       host_selector: input.vm?.hostSelector ?? {},
       path_pattern: input.vm?.pathPattern,
       parse_rules: toParseRulesPayload(input.vm?.parseRules),
+      collector_yaml: input.vm?.collectorYAML,
     },
   };
 }
@@ -500,6 +522,15 @@ export const logsApi = {
     return mapPreview(await apiRequest<any>('/logs/routes/preview', {
       method: 'POST',
       body: JSON.stringify(toRoutePayload(input)),
+    }));
+  },
+  async previewParseRules(sample: string, parseRules: LogParseRule[]): Promise<LogParsePreviewResult> {
+    return mapParsePreview(await apiRequest<any>('/logs/parse-preview', {
+      method: 'POST',
+      body: JSON.stringify({
+        sample,
+        parse_rules: toParseRulesPayload(parseRules),
+      }),
     }));
   },
   async createRoute(input: LogRouteInput): Promise<LogRouteView> {

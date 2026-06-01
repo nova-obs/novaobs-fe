@@ -27,14 +27,21 @@ export function LogsAgentsPage() {
   const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
   const onlineCount = instances.filter((item) => item.healthy).length;
 
+  const activeDomainMode = agentGroupModeLabel(activeGroup);
+  const activeDomainScope = activeGroup?.cluster
+    ? `${activeGroup.cluster} / ${activeGroup.namespace || '-'}`
+    : activeGroup?.environment || '-';
+
   return (
     <div className="logs-agents-workbench grid min-h-[720px] gap-3 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
-      <LogsSection title="AgentGroup" meta={workspaceLoading ? 'loading' : `${groups.length} groups`} bodyClassName="p-0">
+      <LogsSection title="采集域" meta={workspaceLoading ? 'loading' : `${groups.length} domains`} bodyClassName="p-0">
         {workspaceError ? <ErrorLine message={(workspaceError as Error).message} /> : null}
-        {groups.length === 0 ? <LogsEmptyState title="AgentGroup 为空" /> : (
+        {groups.length === 0 ? <LogsEmptyState title="采集域为空" /> : (
           <div className="max-h-[720px] overflow-y-auto">
             {groups.map((group) => {
               const active = group.id === activeGroupId;
+              const mode = agentGroupModeLabel(group);
+              const scope = group.cluster ? `${group.cluster} / ${group.namespace || '-'}` : group.environment || '-';
               return (
                 <button
                   key={group.id}
@@ -44,7 +51,7 @@ export function LogsAgentsPage() {
                   onClick={() => setSelectedGroupId(group.id)}
                 >
                   <div className="truncate text-sm font-semibold">{group.displayName || group.name}</div>
-                  <div className="mt-1 truncate font-mono text-[11px] text-muted">{group.mode || '-'} · {group.environment || '-'}</div>
+                  <div className="mt-1 truncate font-mono text-[11px] text-muted">{mode} · {scope}</div>
                   <div className="mt-1 truncate font-mono text-[11px] text-muted">{group.status || '-'} · online {group.onlineInstances}</div>
                 </button>
               );
@@ -60,7 +67,7 @@ export function LogsAgentsPage() {
         action={<LogsToolbarButton onClick={() => refetch()} disabled={!activeGroupId}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
       >
         {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
-        {!activeGroupId ? <LogsEmptyState title="未选择 AgentGroup" /> : instances.length === 0 ? <LogsEmptyState title="实例心跳为空" /> : (
+        {!activeGroupId ? <LogsEmptyState title="未选择采集域" /> : instances.length === 0 ? <LogsEmptyState title="实例心跳为空" /> : (
           <div className="overflow-auto">
             <table className="console-table min-w-[960px] w-full">
               <thead>
@@ -96,9 +103,10 @@ export function LogsAgentsPage() {
       </LogsSection>
 
       <LogsSection title="上下文" meta={activeGroup?.id || 'agent context'} bodyClassName="p-0">
-        <LogsInfoCell label="AgentGroup" value={activeGroup?.displayName || activeGroup?.name || '-'} tone="primary" />
+        <LogsInfoCell label="采集域" value={activeGroup?.displayName || activeGroup?.name || '-'} tone="primary" />
+        <LogsInfoCell label="状态来源" value={activeGroup ? activeDomainMode : '-'} />
         <LogsInfoCell label="Mode" value={activeGroup?.mode || '-'} />
-        <LogsInfoCell label="Cluster / Namespace" value={`${activeGroup?.cluster || '-'} / ${activeGroup?.namespace || '-'}`} />
+        <LogsInfoCell label="Scope" value={activeGroup ? activeDomainScope : '-'} />
         <LogsInfoCell label="Online" value={String(activeGroup?.onlineInstances ?? '-')} />
         {selectedRoute ? (
           <>
@@ -113,6 +121,13 @@ export function LogsAgentsPage() {
       </LogsSection>
     </div>
   );
+}
+
+function agentGroupModeLabel(group: { mode?: string; cluster?: string } | null) {
+  if (!group) return '-';
+  if (group.mode === 'dedicated_collector') return 'K8s 主动探测';
+  if (group.mode === 'shared_gateway') return 'VM 回连上报';
+  return group.cluster ? 'K8s 主动探测' : 'VM 回连上报';
 }
 
 function ErrorLine({ message }: { message: string }) {
