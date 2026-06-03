@@ -1,14 +1,16 @@
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, ShieldCheck, WifiOff, XCircle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { RefreshCw, ShieldCheck, Trash2, WifiOff, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
 import { logSourceLabel, logsApi } from './api';
 import { LogsEmptyState, LogsInfoCell, LogsSection, LogsToolbarButton } from './LogsPrimitives';
 
 export function LogsAgentsPage() {
+  const queryClient = useQueryClient();
   const [params] = useSearchParams();
   const [selectedGroupId, setSelectedGroupId] = useState(params.get('agent_group_id') ?? '');
+  const [confirmDeleteGroupId, setConfirmDeleteGroupId] = useState<string | null>(null);
   const { data: workspace, isLoading: workspaceLoading, error: workspaceError } = useQuery({
     queryKey: ['logs-onboarding-workspace'],
     queryFn: logsApi.getWorkspace,
@@ -32,6 +34,23 @@ export function LogsAgentsPage() {
     ? `${activeGroup.cluster} / ${activeGroup.namespace || '-'}`
     : activeGroup?.environment || '-';
 
+  const deleteMutation = useMutation({
+    mutationFn: (group: { id: string }) => api.deleteCollectorGroup(group.id),
+    onSuccess: (_, group) => {
+      queryClient.setQueryData(['logs-onboarding-workspace'], (current: typeof workspace) => {
+        if (!current) return current;
+        return {
+          ...current,
+          collectorGroups: current.collectorGroups.filter((item) => item.id !== group.id),
+        };
+      });
+      queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
+      queryClient.removeQueries({ queryKey: ['logs-agent-instances', group.id] });
+      setSelectedGroupId('');
+      setConfirmDeleteGroupId(null);
+    },
+  });
+
   return (
     <div className="logs-agents-workbench grid min-h-[720px] gap-3 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
       <LogsSection title="采集域" meta={workspaceLoading ? 'loading' : `${groups.length} domains`} bodyClassName="p-0">
@@ -48,7 +67,10 @@ export function LogsAgentsPage() {
                   className={`w-full border-b border-outline/60 px-3 py-2.5 text-left transition-colors ${
                     active ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_#0d5bd7]' : 'bg-white/46 text-on-surface hover:bg-surface-low/70'
                   }`}
-                  onClick={() => setSelectedGroupId(group.id)}
+                  onClick={() => {
+                    setConfirmDeleteGroupId(null);
+                    setSelectedGroupId(group.id);
+                  }}
                 >
                   <div className="truncate text-sm font-semibold">{group.displayName || group.name}</div>
                   <div className="mt-1 truncate font-mono text-[11px] text-muted">{mode} · {scope}</div>
@@ -118,6 +140,28 @@ export function LogsAgentsPage() {
         ) : (
           <div className="border-t border-outline/70 p-3 text-xs leading-5 text-muted">route context empty</div>
         )}
+        <div className="border-t border-outline/70 p-3">
+          {deleteMutation.error ? <ErrorLine message={(deleteMutation.error as Error).message} compact /> : null}
+          <button
+            className={`mt-2 inline-flex w-full items-center justify-center gap-2 rounded border px-3 py-2 text-sm font-semibold ${
+              confirmDeleteGroupId === activeGroup?.id
+                ? 'border-red-500/30 bg-red-50 text-red-600'
+                : 'border-outline bg-white text-muted hover:border-red-500/30 hover:bg-red-50 hover:text-red-600'
+            } disabled:opacity-60`}
+            disabled={!activeGroup || (deleteMutation.isPending && confirmDeleteGroupId === activeGroup.id)}
+            onClick={() => {
+              if (!activeGroup) return;
+              if (confirmDeleteGroupId === activeGroup.id) {
+                deleteMutation.mutate(activeGroup);
+                return;
+              }
+              setConfirmDeleteGroupId(activeGroup.id);
+            }}
+          >
+            {deleteMutation.isPending && confirmDeleteGroupId === activeGroup?.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+            {confirmDeleteGroupId === activeGroup?.id ? '确认删除采集域' : '删除采集域'}
+          </button>
+        </div>
       </LogsSection>
     </div>
   );
@@ -130,9 +174,9 @@ function agentGroupModeLabel(group: { mode?: string; cluster?: string } | null) 
   return group.cluster ? 'K8s 主动探测' : 'VM 回连上报';
 }
 
-function ErrorLine({ message }: { message: string }) {
+function ErrorLine({ message, compact = false }: { message: string; compact?: boolean }) {
   return (
-    <div className="m-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
+    <div className={`${compact ? 'mb-2' : 'm-3'} flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600`}>
       <XCircle className="h-4 w-4" />{message}
     </div>
   );

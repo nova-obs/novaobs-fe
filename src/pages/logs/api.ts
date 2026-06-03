@@ -1,16 +1,25 @@
 import { apiRequest } from '../../services/api';
 
-export type LogSourceType = 'k8s_stdout' | 'k8s_hostpath' | 'vm_file';
+export type LogSourceType = 'k8s_stdout' | 'vm_file';
 export type LogAccessSource = 'k8s' | 'vm';
+export type LogSinkType = 'vl' | 'es' | 'kafka';
 
 export function logSourceLabel(type?: string): string {
   return type === 'vm_file' ? 'VM' : 'K8s';
+}
+
+export function logSinkLabel(type?: string): string {
+  if (type === 'es') return 'ES';
+  if (type === 'kafka') return 'Kafka';
+  return 'VL';
 }
 
 export interface LogEndpoint {
   id: string;
   name: string;
   description: string;
+  sinkType: LogSinkType;
+  streamName: string;
   writeURL: string;
   queryURL: string;
   vmuiURL: string;
@@ -41,6 +50,7 @@ export interface LogSource {
   workloadName: string;
   container: string;
   workloadSelector: Record<string, string>;
+  runtimeLogPaths: string[];
   hostGroup: string;
   hostSelector: Record<string, string>;
   pathPattern: string;
@@ -135,6 +145,7 @@ export interface LogsWorkload {
 }
 
 export interface LogRouteInput {
+  routeId?: string;
   name?: string;
   serviceId: string;
   sourceType: LogSourceType;
@@ -148,6 +159,7 @@ export interface LogRouteInput {
     workloadName?: string;
     container?: string;
     workloadSelector?: Record<string, string>;
+    runtimeLogPaths?: string[];
     pathPattern?: string;
     parseRules?: LogParseRule[];
     collectorYAML?: string;
@@ -199,6 +211,8 @@ export interface LogPublishResult {
   previewId: string;
   confirmationToken: string;
   auditId: string;
+  resources: K8sPublishResource[];
+  diffs: K8sPublishDiff[];
   warnings: string[];
   plan?: {
     id: string;
@@ -213,6 +227,26 @@ export interface LogPublishResult {
     auditId: string;
     message: string;
   };
+}
+
+export interface K8sPublishResource {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  uid: string;
+}
+
+export interface K8sPublishDiff {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  operation: string;
+  beforeHash: string;
+  afterHash: string;
 }
 
 export interface LogProbeResult {
@@ -235,6 +269,8 @@ function mapEndpoint(raw: any): LogEndpoint {
     id: String(raw.id ?? ''),
     name: raw.name ?? '',
     description: raw.description ?? '',
+    sinkType: raw.sink_type ?? raw.sinkType ?? 'vl',
+    streamName: raw.stream_name ?? raw.streamName ?? '',
     writeURL: raw.write_url ?? raw.writeURL ?? '',
     queryURL: raw.query_url ?? raw.queryURL ?? '',
     vmuiURL: raw.vmui_url ?? raw.vmuiURL ?? '',
@@ -258,6 +294,7 @@ function mapSource(raw: any): LogSource {
     workloadName: raw.workload_name ?? raw.workloadName ?? '',
     container: raw.container ?? '',
     workloadSelector: raw.workload_selector ?? raw.workloadSelector ?? {},
+    runtimeLogPaths: Array.isArray(raw.runtime_log_paths ?? raw.runtimeLogPaths) ? (raw.runtime_log_paths ?? raw.runtimeLogPaths).map(String) : [],
     hostGroup: raw.host_group ?? raw.hostGroup ?? '',
     hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
@@ -429,6 +466,8 @@ function mapPublish(raw: any): LogPublishResult {
     previewId: raw.preview_id ?? raw.previewId ?? '',
     confirmationToken: raw.confirmation_token ?? raw.confirmationToken ?? '',
     auditId: raw.audit_id ?? raw.auditId ?? '',
+    resources: Array.isArray(raw.resources) ? raw.resources.map(mapPublishResource) : [],
+    diffs: Array.isArray(raw.diffs) ? raw.diffs.map(mapPublishDiff) : [],
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     plan: raw.plan ? {
       id: String(raw.plan.id ?? ''),
@@ -447,13 +486,15 @@ function mapPublish(raw: any): LogPublishResult {
 }
 
 function toRoutePayload(input: LogRouteInput) {
+  const isVM = input.sourceType === 'vm_file';
   return {
+    route_id: input.routeId,
     name: input.name,
     service_id: input.serviceId,
     source_type: input.sourceType,
     agent_group_id: input.agentGroupId,
     endpoint_id: input.endpointId,
-    k8s: {
+    k8s: isVM ? {} : {
       cluster_id: input.k8s?.clusterId,
       namespace: input.k8s?.namespace,
       agent_namespace: input.k8s?.agentNamespace,
@@ -461,17 +502,42 @@ function toRoutePayload(input: LogRouteInput) {
       workload_name: input.k8s?.workloadName,
       container: input.k8s?.container,
       workload_selector: input.k8s?.workloadSelector ?? {},
+      runtime_log_paths: input.k8s?.runtimeLogPaths ?? [],
       path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
       collector_yaml: input.k8s?.collectorYAML,
     },
-    vm: {
+    vm: isVM ? {
       host_group: input.vm?.hostGroup,
       host_selector: input.vm?.hostSelector ?? {},
       path_pattern: input.vm?.pathPattern,
       parse_rules: toParseRulesPayload(input.vm?.parseRules),
       collector_yaml: input.vm?.collectorYAML,
-    },
+    } : {},
+  };
+}
+
+function mapPublishResource(raw: any): K8sPublishResource {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    apiVersion: raw.api_version ?? raw.apiVersion ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    uid: raw.uid ?? '',
+  };
+}
+
+function mapPublishDiff(raw: any): K8sPublishDiff {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    apiVersion: raw.api_version ?? raw.apiVersion ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    operation: raw.operation ?? '',
+    beforeHash: raw.before_hash ?? raw.beforeHash ?? '',
+    afterHash: raw.after_hash ?? raw.afterHash ?? '',
   };
 }
 
@@ -504,12 +570,33 @@ export const logsApi = {
       body: JSON.stringify({
         name: input.name,
         description: input.description,
+        sink_type: input.sinkType,
+        stream_name: input.streamName,
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
         secret_ref: input.secretRef,
         scope_type: input.scopeType,
         cluster_id: input.clusterId,
+      }),
+    });
+    return mapEndpoint(raw);
+  },
+  async updateEndpoint(endpointId: string, input: Partial<LogEndpoint>): Promise<LogEndpoint> {
+    const raw = await apiRequest<any>(`/logs/endpoints/${endpointId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: input.name,
+        description: input.description,
+        sink_type: input.sinkType,
+        stream_name: input.streamName,
+        write_url: input.writeURL,
+        query_url: input.queryURL,
+        vmui_url: input.vmuiURL,
+        secret_ref: input.secretRef,
+        scope_type: input.scopeType,
+        cluster_id: input.clusterId,
+        status: input.status,
       }),
     });
     return mapEndpoint(raw);
@@ -537,6 +624,12 @@ export const logsApi = {
     return mapRouteView(await apiRequest<any>('/logs/routes', {
       method: 'POST',
       body: JSON.stringify(toRoutePayload(input)),
+    }));
+  },
+  async updateRoute(routeId: string, input: LogRouteInput): Promise<LogRouteView> {
+    return mapRouteView(await apiRequest<any>(`/logs/routes/${routeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(toRoutePayload({ ...input, routeId })),
     }));
   },
   async probeRoute(routeId: string): Promise<LogProbeResult> {

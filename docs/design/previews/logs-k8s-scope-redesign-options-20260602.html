@@ -1,0 +1,665 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logs K8s Scope Redesign Options</title>
+  <style>
+    :root {
+      --background: #eef3fb;
+      --surface: #f6f8fc;
+      --surface-low: #edf4ff;
+      --surface-lowest: #ffffff;
+      --line: #d8e2ef;
+      --text: #122033;
+      --muted: #637083;
+      --primary: #0d5bd7;
+      --primary-soft: #e5f0ff;
+      --warning: #cc6b1e;
+      --danger: #b4232f;
+      font-family: Geist, Satoshi, Aptos, ui-sans-serif, system-ui, sans-serif;
+      color: var(--text);
+      background: var(--background);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(135deg, rgba(222, 235, 255, 0.78), rgba(241, 247, 255, 0.92)),
+        var(--background);
+    }
+
+    .page {
+      width: min(1600px, 100%);
+      margin: 0 auto;
+      padding: 28px;
+    }
+
+    .option {
+      overflow: hidden;
+      margin-bottom: 28px;
+      border: 1px solid rgba(205, 218, 235, 0.88);
+      border-radius: 8px;
+      background: linear-gradient(180deg, rgba(255,255,255,0.98), rgba(248,251,255,0.95));
+      box-shadow: 0 24px 60px -48px rgba(24, 52, 96, 0.62);
+    }
+
+    .head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.78);
+    }
+
+    .title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 17px;
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 4px rgba(13, 91, 215, 0.12);
+    }
+
+    .note {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .btn {
+      height: 34px;
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      background: var(--primary);
+      color: #fff;
+      padding: 0 14px;
+      font-weight: 800;
+      font-size: 13px;
+    }
+
+    .btn.secondary {
+      background: #fff;
+      color: var(--primary);
+    }
+
+    .content {
+      padding: 16px;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      padding: 0 8px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 750;
+      white-space: nowrap;
+    }
+
+    .chip.primary {
+      border-color: rgba(13, 91, 215, 0.28);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .chip.warning {
+      border-color: rgba(204, 107, 30, 0.32);
+      background: #fff7ed;
+      color: var(--warning);
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .input {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      padding: 0 10px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px;
+      font-weight: 750;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.9), 0 1px 2px rgba(18,32,51,0.03);
+    }
+
+    .input:focus {
+      outline: 2px solid rgba(13, 91, 215, 0.15);
+      border-color: rgba(13, 91, 215, 0.58);
+    }
+
+    .select {
+      appearance: none;
+      background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 16px) 15px, calc(100% - 11px) 15px;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.86);
+    }
+
+    .panel-pad { padding: 14px; }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px 12px;
+    }
+
+    .metric-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .metric-value {
+      margin-top: 5px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 850;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: 210px 190px minmax(210px, 1fr) 190px auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    .summary-strip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      padding: 10px 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(90deg, rgba(13,91,215,0.05), rgba(255,255,255,0.9)),
+        #fff;
+    }
+
+    .summary-main {
+      display: flex;
+      min-width: 0;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .scope-path {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 850;
+    }
+
+    .subtle {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .workloads-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .workload-card {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .workload-card.active {
+      border-color: rgba(13, 91, 215, 0.66);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .workload-name {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      font-weight: 850;
+    }
+
+    .workload-meta {
+      margin-top: 5px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .rail-layout {
+      display: grid;
+      grid-template-columns: 260px minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .cluster-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cluster-item {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 11px 12px;
+    }
+
+    .cluster-item.active {
+      border-color: rgba(13, 91, 215, 0.68);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .cluster-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      font-weight: 850;
+    }
+
+    .cluster-meta {
+      margin-top: 5px;
+      color: var(--muted);
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .resource-shell {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .resource-toolbar {
+      display: grid;
+      grid-template-columns: 220px minmax(240px, 1fr) 180px auto;
+      gap: 10px;
+      align-items: end;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+    }
+
+    th {
+      position: sticky;
+      top: 0;
+      background: rgba(237, 244, 255, 0.92);
+      color: var(--muted);
+      text-align: left;
+      font-size: 12px;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    td {
+      border-top: 1px solid rgba(216, 226, 239, 0.72);
+      padding: 10px;
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    tr.active td {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .drawer-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 340px;
+      gap: 14px;
+    }
+
+    .scope-hero {
+      min-height: 260px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(90deg, rgba(13,91,215,0.04) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(13,91,215,0.04) 1px, transparent 1px),
+        #fff;
+      background-size: 32px 32px;
+      padding: 16px;
+    }
+
+    .scope-flow {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+      margin-top: 26px;
+    }
+
+    .flow-box {
+      min-height: 112px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+      padding: 13px;
+    }
+
+    .flow-box.active {
+      border-color: rgba(13,91,215,0.58);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .drawer {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px;
+    }
+
+    .drawer .field + .field { margin-top: 12px; }
+
+    .sync-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 12px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px 12px;
+    }
+
+    body:has(#option-a:target) .option:not(#option-a),
+    body:has(#option-b:target) .option:not(#option-b),
+    body:has(#option-c:target) .option:not(#option-c) {
+      display: none;
+    }
+
+    @media (max-width: 980px) {
+      .page { padding: 16px; }
+      .toolbar,
+      .rail-layout,
+      .resource-toolbar,
+      .drawer-layout,
+      .scope-flow,
+      .metric-row,
+      .workloads-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="option" id="option-a">
+      <header class="head">
+        <div>
+          <div class="title"><span class="dot"></span>方案 A：选择工具栏优先</div>
+          <div class="note">把所有选择动作压缩到一行，状态改成摘要条和 workload 结果区，改动最轻。</div>
+        </div>
+        <button class="btn secondary">同步服务</button>
+      </header>
+      <div class="content">
+        <div class="summary-strip">
+          <div class="summary-main">
+            <span class="chip primary">K8s</span>
+            <span class="scope-path">test03-02 / cattle-system / DaemonSet/cattle-node-agent</span>
+            <span class="chip warning">read only</span>
+            <span class="chip">collector: novaobs-system</span>
+          </div>
+          <span class="chip primary">ready</span>
+        </div>
+
+        <div class="panel panel-pad">
+          <div class="toolbar">
+            <label class="field">集群<select class="input select"><option>test03-02</option><option>test03-rw</option></select></label>
+            <label class="field">Namespace<select class="input select"><option>cattle-system</option><option>logplatform</option><option>monitoring</option></select></label>
+            <label class="field">Workload<select class="input select"><option>DaemonSet/cattle-node-agent</option><option>Deployment/cattle-cluster-agent</option><option>DaemonSet/kube-api-auth</option></select></label>
+            <label class="field">Agent Namespace<input class="input" value="novaobs-system" /></label>
+            <button class="btn">应用范围</button>
+          </div>
+        </div>
+
+        <div class="metric-row" style="margin-top: 12px;">
+          <div class="metric">
+            <div class="metric-label">采集域</div>
+            <div class="metric-value">test03-02 / novaobs-system</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">已接入</div>
+            <div class="metric-value">0 namespaces · 0 workloads</div>
+          </div>
+          <div class="metric">
+            <div class="metric-label">标准路径</div>
+            <div class="metric-value">/var/log/pods/*_*_*/*/*.log</div>
+          </div>
+        </div>
+
+        <div class="workloads-grid" style="margin-top: 12px;">
+          <div class="workload-card active">
+            <div class="workload-name">cattle-node-agent</div>
+            <div class="workload-meta">DaemonSet · running 5/5</div>
+          </div>
+          <div class="workload-card">
+            <div class="workload-name">kube-api-auth</div>
+            <div class="workload-meta">DaemonSet · running 3/3</div>
+          </div>
+          <div class="workload-card">
+            <div class="workload-name">cattle-cluster-agent</div>
+            <div class="workload-meta">Deployment · running 1/1</div>
+          </div>
+          <div class="workload-card">
+            <div class="workload-name">system-upgrade-controller</div>
+            <div class="workload-meta">Deployment · running 1/1</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="option" id="option-b">
+      <header class="head">
+        <div>
+          <div class="title"><span class="dot"></span>方案 B：左侧集群，右侧资源浏览器</div>
+          <div class="note">集群选择和资源选择分离，右侧使用表格承载 workload，适合多集群、多 namespace 的日常操作。</div>
+        </div>
+        <button class="btn">同步服务</button>
+      </header>
+      <div class="content">
+        <div class="rail-layout">
+          <aside class="panel panel-pad">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+              <strong>可用集群</strong>
+              <span class="chip">2 clusters</span>
+            </div>
+            <div class="cluster-list">
+              <div class="cluster-item active">
+                <div class="cluster-title">test03-02 <span class="chip warning">只读</span></div>
+                <div class="cluster-meta">direct · v1.28.9 · 5 nodes</div>
+              </div>
+              <div class="cluster-item">
+                <div class="cluster-title">test03-rw <span class="chip primary">可发布</span></div>
+                <div class="cluster-meta">direct · v1.29.2 · 3 nodes</div>
+              </div>
+            </div>
+            <div class="sync-bar">
+              <div>
+                <div style="font-weight:850;">采集域</div>
+                <div class="subtle">novaobs-system · 自动维护</div>
+              </div>
+              <span class="chip primary">ready</span>
+            </div>
+          </aside>
+
+          <section class="resource-shell">
+            <div class="panel panel-pad">
+              <div class="resource-toolbar">
+                <label class="field">Namespace<select class="input select"><option>cattle-system</option><option>logplatform</option><option>monitoring</option></select></label>
+                <label class="field">搜索 Workload<input class="input" value="cattle" /></label>
+                <label class="field">Agent Namespace<input class="input" value="novaobs-system" /></label>
+                <button class="btn secondary">刷新资源</button>
+              </div>
+            </div>
+
+            <div class="panel" style="overflow:hidden;">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Workload</th>
+                    <th>类型</th>
+                    <th>Pods</th>
+                    <th>Selector</th>
+                    <th>接入状态</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr class="active">
+                    <td>cattle-node-agent</td>
+                    <td>DaemonSet</td>
+                    <td>5 / 5</td>
+                    <td>app=cattle-node-agent</td>
+                    <td><span class="chip primary">selected</span></td>
+                  </tr>
+                  <tr>
+                    <td>cattle-cluster-agent</td>
+                    <td>Deployment</td>
+                    <td>1 / 1</td>
+                    <td>app=cattle-cluster-agent</td>
+                    <td><span class="chip">available</span></td>
+                  </tr>
+                  <tr>
+                    <td>kube-api-auth</td>
+                    <td>DaemonSet</td>
+                    <td>3 / 3</td>
+                    <td>app=kube-api-auth</td>
+                    <td><span class="chip">available</span></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div class="summary-strip" style="margin-bottom:0;">
+              <div class="summary-main">
+                <span class="chip primary">当前范围</span>
+                <span class="scope-path">test03-02 / cattle-system / DaemonSet/cattle-node-agent</span>
+                <span class="chip">/var/log/pods/*_*_*/*/*.log</span>
+              </div>
+              <button class="btn">确认范围</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="option" id="option-c">
+      <header class="head">
+        <div>
+          <div class="title"><span class="dot"></span>方案 C：已选范围优先，右侧编辑抽屉</div>
+          <div class="note">日常只看当前采集范围和状态，需要修改时在右侧抽屉集中编辑，页面最清爽但改动最大。</div>
+        </div>
+        <button class="btn secondary">修改范围</button>
+      </header>
+      <div class="content">
+        <div class="drawer-layout">
+          <section class="scope-hero">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+              <div>
+                <div class="subtle">当前 K8s 采集范围</div>
+                <div class="scope-path" style="margin-top:6px;font-size:18px;">test03-02 / cattle-system / DaemonSet/cattle-node-agent</div>
+              </div>
+              <span class="chip primary">route ready</span>
+            </div>
+
+            <div class="scope-flow">
+              <div class="flow-box active">
+                <div class="metric-label">Cluster</div>
+                <div class="metric-value">test03-02</div>
+                <div class="subtle" style="margin-top:8px;">direct · read only</div>
+              </div>
+              <div class="flow-box active">
+                <div class="metric-label">Namespace</div>
+                <div class="metric-value">cattle-system</div>
+                <div class="subtle" style="margin-top:8px;">3 workloads synced</div>
+              </div>
+              <div class="flow-box active">
+                <div class="metric-label">Workload</div>
+                <div class="metric-value">cattle-node-agent</div>
+                <div class="subtle" style="margin-top:8px;">DaemonSet · running 5/5</div>
+              </div>
+            </div>
+
+            <div class="sync-bar">
+              <div class="summary-main">
+                <span class="chip">collector: novaobs-system</span>
+                <span class="chip">stdout path</span>
+                <span class="chip">0 existing routes</span>
+              </div>
+              <button class="btn">同步服务</button>
+            </div>
+          </section>
+
+          <aside class="drawer">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+              <strong>编辑范围</strong>
+              <span class="chip">selected</span>
+            </div>
+            <label class="field">集群<select class="input select"><option>test03-02</option><option>test03-rw</option></select></label>
+            <label class="field">Namespace<select class="input select"><option>cattle-system</option><option>logplatform</option><option>monitoring</option></select></label>
+            <label class="field">Workload<select class="input select"><option>DaemonSet/cattle-node-agent</option><option>Deployment/cattle-cluster-agent</option></select></label>
+            <label class="field">Agent Namespace<input class="input" value="novaobs-system" /></label>
+            <div class="sync-bar">
+              <div>
+                <div style="font-weight:850;">服务同步</div>
+                <div class="subtle">prod · owner sre</div>
+              </div>
+              <button class="btn secondary">同步</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

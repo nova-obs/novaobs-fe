@@ -14,11 +14,11 @@ const domains: OnboardingDomain[] = [
   {
     id: 'logs',
     title: '日志接入',
-    description: 'K8s / VM · AgentGroup · VL endpoint',
+    description: 'K8s / VM · 服务范围 · 日志下游',
     path: '/logs/onboarding',
     status: 'available',
     statusLabel: 'available',
-    highlights: ['K8s workload', 'VM file', 'VL endpoint'],
+    highlights: ['K8s 服务', 'VM 日志路径', '日志下游'],
   },
 ];
 

@@ -401,7 +401,7 @@ function mapCollectorGroup(raw: any): CollectorGroup {
     isolationLevel: raw.isolation_level ?? 'shared',
     platformTemplateId: raw.platform_template_id ?? '',
     receiverProfile: raw.receiver_profile ?? 'mixed',
-    exporterProfile: raw.exporter_profile ?? 'otlphttp/victorialogs',
+    exporterProfile: raw.exporter_profile ?? 'logs/downstream',
     desiredReplicas: raw.desired_replicas ?? 1,
     maxServices: raw.max_services ?? 0,
     status: raw.status ?? 'draft',
@@ -612,6 +612,8 @@ function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
           endpoint: item.endpoint ? {
             id: String(item.endpoint.id ?? ''),
             name: item.endpoint.name ?? '',
+            sinkType: item.endpoint.sink_type ?? item.endpoint.sinkType ?? 'vl',
+            streamName: item.endpoint.stream_name ?? item.endpoint.streamName ?? '',
             vmuiURL: item.endpoint.vmui_url ?? item.endpoint.vmuiURL ?? '',
           } : null,
         }))
@@ -697,6 +699,9 @@ export const api = {
       }),
     });
     return mapService(raw);
+  },
+  async deleteService(id: string): Promise<void> {
+    await request<any>(`/services/${id}`, { method: 'DELETE' });
   },
   async getServiceTargets(serviceId: string): Promise<ServiceTarget[]> {
     const raw = await request<any[]>(`/services/${serviceId}/targets`);

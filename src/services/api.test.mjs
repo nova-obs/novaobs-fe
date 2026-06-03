@@ -171,6 +171,16 @@ test('更新服务时使用 PATCH 方法', async () => {
   assert.equal(request.init.method, 'PATCH');
 });
 
+test('删除服务时调用 DELETE /services/:id', async () => {
+  const request = await captureRequest(
+    () => api.deleteService('507f1f77bcf86cd799439020'),
+    null,
+  );
+
+  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439020');
+  assert.equal(request.init.method, 'DELETE');
+});
+
 test('getServices 支持查询参数', async () => {
   const request = await captureRequest(
     () => api.getServices({ environment: 'prod', status: 'active' }),

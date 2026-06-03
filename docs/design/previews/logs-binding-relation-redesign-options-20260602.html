@@ -1,0 +1,683 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Logs Binding Relation Redesign Options</title>
+  <style>
+    :root {
+      --bg: #eef3fb;
+      --surface: #f6f8fc;
+      --panel: #ffffff;
+      --line: #d8e2ef;
+      --line-strong: #b8c9df;
+      --text: #122033;
+      --muted: #637083;
+      --primary: #0d5bd7;
+      --primary-soft: #e5f0ff;
+      --secondary: #00a4ff;
+      --warning: #cc6b1e;
+      --shadow: 0 18px 46px rgba(24, 52, 96, 0.13);
+      font-family: "Geist", "Satoshi", "Aptos", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .page {
+      width: 1640px;
+      margin: 0 auto;
+      padding: 26px;
+    }
+
+    .option {
+      margin-bottom: 26px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.88);
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+
+    .option-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+    }
+
+    .option-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 18px;
+      font-weight: 760;
+      letter-spacing: -0.01em;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 4px var(--primary-soft);
+    }
+
+    .option-note {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .content {
+      padding: 18px;
+    }
+
+    .btn {
+      height: 34px;
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      background: var(--primary);
+      color: white;
+      padding: 0 14px;
+      font-size: 13px;
+      font-weight: 720;
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn.secondary {
+      background: white;
+      color: var(--primary);
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      padding: 0 8px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: white;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    .mono {
+      font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    .field-shell {
+      border: 1px solid var(--line);
+      background: white;
+      border-radius: 7px;
+      height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 0 10px;
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 700;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .placeholder {
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .mini-label {
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 760;
+      margin-bottom: 7px;
+    }
+
+    /* Option A */
+    .a-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.1fr) 46px minmax(0, 1.1fr) 46px minmax(0, 1.1fr);
+      gap: 0;
+      align-items: stretch;
+    }
+
+    .a-node {
+      min-height: 138px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .a-node.active {
+      border-color: rgba(13, 91, 215, 0.55);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .node-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .node-title {
+      font-size: 12px;
+      font-weight: 760;
+      color: var(--muted);
+    }
+
+    .node-value {
+      font-size: 16px;
+      font-weight: 800;
+      letter-spacing: -0.01em;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .node-meta {
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 650;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .node-action-row {
+      margin-top: auto;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .flow-arrow {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--primary);
+    }
+
+    .flow-arrow-inner {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 4px;
+      transform: translateY(4px);
+    }
+
+    .arrow-line {
+      width: 36px;
+      height: 1px;
+      background: var(--primary);
+      position: relative;
+    }
+
+    .arrow-line::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: -4px;
+      width: 8px;
+      height: 8px;
+      border-right: 1.5px solid var(--primary);
+      border-top: 1.5px solid var(--primary);
+      transform: rotate(45deg);
+    }
+
+    .arrow-text {
+      font-size: 9px;
+      color: var(--muted);
+      font-weight: 800;
+      letter-spacing: 0.08em;
+      font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+    }
+
+    /* Option B */
+    .b-layout {
+      display: grid;
+      grid-template-columns: 390px minmax(0, 1fr);
+      gap: 16px;
+      align-items: start;
+    }
+
+    .b-command {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 14px;
+    }
+
+    .command-title {
+      font-size: 13px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+
+    .field-stack {
+      display: grid;
+      gap: 12px;
+    }
+
+    .b-stage {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background:
+        linear-gradient(90deg, rgba(13, 91, 215, 0.04) 1px, transparent 1px),
+        linear-gradient(180deg, rgba(13, 91, 215, 0.04) 1px, transparent 1px),
+        white;
+      background-size: 28px 28px;
+      padding: 18px;
+      min-height: 248px;
+    }
+
+    .b-flow {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 14px;
+      align-items: center;
+      position: relative;
+      margin-top: 28px;
+    }
+
+    .b-flow::before {
+      content: "";
+      position: absolute;
+      left: 13%;
+      right: 13%;
+      top: 44px;
+      height: 2px;
+      background: linear-gradient(90deg, var(--primary), var(--secondary), var(--primary));
+      opacity: 0.6;
+    }
+
+    .b-card {
+      position: relative;
+      z-index: 1;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.96);
+      padding: 14px;
+      min-height: 128px;
+      box-shadow: 0 10px 24px rgba(24, 52, 96, 0.09);
+    }
+
+    .b-card .circle {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      border: 1px solid rgba(13, 91, 215, 0.32);
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-size: 12px;
+      font-weight: 800;
+      margin-bottom: 12px;
+    }
+
+    .b-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+    }
+
+    /* Option C */
+    .c-layout {
+      display: grid;
+      grid-template-columns: 1fr 315px;
+      gap: 16px;
+    }
+
+    .c-main {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      overflow: hidden;
+    }
+
+    .c-row {
+      display: grid;
+      grid-template-columns: 220px minmax(0, 1fr) 190px;
+      gap: 14px;
+      align-items: center;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .c-row:last-child {
+      border-bottom: 0;
+    }
+
+    .c-row.active {
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .c-route {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 34px minmax(0, 1fr) 34px minmax(0, 1fr);
+      align-items: center;
+      gap: 6px;
+    }
+
+    .c-pill {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: white;
+      padding: 8px 10px;
+    }
+
+    .c-pill-title {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+    }
+
+    .c-pill-value {
+      margin-top: 4px;
+      font-size: 13px;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .c-edit {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 14px;
+    }
+
+    .edit-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+
+    .edit-title {
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .status-line {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .status-line div {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 650;
+    }
+
+    .tiny-arrow {
+      color: var(--primary);
+      text-align: center;
+      font-weight: 900;
+    }
+
+    body:has(#option-a:target) .option:not(#option-a),
+    body:has(#option-b:target) .option:not(#option-b),
+    body:has(#option-c:target) .option:not(#option-c) {
+      display: none;
+    }
+
+    @media (max-width: 900px) {
+      .page { width: 100%; padding: 14px; }
+      .a-grid,
+      .b-layout,
+      .c-layout { grid-template-columns: 1fr; }
+      .flow-arrow { display: none; }
+      .b-flow { grid-template-columns: 1fr; }
+      .b-flow::before { display: none; }
+      .c-row { grid-template-columns: 1fr; }
+      .c-route { grid-template-columns: 1fr; }
+      .tiny-arrow { display: none; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="option" id="option-a">
+      <header class="option-head">
+        <div>
+          <div class="option-title"><span class="dot"></span>方案 A：确认流向优先</div>
+          <div class="option-note">默认只展示已选结果，输入控件压到节点底部，用户先理解链路再修改字段。</div>
+        </div>
+        <button class="btn secondary">编辑绑定</button>
+      </header>
+      <div class="content">
+        <div class="a-grid">
+          <article class="a-node active">
+            <div class="node-top">
+              <div class="node-title">服务</div>
+              <span class="chip">01</span>
+            </div>
+            <div>
+              <div class="node-value">prometheus</div>
+              <div class="node-meta">prod · owner -</div>
+            </div>
+            <div class="node-action-row">
+              <div class="field-shell"><span class="placeholder">搜索或选择服务</span><span class="mono">⌄</span></div>
+              <button class="btn secondary">切换</button>
+            </div>
+          </article>
+          <div class="flow-arrow">
+            <div class="flow-arrow-inner">
+              <span class="arrow-line"></span>
+              <span class="arrow-text">COLLECT</span>
+            </div>
+          </div>
+          <article class="a-node">
+            <div class="node-top">
+              <div class="node-title">采集域</div>
+              <span class="chip">02</span>
+            </div>
+            <div>
+              <div class="node-value">test03-02 / novaobs-system</div>
+              <div class="node-meta">接入成功后自动创建 · collector.yaml</div>
+            </div>
+            <div style="display:flex;gap:8px;margin-top:auto">
+              <span class="chip">K8s</span>
+              <span class="chip">auto group</span>
+              <span class="chip">stdout</span>
+            </div>
+          </article>
+          <div class="flow-arrow">
+            <div class="flow-arrow-inner">
+              <span class="arrow-line"></span>
+              <span class="arrow-text">EXPORT</span>
+            </div>
+          </div>
+          <article class="a-node active">
+            <div class="node-top">
+              <div class="node-title">日志下游</div>
+              <span class="chip">03</span>
+            </div>
+            <div>
+              <div class="node-value">测试环境 · VL</div>
+              <div class="node-meta">global · 查询入口已登记</div>
+            </div>
+            <div class="node-action-row">
+              <div class="field-shell"><span>测试环境 · VL</span><span class="mono">⌄</span></div>
+              <button class="btn secondary">新增</button>
+            </div>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="option" id="option-b">
+      <header class="option-head">
+        <div>
+          <div class="option-title"><span class="dot"></span>方案 B：左侧编辑，右侧链路预览</div>
+          <div class="option-note">把输入框集中在一个窄编辑区，主区域只看服务到采集域再到下游的结果。</div>
+        </div>
+        <button class="btn">保存绑定</button>
+      </header>
+      <div class="content b-layout">
+        <aside class="b-command">
+          <div class="command-title">绑定参数</div>
+          <div class="field-stack">
+            <div>
+              <div class="mini-label">服务</div>
+              <div class="field-shell"><span>prometheus</span><span class="mono">⌄</span></div>
+            </div>
+            <div>
+              <div class="mini-label">日志下游</div>
+              <div class="field-shell"><span>测试环境 · VL</span><span class="mono">⌄</span></div>
+            </div>
+            <button class="btn secondary">高级配置</button>
+          </div>
+        </aside>
+        <section class="b-stage">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div>
+              <div class="node-value">日志接入链路</div>
+              <div class="node-meta">service / collector domain / downstream</div>
+            </div>
+            <span class="chip">config pending</span>
+          </div>
+          <div class="b-flow">
+            <div class="b-card">
+              <div class="circle">01</div>
+              <div class="node-title">服务</div>
+              <div class="node-value">prometheus</div>
+              <div class="node-meta">prod · K8s workload</div>
+            </div>
+            <div class="b-card">
+              <div class="circle">02</div>
+              <div class="node-title">采集域</div>
+              <div class="node-value">test03-02 / novaobs-system</div>
+              <div class="node-meta">接入成功后自动创建</div>
+            </div>
+            <div class="b-card">
+              <div class="circle">03</div>
+              <div class="node-title">日志下游</div>
+              <div class="node-value">测试环境 · VL</div>
+              <div class="node-meta">global · vmui ready</div>
+            </div>
+          </div>
+          <div class="b-footer">
+            <span class="chip">collector.yaml</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn secondary">预览配置</button>
+              <button class="btn">保存路由</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="option" id="option-c">
+      <header class="option-head">
+        <div>
+          <div class="option-title"><span class="dot"></span>方案 C：路由列表优先，右侧编辑抽屉</div>
+          <div class="option-note">适合后续服务多、路由多的场景。默认看已有路由，点某行后在右侧改服务或下游。</div>
+        </div>
+        <button class="btn">新增路由</button>
+      </header>
+      <div class="content c-layout">
+        <section class="c-main">
+          <div class="c-row active">
+            <div>
+              <div class="node-value">prometheus</div>
+              <div class="node-meta">prod · active route</div>
+            </div>
+            <div class="c-route">
+              <div class="c-pill"><div class="c-pill-title">SERVICE</div><div class="c-pill-value">prometheus</div></div>
+              <div class="tiny-arrow">→</div>
+              <div class="c-pill"><div class="c-pill-title">COLLECTOR</div><div class="c-pill-value">test03-02 / novaobs-system</div></div>
+              <div class="tiny-arrow">→</div>
+              <div class="c-pill"><div class="c-pill-title">DOWNSTREAM</div><div class="c-pill-value">测试环境 · VL</div></div>
+            </div>
+            <button class="btn secondary">编辑</button>
+          </div>
+          <div class="c-row">
+            <div>
+              <div class="node-value">cattle-node-agent</div>
+              <div class="node-meta">cattle-system · draft</div>
+            </div>
+            <div class="c-route">
+              <div class="c-pill"><div class="c-pill-title">SERVICE</div><div class="c-pill-value">cattle-node-agent</div></div>
+              <div class="tiny-arrow">→</div>
+              <div class="c-pill"><div class="c-pill-title">COLLECTOR</div><div class="c-pill-value">test03-02 / novaobs-system</div></div>
+              <div class="tiny-arrow">→</div>
+              <div class="c-pill"><div class="c-pill-title">DOWNSTREAM</div><div class="c-pill-value">测试环境 · VL</div></div>
+            </div>
+            <button class="btn secondary">编辑</button>
+          </div>
+          <div class="c-row">
+            <div>
+              <div class="node-value">kube-api-auth</div>
+              <div class="node-meta">cattle-system · draft</div>
+            </div>
+            <div class="c-route">
+              <div class="c-pill"><div class="c-pill-title">SERVICE</div><div class="c-pill-value">kube-api-auth</div></div>
+              <div class="tiny-arrow">→</div>
+              <div class="c-pill"><div class="c-pill-title">COLLECTOR</div><div class="c-pill-value">test03-02 / novaobs-system</div></div>
+              <div class="tiny-arrow">→</div>
+              <div class="c-pill"><div class="c-pill-title">DOWNSTREAM</div><div class="c-pill-value">Kafka prod</div></div>
+            </div>
+            <button class="btn secondary">编辑</button>
+          </div>
+        </section>
+        <aside class="c-edit">
+          <div class="edit-head">
+            <div class="edit-title">编辑绑定</div>
+            <span class="chip">selected</span>
+          </div>
+          <div class="field-stack">
+            <div>
+              <div class="mini-label">服务</div>
+              <div class="field-shell"><span>prometheus</span><span class="mono">⌄</span></div>
+            </div>
+            <div>
+              <div class="mini-label">日志下游</div>
+              <div class="field-shell"><span>测试环境 · VL</span><span class="mono">⌄</span></div>
+            </div>
+            <button class="btn">应用到当前路由</button>
+          </div>
+          <div class="status-line">
+            <div><span>采集域</span><strong>自动维护</strong></div>
+            <div><span>配置</span><strong>collector.yaml</strong></div>
+            <div><span>状态</span><strong>ready</strong></div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+</body>
+</html>
