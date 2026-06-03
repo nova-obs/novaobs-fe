@@ -4,7 +4,21 @@ import { AlertTriangle, ArrowLeft, CheckCircle, RefreshCw, XCircle } from 'lucid
 import { DataPanel } from '../../components/DataPanel';
 import { api } from '../../services/api';
 import type { AgentDetail } from '../../services/types';
-import { shortHash, sourceTypeLabel } from '../pipelines/pipelineConfig';
+
+function shortHash(value?: string) {
+  if (!value) return '-';
+  return value.length > 12 ? value.slice(0, 12) : value;
+}
+
+function sourceTypeLabel(value: string) {
+  const labels: Record<string, string> = {
+    platform_template: '平台模板',
+    group_override: 'Group Override',
+    service_enrichment_patch: '服务属性补齐',
+    service_pipeline_patch: '服务解析规则',
+  };
+  return labels[value] ?? value;
+}
 
 function runtimeStatusLabel(status: string) {
   const labels: Record<string, string> = { online: '在线', stale: '心跳超时', offline: '离线' };
@@ -12,7 +26,7 @@ function runtimeStatusLabel(status: string) {
 }
 
 function runtimeStatusColor(status: string) {
-  if (status === 'online') return 'text-emerald-500';
+  if (status === 'online') return 'text-primary';
   if (status === 'stale') return 'text-amber-500';
   return 'text-muted';
 }
@@ -75,14 +89,14 @@ export function AgentDetailPage() {
               <ArrowLeft className="h-3 w-3" />返回
             </button>
             <span>/</span>
-            <Link className="hover:text-primary" to="/logs?tab=pipelines&section=config">Logs Pipeline</Link>
+            <Link className="hover:text-primary" to="/logs/agents">采集 Agent</Link>
             <span>/</span>
             <span className="text-primary">Agent Detail</span>
           </div>
           <h1 className="truncate font-display text-2xl font-semibold text-on-surface">{detail.instanceUid}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-            <span className={`font-semibold ${runtime.online ? 'text-emerald-500' : 'text-muted'}`}>{runtime.online ? 'online' : 'offline'}</span>
-            <span className={`font-semibold ${runtime.healthy ? 'text-emerald-500' : 'text-amber-500'}`}>{runtime.healthy ? 'healthy' : 'unhealthy'}</span>
+            <span className={`font-semibold ${runtime.online ? 'text-primary' : 'text-muted'}`}>{runtime.online ? 'online' : 'offline'}</span>
+            <span className={`font-semibold ${runtime.healthy ? 'text-primary' : 'text-amber-500'}`}>{runtime.healthy ? 'healthy' : 'unhealthy'}</span>
             <span className={`font-semibold ${runtimeStatusColor(runtime.runtimeStatus)}`}>{runtimeStatusLabel(runtime.runtimeStatus)}</span>
             <span className="text-muted">last seen: {ageText(runtime.lastSeenAt)}</span>
           </div>
@@ -93,7 +107,7 @@ export function AgentDetailPage() {
       </div>
 
       {!runtime.remoteConfigCapable ? (
-        <Notice tone="amber" title="该 Agent 不支持 Remote Config" message="需要使用支持 AcceptsRemoteConfig 的 OpAMP Agent 或 Supervisor，才能接收平台下发的服务级配置。" />
+        <Notice tone="amber" title="Remote Config 不可用" message="AcceptsRemoteConfig=false" />
       ) : null}
       {configuration.expectedConfigHash && inSync ? (
         <Notice tone="green" title="配置已对齐" message={`发布目标与 Agent effective config 一致，hash ${shortHash(configuration.effectiveConfigHash)}`} />
@@ -123,7 +137,7 @@ export function AgentDetailPage() {
           </DataPanel>
 
           <DataPanel title="服务绑定" meta={`${services.length} 个服务 · ${onboardings.length} 条接入记录`}>
-            {services.length === 0 ? <p className="py-3 text-sm text-muted">暂无服务绑定。</p> : (
+            {services.length === 0 ? <p className="py-3 text-sm text-muted">服务绑定为空</p> : (
               <div className="space-y-2">
                 {services.map((item) => (
                   <div key={item.id} className="rounded border border-outline bg-surface-lowest p-3">
@@ -217,7 +231,7 @@ function AttributeList({ title, items }: { title: string; items: Array<{ key: st
 function SourceBreakdown({ detail }: { detail: AgentDetail }) {
   const sources = detail.configuration.configSources;
   if (!sources || sources.sourceBreakdown.length === 0) {
-    return <p className="py-3 text-sm text-muted">暂无服务级配置来源。</p>;
+    return <p className="py-3 text-sm text-muted">配置来源为空</p>;
   }
   return (
     <div className="space-y-2">
@@ -239,7 +253,7 @@ function Notice({ tone, title, message }: { tone: 'amber' | 'red' | 'green'; tit
   const color = tone === 'red'
     ? 'border-red-500/30 bg-red-900/10 text-red-400'
     : tone === 'green'
-      ? 'border-emerald-500/30 bg-emerald-900/10 text-emerald-500'
+      ? 'border-primary/25 bg-primary-soft text-primary'
       : 'border-amber-500/30 bg-amber-900/10 text-amber-500';
   const Icon = tone === 'red' ? XCircle : tone === 'green' ? CheckCircle : AlertTriangle;
   return (

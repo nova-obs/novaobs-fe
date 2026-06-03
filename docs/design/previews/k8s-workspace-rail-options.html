@@ -1,0 +1,628 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>K8s 工作台左侧纵栏方案预览</title>
+  <style>
+    :root {
+      --bg: #eef3fb;
+      --surface: #f6f8fc;
+      --white: #fff;
+      --primary: #0d5bd7;
+      --primary-soft: #e5f0ff;
+      --secondary: #00a4ff;
+      --outline: #d8e2ef;
+      --text: #122033;
+      --muted: #637083;
+      --danger: #b4232f;
+      --warning: #cc6b1e;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(115deg, transparent 0%, rgba(13, 91, 215, 0.12) 38%, transparent 64%),
+        linear-gradient(25deg, transparent 12%, rgba(0, 164, 255, 0.1) 46%, transparent 72%),
+        var(--bg);
+      color: var(--text);
+      font-family: Geist, Satoshi, Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .page {
+      width: 1680px;
+      margin: 0 auto;
+      padding: 22px;
+    }
+
+    .option {
+      margin-bottom: 34px;
+    }
+
+    .option-title {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0 0 12px;
+      color: var(--text);
+      font-size: 18px;
+      font-weight: 750;
+      letter-spacing: 0;
+    }
+
+    .option-title span {
+      display: inline-flex;
+      align-items: center;
+      height: 26px;
+      border-radius: 8px;
+      background: var(--primary-soft);
+      padding: 0 9px;
+      color: var(--primary);
+      font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .app {
+      display: grid;
+      min-height: 760px;
+      overflow: hidden;
+      border: 1px solid rgba(216, 226, 239, 0.95);
+      border-radius: 8px;
+      background: rgba(246, 248, 252, 0.72);
+      box-shadow: 0 18px 42px rgba(34, 75, 130, 0.12);
+    }
+
+    .app-a { grid-template-columns: 56px 248px 1fr; }
+    .app-b { grid-template-columns: 72px 248px 1fr; }
+    .app-c { grid-template-columns: 96px 236px 1fr; }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 58px;
+      margin-bottom: 14px;
+      border: 1px solid rgba(216, 226, 239, 0.85);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.78);
+      padding: 0 18px;
+    }
+
+    .search {
+      display: flex;
+      align-items: center;
+      width: 430px;
+      height: 36px;
+      border: 1px solid rgba(216, 226, 239, 0.9);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.72);
+      color: #92a0b1;
+      padding: 0 12px;
+      font-size: 13px;
+    }
+
+    .chips {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .chip {
+      height: 34px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      border: 1px solid rgba(216, 226, 239, 0.8);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.65);
+      padding: 0 12px;
+    }
+
+    .chip.primary {
+      border-color: rgba(13, 91, 215, 0.18);
+      background: rgba(229, 240, 255, 0.72);
+      color: var(--primary);
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--primary);
+    }
+
+    .platform {
+      position: relative;
+      border-right: 1px solid rgba(216, 226, 239, 0.74);
+      background:
+        radial-gradient(ellipse at 30% 96%, rgba(13, 91, 215, 0.13), transparent 48%),
+        rgba(255, 255, 255, 0.42);
+    }
+
+    .rail-a {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 8px;
+      gap: 14px;
+    }
+
+    .back-square {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 1px solid rgba(13, 91, 215, 0.22);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.82);
+      color: var(--primary);
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+    }
+
+    .arrow {
+      width: 14px;
+      height: 14px;
+      border-left: 2px solid currentColor;
+      border-bottom: 2px solid currentColor;
+      transform: rotate(45deg);
+      margin-left: 4px;
+    }
+
+    .vertical-label {
+      writing-mode: vertical-rl;
+      text-orientation: mixed;
+      color: var(--muted);
+      font: 700 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: 0.08em;
+    }
+
+    .rail-b {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      padding: 16px 10px;
+      gap: 12px;
+    }
+
+    .brand-mini {
+      width: 46px;
+      height: 46px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--primary);
+      color: #fff;
+      font-weight: 850;
+      letter-spacing: -0.03em;
+    }
+
+    .mode-pill {
+      width: 50px;
+      border: 1px solid rgba(216, 226, 239, 0.9);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.7);
+      padding: 9px 0;
+      text-align: center;
+      color: var(--muted);
+      font: 700 10px/1.35 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .rail-c {
+      padding: 14px 10px;
+    }
+
+    .rail-c-card {
+      height: calc(100% - 28px);
+      border: 1px solid rgba(216, 226, 239, 0.85);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.62);
+      padding: 10px;
+    }
+
+    .rail-c .back-square {
+      width: 100%;
+    }
+
+    .mini-stack {
+      margin-top: 14px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .mini-item {
+      min-height: 38px;
+      border-radius: 8px;
+      background: rgba(229, 240, 255, 0.56);
+      padding: 8px;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .mini-item strong {
+      display: block;
+      margin-top: 3px;
+      color: var(--text);
+      font: 800 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .k8s-nav {
+      position: relative;
+      overflow: hidden;
+      border-right: 1px solid rgba(216, 226, 239, 0.75);
+      background:
+        radial-gradient(ellipse at 22% 4%, rgba(13, 91, 215, 0.13), transparent 44%),
+        rgba(255, 255, 255, 0.62);
+      padding: 18px;
+    }
+
+    .k8s-head {
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.48);
+      padding: 14px;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    }
+
+    .k8s-head h2 {
+      margin: 0;
+      font-size: 19px;
+      letter-spacing: 0;
+    }
+
+    .k8s-head code {
+      display: block;
+      margin-top: 7px;
+      color: var(--muted);
+      font-size: 11px;
+    }
+
+    .status-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .status {
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.52);
+      padding: 9px;
+      font-size: 10px;
+      color: var(--muted);
+    }
+
+    .status strong {
+      display: block;
+      margin-top: 4px;
+      color: var(--text);
+      font: 800 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .nav-group {
+      margin-top: 22px;
+    }
+
+    .nav-group-title {
+      margin: 0 0 8px;
+      padding-left: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .nav-item {
+      height: 39px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border-radius: 8px;
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .nav-item.active {
+      background: var(--primary-soft);
+      color: var(--primary);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .icon {
+      width: 14px;
+      height: 14px;
+      border: 1.8px solid currentColor;
+      border-radius: 4px;
+      opacity: 0.82;
+    }
+
+    .content {
+      padding: 14px 18px 18px;
+      min-width: 0;
+    }
+
+    .hero {
+      border: 1px solid rgba(216, 226, 239, 0.9);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.76);
+      padding: 18px 20px;
+      margin-bottom: 14px;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      color: var(--primary);
+      font: 850 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      text-transform: uppercase;
+      letter-spacing: 0.16em;
+    }
+
+    .hero h1 {
+      margin: 10px 0 0;
+      font-size: 27px;
+      line-height: 1;
+      letter-spacing: -0.02em;
+    }
+
+    .hero p {
+      margin: 8px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .workspace-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      border: 1px solid rgba(216, 226, 239, 0.9);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.76);
+      padding: 13px 16px;
+      margin-bottom: 14px;
+    }
+
+    .breadcrumb {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .breadcrumb b {
+      color: var(--primary);
+    }
+
+    select {
+      width: 220px;
+      height: 36px;
+      border: 1px solid rgba(216, 226, 239, 0.96);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.76);
+      padding: 0 10px;
+      color: var(--text);
+      font-weight: 750;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1.25fr 0.9fr;
+      gap: 14px;
+    }
+
+    .panel {
+      min-height: 230px;
+      border: 1px solid rgba(216, 226, 239, 0.9);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.72);
+      padding: 18px;
+    }
+
+    .panel h3 {
+      margin: 0;
+      font-size: 16px;
+    }
+
+    .panel small {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-top: 14px;
+    }
+
+    .metric {
+      min-height: 88px;
+      border: 1px solid rgba(216, 226, 239, 0.78);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.6);
+      padding: 13px;
+    }
+
+    .metric b {
+      display: block;
+      margin-top: 12px;
+      font: 850 25px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .diagram {
+      position: relative;
+      height: 170px;
+      margin-top: 18px;
+      border-radius: 8px;
+      background: linear-gradient(135deg, rgba(229, 240, 255, 0.62), rgba(255, 255, 255, 0.22));
+    }
+
+    .node {
+      position: absolute;
+      border: 1px solid rgba(13, 91, 215, 0.18);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.76);
+      padding: 10px 12px;
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 800;
+      box-shadow: 0 10px 20px rgba(40, 83, 140, 0.06);
+    }
+
+    .node small {
+      display: block;
+      margin-top: 3px;
+      font: 700 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .n1 { left: 26px; top: 60px; }
+    .n2 { left: 210px; top: 34px; }
+    .n3 { left: 254px; top: 116px; }
+    .n4 { left: 438px; top: 76px; }
+
+    .audit-list {
+      margin-top: 16px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .audit {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-radius: 8px;
+      background: rgba(246, 248, 252, 0.72);
+      padding: 12px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .audit span {
+      color: var(--muted);
+      font: 700 11px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="option">
+      <h1 class="option-title"><span>A</span>极窄返回锚点：56px，仅保留返回动作</h1>
+      <div class="app app-a">
+        <aside class="platform rail-a">
+          <div class="back-square" title="返回 K8s 集群总览"><div class="arrow"></div></div>
+          <div class="vertical-label">K8s Fleet</div>
+        </aside>
+        <nav class="k8s-nav">
+          <div class="k8s-head">
+            <h2>K8s 运维</h2>
+            <code>cluster/test03-02</code>
+            <div class="status-grid">
+              <div class="status">API<strong>active</strong></div>
+              <div class="status">Mode<strong>direct/ro</strong></div>
+            </div>
+          </div>
+          <div class="nav-group"><div class="nav-group-title">总览</div><div class="nav-item active"><i class="icon"></i>Dashboard</div></div>
+          <div class="nav-group"><div class="nav-group-title">资源</div><div class="nav-item"><i class="icon"></i>命名空间</div><div class="nav-item"><i class="icon"></i>运行时拓扑</div></div>
+          <div class="nav-group"><div class="nav-group-title">访问控制</div><div class="nav-item"><i class="icon"></i>访问授权</div><div class="nav-item"><i class="icon"></i>RBAC</div></div>
+          <div class="nav-group"><div class="nav-group-title">交付运维</div><div class="nav-item"><i class="icon"></i>资源视图</div><div class="nav-item"><i class="icon"></i>发布部署</div><div class="nav-item"><i class="icon"></i>操作审计</div></div>
+        </nav>
+        <section class="content">
+          <div class="topbar"><div class="search">搜索服务、指标、日志、告警</div><div class="chips"><span class="chip primary"><i class="dot"></i>平台运行正常</span><span class="chip">配置已同步</span><span class="chip">最近 15 分钟</span></div></div>
+          <div class="hero"><div><div class="eyebrow"><i class="dot"></i>Kubernetes Operations</div><h1>Dashboard</h1><p>test03-02 · 集群态势与同步状态</p></div><div class="chips"><span class="chip primary">权限接入 NovaObs RBAC</span></div></div>
+          <div class="workspace-bar"><div class="breadcrumb"><b>K8s 运维</b> / test03-02 / Dashboard</div><select><option>test03-02</option></select></div>
+          <div class="grid">
+            <article class="panel"><h3>集群态势</h3><small>source: Kubernetes API · cluster/test03-02</small><div class="diagram"><div class="node n1">API Server<small>unknown</small></div><div class="node n2">Workloads<small>0 active</small></div><div class="node n3">RBAC Sync<small>NovaObs policy</small></div><div class="node n4">Namespace<small>0 domains</small></div></div></article>
+            <article class="panel"><h3>迁移闭环</h3><small>加载 K8sOps Dashboard</small><div class="audit-list"><div class="audit">接入来源 <span>startorch</span></div><div class="audit">权限模型 <span>NovaObs RBAC</span></div><div class="audit">凭据托管 <span>Secret Store</span></div></div></article>
+          </div>
+          <div class="metrics"><div class="metric">运行工作负载<b>0</b><small>Deployment</small></div><div class="metric">命名空间<b>0</b><small>Kubernetes API</small></div><div class="metric">Pod Ready<b>0/0</b><small>0 warning</small></div><div class="metric">已登记集群<b>1</b><small>NovaObs metadata</small></div></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="option">
+      <h1 class="option-title"><span>B</span>窄品牌轨道：72px，返回 + 当前模式识别</h1>
+      <div class="app app-b">
+        <aside class="platform rail-b">
+          <div class="brand-mini">N</div>
+          <div class="back-square" title="返回 K8s 集群总览"><div class="arrow"></div></div>
+          <div class="mode-pill">K8s<br />Focus</div>
+        </aside>
+        <nav class="k8s-nav">
+          <div class="k8s-head">
+            <h2>K8s 运维</h2>
+            <code>cluster/test03-02</code>
+            <div class="status-grid">
+              <div class="status">API<strong>active</strong></div>
+              <div class="status">Mode<strong>direct/ro</strong></div>
+            </div>
+          </div>
+          <div class="nav-group"><div class="nav-group-title">总览</div><div class="nav-item active"><i class="icon"></i>Dashboard</div></div>
+          <div class="nav-group"><div class="nav-group-title">资源</div><div class="nav-item"><i class="icon"></i>命名空间</div><div class="nav-item"><i class="icon"></i>运行时拓扑</div></div>
+          <div class="nav-group"><div class="nav-group-title">访问控制</div><div class="nav-item"><i class="icon"></i>访问授权</div><div class="nav-item"><i class="icon"></i>RBAC</div></div>
+          <div class="nav-group"><div class="nav-group-title">交付运维</div><div class="nav-item"><i class="icon"></i>资源视图</div><div class="nav-item"><i class="icon"></i>发布部署</div><div class="nav-item"><i class="icon"></i>操作审计</div></div>
+        </nav>
+        <section class="content">
+          <div class="topbar"><div class="search">搜索服务、指标、日志、告警</div><div class="chips"><span class="chip primary"><i class="dot"></i>平台运行正常</span><span class="chip">配置已同步</span><span class="chip">最近 15 分钟</span></div></div>
+          <div class="hero"><div><div class="eyebrow"><i class="dot"></i>Kubernetes Operations</div><h1>Dashboard</h1><p>test03-02 · 集群态势与同步状态</p></div><div class="chips"><span class="chip primary">权限接入 NovaObs RBAC</span></div></div>
+          <div class="workspace-bar"><div class="breadcrumb"><b>K8s 运维</b> / test03-02 / Dashboard</div><select><option>test03-02</option></select></div>
+          <div class="grid">
+            <article class="panel"><h3>集群态势</h3><small>source: Kubernetes API · cluster/test03-02</small><div class="diagram"><div class="node n1">API Server<small>unknown</small></div><div class="node n2">Workloads<small>0 active</small></div><div class="node n3">RBAC Sync<small>NovaObs policy</small></div><div class="node n4">Namespace<small>0 domains</small></div></div></article>
+            <article class="panel"><h3>迁移闭环</h3><small>加载 K8sOps Dashboard</small><div class="audit-list"><div class="audit">接入来源 <span>startorch</span></div><div class="audit">权限模型 <span>NovaObs RBAC</span></div><div class="audit">凭据托管 <span>Secret Store</span></div></div></article>
+          </div>
+          <div class="metrics"><div class="metric">运行工作负载<b>0</b><small>Deployment</small></div><div class="metric">命名空间<b>0</b><small>Kubernetes API</small></div><div class="metric">Pod Ready<b>0/0</b><small>0 warning</small></div><div class="metric">已登记集群<b>1</b><small>NovaObs metadata</small></div></div>
+        </section>
+      </div>
+    </section>
+
+    <section class="option">
+      <h1 class="option-title"><span>C</span>紧凑状态轨道：96px，保留少量状态但不解释</h1>
+      <div class="app app-c">
+        <aside class="platform rail-c">
+          <div class="rail-c-card">
+            <div class="back-square" title="返回 K8s 集群总览"><div class="arrow"></div></div>
+            <div class="mini-stack">
+              <div class="mini-item">Mode<strong>Focus</strong></div>
+              <div class="mini-item">Fleet<strong>1</strong></div>
+              <div class="mini-item">Scope<strong>RO</strong></div>
+            </div>
+          </div>
+        </aside>
+        <nav class="k8s-nav">
+          <div class="k8s-head">
+            <h2>K8s 运维</h2>
+            <code>cluster/test03-02</code>
+            <div class="status-grid">
+              <div class="status">API<strong>active</strong></div>
+              <div class="status">Mode<strong>direct/ro</strong></div>
+            </div>
+          </div>
+          <div class="nav-group"><div class="nav-group-title">总览</div><div class="nav-item active"><i class="icon"></i>Dashboard</div></div>
+          <div class="nav-group"><div class="nav-group-title">资源</div><div class="nav-item"><i class="icon"></i>命名空间</div><div class="nav-item"><i class="icon"></i>运行时拓扑</div></div>
+          <div class="nav-group"><div class="nav-group-title">访问控制</div><div class="nav-item"><i class="icon"></i>访问授权</div><div class="nav-item"><i class="icon"></i>RBAC</div></div>
+          <div class="nav-group"><div class="nav-group-title">交付运维</div><div class="nav-item"><i class="icon"></i>资源视图</div><div class="nav-item"><i class="icon"></i>发布部署</div><div class="nav-item"><i class="icon"></i>操作审计</div></div>
+        </nav>
+        <section class="content">
+          <div class="topbar"><div class="search">搜索服务、指标、日志、告警</div><div class="chips"><span class="chip primary"><i class="dot"></i>平台运行正常</span><span class="chip">配置已同步</span><span class="chip">最近 15 分钟</span></div></div>
+          <div class="hero"><div><div class="eyebrow"><i class="dot"></i>Kubernetes Operations</div><h1>Dashboard</h1><p>test03-02 · 集群态势与同步状态</p></div><div class="chips"><span class="chip primary">权限接入 NovaObs RBAC</span></div></div>
+          <div class="workspace-bar"><div class="breadcrumb"><b>K8s 运维</b> / test03-02 / Dashboard</div><select><option>test03-02</option></select></div>
+          <div class="grid">
+            <article class="panel"><h3>集群态势</h3><small>source: Kubernetes API · cluster/test03-02</small><div class="diagram"><div class="node n1">API Server<small>unknown</small></div><div class="node n2">Workloads<small>0 active</small></div><div class="node n3">RBAC Sync<small>NovaObs policy</small></div><div class="node n4">Namespace<small>0 domains</small></div></div></article>
+            <article class="panel"><h3>迁移闭环</h3><small>加载 K8sOps Dashboard</small><div class="audit-list"><div class="audit">接入来源 <span>startorch</span></div><div class="audit">权限模型 <span>NovaObs RBAC</span></div><div class="audit">凭据托管 <span>Secret Store</span></div></div></article>
+          </div>
+          <div class="metrics"><div class="metric">运行工作负载<b>0</b><small>Deployment</small></div><div class="metric">命名空间<b>0</b><small>Kubernetes API</small></div><div class="metric">Pod Ready<b>0/0</b><small>0 warning</small></div><div class="metric">已登记集群<b>1</b><small>NovaObs metadata</small></div></div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

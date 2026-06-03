@@ -1,0 +1,923 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NovaObs Logs 接入配置与采集 Agent</title>
+  <style>
+    :root {
+      --bg: #eef3fb;
+      --paper: #ffffff;
+      --paper-2: #f7faff;
+      --soft: #edf4ff;
+      --line: #d8e2ef;
+      --line-strong: #c3d2e7;
+      --ink: #122033;
+      --muted: #637083;
+      --blue: #0d5bd7;
+      --cyan: #00a4ff;
+      --amber: #cc6b1e;
+      --red: #b4232f;
+      --green: #138a58;
+      --navy: #101a32;
+      font-family: Geist, Satoshi, Aptos, "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+      color: var(--ink);
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      min-width: 1440px;
+      background:
+        radial-gradient(circle at 8% 0%, rgba(13, 91, 215, 0.15), transparent 30%),
+        radial-gradient(circle at 86% 0%, rgba(0, 164, 255, 0.13), transparent 32%),
+        linear-gradient(135deg, #f9fbff 0%, var(--bg) 52%, #f8fbff 100%);
+    }
+
+    .page {
+      padding: 24px 28px 52px;
+    }
+
+    .intro {
+      max-width: 1560px;
+      margin: 0 auto 14px;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 24px;
+      align-items: end;
+    }
+
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.08;
+      letter-spacing: 0;
+    }
+
+    .intro p {
+      margin: 8px 0 0;
+      max-width: 900px;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    .jump {
+      display: flex;
+      gap: 8px;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.82);
+    }
+
+    .jump a {
+      height: 30px;
+      min-width: 104px;
+      border-radius: 7px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 820;
+      text-decoration: none;
+    }
+
+    .jump a:first-child {
+      color: var(--blue);
+      background: var(--soft);
+    }
+
+    .option {
+      max-width: 1560px;
+      margin: 0 auto 28px;
+    }
+
+    .option h2 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      letter-spacing: 0;
+    }
+
+    .console {
+      height: 900px;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      overflow: hidden;
+      background: var(--paper);
+      box-shadow: 0 28px 70px -44px rgba(16, 32, 55, 0.62);
+      display: grid;
+      grid-template-columns: 70px 226px minmax(0, 1fr);
+    }
+
+    .global-rail {
+      background: linear-gradient(180deg, var(--navy), #0b1326);
+      color: white;
+      padding: 14px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .mark {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: linear-gradient(135deg, var(--blue), var(--cyan));
+      font-weight: 900;
+    }
+
+    .rail-icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: rgba(255,255,255,0.64);
+      border: 1px solid transparent;
+    }
+
+    .rail-icon.active {
+      color: white;
+      background: rgba(13, 91, 215, 0.28);
+      border-color: rgba(0, 164, 255, 0.34);
+    }
+
+    .glyph {
+      width: 17px;
+      height: 17px;
+      border: 1.7px solid currentColor;
+      border-radius: 5px;
+      position: relative;
+    }
+
+    .glyph::after {
+      content: "";
+      position: absolute;
+      inset: 5px;
+      border-radius: 99px;
+      background: currentColor;
+    }
+
+    .module-nav {
+      border-right: 1px solid var(--line);
+      background:
+        linear-gradient(180deg, rgba(255,255,255,0.96), rgba(245,249,255,0.96)),
+        radial-gradient(circle at 20% 0%, rgba(13,91,215,0.1), transparent 34%);
+      padding: 16px 12px;
+      display: grid;
+      grid-template-rows: auto auto 1fr auto;
+      gap: 14px;
+    }
+
+    .module-title {
+      padding: 0 4px 12px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .module-title strong {
+      display: block;
+      font-size: 17px;
+      line-height: 1.1;
+    }
+
+    .module-title code {
+      display: block;
+      margin-top: 8px;
+      color: var(--muted);
+      font: 760 11px/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .scope-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.82);
+      padding: 10px;
+    }
+
+    .scope-card span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .scope-card strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .subnav {
+      display: grid;
+      align-content: start;
+      gap: 7px;
+    }
+
+    .subnav a {
+      min-height: 42px;
+      border-radius: 8px;
+      display: grid;
+      grid-template-columns: 18px 1fr;
+      gap: 9px;
+      align-items: center;
+      padding: 8px 10px;
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 12px;
+      font-weight: 820;
+    }
+
+    .subnav a.active {
+      color: var(--blue);
+      background: linear-gradient(135deg, var(--soft), rgba(255,255,255,0.88));
+      box-shadow: inset 3px 0 0 var(--blue);
+    }
+
+    .nav-symbol {
+      width: 16px;
+      height: 16px;
+      border: 1.6px solid currentColor;
+      border-radius: 4px;
+    }
+
+    .subnav small {
+      display: block;
+      margin-top: 2px;
+      color: #7c8a9d;
+      font-size: 10px;
+      font-weight: 720;
+    }
+
+    .user-box {
+      border-top: 1px solid var(--line);
+      padding-top: 12px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+    }
+
+    .workspace {
+      min-width: 0;
+      display: grid;
+      grid-template-rows: 58px 1fr;
+      background:
+        linear-gradient(180deg, rgba(247,250,255,0.74), rgba(238,243,251,0.88));
+    }
+
+    .topbar {
+      display: grid;
+      grid-template-columns: 390px 1fr auto;
+      align-items: center;
+      gap: 14px;
+      padding: 0 16px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255,255,255,0.88);
+      backdrop-filter: blur(12px);
+    }
+
+    .search {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--paper-2);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 10px;
+      color: #778497;
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .kbd {
+      padding: 3px 6px;
+      border: 1px solid var(--line);
+      border-radius: 5px;
+      background: white;
+      color: #8a98aa;
+      font: 760 10px ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+
+    .crumbs {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .crumbs span:last-child { color: var(--ink); }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .chip {
+      height: 30px;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.9);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .chip.primary {
+      color: var(--blue);
+      border-color: #bfdbff;
+      background: #edf5ff;
+    }
+
+    .content {
+      min-width: 0;
+      padding: 14px;
+      display: grid;
+      grid-template-rows: 54px minmax(0, 1fr);
+      gap: 12px;
+      overflow: hidden;
+    }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.9);
+      box-shadow: 0 18px 44px -38px rgba(16, 32, 55, 0.56);
+      overflow: hidden;
+    }
+
+    .toolbar {
+      display: grid;
+      grid-template-columns: minmax(280px, 1fr) 180px 170px auto;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 10px;
+    }
+
+    .select-like {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 0 10px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 800;
+      min-width: 0;
+    }
+
+    .select-like span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 820;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .select-like strong {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .caret {
+      width: 8px;
+      height: 8px;
+      border-right: 1.6px solid #718096;
+      border-bottom: 1.6px solid #718096;
+      transform: rotate(45deg) translateY(-2px);
+      flex: 0 0 auto;
+    }
+
+    .btn {
+      height: 30px;
+      border-radius: 7px;
+      border: 1px solid var(--line);
+      background: white;
+      color: var(--ink);
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 0 10px;
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .btn.primary {
+      color: white;
+      border-color: var(--blue);
+      background: var(--blue);
+    }
+
+    .flow-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .panel-head {
+      min-height: 46px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .panel-title {
+      display: grid;
+      gap: 2px;
+    }
+
+    .panel-title strong {
+      font-size: 13px;
+      letter-spacing: 0;
+    }
+
+    .panel-title span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 680;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 11px;
+    }
+
+    th {
+      color: #738197;
+      text-align: left;
+      font-size: 10px;
+      font-weight: 840;
+      padding: 8px 10px;
+      background: #f6f9fe;
+      border-bottom: 1px solid var(--line);
+    }
+
+    td {
+      padding: 9px 10px;
+      border-bottom: 1px solid #e6edf7;
+      vertical-align: top;
+    }
+
+    tr.selected td {
+      background: #edf5ff;
+      box-shadow: inset 3px 0 0 var(--blue);
+    }
+
+    .mono {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      letter-spacing: 0;
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 99px;
+      background: var(--green);
+      box-shadow: 0 0 0 4px rgba(19, 138, 88, 0.1);
+      display: inline-block;
+      flex: 0 0 auto;
+    }
+
+    .dot.blue {
+      background: var(--blue);
+      box-shadow: 0 0 0 4px rgba(13, 91, 215, 0.1);
+    }
+
+    .dot.amber {
+      background: var(--amber);
+      box-shadow: 0 0 0 4px rgba(204, 107, 30, 0.12);
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      color: var(--green);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .status.warn { color: var(--amber); }
+    .status.fail { color: var(--red); }
+
+    .form {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+      align-content: start;
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+    }
+
+    .field label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .input {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 8px 10px;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 6px;
+    }
+
+    .segmented span {
+      min-height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: white;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 780;
+    }
+
+    .segmented span.active {
+      color: var(--blue);
+      border-color: #bfdbff;
+      background: #edf5ff;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #f7faff;
+    }
+
+    .step {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 8px;
+    }
+
+    .step span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 820;
+    }
+
+    .step strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 12px;
+    }
+
+    .agent-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 380px;
+      gap: 12px;
+      min-height: 0;
+    }
+
+    .agent-main {
+      display: grid;
+      grid-template-rows: auto minmax(0, 1fr);
+      min-height: 0;
+    }
+
+    .stat-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      background: #f7faff;
+    }
+
+    .stat {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 8px 10px;
+    }
+
+    .stat span {
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 820;
+    }
+
+    .stat strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 17px;
+    }
+
+    .yaml {
+      min-height: 230px;
+      background: #0f172a;
+      color: #d5e1f2;
+      border-radius: 8px;
+      padding: 10px;
+      font: 650 10px/1.56 ui-monospace, SFMono-Regular, Menlo, monospace;
+      white-space: pre-wrap;
+      overflow: hidden;
+    }
+
+    .impact-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .impact {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 9px;
+      display: grid;
+      gap: 5px;
+    }
+
+    .impact strong {
+      font-size: 12px;
+    }
+
+    .impact span {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 720;
+    }
+
+    @media (max-width: 900px) {
+      body { min-width: 0; }
+      .page { padding: 14px; }
+      .intro, .console, .flow-main, .agent-layout, .toolbar { grid-template-columns: 1fr; }
+      .console { height: auto; }
+      .content { grid-template-rows: auto; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro">
+      <div>
+        <h1>Logs 闭环页面：接入配置与采集 Agent</h1>
+        <p>闭环顺序是接入配置创建路由，Agent 接收并采集，日志分析加载 VMUI，最后在日志告警里做规则。这里先设计前两步，避免接入配置和 Agent 运维混成一个复杂页面。</p>
+      </div>
+      <nav class="jump">
+        <a href="#onboarding">接入配置</a>
+        <a href="#agents">采集 Agent</a>
+      </nav>
+    </section>
+
+    <section id="onboarding" class="option">
+      <h2>接入配置：服务、来源、Agent、VL 端点一次绑定</h2>
+      <div class="console">
+        <aside class="global-rail">
+          <div class="mark">N</div>
+          <div class="rail-icon"><span class="glyph"></span></div>
+          <div class="rail-icon active"><span class="glyph"></span></div>
+          <div class="rail-icon"><span class="glyph"></span></div>
+          <div style="flex:1"></div>
+          <div class="rail-icon"><span class="glyph"></span></div>
+        </aside>
+        <aside class="module-nav">
+          <div class="module-title">
+            <strong>Logs</strong>
+            <code>config / agent / explore / alert</code>
+          </div>
+          <div class="scope-card">
+            <span>当前视角</span>
+            <strong>接入配置</strong>
+          </div>
+          <nav class="subnav">
+            <a class="active" href="#"><i class="nav-symbol"></i><span>接入配置<small>来源、路由、端点</small></span></a>
+            <a href="#agents"><i class="nav-symbol"></i><span>采集 Agent<small>实例、配置、状态</small></span></a>
+            <a href="#"><i class="nav-symbol"></i><span>日志分析<small>服务与 VMUI</small></span></a>
+            <a href="#"><i class="nav-symbol"></i><span>日志告警<small>规则与预览</small></span></a>
+          </nav>
+          <div class="user-box">
+            <div>dev-admin</div>
+            <div class="mono">logs:manage</div>
+          </div>
+        </aside>
+        <section class="workspace">
+          <header class="topbar">
+            <div class="search">搜索服务、路由、Agent、VL 端点 <span class="kbd">⌘K</span></div>
+            <div class="crumbs"><span>NovaObs</span><span>/</span><span>Logs</span><span>/</span><span>接入配置</span></div>
+            <div class="top-actions">
+              <span class="chip primary"><i class="dot blue"></i> 采集策略已同步</span>
+              <span class="chip">最近 15 分钟</span>
+            </div>
+          </header>
+          <div class="content">
+            <section class="panel toolbar">
+              <div class="select-like"><div><span>服务</span><strong>全部服务</strong></div><i class="caret"></i></div>
+              <div class="select-like"><div><span>来源</span><strong>全部</strong></div><i class="caret"></i></div>
+              <div class="select-like"><div><span>状态</span><strong>active</strong></div><i class="caret"></i></div>
+              <div class="top-actions"><button class="btn">探测选中</button><button class="btn primary">新增接入</button></div>
+            </section>
+            <section class="flow-main">
+              <main class="panel">
+                <div class="steps">
+                  <div class="step"><span>1 接入配置</span><strong>route ready</strong></div>
+                  <div class="step"><span>2 Agent 应用</span><strong>109 / 118</strong></div>
+                  <div class="step"><span>3 日志入库</span><strong>vl 200 ok</strong></div>
+                  <div class="step"><span>4 可分析</span><strong>VMUI ready</strong></div>
+                </div>
+                <div class="panel-head">
+                  <div class="panel-title"><strong>接入路由</strong><span>每行是一条服务日志链路</span></div>
+                  <button class="btn">批量发布</button>
+                </div>
+                <table>
+                  <thead><tr><th>Service</th><th>Source</th><th>AgentGroup</th><th>VL Endpoint</th><th>Status</th><th>Last Probe</th></tr></thead>
+                  <tbody>
+                    <tr class="selected"><td>logplatform-api</td><td>k8s stdout<br><span class="mono">logplatform/api</span></td><td>otel-ds-prod</td><td>vl-shared-prod<br>vl-shadow-legacy</td><td><span class="status"><i class="dot"></i> active</span></td><td>12s ago</td></tr>
+                    <tr><td>billing-stream</td><td>vm file<br><span class="mono">/data/logs/billing/*.log</span></td><td>vm-file-agent</td><td>vl-shared-prod</td><td><span class="status"><i class="dot"></i> active</span></td><td>41s ago</td></tr>
+                    <tr><td>edge-gateway</td><td>k8s hostpath<br><span class="mono">ingress/*.log</span></td><td>otel-ds-prod</td><td>vl-shadow-legacy</td><td><span class="status warn"><i class="dot amber"></i> shadow</span></td><td>1m ago</td></tr>
+                    <tr><td>audit-worker</td><td>vm file<br><span class="mono">/var/log/audit/*.log</span></td><td>vm-file-agent</td><td>vl-payment</td><td><span class="status fail"><i class="dot amber"></i> failed</span></td><td>hash drift</td></tr>
+                  </tbody>
+                </table>
+              </main>
+              <aside class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><strong>编辑接入</strong><span>最少字段完成一条链路</span></div>
+                  <button class="btn">复制</button>
+                </div>
+                <div class="form">
+                  <div class="field">
+                    <label>服务</label>
+                    <div class="input">logplatform-api</div>
+                  </div>
+                  <div class="field">
+                    <label>采集方式</label>
+                    <div class="segmented"><span class="active">stdout</span><span>hostpath</span><span>vm file</span></div>
+                  </div>
+                  <div class="field">
+                    <label>范围</label>
+                    <div class="input mono">test03-02 / logplatform / api</div>
+                  </div>
+                  <div class="field">
+                    <label>AgentGroup</label>
+                    <div class="input">otel-ds-prod</div>
+                  </div>
+                  <div class="field">
+                    <label>VL 端点</label>
+                    <div class="input">vl-shared-prod, vl-shadow-legacy</div>
+                  </div>
+                  <div class="field">
+                    <label>接入验证</label>
+                    <div class="input">probe 200 ok · sample logs 42 rows</div>
+                  </div>
+                  <div class="top-actions">
+                    <button class="btn">预览配置</button>
+                    <button class="btn primary">发布接入</button>
+                  </div>
+                </div>
+              </aside>
+            </section>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section id="agents" class="option">
+      <h2>采集 Agent：确认配置已应用、实例健康、日志已上来</h2>
+      <div class="console">
+        <aside class="global-rail">
+          <div class="mark">N</div>
+          <div class="rail-icon"><span class="glyph"></span></div>
+          <div class="rail-icon active"><span class="glyph"></span></div>
+          <div class="rail-icon"><span class="glyph"></span></div>
+          <div style="flex:1"></div>
+          <div class="rail-icon"><span class="glyph"></span></div>
+        </aside>
+        <aside class="module-nav">
+          <div class="module-title">
+            <strong>Logs</strong>
+            <code>config / agent / explore / alert</code>
+          </div>
+          <div class="scope-card">
+            <span>当前视角</span>
+            <strong>采集 Agent</strong>
+          </div>
+          <nav class="subnav">
+            <a href="#onboarding"><i class="nav-symbol"></i><span>接入配置<small>来源、路由、端点</small></span></a>
+            <a class="active" href="#"><i class="nav-symbol"></i><span>采集 Agent<small>实例、配置、状态</small></span></a>
+            <a href="#"><i class="nav-symbol"></i><span>日志分析<small>服务与 VMUI</small></span></a>
+            <a href="#"><i class="nav-symbol"></i><span>日志告警<small>规则与预览</small></span></a>
+          </nav>
+          <div class="user-box">
+            <div>dev-admin</div>
+            <div class="mono">logs:manage</div>
+          </div>
+        </aside>
+        <section class="workspace">
+          <header class="topbar">
+            <div class="search">搜索 Agent、节点、服务、配置 hash <span class="kbd">⌘K</span></div>
+            <div class="crumbs"><span>NovaObs</span><span>/</span><span>Logs</span><span>/</span><span>采集 Agent</span></div>
+            <div class="top-actions">
+              <span class="chip primary"><i class="dot blue"></i> Remote Config applied</span>
+              <span class="chip">最近 15 分钟</span>
+            </div>
+          </header>
+          <div class="content">
+            <section class="panel toolbar">
+              <div class="select-like"><div><span>AgentGroup</span><strong>otel-ds-prod</strong></div><i class="caret"></i></div>
+              <div class="select-like"><div><span>状态</span><strong>全部</strong></div><i class="caret"></i></div>
+              <div class="select-like"><div><span>服务</span><strong>全部服务</strong></div><i class="caret"></i></div>
+              <div class="top-actions"><button class="btn">只看异常</button><button class="btn primary">刷新</button></div>
+            </section>
+            <section class="agent-layout">
+              <main class="panel agent-main">
+                <div class="stat-row">
+                  <div class="stat"><span>在线实例</span><strong>109 / 118</strong></div>
+                  <div class="stat"><span>配置同步</span><strong>104 / 118</strong></div>
+                  <div class="stat"><span>当前 hash</span><strong class="mono">a1b2c3d4</strong></div>
+                  <div class="stat"><span>最近错误</span><strong>9</strong></div>
+                </div>
+                <div>
+                  <div class="panel-head">
+                    <div class="panel-title"><strong>实例列表</strong><span>Agent 采集状态与配置漂移</span></div>
+                    <button class="btn">导出</button>
+                  </div>
+                  <table>
+                    <thead><tr><th>Instance</th><th>Node / Host</th><th>Version</th><th>Config</th><th>Input</th><th>Output</th><th>Last Error</th></tr></thead>
+                    <tbody>
+                      <tr class="selected"><td class="mono">agent-7ab3</td><td>node-10-72-41</td><td>0.97.0</td><td><span class="status"><i class="dot"></i> sync</span></td><td>42.6k/s</td><td>vl 200 ok</td><td>-</td></tr>
+                      <tr><td class="mono">agent-8f11</td><td>node-10-72-43</td><td>0.97.0</td><td><span class="status"><i class="dot"></i> sync</span></td><td>38.1k/s</td><td>vl 200 ok</td><td>-</td></tr>
+                      <tr><td class="mono">agent-0c92</td><td>node-10-72-44</td><td>0.96.1</td><td><span class="status warn"><i class="dot amber"></i> drift</span></td><td>17.4k/s</td><td>vl 200 ok</td><td>hash mismatch</td></tr>
+                      <tr><td class="mono">agent-f2c1</td><td>node-10-72-47</td><td>0.97.0</td><td><span class="status fail"><i class="dot amber"></i> offline</span></td><td>-</td><td>-</td><td>last seen 18m</td></tr>
+                      <tr><td class="mono">agent-b673</td><td>node-10-72-45</td><td>0.97.0</td><td><span class="status"><i class="dot"></i> sync</span></td><td>21.9k/s</td><td>vl 200 ok</td><td>-</td></tr>
+                    </tbody>
+                  </table>
+                </div>
+              </main>
+              <aside class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><strong>配置与影响</strong><span>当前 AgentGroup</span></div>
+                  <button class="btn">查看完整 YAML</button>
+                </div>
+                <div class="form">
+                  <div class="yaml">receivers:
+  filelog/k8s:
+    include:
+      - /var/log/pods/logplatform*/*/*.log
+processors:
+  k8sattributes: {}
+  resource/cmdb:
+    attributes:
+      service.name: logplatform-api
+exporters:
+  otlphttp/vl:
+    endpoint: https://vl-shared-prod</div>
+                  <div class="impact-list">
+                    <div class="impact"><strong>logplatform-api</strong><span>test03-02/logplatform · vl-shared-prod</span></div>
+                    <div class="impact"><strong>edge-gateway</strong><span>test03-02/ingress · vl-shadow-legacy</span></div>
+                    <div class="impact"><strong>audit-worker</strong><span>test03-02/sec · vl-shared-prod</span></div>
+                  </div>
+                  <div class="top-actions">
+                    <button class="btn">预览发布</button>
+                    <button class="btn primary">重新下发</button>
+                  </div>
+                </div>
+              </aside>
+            </section>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

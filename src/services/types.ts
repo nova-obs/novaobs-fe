@@ -1,9 +1,8 @@
 export type ServiceStatus = 'active' | 'pending' | 'degraded';
-export type PipelineStatus = 'active' | 'draft' | 'paused' | 'failed';
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
-export type ServiceSource = 'manual' | 'cmdb';
+export type ServiceSource = 'manual' | 'cmdb' | 'k8s';
 export type SyncStatus = 'local' | 'synced';
 export type ServiceIdentityType = 'k8s_workload' | 'host_process' | 'syslog_device';
 export type ServiceTargetType = 'cloud_native_workload' | 'host_process' | 'physical_or_network_device';
@@ -24,6 +23,7 @@ export interface Service {
   alertRoute: string;
   sloLevel: string;
   identityType: ServiceIdentityType;
+  serviceType: string;
   source: ServiceSource;
   syncStatus: SyncStatus;
   lastSyncedAt?: string;
@@ -55,18 +55,36 @@ export interface CreateServiceTargetInput {
   matchRules?: Record<string, string>;
 }
 
-export interface ServiceGraphPipelineSummary {
-  configHash: string;
-  sourceBreakdown: Array<{ type: string; id: string; name: string; status: string; hash: string; warnings: string[] }>;
-  warnings: string[];
-  errors: string[];
+export interface ServiceGraphLogRouteSummary {
+  total: number;
+  routes: Array<{
+    route: {
+      id: string;
+      sourceType: string;
+      agentGroupId: string;
+      endpointId: string;
+      status: string;
+      configHash: string;
+      lastPublishStatus: string;
+    };
+    source?: {
+      sourceType: string;
+      clusterId: string;
+      namespace: string;
+      workloadKind: string;
+      workloadName: string;
+      hostGroup: string;
+      pathPattern: string;
+    } | null;
+    endpoint?: { id: string; name: string; vmuiURL: string } | null;
+  }>;
 }
 
 export interface ServiceObservabilityGraph {
   service: Service;
   targets: ServiceTarget[];
   agents: CollectorInstance[];
-  pipelines: ServiceGraphPipelineSummary;
+  logRoutes: ServiceGraphLogRouteSummary;
   alertRules: AlertRule[];
 }
 
@@ -81,6 +99,7 @@ export interface CreateServiceInput {
   alertRoute?: string;
   sloLevel?: string;
   identityType?: ServiceIdentityType;
+  serviceType?: string;
 }
 
 export interface UpdateServiceInput {
@@ -98,6 +117,7 @@ export interface UpdateServiceInput {
   alertRoute?: string;
   sloLevel?: string;
   identityType?: ServiceIdentityType;
+  serviceType?: string;
   status?: ServiceStatus;
 }
 
@@ -413,25 +433,6 @@ export interface ServiceEnrichmentPatch {
   updatedAt: string;
 }
 
-export interface ServiceParserRule {
-  id: string;
-  serviceId: string;
-  collectorGroupId: string;
-  parseMode: 'none' | 'json' | 'regex' | 'ottl';
-  parseFrom: string;
-  regexPattern: string;
-  jsonMappings: Record<string, string>;
-  attributeMappings: Record<string, string>;
-  resourceMappings: Record<string, string>;
-  ottlStatements: string[];
-  sampleLog: string;
-  enabled: boolean;
-  status: string;
-  version: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface ServicePipelinePatch {
   id: string;
   serviceId: string;
@@ -467,61 +468,6 @@ export interface CollectorConfigSources {
   sourceBreakdown: ConfigSourceBreakdown[];
 }
 
-export interface ServicePipelineSources {
-  baseTemplate: CollectorPlatformTemplate | null;
-  serviceEnrichmentPatches: ServiceEnrichmentPatch[];
-  servicePipelinePatches: ServicePipelinePatch[];
-  renderedYaml: string;
-  configHash: string;
-  warnings: string[];
-  errors: string[];
-  sourceBreakdown: ConfigSourceBreakdown[];
-}
-
-export interface ServicePipelinePublishResult {
-  serviceId: string;
-  configHash: string;
-  renderedYaml: string;
-  agentCount: number;
-  activeDeliveryCount: number;
-  queuedDeliveryCount: number;
-  skippedAgents: string[];
-}
-
-export interface ParserPreviewResult {
-  valid: boolean;
-  parseMode: string;
-  sampleLog: string;
-  parsedFields: Record<string, unknown>;
-  mappedAttributes: Record<string, unknown>;
-  mappedResources: Record<string, unknown>;
-  unmappedFields: string[];
-  warnings: string[];
-  errors: string[];
-}
-
-export interface LogEntry {
-  timestamp: string;
-  level: LogLevel;
-  message: string;
-  tenant: string;
-  service: string;
-  environment: string;
-  cluster: string;
-  namespace: string;
-  pod: string;
-  container: string;
-  traceId: string;
-  spanId: string;
-  requestId: string;
-  errorCode?: string;
-  pipelineId: string;
-  pipelineVersion: number;
-  parseStatus: 'parsed' | 'failed' | 'raw';
-  cmdbMatchStatus: 'matched' | 'unmatched';
-  labels: Record<string, string>;
-}
-
 export interface AlertRule {
   id: string;
   name: string;
@@ -542,6 +488,44 @@ export interface AlertRule {
 export interface OverviewSummary {
   serviceCount: number;
   logThroughputPerMinute: number;
-  healthyPipelineCount: number;
+  healthyLogRouteCount: number;
   activeAlertCount: number;
+}
+
+export type K8sHealthStatus = 'healthy' | 'warning' | 'unknown' | 'failed';
+export type K8sSyncStatus = 'applied' | 'pending' | 'unknown' | 'failed';
+
+export interface K8sPodStats {
+  total: number;
+  ready: number;
+  warning: number;
+}
+
+export interface K8sDashboardStats {
+  clusterId: string;
+  health: K8sHealthStatus;
+  namespaces: number;
+  workloads: number;
+  pods: K8sPodStats;
+}
+
+export interface K8sDashboardSignal {
+  key: string;
+  label: string;
+  status: K8sHealthStatus;
+  source: string;
+  checkedAt: string;
+}
+
+export interface K8sDashboardSyncState {
+  status: K8sSyncStatus;
+  source: string;
+  timeWindow: string;
+  lastSyncedAt: string;
+}
+
+export interface K8sDashboardSnapshot {
+  stats: K8sDashboardStats;
+  signals: K8sDashboardSignal[];
+  sync: K8sDashboardSyncState;
 }

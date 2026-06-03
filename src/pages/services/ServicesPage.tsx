@@ -47,6 +47,7 @@ const emptyTargetForm = {
 };
 
 function sourceLabel(source: string) {
+  if (source === 'k8s') return 'K8s 同步';
   return source === 'cmdb' ? 'CMDB' : '本地录入';
 }
 
@@ -142,7 +143,12 @@ export function ServicesPage() {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="font-display text-2xl font-semibold text-on-surface">服务目录</h1>
-          <p className="mt-1 text-sm text-muted">业务、应用、环境、负责人和告警路由的统一控制面。</p>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted">
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">服务</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">运行目标</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">日志路由</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">告警规则</span>
+          </div>
         </div>
         <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={openCreate}>
           <Plus className="mr-1 inline h-3.5 w-3.5" />新增服务
@@ -192,6 +198,7 @@ export function ServicesPage() {
                   <option value="">全部</option>
                   <option value="manual">本地录入</option>
                   <option value="cmdb">CMDB</option>
+                  <option value="k8s">K8s 同步</option>
                 </select>
               </label>
             </div>
@@ -202,7 +209,7 @@ export function ServicesPage() {
               <div className="grid gap-3 md:grid-cols-2">
                 <label className="text-sm font-semibold">服务名称 *<input className="console-input mt-2 w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
                 <label className="text-sm font-semibold">环境 *<select className="console-input mt-2 w-full" value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })}><option value="prod">prod</option><option value="staging">staging</option><option value="dev">dev</option></select></label>
-                <label className="text-sm font-semibold">展示名称<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
+                <label className="text-sm font-semibold">别名<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
                 <label className="text-sm font-semibold">集群<input className="console-input mt-2 w-full" value={form.cluster ?? ''} onChange={(e) => setForm({ ...form, cluster: e.target.value })} /></label>
                 <label className="text-sm font-semibold">Namespace<input className="console-input mt-2 w-full" value={form.namespace ?? ''} onChange={(e) => setForm({ ...form, namespace: e.target.value })} /></label>
                 <label className="text-sm font-semibold">Owner Team<input className="console-input mt-2 w-full" value={form.ownerTeam ?? ''} onChange={(e) => setForm({ ...form, ownerTeam: e.target.value })} /></label>
@@ -228,7 +235,7 @@ export function ServicesPage() {
               <div className="flex items-center gap-2 py-4 text-sm text-muted"><RefreshCw className="h-4 w-4 animate-spin" />加载中...</div>
             ) : data.length === 0 ? (
               <div className="flex flex-col items-center gap-3 py-8">
-                <p className="text-sm text-muted">暂无服务，请手工录入服务。</p>
+                <p className="text-sm text-muted">服务清单为空</p>
                 <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={openCreate}><Plus className="mr-1 inline h-3.5 w-3.5" />新增服务</button>
               </div>
             ) : (
@@ -238,7 +245,7 @@ export function ServicesPage() {
                     <tr>
                       <th>服务</th>
                       <th>环境</th>
-                      <th>默认定位</th>
+                      <th>定位</th>
                       <th>Owner</th>
                       <th>来源</th>
                       <th>同步</th>
@@ -259,7 +266,7 @@ export function ServicesPage() {
                         <td className="font-mono text-xs">{svc.cluster || '-'}{svc.namespace ? ` / ${svc.namespace}` : ''}</td>
                         <td className="text-sm">{svc.ownerTeam}{svc.owner ? ` · ${svc.owner}` : ''}</td>
                         <td><span className={`text-xs ${svc.source === 'cmdb' ? 'text-info' : 'text-muted'}`}>{sourceLabel(svc.source)}</span></td>
-                        <td><span className={`text-xs ${svc.syncStatus === 'synced' ? 'text-emerald-400' : 'text-muted'}`}>{syncLabel(svc.syncStatus)}</span></td>
+                        <td><span className={`text-xs ${svc.syncStatus === 'synced' ? 'text-primary' : 'text-muted'}`}>{syncLabel(svc.syncStatus)}</span></td>
                         <td className="font-mono text-xs text-muted">{svc.alertRoute || '-'}</td>
                         <td className="font-mono text-xs text-muted">{svc.identityType || 'k8s_workload'}</td>
                         <td><StatusBadge value={svc.status} /></td>
@@ -357,7 +364,7 @@ function ServiceGraphPanel({
                   <option value="host_process">VM / 物理机进程</option>
                   <option value="physical_or_network_device">物理设备 / 网络设备</option>
                 </select>
-                <input className="console-input w-full" placeholder="展示名称" value={targetForm.displayName} onChange={(e) => setTargetForm({ ...targetForm, displayName: e.target.value })} />
+                <input className="console-input w-full" placeholder="别名" value={targetForm.displayName} onChange={(e) => setTargetForm({ ...targetForm, displayName: e.target.value })} />
                 <input className="console-input w-full" placeholder="环境" value={targetForm.environment} onChange={(e) => setTargetForm({ ...targetForm, environment: e.target.value })} />
                 {fields.map((field) => (
                   <input
@@ -379,7 +386,7 @@ function ServiceGraphPanel({
 
           <div className="grid gap-4 lg:grid-cols-3">
             <RelationList icon={<Cpu className="h-4 w-4 text-primary" />} title="Agent" empty="暂无 Agent" items={graph.agents.map((agent) => ({ id: agent.instanceUid, title: agent.instanceUid, meta: `${agent.runtimeStatus} · ${agent.remoteConfigStatus || 'unset'}` }))} />
-            <RelationList icon={<GitBranch className="h-4 w-4 text-primary" />} title="Pipeline" empty="暂无 Pipeline 片段" items={graph.pipelines.sourceBreakdown.map((source) => ({ id: source.id || source.name, title: source.name || source.type, meta: `${source.type} · ${source.status || 'unknown'}` }))} />
+            <RelationList icon={<GitBranch className="h-4 w-4 text-primary" />} title="日志路由" empty="暂无日志路由" items={graph.logRoutes.routes.map((item) => ({ id: item.route.id, title: item.source?.sourceType === 'vm_file' ? item.source.pathPattern : `${item.source?.workloadKind || '-'} / ${item.source?.workloadName || '-'}`, meta: `${item.route.sourceType} · ${item.route.lastPublishStatus || item.route.status || 'unknown'}` }))} />
             <RelationList icon={<Bell className="h-4 w-4 text-primary" />} title="告警规则" empty="暂无告警规则" items={graph.alertRules.map((rule) => ({ id: rule.id, title: rule.name, meta: `${rule.severity} · ${rule.status}` }))} />
           </div>
         </div>

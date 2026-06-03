@@ -14,11 +14,11 @@ const domains: OnboardingDomain[] = [
   {
     id: 'logs',
     title: '日志接入',
-    description: '配置服务日志进入统一采集链路，管理属性补齐、业务解析规则、配置校验和 Remote Config 发布。',
-    path: '/logs?tab=pipelines&section=config',
+    description: 'K8s / VM · AgentGroup · VL endpoint',
+    path: '/logs/onboarding',
     status: 'available',
-    statusLabel: '已接入 Pipeline Config',
-    highlights: ['服务属性补齐', '业务解析规则', '服务级发布'],
+    statusLabel: 'available',
+    highlights: ['K8s workload', 'VM file', 'VL endpoint'],
   },
 ];
 

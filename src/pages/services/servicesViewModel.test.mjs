@@ -42,9 +42,9 @@ test('关系统计只包含已落地关系类型', () => {
   const items = graphStatItems({
     targets: [{ id: 't1' }],
     agents: [{ instanceUid: 'a1' }, { instanceUid: 'a2' }],
-    pipelines: { sourceBreakdown: [{ id: 'p1' }, { id: 'p2' }] },
+    logRoutes: { total: 2, routes: [{ route: { id: 'p1' } }, { route: { id: 'p2' } }] },
     alertRules: [{ id: 'r1' }],
   });
-  assert.deepEqual(items.map((item) => item.label), ['运行目标', 'Agent', 'Pipeline 片段', '告警规则']);
+  assert.deepEqual(items.map((item) => item.label), ['运行目标', 'Agent', '日志路由', '告警规则']);
   assert.deepEqual(items.map((item) => item.value), [1, 2, 2, 1]);
 });

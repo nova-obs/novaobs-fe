@@ -27,11 +27,11 @@ export function targetLocationSummary(target: Pick<ServiceTarget, 'targetType' |
   return compactJoin(Object.values(attrs).slice(0, 3));
 }
 
-export function graphStatItems(graph: Pick<ServiceObservabilityGraph, 'targets' | 'agents' | 'pipelines' | 'alertRules'>) {
+export function graphStatItems(graph: Pick<ServiceObservabilityGraph, 'targets' | 'agents' | 'logRoutes' | 'alertRules'>) {
   return [
     { label: '运行目标', value: graph.targets.length },
     { label: 'Agent', value: graph.agents.length },
-    { label: 'Pipeline 片段', value: graph.pipelines.sourceBreakdown.length },
+    { label: '日志路由', value: graph.logRoutes.total },
     { label: '告警规则', value: graph.alertRules.length },
   ];
 }

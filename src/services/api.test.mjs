@@ -181,6 +181,32 @@ test('getServices 支持查询参数', async () => {
   assert.ok(request.path.includes('status=active'));
 });
 
+test('列表接口返回 null 时按空列表处理', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse(null);
+
+  try {
+    assert.deepEqual(await api.getServices(), []);
+    assert.deepEqual(await api.getAlertRules(), []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('获取 K8s Dashboard 时调用统一 K8sOps API', async () => {
+  const request = await captureRequest(
+    () => api.getK8sDashboard('prod'),
+    {
+      stats: { cluster_id: 'prod', health: 'unknown', namespaces: 12, workloads: 47, pods: { total: 128, ready: 109, warning: 7 } },
+      signals: [{ key: 'api-server', label: 'API Server', status: 'unknown', source: 'startorch', checked_at: '2026-05-19T10:30:00Z' }],
+      sync: { status: 'unknown', source: 'startorch', time_window: '最近 15 分钟', last_synced_at: '2026-05-19T10:30:00Z' },
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/k8sops/dashboard?cluster_id=prod');
+  assert.equal(request.init.method, undefined);
+});
+
 test('校验 Collector Group 配置时调用 validate 接口', async () => {
   const request = await captureRequest(
     () => api.validateCollectorGroupConfig('507f1f77bcf86cd799439013'),
@@ -241,71 +267,6 @@ test('更新平台模板时调用 PUT /collector-platform-templates/:id', async 
   assert.equal(request.init.method, 'PUT');
   assert.equal(request.body.name, 'base-prod-v2');
   assert.equal(request.body.base_yaml, 'receivers:\n  otlp:\n');
-});
-
-test('生成服务属性补齐时可传递 collector group', async () => {
-  const request = await captureRequest(
-    () => api.regenerateServiceEnrichmentPatch('507f1f77bcf86cd799439011', '507f1f77bcf86cd799439013'),
-    {
-      id: '507f1f77bcf86cd799439051',
-      service_id: '507f1f77bcf86cd799439011',
-      collector_group_id: '507f1f77bcf86cd799439013',
-      patch_yaml: 'processors:\n  transform/enrich:\n',
-      warnings: [],
-      status: 'generated',
-    },
-  );
-
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439011/enrichment-patch/regenerate');
-  assert.equal(request.init.method, 'POST');
-  assert.equal(request.body.collector_group_id, '507f1f77bcf86cd799439013');
-});
-
-
-test('预览解析规则时调用 parser-rule/preview', async () => {
-  const request = await captureRequest(
-    () => api.previewServiceParserRule('507f1f77bcf86cd799439011', {
-      parseMode: 'regex',
-      regexPattern: 'order_id=(?P<order_id>[\\w-]+)',
-      attributeMappings: { order_id: 'order.id' },
-      resourceMappings: { namespace: 'k8s.namespace.name' },
-      sampleLog: 'order_id=A-1',
-    }),
-    {
-      valid: true,
-      parse_mode: 'regex',
-      sample_log: 'order_id=A-1',
-      parsed_fields: { order_id: 'A-1' },
-      mapped_attributes: { 'order.id': 'A-1' },
-      mapped_resources: {},
-      unmapped_fields: [],
-      warnings: [],
-      errors: [],
-    },
-  );
-
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439011/parser-rule/preview');
-  assert.equal(request.init.method, 'POST');
-  assert.equal(request.body.parse_mode, 'regex');
-  assert.equal(request.body.regex_pattern, 'order_id=(?P<order_id>[\\w-]+)');
-  assert.deepEqual(request.body.attribute_mappings, { order_id: 'order.id' });
-  assert.deepEqual(request.body.resource_mappings, { namespace: 'k8s.namespace.name' });
-});
-
-test('生成服务业务 Patch 时调用 generate-patch', async () => {
-  const request = await captureRequest(
-    () => api.generateServicePipelinePatch('507f1f77bcf86cd799439011'),
-    {
-      id: '507f1f77bcf86cd799439061',
-      service_id: '507f1f77bcf86cd799439011',
-      collector_group_id: '507f1f77bcf86cd799439013',
-      patch_yaml: 'processors:\n  transform/parser:\n',
-      status: 'active',
-    },
-  );
-
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439011/parser-rule/generate-patch');
-  assert.equal(request.init.method, 'POST');
 });
 
 test('Agent Detail 缺少 runtime 字段时 mapper 不应导致页面白屏', async () => {
@@ -447,48 +408,4 @@ test('获取服务绑定 Agent 时调用 GET /services/:id/agents', async () => 
   );
 
   assert.equal(request.path, '/api/v1/services/svc-001/agents');
-});
-
-test('保存服务公共处理片段时调用 pipeline/base', async () => {
-  const request = await captureRequest(
-    () => api.saveServicePipelineBase('svc-001', ''),
-    { id: 'service-base:svc-001', base_yaml: '' },
-  );
-
-  assert.equal(request.path, '/api/v1/services/svc-001/pipeline/base');
-  assert.equal(request.init.method, 'PUT');
-  assert.equal(request.body.base_yaml, '');
-});
-
-test('保存服务级解析规则时不再传递 collector_group_id', async () => {
-  const request = await captureRequest(
-    () => api.saveServicePipelineParserRule('svc-001', { parseMode: 'json', parseFrom: 'body', enabled: true }),
-    { id: 'rule-001', service_id: 'svc-001', parse_mode: 'json', enabled: true },
-  );
-
-  assert.equal(request.path, '/api/v1/services/svc-001/pipeline/parser-rule');
-  assert.equal(request.init.method, 'PUT');
-  assert.equal('collector_group_id' in request.body, false);
-});
-
-test('发布服务级 Pipeline 时调用服务发布接口并映射下发数量', async () => {
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async () => jsonResponse({
-    service_id: 'svc-001',
-    config_hash: 'abc123',
-    rendered_yaml: 'service:\n',
-    agent_count: 2,
-    active_delivery_count: 1,
-    queued_delivery_count: 1,
-    skipped_agents: [],
-  });
-
-  try {
-    const result = await api.publishServicePipeline('svc-001');
-    assert.equal(result.serviceId, 'svc-001');
-    assert.equal(result.activeDeliveryCount, 1);
-    assert.equal(result.queuedDeliveryCount, 1);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
 });

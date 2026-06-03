@@ -17,10 +17,9 @@ import type {
   CreateServiceInput,
   GeneratedConfig,
   IdentitySummary,
-  LogEntry,
+  K8sDashboardSnapshot,
   OnboardingWorkspace,
   OpAMPAgent,
-  ParserPreviewResult,
   OverviewSummary,
   ReceiverProfile,
   Service,
@@ -28,9 +27,6 @@ import type {
   ServiceTarget,
   ServiceEnrichmentPatch,
   ServiceOnboarding,
-  ServicePipelinePublishResult,
-  ServicePipelineSources,
-  ServiceParserRule,
   ServicePipelinePatch,
   ServiceSummary,
   UpdateServiceInput,
@@ -39,8 +35,25 @@ import type {
 interface Envelope<T> {
   success: boolean;
   data: T;
-  error?: { message?: string } | null;
+  error?: { code?: string; message?: string } | null;
 }
+
+export class ApiRequestError<T = unknown> extends Error {
+  status: number;
+  code?: string;
+  data?: T;
+
+  constructor(message: string, status: number, code?: string, data?: T) {
+    super(message);
+    this.name = 'ApiRequestError';
+    this.status = status;
+    this.code = code;
+    this.data = data;
+  }
+}
+
+const signedOutStorageKey = 'novaobs_signed_out';
+const clientSessionKeys = ['novaobs_session', 'novaobs_token', 'novaobs_subject', 'auth_token', 'access_token', 'refresh_token'];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -62,9 +75,29 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
     throw new Error('响应 JSON 无效');
   }
   if (!response.ok || !body.success) {
-    throw new Error(body.error?.message ?? `请求失败: ${response.status}`);
+    if (response.status === 401) {
+      redirectToLogin();
+    }
+    throw new ApiRequestError(body.error?.message ?? `请求失败: ${response.status}`, response.status, body.error?.code, body.data);
   }
   return body.data;
+}
+
+export const apiRequest = request;
+
+function redirectToLogin() {
+  if (typeof window === 'undefined') {
+    return;
+  }
+  for (const key of clientSessionKeys) {
+    window.localStorage.removeItem(key);
+    window.sessionStorage.removeItem(key);
+  }
+  window.sessionStorage.setItem(signedOutStorageKey, '1');
+  const target = '/?signed_out=1';
+  if (window.location.pathname + window.location.search !== target) {
+    window.location.replace(target);
+  }
 }
 
 function computeRuntimeStatus(lastSeenAt: string): { runtimeStatus: 'online' | 'stale' | 'offline'; lastSeenAgeSeconds: number } {
@@ -96,8 +129,39 @@ function mapOverview(raw: any): OverviewSummary {
   return {
     serviceCount: raw.service_count ?? raw.serviceCount ?? raw.services ?? 0,
     logThroughputPerMinute: raw.log_throughput_per_minute ?? raw.logThroughputPerMinute ?? 0,
-    healthyPipelineCount: raw.healthy_pipeline_count ?? raw.healthyPipelineCount ?? 0,
+    healthyLogRouteCount: raw.healthy_log_route_count ?? raw.healthyLogRouteCount ?? raw.healthy_pipeline_count ?? raw.healthyPipelineCount ?? 0,
     activeAlertCount: raw.active_alert_count ?? raw.activeAlertCount ?? raw.alerts ?? 0,
+  };
+}
+
+function mapK8sDashboardSnapshot(raw: any): K8sDashboardSnapshot {
+  return {
+    stats: {
+      clusterId: String(raw.stats?.cluster_id ?? raw.stats?.clusterId ?? ''),
+      health: raw.stats?.health ?? 'unknown',
+      namespaces: raw.stats?.namespaces ?? 0,
+      workloads: raw.stats?.workloads ?? 0,
+      pods: {
+        total: raw.stats?.pods?.total ?? 0,
+        ready: raw.stats?.pods?.ready ?? 0,
+        warning: raw.stats?.pods?.warning ?? 0,
+      },
+    },
+    signals: Array.isArray(raw.signals)
+      ? raw.signals.map((signal: any) => ({
+        key: String(signal.key ?? ''),
+        label: signal.label ?? '',
+        status: signal.status ?? 'unknown',
+        source: signal.source ?? '',
+        checkedAt: signal.checked_at ?? signal.checkedAt ?? '',
+      }))
+      : [],
+    sync: {
+      status: raw.sync?.status ?? 'unknown',
+      source: raw.sync?.source ?? 'startorch',
+      timeWindow: raw.sync?.time_window ?? raw.sync?.timeWindow ?? '最近 15 分钟',
+      lastSyncedAt: raw.sync?.last_synced_at ?? raw.sync?.lastSyncedAt ?? '',
+    },
   };
 }
 
@@ -118,6 +182,7 @@ function mapService(raw: any): Service {
     alertRoute: raw.alert_route ?? raw.alertRoute ?? '',
     sloLevel: raw.slo_level ?? raw.sloLevel ?? '',
     identityType: raw.identity_type ?? raw.identityType ?? 'k8s_workload',
+    serviceType: raw.service_type ?? raw.serviceType ?? '',
     source: raw.source ?? 'manual',
     syncStatus: raw.sync_status ?? 'local',
     lastSyncedAt: raw.last_synced_at ?? undefined,
@@ -141,30 +206,6 @@ function mapServiceTarget(raw: any): ServiceTarget {
     lastSyncedAt: raw.last_synced_at ?? raw.lastSyncedAt ?? undefined,
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
-function mapLogEntry(raw: any): LogEntry {
-  return {
-    timestamp: raw.timestamp ?? '',
-    level: raw.level ?? 'info',
-    message: raw.message ?? '',
-    tenant: raw.tenant ?? '',
-    service: raw.service ?? '',
-    environment: raw.environment ?? '',
-    cluster: raw.cluster ?? '',
-    namespace: raw.namespace ?? '',
-    pod: raw.pod ?? '',
-    container: raw.container ?? '',
-    traceId: raw.trace_id ?? raw.traceId ?? '',
-    spanId: raw.span_id ?? raw.spanId ?? '',
-    requestId: raw.request_id ?? raw.requestId ?? '',
-    errorCode: raw.error_code ?? raw.errorCode ?? undefined,
-    pipelineId: String(raw.pipeline_id ?? raw.pipelineId ?? ''),
-    pipelineVersion: raw.pipeline_version ?? raw.pipelineVersion ?? 0,
-    parseStatus: raw.parse_status ?? raw.parseStatus ?? 'raw',
-    cmdbMatchStatus: raw.cmdb_match_status ?? raw.cmdbMatchStatus ?? 'unmatched',
-    labels: raw.labels ?? {},
   };
 }
 
@@ -541,78 +582,42 @@ function mapCollectorConfigSources(raw: any): CollectorConfigSources {
   };
 }
 
-function mapServicePipelineSources(raw: any): ServicePipelineSources {
-  return {
-    baseTemplate: raw.base_template || raw.base ? mapCollectorPlatformTemplate(raw.base_template ?? raw.base) : null,
-    serviceEnrichmentPatches: Array.isArray(raw.service_enrichment_patches) ? raw.service_enrichment_patches.map(mapServiceEnrichmentPatch) : (raw.enrichment ? [mapServiceEnrichmentPatch(raw.enrichment)] : []),
-    servicePipelinePatches: Array.isArray(raw.service_pipeline_patches) ? raw.service_pipeline_patches.map(mapServicePipelinePatch) : (raw.parser ? [mapServicePipelinePatch(raw.parser)] : []),
-    renderedYaml: raw.rendered_yaml ?? '',
-    configHash: raw.config_hash ?? '',
-    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
-    errors: Array.isArray(raw.errors) ? raw.errors.map(String) : [],
-    sourceBreakdown: Array.isArray(raw.source_breakdown) ? raw.source_breakdown.map(mapSourceBreakdown) : [],
-  };
-}
-
-function mapServicePipelinePublishResult(raw: any): ServicePipelinePublishResult {
-  return {
-    serviceId: String(raw.service_id ?? ''),
-    configHash: raw.config_hash ?? '',
-    renderedYaml: raw.rendered_yaml ?? '',
-    agentCount: raw.agent_count ?? 0,
-    activeDeliveryCount: raw.active_delivery_count ?? 0,
-    queuedDeliveryCount: raw.queued_delivery_count ?? 0,
-    skippedAgents: Array.isArray(raw.skipped_agents) ? raw.skipped_agents.map(String) : [],
-  };
-}
-
 function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
   return {
     service: mapService(raw.service ?? {}),
     targets: Array.isArray(raw.targets) ? raw.targets.map(mapServiceTarget) : [],
     agents: Array.isArray(raw.agents) ? raw.agents.map(mapCollectorInstance) : [],
-    pipelines: {
-      configHash: raw.pipelines?.config_hash ?? raw.pipelines?.configHash ?? '',
-      sourceBreakdown: Array.isArray(raw.pipelines?.source_breakdown) ? raw.pipelines.source_breakdown.map(mapSourceBreakdown) : [],
-      warnings: Array.isArray(raw.pipelines?.warnings) ? raw.pipelines.warnings.map(String) : [],
-      errors: Array.isArray(raw.pipelines?.errors) ? raw.pipelines.errors.map(String) : [],
+    logRoutes: {
+      total: raw.log_routes?.total ?? raw.logRoutes?.total ?? 0,
+      routes: Array.isArray(raw.log_routes?.routes ?? raw.logRoutes?.routes)
+        ? (raw.log_routes?.routes ?? raw.logRoutes?.routes).map((item: any) => ({
+          route: {
+            id: String(item.route?.id ?? ''),
+            sourceType: item.route?.source_type ?? item.route?.sourceType ?? '',
+            agentGroupId: item.route?.agent_group_id ?? item.route?.agentGroupId ?? '',
+            endpointId: item.route?.endpoint_id ?? item.route?.endpointId ?? '',
+            status: item.route?.status ?? '',
+            configHash: item.route?.config_hash ?? item.route?.configHash ?? '',
+            lastPublishStatus: item.route?.last_publish_status ?? item.route?.lastPublishStatus ?? '',
+          },
+          source: item.source ? {
+            sourceType: item.source.source_type ?? item.source.sourceType ?? '',
+            clusterId: item.source.cluster_id ?? item.source.clusterId ?? '',
+            namespace: item.source.namespace ?? '',
+            workloadKind: item.source.workload_kind ?? item.source.workloadKind ?? '',
+            workloadName: item.source.workload_name ?? item.source.workloadName ?? '',
+            hostGroup: item.source.host_group ?? item.source.hostGroup ?? '',
+            pathPattern: item.source.path_pattern ?? item.source.pathPattern ?? '',
+          } : null,
+          endpoint: item.endpoint ? {
+            id: String(item.endpoint.id ?? ''),
+            name: item.endpoint.name ?? '',
+            vmuiURL: item.endpoint.vmui_url ?? item.endpoint.vmuiURL ?? '',
+          } : null,
+        }))
+        : [],
     },
     alertRules: Array.isArray(raw.alert_rules) ? raw.alert_rules.map(mapAlertRule) : [],
-  };
-}
-
-function mapServiceParserRule(raw: any): ServiceParserRule {
-  return {
-    id: String(raw.id ?? ''),
-    serviceId: String(raw.service_id ?? ''),
-    collectorGroupId: String(raw.collector_group_id ?? ''),
-    parseMode: raw.parse_mode ?? 'none',
-    parseFrom: raw.parse_from ?? 'body',
-    regexPattern: raw.regex_pattern ?? '',
-    jsonMappings: raw.json_mappings ?? {},
-    attributeMappings: raw.attribute_mappings ?? raw.json_mappings ?? {},
-    resourceMappings: raw.resource_mappings ?? {},
-    ottlStatements: Array.isArray(raw.ottl_statements) ? raw.ottl_statements.map(String) : [],
-    sampleLog: raw.sample_log ?? '',
-    enabled: raw.enabled ?? false,
-    status: raw.status ?? '',
-    version: raw.version ?? 0,
-    createdAt: raw.created_at ?? '',
-    updatedAt: raw.updated_at ?? '',
-  };
-}
-
-function mapParserPreviewResult(raw: any): ParserPreviewResult {
-  return {
-    valid: raw.valid ?? false,
-    parseMode: raw.parse_mode ?? '',
-    sampleLog: raw.sample_log ?? '',
-    parsedFields: raw.parsed_fields ?? {},
-    mappedAttributes: raw.mapped_attributes ?? {},
-    mappedResources: raw.mapped_resources ?? {},
-    unmappedFields: Array.isArray(raw.unmapped_fields) ? raw.unmapped_fields.map(String) : [],
-    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
-    errors: Array.isArray(raw.errors) ? raw.errors.map(String) : [],
   };
 }
 
@@ -648,7 +653,7 @@ export const api = {
     if (params?.source) search.set('source', params.source);
     const qs = search.toString();
     const raw = await request<any[]>(`/services${qs ? `?${qs}` : ''}`);
-    return raw.map(mapService);
+    return Array.isArray(raw) ? raw.map(mapService) : [];
   },
   async createService(input: CreateServiceInput): Promise<Service> {
     const raw = await request<any>('/services', {
@@ -664,6 +669,7 @@ export const api = {
         alert_route: input.alertRoute,
         slo_level: input.sloLevel,
         identity_type: input.identityType,
+        service_type: input.serviceType,
       }),
     });
     return mapService(raw);
@@ -686,6 +692,7 @@ export const api = {
         alert_route: patch.alertRoute,
         slo_level: patch.sloLevel,
         identity_type: patch.identityType,
+        service_type: patch.serviceType,
         status: patch.status,
       }),
     });
@@ -711,11 +718,6 @@ export const api = {
   async getServiceObservabilityGraph(serviceId: string): Promise<ServiceObservabilityGraph> {
     const raw = await request<any>(`/services/${serviceId}/observability-graph`);
     return mapServiceObservabilityGraph(raw);
-  },
-  async getLogs(): Promise<LogEntry[]> {
-    const raw = await request<any[] | { items?: any[] }>('/logs');
-    const items = Array.isArray(raw) ? raw : raw.items ?? [];
-    return items.map(mapLogEntry);
   },
   async getOpAMPAgents(): Promise<OpAMPAgent[]> {
     const raw = await request<any[]>('/opamp/agents');
@@ -849,115 +851,6 @@ export const api = {
     });
     return mapCollectorPlatformTemplate(raw);
   },
-  async getServiceEnrichmentPatch(serviceId: string): Promise<ServiceEnrichmentPatch> {
-    const raw = await request<any>(`/services/${serviceId}/enrichment-patch`);
-    return mapServiceEnrichmentPatch(raw);
-  },
-  async regenerateServiceEnrichmentPatch(serviceId: string, collectorGroupId?: string): Promise<ServiceEnrichmentPatch> {
-    const raw = await request<any>(`/services/${serviceId}/enrichment-patch/regenerate`, {
-      method: 'POST',
-      body: JSON.stringify({ collector_group_id: optionalString(collectorGroupId) }),
-    });
-    return mapServiceEnrichmentPatch(raw);
-  },
-  async getServiceParserRule(serviceId: string): Promise<ServiceParserRule> {
-    const raw = await request<any>(`/services/${serviceId}/parser-rule`);
-    return mapServiceParserRule(raw);
-  },
-  async saveServiceParserRule(serviceId: string, input: Partial<ServiceParserRule>): Promise<ServiceParserRule> {
-    const raw = await request<any>(`/services/${serviceId}/parser-rule`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        collector_group_id: input.collectorGroupId,
-        parse_mode: input.parseMode ?? 'none',
-        parse_from: input.parseFrom ?? 'body',
-        regex_pattern: input.regexPattern,
-        json_mappings: input.jsonMappings ?? {},
-        attribute_mappings: input.attributeMappings ?? input.jsonMappings ?? {},
-        resource_mappings: input.resourceMappings ?? {},
-        ottl_statements: input.ottlStatements ?? [],
-        sample_log: input.sampleLog,
-        enabled: input.enabled ?? false,
-      }),
-    });
-    return mapServiceParserRule(raw);
-  },
-  async previewServiceParserRule(serviceId: string, input: Partial<ServiceParserRule>): Promise<ParserPreviewResult> {
-    const raw = await request<any>(`/services/${serviceId}/parser-rule/preview`, {
-      method: 'POST',
-      body: JSON.stringify({
-        parse_mode: input.parseMode ?? 'none',
-        parse_from: input.parseFrom ?? 'body',
-        regex_pattern: input.regexPattern,
-        json_mappings: input.jsonMappings ?? {},
-        attribute_mappings: input.attributeMappings ?? input.jsonMappings ?? {},
-        resource_mappings: input.resourceMappings ?? {},
-        ottl_statements: input.ottlStatements ?? [],
-        sample_log: input.sampleLog,
-      }),
-    });
-    return mapParserPreviewResult(raw);
-  },
-  async generateServicePipelinePatch(serviceId: string): Promise<ServicePipelinePatch> {
-    const raw = await request<any>(`/services/${serviceId}/parser-rule/generate-patch`, { method: 'POST' });
-    return mapServicePipelinePatch(raw);
-  },
-  async saveServicePipelineBase(serviceId: string, baseYaml: string): Promise<CollectorPlatformTemplate> {
-    const raw = await request<any>(`/services/${serviceId}/pipeline/base`, {
-      method: 'PUT',
-      body: JSON.stringify({ base_yaml: baseYaml }),
-    });
-    return mapCollectorPlatformTemplate(raw);
-  },
-  async regenerateServicePipelineEnrichment(serviceId: string): Promise<ServiceEnrichmentPatch> {
-    const raw = await request<any>(`/services/${serviceId}/pipeline/enrichment/regenerate`, { method: 'POST' });
-    return mapServiceEnrichmentPatch(raw);
-  },
-  async saveServicePipelineParserRule(serviceId: string, input: Partial<ServiceParserRule>): Promise<ServiceParserRule> {
-    const raw = await request<any>(`/services/${serviceId}/pipeline/parser-rule`, {
-      method: 'PUT',
-      body: JSON.stringify({
-        parse_mode: input.parseMode ?? 'none',
-        parse_from: input.parseFrom ?? 'body',
-        regex_pattern: input.regexPattern,
-        json_mappings: input.jsonMappings ?? {},
-        attribute_mappings: input.attributeMappings ?? input.jsonMappings ?? {},
-        resource_mappings: input.resourceMappings ?? {},
-        ottl_statements: input.ottlStatements ?? [],
-        sample_log: input.sampleLog,
-        enabled: input.enabled ?? false,
-      }),
-    });
-    return mapServiceParserRule(raw);
-  },
-  async previewServicePipelineParserRule(serviceId: string, input: Partial<ServiceParserRule>): Promise<ParserPreviewResult> {
-    const raw = await request<any>(`/services/${serviceId}/pipeline/parser-rule/preview`, {
-      method: 'POST',
-      body: JSON.stringify({
-        parse_mode: input.parseMode ?? 'none',
-        parse_from: input.parseFrom ?? 'body',
-        regex_pattern: input.regexPattern,
-        json_mappings: input.jsonMappings ?? {},
-        attribute_mappings: input.attributeMappings ?? input.jsonMappings ?? {},
-        resource_mappings: input.resourceMappings ?? {},
-        ottl_statements: input.ottlStatements ?? [],
-        sample_log: input.sampleLog,
-      }),
-    });
-    return mapParserPreviewResult(raw);
-  },
-  async generateServicePipelineParserPatch(serviceId: string): Promise<ServicePipelinePatch> {
-    const raw = await request<any>(`/services/${serviceId}/pipeline/parser-rule/generate-patch`, { method: 'POST' });
-    return mapServicePipelinePatch(raw);
-  },
-  async getServicePipelineSources(serviceId: string): Promise<ServicePipelineSources> {
-    const raw = await request<any>(`/services/${serviceId}/pipeline/sources`);
-    return mapServicePipelineSources(raw);
-  },
-  async publishServicePipeline(serviceId: string): Promise<ServicePipelinePublishResult> {
-    const raw = await request<any>(`/services/${serviceId}/pipeline/publish`, { method: 'POST' });
-    return mapServicePipelinePublishResult(raw);
-  },
   async getCollectorGroupConfigStatus(groupId: string): Promise<CollectorGroupConfigStatus> {
     const raw = await request<any>(`/collector-groups/${groupId}/config/status`);
     return mapCollectorGroupConfigStatus(raw);
@@ -1013,6 +906,10 @@ export const api = {
   },
   async getAlertRules(): Promise<AlertRule[]> {
     const raw = await request<any[]>('/alert-rules');
-    return raw.map(mapAlertRule);
+    return Array.isArray(raw) ? raw.map(mapAlertRule) : [];
+  },
+  async getK8sDashboard(clusterId = 'prod'): Promise<K8sDashboardSnapshot> {
+    const raw = await request<any>(`/k8sops/dashboard?cluster_id=${encodeURIComponent(clusterId)}`);
+    return mapK8sDashboardSnapshot(raw);
   },
 };

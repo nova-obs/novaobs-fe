@@ -15,6 +15,6 @@ test('浏览器标签页图标使用 NovaObs 设计系统主色', () => {
   const faviconSvg = readFileSync(faviconPath, 'utf8');
 
   assert.match(faviconSvg, /viewBox="0 0 32 32"/);
-  assert.match(faviconSvg, /#1f7a76/i);
-  assert.doesNotMatch(faviconSvg, /#0058be/i);
+  assert.match(faviconSvg, /#0d5bd7/i);
+  assert.doesNotMatch(faviconSvg, /#1f7a76/i);
 });
