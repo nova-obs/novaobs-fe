@@ -334,12 +334,19 @@ export interface CollectorGroup {
 export interface CollectorInstance {
   id: string;
   instanceUid: string;
+  opampInstanceUid: string;
+  runtimeIdentity: string;
   collectorGroupId: string;
   serviceId: string;
+  clusterId: string;
+  namespace: string;
+  agentNamespace: string;
   hostname: string;
+  podUid: string;
   podName: string;
   nodeName: string;
   ip: string;
+  podIp: string;
   version: string;
   capabilities: number;
   online: boolean;

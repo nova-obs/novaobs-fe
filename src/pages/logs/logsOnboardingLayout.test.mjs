@@ -431,6 +431,16 @@ test('Logs 采集路由只展示运行中路由并承接配置查看和变更', 
   assert.equal(agentsSource.includes('/logs/onboarding?mode=update&route_id='), true);
   assert.equal(agentsSource.includes('更新配置'), true);
   assert.equal(agentsSource.includes('实例状态'), true);
+  assert.equal(agentsSource.includes('运行身份'), true);
+  assert.equal(agentsSource.includes('K8s 范围'), true);
+  assert.equal(agentsSource.includes('Pod / Node'), true);
+  assert.equal(agentsSource.includes('runtimeIdentity'), true);
+  assert.equal(agentsSource.includes('opampInstanceUid'), true);
+  assert.equal(agentsSource.includes('clusterId'), true);
+  assert.equal(agentsSource.includes('agentNamespace'), true);
+  assert.equal(agentsSource.includes('podUid'), true);
+  assert.equal(agentsSource.includes('podIp'), true);
+  assert.equal(agentsSource.includes('collectorDomainScope(activeGroup'), true);
   assert.equal(agentsSource.includes('Remote Config'), true);
   assert.equal(agentsSource.includes('confirmDeleteGroupId'), false);
   assert.equal(agentsSource.includes('deleteCollectorGroup'), false);
