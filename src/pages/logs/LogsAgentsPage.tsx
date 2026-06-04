@@ -1,58 +1,105 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { RefreshCw, ShieldCheck, WifiOff, XCircle } from 'lucide-react';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Copy, FileText, RefreshCw, ShieldCheck, WifiOff, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
-import { logSourceLabel, logsApi } from './api';
+import { logSinkLabel, logSourceLabel, logsApi, type LogRouteView } from './api';
+import { isCollectingRoute, routeLifecycle, serviceDisplayName, statusPillClass } from './ServicePickerPanel';
 import { LogsEmptyState, LogsInfoCell, LogsSection, LogsToolbarButton } from './LogsPrimitives';
 
 export function LogsAgentsPage() {
   const [params] = useSearchParams();
-  const [selectedGroupId, setSelectedGroupId] = useState(params.get('agent_group_id') ?? '');
-  const { data: workspace, isLoading: workspaceLoading, error: workspaceError } = useQuery({
+  const initialRouteId = params.get('route_id') ?? '';
+  const [selectedRouteId, setSelectedRouteId] = useState(initialRouteId);
+  const [collectorConfigRoute, setCollectorConfigRoute] = useState<LogRouteView | null>(null);
+  const { data: workspace, isLoading: workspaceLoading, error: workspaceError, refetch: refetchWorkspace } = useQuery({
     queryKey: ['logs-onboarding-workspace'],
     queryFn: logsApi.getWorkspace,
   });
 
+  const services = workspace?.services ?? [];
   const groups = workspace?.collectorGroups ?? [];
-  const activeGroupId = selectedGroupId || groups[0]?.id || '';
-  const { data: instances = [], isLoading: instancesLoading, error: instancesError, refetch } = useQuery({
+  const runningRoutes = useMemo(() => (workspace?.routes ?? []).filter(isCollectingRoute), [workspace]);
+  const activeRoute = runningRoutes.find((route) => route.route.id === selectedRouteId) ?? runningRoutes[0] ?? null;
+  const activeGroupId = activeRoute?.route.agentGroupId ?? '';
+  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
+  const activeService = activeRoute ? services.find((service) => service.id === activeRoute.route.serviceId) ?? null : null;
+
+  useEffect(() => {
+    if (runningRoutes.length === 0) {
+      setSelectedRouteId('');
+      return;
+    }
+    if (selectedRouteId && runningRoutes.some((route) => route.route.id === selectedRouteId)) return;
+    const routeFromUrl = initialRouteId ? runningRoutes.find((route) => route.route.id === initialRouteId) : null;
+    setSelectedRouteId(routeFromUrl?.route.id ?? runningRoutes[0].route.id);
+  }, [initialRouteId, runningRoutes, selectedRouteId]);
+
+  const { data: instances = [], isLoading: instancesLoading, error: instancesError, refetch: refetchInstances } = useQuery({
     queryKey: ['logs-agent-instances', activeGroupId],
     queryFn: () => api.getCollectorInstances(activeGroupId),
     enabled: Boolean(activeGroupId),
     refetchInterval: 10000,
   });
-  const selectedRouteId = params.get('route_id') ?? '';
-  const selectedRoute = useMemo(() => (workspace?.routes ?? []).find((item) => item.route.id === selectedRouteId) ?? null, [selectedRouteId, workspace]);
-  const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
   const onlineCount = instances.filter((item) => item.healthy).length;
 
-  const activeDomainMode = agentGroupModeLabel(activeGroup);
-  const activeDomainScope = activeGroup?.cluster
+  const collectorConfigMutation = useMutation({
+    mutationFn: (routeId: string) => logsApi.getRouteCollectorConfig(routeId),
+  });
+
+  function openCollectorConfig(route: LogRouteView) {
+    setCollectorConfigRoute(route);
+    collectorConfigMutation.mutate(route.route.id);
+  }
+
+  function closeCollectorConfig() {
+    setCollectorConfigRoute(null);
+    collectorConfigMutation.reset();
+  }
+
+  const activeLifecycle = activeRoute ? routeLifecycle(activeRoute) : null;
+  const activeServiceName = activeService ? serviceDisplayName(activeService) : activeRoute?.route.serviceId ?? '-';
+  const activeScope = routeScope(activeRoute);
+  const activeAgentScope = activeGroup?.cluster
     ? `${activeGroup.cluster} / ${activeGroup.namespace || '-'}`
     : activeGroup?.environment || '-';
 
   return (
-    <div className="logs-agents-workbench grid min-h-[720px] gap-3 xl:grid-cols-[300px_minmax(0,1fr)_300px]">
-      <LogsSection title="采集域" meta={workspaceLoading ? 'loading' : `${groups.length} domains`} bodyClassName="p-0">
+    <div className="logs-routes-workbench grid min-h-[720px] gap-3 xl:grid-cols-[340px_minmax(0,1fr)_320px]">
+      <LogsSection
+        title="运行中路由"
+        meta={workspaceLoading ? 'loading' : `${runningRoutes.length} running routes`}
+        bodyClassName="p-0"
+        action={<LogsToolbarButton onClick={() => refetchWorkspace()}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
+      >
         {workspaceError ? <ErrorLine message={(workspaceError as Error).message} /> : null}
-        {groups.length === 0 ? <LogsEmptyState title="采集域为空" /> : (
+        {runningRoutes.length === 0 ? <LogsEmptyState title="暂无运行中采集路由" description="已登记但未发布的路由继续留在接入配置中处理。" /> : (
           <div className="max-h-[720px] overflow-y-auto">
-            {groups.map((group) => {
-              const active = group.id === activeGroupId;
-              const mode = agentGroupModeLabel(group);
-              const scope = group.cluster ? `${group.cluster} / ${group.namespace || '-'}` : group.environment || '-';
+            {runningRoutes.map((route) => {
+              const active = route.route.id === (activeRoute?.route.id ?? '');
+              const lifecycle = routeLifecycle(route);
+              const service = services.find((item) => item.id === route.route.serviceId) ?? null;
               return (
                 <button
-                  key={group.id}
+                  key={route.route.id}
                   className={`w-full border-b border-outline/60 px-3 py-2.5 text-left transition-colors ${
                     active ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_#0d5bd7]' : 'bg-white/46 text-on-surface hover:bg-surface-low/70'
                   }`}
-                  onClick={() => setSelectedGroupId(group.id)}
+                  onClick={() => setSelectedRouteId(route.route.id)}
                 >
-                  <div className="truncate text-sm font-semibold">{group.displayName || group.name}</div>
-                  <div className="mt-1 truncate font-mono text-[11px] text-muted">{mode} · {scope}</div>
-                  <div className="mt-1 truncate font-mono text-[11px] text-muted">{group.status || '-'} · online {group.onlineInstances}</div>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="break-words text-sm font-semibold">{service ? serviceDisplayName(service) : route.route.serviceId}</div>
+                      <div className="mt-1 break-all font-mono text-[11px] text-muted">{routeScope(route)}</div>
+                    </div>
+                    <span className={`inline-flex shrink-0 rounded border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(lifecycle.tone)}`}>{lifecycle.label}</span>
+                  </div>
+                  <div className="mt-1 flex flex-wrap gap-1.5 font-mono text-[11px] text-muted">
+                    <span>{logSourceLabel(route.route.sourceType)}</span>
+                    <span>{shortHash(route.route.collectorConfigHash)}</span>
+                    <span>{route.endpoint ? logSinkLabel(route.endpoint.sinkType) : 'endpoint -'}</span>
+                  </div>
                 </button>
               );
             })}
@@ -64,10 +111,10 @@ export function LogsAgentsPage() {
         title="实例状态"
         meta={instancesLoading ? 'loading' : `${instances.length} instances · ${onlineCount} healthy`}
         bodyClassName="p-0"
-        action={<LogsToolbarButton onClick={() => refetch()} disabled={!activeGroupId}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
+        action={<LogsToolbarButton onClick={() => refetchInstances()} disabled={!activeGroupId}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
       >
         {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
-        {!activeGroupId ? <LogsEmptyState title="未选择采集域" /> : instances.length === 0 ? <LogsEmptyState title="实例心跳为空" /> : (
+        {!activeRoute ? <LogsEmptyState title="未选择运行中路由" /> : !activeGroupId ? <LogsEmptyState title="路由未绑定采集域" /> : instances.length === 0 ? <LogsEmptyState title="实例心跳为空" /> : (
           <div className="overflow-auto">
             <table className="console-table min-w-[960px] w-full">
               <thead>
@@ -102,32 +149,106 @@ export function LogsAgentsPage() {
         )}
       </LogsSection>
 
-      <LogsSection title="上下文" meta={activeGroup?.id || 'agent context'} bodyClassName="p-0">
-        <LogsInfoCell label="采集域" value={activeGroup?.displayName || activeGroup?.name || '-'} tone="primary" />
-        <LogsInfoCell label="状态来源" value={activeGroup ? activeDomainMode : '-'} />
-        <LogsInfoCell label="Mode" value={activeGroup?.mode || '-'} />
-        <LogsInfoCell label="Scope" value={activeGroup ? activeDomainScope : '-'} />
-        <LogsInfoCell label="Online" value={String(activeGroup?.onlineInstances ?? '-')} />
-        {selectedRoute ? (
-          <>
-            <LogsInfoCell label="接入路由" value={selectedRoute.route.id} />
-            <LogsInfoCell label="来源" value={logSourceLabel(selectedRoute.route.sourceType)} />
-            <LogsInfoCell label="端点" value={selectedRoute.endpoint?.name ?? '-'} />
-            <LogsInfoCell label="发布" value={selectedRoute.route.lastPublishStatus || selectedRoute.route.status} />
-          </>
-        ) : (
-          <div className="border-t border-outline/70 p-3 text-xs leading-5 text-muted">route context empty</div>
-        )}
+      <LogsSection title="路由上下文" meta={activeRoute?.route.collectorConfigHash || 'route context'} bodyClassName="p-0">
+        <LogsInfoCell label="服务" value={activeServiceName} tone="primary" />
+        <LogsInfoCell label="范围" value={activeScope} />
+        <LogsInfoCell label="来源" value={activeRoute ? logSourceLabel(activeRoute.route.sourceType) : '-'} />
+        <LogsInfoCell label="下游" value={activeRoute?.endpoint ? `${activeRoute.endpoint.name} · ${logSinkLabel(activeRoute.endpoint.sinkType)}` : '-'} />
+        <LogsInfoCell label="采集域" value={activeGroup?.displayName || activeGroup?.name || '-'} />
+        <LogsInfoCell label="采集域范围" value={activeGroup ? activeAgentScope : '-'} />
+        <LogsInfoCell label="采集配置" value={activeRoute?.route.collectorConfigHash || '-'} />
+        <LogsInfoCell label="部署状态" value={activeLifecycle?.detail || '-'} />
+        <LogsInfoCell label="Audit" value={activeRoute?.route.lastAuditId || '-'} />
+        <LogsInfoCell label="Preview" value={activeRoute?.route.lastPreviewId || '-'} />
+        <div className="border-t border-outline/70 p-3">
+          <div className="grid gap-2">
+            <button
+              className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white px-3 text-xs font-semibold text-on-surface transition-all hover:border-primary/40 hover:text-primary disabled:opacity-60"
+              disabled={!activeRoute}
+              onClick={() => activeRoute && openCollectorConfig(activeRoute)}
+            >
+              <FileText className="h-3.5 w-3.5" />
+              查看采集配置
+            </button>
+            <Link
+              className={`inline-flex h-8 items-center justify-center rounded-md px-3 text-xs font-semibold transition-all ${
+                activeRoute ? 'bg-primary text-white active:translate-y-px' : 'pointer-events-none bg-primary text-white opacity-60'
+              }`}
+              to={`/logs/onboarding?mode=update&route_id=${activeRoute?.route.id || ''}`}
+            >
+              更新配置
+            </Link>
+          </div>
+        </div>
       </LogsSection>
+
+      {collectorConfigRoute && typeof document !== 'undefined' ? createPortal((
+        <div className="fixed inset-0 z-[100] flex items-center justify-center overflow-hidden bg-slate-900/28 px-4 py-6 backdrop-blur-sm">
+          <div className="route-collector-config-viewer grid h-[86vh] max-h-[86vh] w-full max-w-[1120px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-lg border border-outline bg-white shadow-[0_24px_80px_rgba(24,52,96,0.28)]">
+            <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
+              <div className="min-w-0">
+                <div className="flex min-w-0 flex-wrap items-center gap-2">
+                  <div className="text-base font-semibold text-on-surface">完整 collector.yaml</div>
+                  <span className="rounded border border-outline bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted">非 K8s 部署清单</span>
+                  <span className="rounded border border-primary/20 bg-primary-soft px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">{shortHash(collectorConfigMutation.data?.collectorConfigHash || collectorConfigRoute.route.collectorConfigHash)}</span>
+                </div>
+                <div className="mt-1 break-all font-mono text-[11px] text-muted">
+                  {routeScope(collectorConfigRoute)} · {logSourceLabel(collectorConfigRoute.route.sourceType)}
+                </div>
+                {collectorConfigMutation.data?.deploymentManifestHash ? (
+                  <div className="mt-1 break-all font-mono text-[11px] text-muted">
+                    部署清单 hash {shortHash(collectorConfigMutation.data.deploymentManifestHash)}
+                  </div>
+                ) : null}
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  className="rounded border border-outline bg-white p-1.5 text-muted hover:bg-surface-low hover:text-primary disabled:opacity-50"
+                  disabled={!collectorConfigMutation.data?.collectorYAML}
+                  onClick={() => navigator.clipboard?.writeText(collectorConfigMutation.data?.collectorYAML ?? '')}
+                  title="复制 YAML"
+                >
+                  <Copy className="h-4 w-4" />
+                </button>
+                <button className="inline-flex h-8 items-center gap-1.5 rounded border border-outline bg-white px-2.5 text-xs font-semibold text-muted hover:bg-surface-low hover:text-on-surface" onClick={closeCollectorConfig} title="关闭" aria-label="关闭采集配置">
+                  <XCircle className="h-4 w-4" />
+                  关闭
+                </button>
+              </div>
+            </div>
+            <div className="grid min-h-0 overflow-hidden bg-surface-lowest p-4">
+              {collectorConfigMutation.isPending ? (
+                <div className="min-h-0 overflow-auto rounded border border-outline bg-white">
+                  <LogsEmptyState title="正在加载 collector.yaml" />
+                </div>
+              ) : collectorConfigMutation.error ? (
+                <div className="min-h-0 overflow-auto rounded border border-outline bg-white">
+                  <ErrorLine message={(collectorConfigMutation.error as Error).message} />
+                </div>
+              ) : (
+                <pre className="min-h-0 overflow-auto rounded border border-outline bg-white p-4 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">
+                  {collectorConfigMutation.data?.collectorYAML || 'collector.yaml 为空'}
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>),
+        document.body,
+      ) : null}
     </div>
   );
 }
 
-function agentGroupModeLabel(group: { mode?: string; cluster?: string } | null) {
-  if (!group) return '-';
-  if (group.mode === 'dedicated_collector') return 'K8s 主动探测';
-  if (group.mode === 'shared_gateway') return 'VM 回连上报';
-  return group.cluster ? 'K8s 主动探测' : 'VM 回连上报';
+function routeScope(route?: LogRouteView | null) {
+  const source = route?.source;
+  if (!source) return '-';
+  if (source.sourceType === 'vm_file') return `${source.hostGroup || 'VM'} · ${source.pathPattern || '-'}`;
+  return `${source.clusterId || '-'} / ${source.namespace || '-'} / ${source.workloadKind || '-'}/${source.workloadName || '-'}`;
+}
+
+function shortHash(value?: string) {
+  if (!value) return '-';
+  return value.length > 12 ? value.slice(0, 12) : value;
 }
 
 function ErrorLine({ message }: { message: string }) {

@@ -18,7 +18,7 @@ export function OnboardingPage() {
           <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted">
             <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">K8s</span>
             <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">VM</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">VictoriaLogs</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">日志下游</span>
           </div>
         </div>
       </div>
@@ -53,7 +53,7 @@ export function OnboardingPage() {
                     </td>
                     <td><StateChip value={domain.statusLabel} /></td>
                     <td className="text-xs text-muted">{domain.highlights.slice(0, 2).join(' / ')}</td>
-                    <td className="font-mono text-xs text-muted">VictoriaLogs</td>
+                    <td className="font-mono text-xs text-muted">日志下游</td>
                     <td>
                       <Link className="quiet-button h-9 justify-center bg-primary px-3 text-xs text-white hover:bg-primary/90" to={domain.path}>
                         打开

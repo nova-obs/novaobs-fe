@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
-import { Bell, Cpu, Edit3, Eye, GitBranch, Plus, RefreshCw, Search, Server, XCircle } from 'lucide-react';
+import { Bell, Cpu, Edit3, Eye, GitBranch, Plus, RefreshCw, Search, Server, Trash2, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
@@ -61,6 +61,7 @@ export function ServicesPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [confirmDeleteServiceId, setConfirmDeleteServiceId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const [targetForm, setTargetForm] = useState(emptyTargetForm);
 
@@ -129,8 +130,26 @@ export function ServicesPage() {
     },
   });
 
-  const openCreate = () => { setEditingId(null); setForm(emptyForm); setShowForm(true); };
+  const deleteMutation = useMutation({
+    mutationFn: (svc: Service) => api.deleteService(svc.id),
+    onSuccess: (_, svc) => {
+      queryClient.invalidateQueries({ queryKey: ['services'] });
+      queryClient.removeQueries({ queryKey: ['service-observability-graph', svc.id] });
+      if (selectedServiceId === svc.id) {
+        setSelectedServiceId(null);
+      }
+      if (editingId === svc.id) {
+        setEditingId(null);
+        setShowForm(false);
+        setForm(emptyForm);
+      }
+      setConfirmDeleteServiceId(null);
+    },
+  });
+
+  const openCreate = () => { setEditingId(null); setConfirmDeleteServiceId(null); setForm(emptyForm); setShowForm(true); };
   const openEdit = (svc: Service) => {
+    setConfirmDeleteServiceId(null);
     setEditingId(svc.id);
     setForm({ name: svc.name, environment: svc.environment, displayName: svc.displayName, description: svc.description, cluster: svc.cluster, namespace: svc.namespace, ownerTeam: svc.ownerTeam, owner: svc.owner, alertRoute: svc.alertRoute, sloLevel: svc.sloLevel, identityType: svc.identityType });
     setShowForm(true);
@@ -216,7 +235,7 @@ export function ServicesPage() {
                 <label className="text-sm font-semibold">Owner<input className="console-input mt-2 w-full" value={form.owner ?? ''} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label>
                 <label className="text-sm font-semibold">告警路由<input className="console-input mt-2 w-full" value={form.alertRoute ?? ''} onChange={(e) => setForm({ ...form, alertRoute: e.target.value })} /></label>
                 <label className="text-sm font-semibold">SLO Level<input className="console-input mt-2 w-full" value={form.sloLevel ?? ''} onChange={(e) => setForm({ ...form, sloLevel: e.target.value })} /></label>
-                <label className="text-sm font-semibold">运行身份<select className="console-input mt-2 w-full" value={form.identityType ?? 'k8s_workload'} onChange={(e) => setForm({ ...form, identityType: e.target.value as typeof form.identityType })}><option value="k8s_workload">K8s Workload</option><option value="host_process">物理机 / VM 进程</option><option value="syslog_device">Syslog 设备</option></select></label>
+                <label className="text-sm font-semibold">运行身份<select className="console-input mt-2 w-full" value={form.identityType ?? 'k8s_workload'} onChange={(e) => setForm({ ...form, identityType: e.target.value as typeof form.identityType })}><option value="k8s_workload">K8s Workload</option><option value="host_process">物理机 / VM 进程</option></select></label>
               </div>
               <div className="mt-4 flex gap-2">
                 <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!form.name || !form.environment || isPending} onClick={() => (editingId ? updateMutation.mutate() : createMutation.mutate())}>
@@ -231,6 +250,11 @@ export function ServicesPage() {
           ) : null}
 
           <DataPanel title="服务清单" meta={`${data.length} 个服务`}>
+            {deleteMutation.error ? (
+              <div className="mb-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
+                <XCircle className="h-4 w-4" />{(deleteMutation.error as Error).message}
+              </div>
+            ) : null}
             {isLoading ? (
               <div className="flex items-center gap-2 py-4 text-sm text-muted"><RefreshCw className="h-4 w-4 animate-spin" />加载中...</div>
             ) : data.length === 0 ? (
@@ -271,8 +295,29 @@ export function ServicesPage() {
                         <td className="font-mono text-xs text-muted">{svc.identityType || 'k8s_workload'}</td>
                         <td><StatusBadge value={svc.status} /></td>
                         <td>
-                          <button className="rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => openEdit(svc)}><Edit3 className="h-3.5 w-3.5" /></button>
-                          <button className="ml-1 rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => setSelectedServiceId(svc.id)}><Eye className="h-3.5 w-3.5" /></button>
+                          <div className="flex items-center gap-1">
+                            <button title="编辑服务" className="rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => openEdit(svc)}><Edit3 className="h-3.5 w-3.5" /></button>
+                            <button title="查看观测关系" className="rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => { setConfirmDeleteServiceId(null); setSelectedServiceId(svc.id); }}><Eye className="h-3.5 w-3.5" /></button>
+                            <button
+                              title={confirmDeleteServiceId === svc.id ? '确认删除服务' : '删除服务'}
+                              className={`inline-flex items-center rounded border px-1.5 py-1 text-xs font-semibold ${
+                                confirmDeleteServiceId === svc.id
+                                  ? 'border-red-500/30 bg-red-50 text-red-600'
+                                  : 'border-transparent text-muted hover:border-red-500/20 hover:bg-red-50 hover:text-red-600'
+                              }`}
+                              disabled={deleteMutation.isPending && confirmDeleteServiceId === svc.id}
+                              onClick={() => {
+                                if (confirmDeleteServiceId === svc.id) {
+                                  deleteMutation.mutate(svc);
+                                  return;
+                                }
+                                setConfirmDeleteServiceId(svc.id);
+                              }}
+                            >
+                              {deleteMutation.isPending && confirmDeleteServiceId === svc.id ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                              {confirmDeleteServiceId === svc.id ? <span className="ml-1">确认</span> : null}
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}

@@ -74,7 +74,7 @@ const logsChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <Navigate to="/logs/explore" replace /> },
   { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
   { path: 'onboarding', title: 'Logs 接入配置', element: <LogsOnboardingPage /> },
-  { path: 'agents', title: 'Logs 采集 Agent', element: <LogsAgentsPage /> },
+  { path: 'agents', title: 'Logs 采集路由', element: <LogsAgentsPage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
 ];
 

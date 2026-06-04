@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, ExternalLink, ListFilter, RefreshCw, Rows3, Search, Table2 } from 'lucide-react';
-import { logsApi, logSourceLabel, type LogRouteView } from './api';
+import { logSinkLabel, logsApi, logSourceLabel, type LogRouteView } from './api';
 import { LogsEmptyState, LogsInfoCell, LogsSection, LogsToolbarButton } from './LogsPrimitives';
 
 function serviceName(route: LogRouteView, services: Array<{ id: string; name: string; displayName: string }>) {
@@ -35,6 +35,7 @@ export function LogsExplorePage() {
     return routes.filter((route) => `${serviceName(route, services)} ${route.endpoint?.name ?? ''} ${routeScope(route)}`.toLowerCase().includes(keyword));
   }, [routeQuery, routes, services]);
   const vmuiURL = activeRoute?.endpoint?.vmuiURL ?? '';
+  const activeSinkLabel = logSinkLabel(activeRoute?.endpoint?.sinkType);
   const selectedServiceName = activeRoute ? serviceName(activeRoute, services) : '-';
 
   return (
@@ -90,7 +91,7 @@ export function LogsExplorePage() {
         <div className="border-b border-outline/70 bg-white/62 p-3">
           <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
             <label className="min-w-0">
-              <span className="mb-1 block text-[11px] font-semibold text-muted">LogQL / VictoriaLogs query</span>
+              <span className="mb-1 block text-[11px] font-semibold text-muted">Log query / {activeSinkLabel}</span>
               <input className="console-input h-9 w-full font-mono text-xs" value={query} onChange={(event) => setQuery(event.target.value)} />
             </label>
             <label>
@@ -108,27 +109,27 @@ export function LogsExplorePage() {
                   <ExternalLink className="h-4 w-4" />打开 VMUI
                 </a>
               ) : (
-                <button className="h-9 rounded-md border border-outline bg-white px-3 text-sm font-semibold text-muted" disabled>VMUI 未登记</button>
+                <button className="h-9 rounded-md border border-outline bg-white px-3 text-sm font-semibold text-muted" disabled>未登记查询入口</button>
               )}
             </div>
           </div>
         </div>
 
         {vmuiURL ? (
-          <iframe className="h-[650px] w-full border-0 bg-white" src={vmuiURL} title="VictoriaLogs VMUI" />
+          <iframe className="h-[650px] w-full border-0 bg-white" src={vmuiURL} title="Logs query console" />
         ) : (
           <LogsEmptyState
-            title={routes.length === 0 ? '日志路由为空' : 'VMUI URL 为空'}
+            title={routes.length === 0 ? '日志路由为空' : '当前下游未提供内嵌查询入口'}
           />
         )}
       </LogsSection>
 
-      <LogsSection title="详情" meta={activeRoute?.route.configHash || 'route context'} bodyClassName="p-0">
+      <LogsSection title="详情" meta={activeRoute?.route.collectorConfigHash || 'route context'} bodyClassName="p-0">
         <LogsInfoCell label="服务" value={selectedServiceName} tone="primary" />
         <LogsInfoCell label="来源" value={activeRoute ? logSourceLabel(activeRoute.route.sourceType) : '-'} />
         <LogsInfoCell label="范围" value={routeScope(activeRoute)} />
         <LogsInfoCell label="端点" value={activeRoute?.endpoint?.name || '-'} />
-        <LogsInfoCell label="配置 Hash" value={activeRoute?.route.configHash || '-'} />
+        <LogsInfoCell label="采集配置 hash" value={activeRoute?.route.collectorConfigHash || '-'} />
         <LogsInfoCell label="发布状态" value={activeRoute?.route.lastPublishStatus || activeRoute?.route.status || '-'} />
         <div className="border-t border-outline/70 p-3">
           <div className="mb-2 text-xs font-semibold text-on-surface">动作</div>

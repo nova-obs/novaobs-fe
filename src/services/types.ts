@@ -1,10 +1,10 @@
-export type ServiceStatus = 'active' | 'pending' | 'degraded';
+export type ServiceStatus = 'active' | 'pending' | 'degraded' | 'deleted';
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type ServiceSource = 'manual' | 'cmdb' | 'k8s';
 export type SyncStatus = 'local' | 'synced';
-export type ServiceIdentityType = 'k8s_workload' | 'host_process' | 'syslog_device';
+export type ServiceIdentityType = 'k8s_workload' | 'host_process';
 export type ServiceTargetType = 'cloud_native_workload' | 'host_process' | 'physical_or_network_device';
 
 export interface Service {
@@ -64,7 +64,7 @@ export interface ServiceGraphLogRouteSummary {
       agentGroupId: string;
       endpointId: string;
       status: string;
-      configHash: string;
+      collectorConfigHash: string;
       lastPublishStatus: string;
     };
     source?: {
@@ -76,7 +76,7 @@ export interface ServiceGraphLogRouteSummary {
       hostGroup: string;
       pathPattern: string;
     } | null;
-    endpoint?: { id: string; name: string; vmuiURL: string } | null;
+    endpoint?: { id: string; name: string; sinkType: string; streamName: string; vmuiURL: string } | null;
   }>;
 }
 

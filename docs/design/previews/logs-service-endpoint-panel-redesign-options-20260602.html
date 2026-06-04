@@ -1,0 +1,678 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logs Service and Endpoint Panel Redesign Options</title>
+  <style>
+    :root {
+      --background: #eef3fb;
+      --surface: #f6f8fc;
+      --surface-low: #edf4ff;
+      --panel: #ffffff;
+      --line: #d8e2ef;
+      --line-strong: #bfd0e5;
+      --text: #122033;
+      --muted: #637083;
+      --primary: #0d5bd7;
+      --primary-soft: #e5f0ff;
+      --warning: #cc6b1e;
+      --danger: #b4232f;
+      font-family: Geist, Satoshi, Aptos, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background:
+        linear-gradient(135deg, rgba(219, 234, 255, 0.82), rgba(246, 250, 255, 0.95)),
+        var(--background);
+      color: var(--text);
+    }
+
+    .page {
+      width: min(1560px, 100%);
+      margin: 0 auto;
+      padding: 26px;
+    }
+
+    .option {
+      overflow: hidden;
+      margin-bottom: 28px;
+      border: 1px solid rgba(199, 216, 235, 0.92);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.9);
+      box-shadow: 0 22px 58px -46px rgba(24, 52, 96, 0.8);
+    }
+
+    .option-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+    }
+
+    .title-row {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 17px;
+      font-weight: 820;
+      letter-spacing: 0;
+    }
+
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 4px rgba(13, 91, 215, 0.13);
+    }
+
+    .note {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      height: 24px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 0 8px;
+      background: #fff;
+      color: var(--muted);
+      font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+      font-size: 11px;
+      font-weight: 760;
+      white-space: nowrap;
+    }
+
+    .tag.primary {
+      border-color: rgba(13, 91, 215, 0.24);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .tag.warning {
+      border-color: rgba(204, 107, 30, 0.32);
+      background: #fff7ed;
+      color: var(--warning);
+    }
+
+    .content { padding: 16px; }
+
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 255, 255, 0.92);
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(248, 251, 255, 0.76);
+    }
+
+    .panel-name {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      font-weight: 820;
+    }
+
+    .mini-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: var(--primary);
+      box-shadow: 0 0 0 4px rgba(13, 91, 215, 0.12);
+    }
+
+    .field {
+      display: grid;
+      gap: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 780;
+    }
+
+    .input {
+      height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--text);
+      padding: 0 10px;
+      font-size: 13px;
+      font-weight: 720;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.95), 0 1px 2px rgba(18, 32, 51, 0.03);
+    }
+
+    .input.mono {
+      font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace;
+      font-size: 12px;
+    }
+
+    .select {
+      appearance: none;
+      background-image:
+        linear-gradient(45deg, transparent 50%, var(--muted) 50%),
+        linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+      background-position: calc(100% - 15px) 15px, calc(100% - 10px) 15px;
+      background-size: 5px 5px, 5px 5px;
+      background-repeat: no-repeat;
+      padding-right: 28px;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      height: 34px;
+      border: 1px solid var(--primary);
+      border-radius: 6px;
+      background: var(--primary);
+      color: #fff;
+      padding: 0 13px;
+      font-size: 13px;
+      font-weight: 780;
+    }
+
+    .btn.secondary {
+      background: #fff;
+      color: var(--primary);
+    }
+
+    .btn.ghost {
+      border-color: var(--line);
+      background: #fff;
+      color: var(--text);
+    }
+
+    .mono { font-family: "Geist Mono", "JetBrains Mono", ui-monospace, monospace; }
+    .muted { color: var(--muted); }
+
+    /* Option A */
+    .a-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 0.92fr) minmax(0, 1.08fr);
+      gap: 14px;
+      align-items: start;
+    }
+
+    .a-picker {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 170px;
+      gap: 12px;
+      padding: 14px;
+      align-items: end;
+    }
+
+    .selected-strip {
+      border-left: 3px solid var(--primary);
+      border-radius: 8px;
+      background: var(--primary-soft);
+      padding: 11px 12px;
+    }
+
+    .selected-main {
+      font-size: 15px;
+      font-weight: 820;
+      letter-spacing: 0;
+    }
+
+    .selected-meta {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .endpoint-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 10px 12px 0;
+    }
+
+    .endpoint-tab {
+      height: 30px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: #fff;
+      padding: 0 10px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+    }
+
+    .endpoint-tab.active {
+      border-color: rgba(13, 91, 215, 0.38);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .endpoint-form-a {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr) minmax(0, 1fr) 128px;
+      gap: 10px;
+      padding: 12px;
+      align-items: end;
+    }
+
+    .endpoint-current {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      padding: 0 12px 12px;
+    }
+
+    .compact-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 10px 12px;
+    }
+
+    /* Option B */
+    .b-layout {
+      display: grid;
+      grid-template-columns: 330px minmax(0, 1fr);
+      gap: 14px;
+    }
+
+    .service-list {
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .service-row {
+      border: 1px solid transparent;
+      border-radius: 8px;
+      padding: 10px;
+      background: #fff;
+      display: grid;
+      gap: 4px;
+    }
+
+    .service-row.active {
+      border-color: rgba(13, 91, 215, 0.35);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .service-name {
+      font-size: 14px;
+      font-weight: 820;
+    }
+
+    .endpoint-workbench {
+      padding: 12px;
+      display: grid;
+      gap: 12px;
+    }
+
+    .endpoint-toolbar {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto auto;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .endpoint-table {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      overflow: hidden;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th {
+      background: #edf4ff;
+      color: var(--muted);
+      padding: 9px 10px;
+      text-align: left;
+      font-weight: 800;
+    }
+
+    td {
+      border-top: 1px solid var(--line);
+      padding: 10px;
+      font-weight: 680;
+    }
+
+    tr.active td {
+      background: rgba(229, 240, 255, 0.74);
+      color: var(--primary);
+    }
+
+    .inline-create {
+      display: grid;
+      grid-template-columns: 150px minmax(0, 1fr) 150px auto;
+      gap: 10px;
+      align-items: end;
+      padding-top: 4px;
+    }
+
+    /* Option C */
+    .c-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 360px;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .c-main {
+      display: grid;
+      gap: 14px;
+    }
+
+    .hero-select {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 160px;
+      gap: 12px;
+      align-items: end;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .endpoint-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      padding: 12px;
+    }
+
+    .endpoint-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      padding: 12px;
+      min-height: 116px;
+      display: grid;
+      align-content: space-between;
+      gap: 10px;
+    }
+
+    .endpoint-card.active {
+      border-color: rgba(13, 91, 215, 0.42);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .drawer {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      overflow: hidden;
+    }
+
+    .drawer-body {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .summary-kv {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .kv {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      padding: 9px 10px;
+    }
+
+    .kv-label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 730;
+    }
+
+    .kv-value {
+      margin-top: 4px;
+      font-size: 12px;
+      font-weight: 780;
+      word-break: break-all;
+    }
+
+    @media (max-width: 1100px) {
+      .a-layout,
+      .b-layout,
+      .c-layout {
+        grid-template-columns: 1fr;
+      }
+      .endpoint-form-a,
+      .inline-create,
+      .hero-select,
+      .a-picker,
+      .endpoint-toolbar {
+        grid-template-columns: 1fr;
+      }
+      .endpoint-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="option">
+      <header class="option-head">
+        <div>
+          <div class="title-row"><span class="dot"></span>方案 A：双面板主从式</div>
+          <div class="note">推荐：服务只负责选择；下游端点以“当前选择 + 新增端点”分层展示，控件少、落地改动小。</div>
+        </div>
+        <span class="tag primary">recommended</span>
+      </header>
+      <div class="content">
+        <div class="a-layout">
+          <section class="panel">
+            <div class="panel-title">
+              <div class="panel-name"><span class="mini-dot"></span>服务绑定</div>
+              <span class="tag">service</span>
+            </div>
+            <div class="a-picker">
+              <label class="field">
+                选择服务
+                <div class="input">prometheus</div>
+              </label>
+              <button class="btn secondary">同步服务</button>
+            </div>
+            <div style="padding: 0 14px 14px;">
+              <div class="selected-strip">
+                <div class="selected-main">prometheus</div>
+                <div class="selected-meta mono">prod · owner - · k8s synced</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-title">
+              <div class="panel-name"><span class="mini-dot"></span>日志下游端点</div>
+              <div style="display:flex; gap: 6px;"><span class="tag primary">测试环境 · VL</span><span class="tag">k8s_cluster</span></div>
+            </div>
+            <div class="endpoint-tabs">
+              <button class="endpoint-tab active">选择端点</button>
+              <button class="endpoint-tab">新增端点</button>
+            </div>
+            <div class="endpoint-current">
+              <div class="compact-card">
+                <div class="muted" style="font-size:11px;font-weight:760;">当前端点</div>
+                <div class="mono" style="margin-top:5px;font-size:13px;font-weight:820;">测试环境 · VL</div>
+              </div>
+              <button class="btn ghost">切换</button>
+            </div>
+            <div class="endpoint-form-a">
+              <label class="field">类型<div class="input select">VL</div></label>
+              <label class="field">写入地址<div class="input mono">http://vl:9428/insert</div></label>
+              <label class="field">查询地址<div class="input mono">http://vl:9428/select</div></label>
+              <button class="btn">保存端点</button>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <header class="option-head">
+        <div>
+          <div class="title-row"><span class="dot"></span>方案 B：左服务、右端点工作台</div>
+          <div class="note">更像生产控制台：服务选择变成列表，右侧端点以表格管理；适合后续端点很多时扩展。</div>
+        </div>
+        <span class="tag">scalable</span>
+      </header>
+      <div class="content">
+        <div class="b-layout">
+          <section class="panel">
+            <div class="panel-title">
+              <div class="panel-name"><span class="mini-dot"></span>服务</div>
+              <span class="tag">2 services</span>
+            </div>
+            <div style="padding: 10px 10px 0;">
+              <div class="input">搜索服务</div>
+            </div>
+            <div class="service-list">
+              <div class="service-row active">
+                <div class="service-name">prometheus</div>
+                <div class="mono muted" style="font-size:11px;font-weight:700;">prod · owner - · k8s</div>
+              </div>
+              <div class="service-row">
+                <div class="service-name">cattle-node-agent</div>
+                <div class="mono muted" style="font-size:11px;font-weight:700;">prod · sre · k8s</div>
+              </div>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-title">
+              <div class="panel-name"><span class="mini-dot"></span>日志下游端点</div>
+              <span class="tag warning">未发布</span>
+            </div>
+            <div class="endpoint-workbench">
+              <div class="endpoint-toolbar">
+                <div class="input">搜索端点 / URL / 集群</div>
+                <button class="btn secondary">测试连接</button>
+                <button class="btn">新增端点</button>
+              </div>
+              <div class="endpoint-table">
+                <table>
+                  <thead>
+                    <tr><th>端点</th><th>类型</th><th>作用域</th><th>状态</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr class="active"><td>测试环境</td><td>VL</td><td>test03-02</td><td>ready</td></tr>
+                    <tr><td>prod-es</td><td>ES</td><td>global</td><td>ready</td></tr>
+                    <tr><td>audit-kafka</td><td>Kafka</td><td>vm</td><td>unknown</td></tr>
+                  </tbody>
+                </table>
+              </div>
+              <div class="inline-create">
+                <label class="field">类型<div class="input select">VL</div></label>
+                <label class="field">写入地址<div class="input mono">http://vl:9428/insert</div></label>
+                <label class="field">Secret Ref<div class="input mono">secret/logs-vl</div></label>
+                <button class="btn">保存</button>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <section class="option">
+      <header class="option-head">
+        <div>
+          <div class="title-row"><span class="dot"></span>方案 C：端点卡片 + 右侧编辑抽屉</div>
+          <div class="note">最轻的首屏：服务选择和端点卡片都很直观；新增/编辑统一放右侧抽屉，视觉更完整但改动较大。</div>
+        </div>
+        <span class="tag">polished</span>
+      </header>
+      <div class="content">
+        <div class="c-layout">
+          <div class="c-main">
+            <section class="panel">
+              <div class="panel-title">
+                <div class="panel-name"><span class="mini-dot"></span>服务绑定</div>
+                <span class="tag primary">prometheus</span>
+              </div>
+              <div class="hero-select">
+                <label class="field">选择或搜索服务<div class="input">prometheus</div></label>
+                <button class="btn secondary">同步服务</button>
+              </div>
+            </section>
+
+            <section class="panel">
+              <div class="panel-title">
+                <div class="panel-name"><span class="mini-dot"></span>日志下游端点</div>
+                <button class="btn">新增端点</button>
+              </div>
+              <div class="endpoint-grid">
+                <div class="endpoint-card active">
+                  <div>
+                    <div style="font-weight:820;">测试环境</div>
+                    <div class="mono muted" style="font-size:11px;margin-top:4px;">VL · test03-02</div>
+                  </div>
+                  <span class="tag primary">selected</span>
+                </div>
+                <div class="endpoint-card">
+                  <div>
+                    <div style="font-weight:820;">prod-es</div>
+                    <div class="mono muted" style="font-size:11px;margin-top:4px;">ES · global</div>
+                  </div>
+                  <span class="tag">ready</span>
+                </div>
+                <div class="endpoint-card">
+                  <div>
+                    <div style="font-weight:820;">audit-kafka</div>
+                    <div class="mono muted" style="font-size:11px;margin-top:4px;">Kafka · vm</div>
+                  </div>
+                  <span class="tag warning">unknown</span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="drawer">
+            <div class="panel-title">
+              <div class="panel-name"><span class="mini-dot"></span>端点编辑</div>
+              <span class="tag">VL</span>
+            </div>
+            <div class="drawer-body">
+              <label class="field">名称<div class="input">测试环境</div></label>
+              <label class="field">写入地址<div class="input mono">http://vl:9428/insert</div></label>
+              <label class="field">查询地址<div class="input mono">http://vl:9428/select</div></label>
+              <label class="field">Secret Ref<div class="input mono">secret/logs-vl</div></label>
+              <button class="btn">保存端点</button>
+            </div>
+            <div class="summary-kv">
+              <div class="kv"><div class="kv-label">当前路由</div><div class="kv-value mono">prometheus -> test03-02 -> 测试环境</div></div>
+              <div class="kv"><div class="kv-label">配置状态</div><div class="kv-value mono">collector.yaml pending</div></div>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

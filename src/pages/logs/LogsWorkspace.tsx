@@ -2,9 +2,9 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { Bell, Clock, Database, RadioTower, RefreshCw, Search, ServerCog } from 'lucide-react';
 
 const logsNav = [
-  { to: '/logs/explore', label: '日志分析', meta: 'VMUI / VictoriaLogs', icon: Search },
+  { to: '/logs/explore', label: '日志分析', meta: '下游查询', icon: Search },
   { to: '/logs/onboarding', label: '接入配置', icon: RadioTower },
-  { to: '/logs/agents', label: '采集 Agent', icon: ServerCog },
+  { to: '/logs/agents', label: '采集路由', icon: ServerCog },
   { to: '/logs/alerts', label: '日志告警', icon: Bell },
 ];
 
@@ -38,7 +38,7 @@ function LogsWorkspace() {
           <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
             <span className="inline-flex h-8 items-center gap-1.5 rounded-md border border-outline bg-white/85 px-2.5 font-semibold text-muted">
               <Database className="h-3.5 w-3.5 text-primary" />
-              VictoriaLogs
+              日志下游
             </span>
             <span className="inline-flex h-8 items-center gap-1.5 rounded-md border border-outline bg-white/85 px-2.5 font-semibold text-muted">
               <Clock className="h-3.5 w-3.5" />

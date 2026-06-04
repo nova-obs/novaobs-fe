@@ -1,16 +1,25 @@
 import { apiRequest } from '../../services/api';
 
-export type LogSourceType = 'k8s_stdout' | 'k8s_hostpath' | 'vm_file';
+export type LogSourceType = 'k8s_stdout' | 'vm_file';
 export type LogAccessSource = 'k8s' | 'vm';
+export type LogSinkType = 'vl' | 'es' | 'kafka';
 
 export function logSourceLabel(type?: string): string {
   return type === 'vm_file' ? 'VM' : 'K8s';
+}
+
+export function logSinkLabel(type?: string): string {
+  if (type === 'es') return 'ES';
+  if (type === 'kafka') return 'Kafka';
+  return 'VL';
 }
 
 export interface LogEndpoint {
   id: string;
   name: string;
   description: string;
+  sinkType: LogSinkType;
+  streamName: string;
   writeURL: string;
   queryURL: string;
   vmuiURL: string;
@@ -46,6 +55,8 @@ export interface LogSource {
   pathPattern: string;
   parseRules: LogParseRule[];
   collectorYAML: string;
+  collectorConfigHash: string;
+  deploymentManifestHash: string;
 }
 
 export interface LogRoute {
@@ -57,7 +68,7 @@ export interface LogRoute {
   agentGroupId: string;
   endpointId: string;
   status: string;
-  configHash: string;
+  collectorConfigHash: string;
   lastProbeStatus: string;
   lastProbeMessage: string;
   lastProbeAt: string;
@@ -135,6 +146,7 @@ export interface LogsWorkload {
 }
 
 export interface LogRouteInput {
+  routeId?: string;
   name?: string;
   serviceId: string;
   sourceType: LogSourceType;
@@ -150,7 +162,6 @@ export interface LogRouteInput {
     workloadSelector?: Record<string, string>;
     pathPattern?: string;
     parseRules?: LogParseRule[];
-    collectorYAML?: string;
   };
   vm?: {
     hostGroup?: string;
@@ -185,11 +196,20 @@ export interface LogRoutePreview {
   source: LogSource;
   endpoint: LogEndpoint;
   agentYAML: string;
-  configHash: string;
+  collectorConfigHash: string;
+  deploymentManifestHash: string;
   mode: string;
   publishBlocked: boolean;
   publishBlockedReason: string;
   warnings: string[];
+}
+
+export interface LogRouteCollectorConfig {
+  routeId: string;
+  collectorConfigHash: string;
+  deploymentManifestHash: string;
+  sourceType: LogSourceType;
+  collectorYAML: string;
 }
 
 export interface LogPublishResult {
@@ -199,13 +219,16 @@ export interface LogPublishResult {
   previewId: string;
   confirmationToken: string;
   auditId: string;
+  resources: K8sPublishResource[];
+  diffs: K8sPublishDiff[];
   warnings: string[];
   plan?: {
     id: string;
     routeId: string;
     agentGroupId: string;
     sourceType: LogSourceType;
-    configHash: string;
+    collectorConfigHash: string;
+    deploymentManifestHash: string;
     renderedYAML: string;
     status: string;
     previewId: string;
@@ -213,6 +236,26 @@ export interface LogPublishResult {
     auditId: string;
     message: string;
   };
+}
+
+export interface K8sPublishResource {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  uid: string;
+}
+
+export interface K8sPublishDiff {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  operation: string;
+  beforeHash: string;
+  afterHash: string;
 }
 
 export interface LogProbeResult {
@@ -235,6 +278,8 @@ function mapEndpoint(raw: any): LogEndpoint {
     id: String(raw.id ?? ''),
     name: raw.name ?? '',
     description: raw.description ?? '',
+    sinkType: raw.sink_type ?? raw.sinkType ?? 'vl',
+    streamName: raw.stream_name ?? raw.streamName ?? '',
     writeURL: raw.write_url ?? raw.writeURL ?? '',
     queryURL: raw.query_url ?? raw.queryURL ?? '',
     vmuiURL: raw.vmui_url ?? raw.vmuiURL ?? '',
@@ -262,7 +307,9 @@ function mapSource(raw: any): LogSource {
     hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
     parseRules: mapParseRules(raw.parse_rules ?? raw.parseRules),
-    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
+    collectorYAML: raw.custom_collector_yaml ?? raw.customCollectorYAML ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
   };
 }
 
@@ -276,7 +323,7 @@ function mapRoute(raw: any): LogRoute {
     agentGroupId: raw.agent_group_id ?? raw.agentGroupId ?? '',
     endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
     status: raw.status ?? '',
-    configHash: raw.config_hash ?? raw.configHash ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     lastProbeStatus: raw.last_probe_status ?? raw.lastProbeStatus ?? '',
     lastProbeMessage: raw.last_probe_message ?? raw.lastProbeMessage ?? '',
     lastProbeAt: raw.last_probe_at ?? raw.lastProbeAt ?? '',
@@ -404,11 +451,22 @@ function mapPreview(raw: any): LogRoutePreview {
     source: mapSource(raw.source ?? {}),
     endpoint: mapEndpoint(raw.endpoint ?? {}),
     agentYAML: raw.agent_yaml ?? raw.agentYAML ?? '',
-    configHash: raw.config_hash ?? raw.configHash ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
     mode: raw.mode ?? '',
     publishBlocked: Boolean(raw.publish_blocked ?? raw.publishBlocked),
     publishBlockedReason: raw.publish_blocked_reason ?? raw.publishBlockedReason ?? '',
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+  };
+}
+
+function mapRouteCollectorConfig(raw: any): LogRouteCollectorConfig {
+  return {
+    routeId: raw.route_id ?? raw.routeId ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
+    sourceType: raw.source_type ?? raw.sourceType ?? 'k8s_stdout',
+    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
   };
 }
 
@@ -429,13 +487,16 @@ function mapPublish(raw: any): LogPublishResult {
     previewId: raw.preview_id ?? raw.previewId ?? '',
     confirmationToken: raw.confirmation_token ?? raw.confirmationToken ?? '',
     auditId: raw.audit_id ?? raw.auditId ?? '',
+    resources: Array.isArray(raw.resources) ? raw.resources.map(mapPublishResource) : [],
+    diffs: Array.isArray(raw.diffs) ? raw.diffs.map(mapPublishDiff) : [],
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     plan: raw.plan ? {
       id: String(raw.plan.id ?? ''),
       routeId: raw.plan.route_id ?? raw.plan.routeId ?? '',
       agentGroupId: raw.plan.agent_group_id ?? raw.plan.agentGroupId ?? '',
       sourceType: raw.plan.source_type ?? raw.plan.sourceType ?? 'vm_file',
-      configHash: raw.plan.config_hash ?? raw.plan.configHash ?? '',
+      collectorConfigHash: raw.plan.collector_config_hash ?? raw.plan.collectorConfigHash ?? '',
+      deploymentManifestHash: raw.plan.deployment_manifest_hash ?? raw.plan.deploymentManifestHash ?? '',
       renderedYAML: raw.plan.rendered_yaml ?? raw.plan.renderedYAML ?? '',
       status: raw.plan.status ?? '',
       previewId: raw.plan.preview_id ?? raw.plan.previewId ?? '',
@@ -447,13 +508,15 @@ function mapPublish(raw: any): LogPublishResult {
 }
 
 function toRoutePayload(input: LogRouteInput) {
+  const isVM = input.sourceType === 'vm_file';
   return {
+    route_id: input.routeId,
     name: input.name,
     service_id: input.serviceId,
     source_type: input.sourceType,
     agent_group_id: input.agentGroupId,
     endpoint_id: input.endpointId,
-    k8s: {
+    k8s: isVM ? {} : {
       cluster_id: input.k8s?.clusterId,
       namespace: input.k8s?.namespace,
       agent_namespace: input.k8s?.agentNamespace,
@@ -463,15 +526,38 @@ function toRoutePayload(input: LogRouteInput) {
       workload_selector: input.k8s?.workloadSelector ?? {},
       path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
-      collector_yaml: input.k8s?.collectorYAML,
     },
-    vm: {
+    vm: isVM ? {
       host_group: input.vm?.hostGroup,
       host_selector: input.vm?.hostSelector ?? {},
       path_pattern: input.vm?.pathPattern,
       parse_rules: toParseRulesPayload(input.vm?.parseRules),
       collector_yaml: input.vm?.collectorYAML,
-    },
+    } : {},
+  };
+}
+
+function mapPublishResource(raw: any): K8sPublishResource {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    apiVersion: raw.api_version ?? raw.apiVersion ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    uid: raw.uid ?? '',
+  };
+}
+
+function mapPublishDiff(raw: any): K8sPublishDiff {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    apiVersion: raw.api_version ?? raw.apiVersion ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    operation: raw.operation ?? '',
+    beforeHash: raw.before_hash ?? raw.beforeHash ?? '',
+    afterHash: raw.after_hash ?? raw.afterHash ?? '',
   };
 }
 
@@ -504,12 +590,33 @@ export const logsApi = {
       body: JSON.stringify({
         name: input.name,
         description: input.description,
+        sink_type: input.sinkType,
+        stream_name: input.streamName,
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
         secret_ref: input.secretRef,
         scope_type: input.scopeType,
         cluster_id: input.clusterId,
+      }),
+    });
+    return mapEndpoint(raw);
+  },
+  async updateEndpoint(endpointId: string, input: Partial<LogEndpoint>): Promise<LogEndpoint> {
+    const raw = await apiRequest<any>(`/logs/endpoints/${endpointId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({
+        name: input.name,
+        description: input.description,
+        sink_type: input.sinkType,
+        stream_name: input.streamName,
+        write_url: input.writeURL,
+        query_url: input.queryURL,
+        vmui_url: input.vmuiURL,
+        secret_ref: input.secretRef,
+        scope_type: input.scopeType,
+        cluster_id: input.clusterId,
+        status: input.status,
       }),
     });
     return mapEndpoint(raw);
@@ -538,6 +645,15 @@ export const logsApi = {
       method: 'POST',
       body: JSON.stringify(toRoutePayload(input)),
     }));
+  },
+  async updateRoute(routeId: string, input: LogRouteInput): Promise<LogRouteView> {
+    return mapRouteView(await apiRequest<any>(`/logs/routes/${routeId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(toRoutePayload({ ...input, routeId })),
+    }));
+  },
+  async getRouteCollectorConfig(routeId: string): Promise<LogRouteCollectorConfig> {
+    return mapRouteCollectorConfig(await apiRequest<any>(`/logs/routes/${routeId}/collector-config`));
   },
   async probeRoute(routeId: string): Promise<LogProbeResult> {
     const raw = await apiRequest<any>(`/logs/routes/${routeId}/probe`, { method: 'POST' });

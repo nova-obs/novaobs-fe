@@ -16,7 +16,7 @@ test('平台总览不展示硬编码业务数据', () => {
 });
 
 test('平台总览展示审计级指标元信息', () => {
-  assert.equal(source.includes('VictoriaLogs'), true);
+  assert.equal(source.includes('日志下游'), true);
   assert.equal(source.includes('OTel Collector'), true);
   assert.equal(source.includes('最近 15 分钟'), true);
   assert.equal(source.includes('config a1b2c3d4'), false);

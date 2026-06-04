@@ -28,7 +28,7 @@ export function OverviewPage() {
     {
       label: '日志吞吐',
       value: `${formatNumber(logThroughput)}/min`,
-      source: 'VictoriaLogs',
+      source: '日志下游',
       detail: '最近 15 分钟',
       icon: Database,
     },
@@ -50,7 +50,7 @@ export function OverviewPage() {
   ];
 
   const componentStates = [
-    { name: 'VictoriaLogs', source: 'logs', status: logThroughput > 0 ? 'active' : 'unknown' },
+    { name: '日志下游', source: 'logs', status: logThroughput > 0 ? 'active' : 'unknown' },
     { name: 'OTel Collector', source: 'agent', status: healthyLogRouteCount > 0 ? 'active' : 'unknown' },
     { name: 'Alertmanager', source: 'alerts', status: activeAlertCount > 0 ? 'active' : 'unknown' },
     { name: 'OpAMP', source: 'remote config', status: healthyLogRouteCount > 0 ? 'active' : 'unknown' },
@@ -63,7 +63,7 @@ export function OverviewPage() {
           <h1 className="font-display text-2xl font-semibold tracking-tight text-on-surface">平台总览</h1>
           <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted">
             <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">最近 15 分钟</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">VictoriaLogs</span>
+            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">日志下游</span>
             <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">OTel Collector</span>
           </div>
         </div>
