@@ -89,7 +89,7 @@ export function AgentDetailPage() {
               <ArrowLeft className="h-3 w-3" />返回
             </button>
             <span>/</span>
-            <Link className="hover:text-primary" to="/logs/agents">采集 Agent</Link>
+            <Link className="hover:text-primary" to="/logs/agents">采集路由</Link>
             <span>/</span>
             <span className="text-primary">Agent Detail</span>
           </div>

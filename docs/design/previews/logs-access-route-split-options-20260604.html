@@ -1,0 +1,1125 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Logs 接入与采集路由拆分方向</title>
+  <style>
+    :root {
+      --bg: #eef3fb;
+      --surface: #f6f8fc;
+      --panel: #ffffff;
+      --soft: #edf4ff;
+      --primary: #0d5bd7;
+      --primary-soft: #e5f0ff;
+      --secondary: #00a4ff;
+      --text: #122033;
+      --muted: #637083;
+      --outline: #d8e2ef;
+      --warning: #cc6b1e;
+      --danger: #b4232f;
+      --success: #176f4d;
+      font-family: Inter, "SF Pro Display", "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--text);
+      letter-spacing: 0;
+    }
+
+    .deck {
+      display: grid;
+      gap: 28px;
+      padding: 28px;
+    }
+
+    .deck.single {
+      padding: 0;
+    }
+
+    .deck.single .option {
+      border: 0;
+      border-radius: 0;
+      box-shadow: none;
+    }
+
+    .deck.single .option[hidden] {
+      display: none;
+    }
+
+    .option {
+      width: 1360px;
+      min-height: 900px;
+      overflow: hidden;
+      border: 1px solid #ccdaea;
+      border-radius: 8px;
+      background: linear-gradient(180deg, #f9fbff 0%, #eef3fb 100%);
+      box-shadow: 0 22px 60px rgba(24, 52, 96, 0.16);
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 218px minmax(0, 1fr);
+      min-height: 900px;
+    }
+
+    .side {
+      background: #ffffff;
+      border-right: 1px solid var(--outline);
+      padding: 18px 12px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      height: 38px;
+      padding: 0 10px;
+      font-weight: 800;
+    }
+
+    .mark {
+      width: 24px;
+      height: 24px;
+      border-radius: 6px;
+      background: var(--primary);
+      box-shadow: inset 5px 0 0 rgba(255,255,255,0.28);
+    }
+
+    .nav {
+      display: grid;
+      gap: 4px;
+      margin-top: 18px;
+    }
+
+    .nav span {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      min-height: 34px;
+      padding: 0 10px;
+      border-radius: 6px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    .nav .active {
+      color: var(--primary);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .main {
+      display: flex;
+      min-width: 0;
+      flex-direction: column;
+    }
+
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 58px;
+      padding: 0 22px;
+      border-bottom: 1px solid var(--outline);
+      background: rgba(255,255,255,0.86);
+    }
+
+    .search {
+      width: 380px;
+      height: 34px;
+      border: 1px solid var(--outline);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--muted);
+      padding: 8px 12px;
+      font-size: 12px;
+    }
+
+    .topmeta {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-family: "SF Mono", Menlo, monospace;
+      font-weight: 650;
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 24px;
+      padding: 0 8px;
+      border: 1px solid var(--outline);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .chip.primary { border-color: rgba(13,91,215,0.2); background: var(--primary-soft); color: var(--primary); }
+    .chip.success { border-color: rgba(23,111,77,0.2); background: #ecf8f3; color: var(--success); }
+    .chip.warning { border-color: rgba(204,107,30,0.26); background: #fff6ea; color: var(--warning); }
+    .chip.danger { border-color: rgba(180,35,47,0.22); background: #fff0f1; color: var(--danger); }
+
+    .content {
+      min-width: 0;
+      padding: 18px 20px 24px;
+    }
+
+    .titlebar {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .eyebrow {
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+      font-family: "SF Mono", Menlo, monospace;
+    }
+
+    h1 {
+      margin: 3px 0 0;
+      font-size: 22px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+
+    .sub {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    .actions {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    button, .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      height: 32px;
+      padding: 0 12px;
+      border: 1px solid var(--outline);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--text);
+      font-size: 12px;
+      font-weight: 750;
+      font-family: inherit;
+    }
+
+    .button.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: white;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 2px;
+      border-bottom: 1px solid var(--outline);
+      margin-bottom: 14px;
+    }
+
+    .tab {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      height: 38px;
+      padding: 0 14px;
+      border: 1px solid transparent;
+      border-bottom: 0;
+      border-radius: 6px 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .tab.active {
+      border-color: var(--outline);
+      background: var(--panel);
+      color: var(--primary);
+      box-shadow: inset 0 3px 0 var(--primary);
+    }
+
+    .metric-row {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+
+    .metric {
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.82);
+      padding: 10px 12px;
+    }
+
+    .metric .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+    }
+
+    .metric .value {
+      margin-top: 6px;
+      font-size: 20px;
+      font-weight: 850;
+      font-family: "SF Mono", Menlo, monospace;
+    }
+
+    .metric .hint {
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 11px;
+      font-family: "SF Mono", Menlo, monospace;
+    }
+
+    .panel {
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.88);
+      overflow: hidden;
+    }
+
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-height: 42px;
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--outline);
+      background: rgba(255,255,255,0.76);
+    }
+
+    .panel-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 850;
+    }
+
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 99px;
+      background: var(--primary);
+      box-shadow: 0 0 0 4px rgba(13,91,215,0.12);
+    }
+
+    .toolbar {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .input {
+      height: 32px;
+      min-width: 180px;
+      border: 1px solid var(--outline);
+      border-radius: 6px;
+      background: var(--panel);
+      color: var(--muted);
+      padding: 0 10px;
+      font-size: 12px;
+      font-weight: 650;
+    }
+
+    .layout-a-access {
+      display: grid;
+      grid-template-columns: 348px minmax(0, 1fr) 310px;
+      gap: 12px;
+    }
+
+    .service-list {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      max-height: 590px;
+      overflow: hidden;
+    }
+
+    .service-card {
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px 11px;
+      box-shadow: 0 8px 18px rgba(18,32,51,0.04);
+    }
+
+    .service-card.selected {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      box-shadow: inset 4px 0 0 var(--primary), 0 12px 26px rgba(13,91,215,0.12);
+    }
+
+    .service-main {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 8px;
+    }
+
+    .service-name {
+      font-size: 14px;
+      font-weight: 850;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .meta-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+
+    .kv {
+      display: grid;
+      grid-template-columns: 68px minmax(0, 1fr);
+      gap: 4px 8px;
+      margin-top: 9px;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      font-family: "SF Mono", Menlo, monospace;
+      font-weight: 650;
+    }
+
+    .kv b {
+      color: var(--text);
+      font-weight: 750;
+      overflow-wrap: anywhere;
+    }
+
+    .scope-grid {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 12px;
+      padding: 12px;
+    }
+
+    .cluster-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cluster-card {
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px;
+    }
+
+    .cluster-card.active {
+      border-color: rgba(13,91,215,0.42);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .workload-table, .route-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 12px;
+    }
+
+    th, td {
+      border-bottom: 1px solid var(--outline);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      color: var(--muted);
+      background: #f7faff;
+      font-size: 11px;
+      font-weight: 850;
+    }
+
+    td {
+      font-weight: 650;
+    }
+
+    .mono {
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      color: var(--muted);
+      font-weight: 700;
+      overflow-wrap: anywhere;
+    }
+
+    .summary {
+      padding: 12px;
+      display: grid;
+      gap: 9px;
+    }
+
+    .summary-item {
+      border: 1px solid var(--outline);
+      border-radius: 7px;
+      background: #fbfdff;
+      padding: 9px;
+    }
+
+    .summary-item small {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+      margin-bottom: 5px;
+    }
+
+    .summary-item strong {
+      display: block;
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+
+    .flow-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      padding: 10px 12px;
+      border-top: 1px solid var(--outline);
+      background: #f7faff;
+    }
+
+    .route-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 354px;
+      gap: 12px;
+    }
+
+    .drawer {
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: var(--panel);
+      overflow: hidden;
+      box-shadow: 0 14px 34px rgba(24,52,96,0.1);
+    }
+
+    .drawer-body {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .code {
+      height: 214px;
+      overflow: hidden;
+      border: 1px solid var(--outline);
+      border-radius: 7px;
+      background: #fbfdff;
+      color: #203049;
+      padding: 10px;
+      font-family: "SF Mono", Menlo, monospace;
+      font-size: 11px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .route-tabs {
+      display: flex;
+      gap: 6px;
+      padding: 10px 12px 0;
+    }
+
+    .route-tab {
+      border: 1px solid var(--outline);
+      border-bottom: 0;
+      border-radius: 6px 6px 0 0;
+      background: #f7faff;
+      color: var(--muted);
+      padding: 7px 10px;
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .route-tab.active {
+      background: var(--panel);
+      color: var(--primary);
+      box-shadow: inset 0 2px 0 var(--primary);
+    }
+
+    .split-b {
+      display: grid;
+      grid-template-columns: 410px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .pool-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--outline);
+      background: #f7faff;
+    }
+
+    .mini-card-row {
+      display: grid;
+      gap: 8px;
+      padding: 10px;
+      max-height: 636px;
+      overflow: hidden;
+    }
+
+    .route-card {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 8px;
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px;
+    }
+
+    .route-card.active {
+      border-color: var(--primary);
+      background: var(--primary-soft);
+      box-shadow: inset 4px 0 0 var(--primary);
+    }
+
+    .wizard-c {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 370px;
+      gap: 12px;
+    }
+
+    .pipeline-line {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .stage {
+      min-height: 86px;
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 10px;
+    }
+
+    .stage.active {
+      border-color: rgba(13,91,215,0.35);
+      background: var(--primary-soft);
+      box-shadow: inset 0 3px 0 var(--primary);
+    }
+
+    .stage small {
+      display: block;
+      color: var(--muted);
+      font-size: 10px;
+      font-weight: 800;
+      font-family: "SF Mono", Menlo, monospace;
+    }
+
+    .stage strong {
+      display: block;
+      margin-top: 6px;
+      font-size: 13px;
+    }
+
+    .riskbar {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      justify-content: space-between;
+      padding: 9px 12px;
+      border-top: 1px solid var(--outline);
+      background: #f7faff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 750;
+    }
+  </style>
+</head>
+<body>
+  <main class="deck">
+    <section class="option" data-option="a">
+      <div class="app">
+        <aside class="side">
+          <div class="brand"><span class="mark"></span> NovaObs</div>
+          <nav class="nav">
+            <span>平台总览</span>
+            <span>服务目录</span>
+            <span class="active">Logs <b>4</b></span>
+            <span>Pipeline</span>
+            <span>Agent</span>
+            <span>K8s 运维</span>
+            <span>告警中心</span>
+          </nav>
+        </aside>
+        <section class="main">
+          <div class="topbar">
+            <div class="search">搜索服务、路由、config hash、audit id</div>
+            <div class="topmeta">
+              <span class="chip primary">VictoriaLogs</span>
+              <span class="chip success">OTel Collector applied</span>
+              <span>15m window</span>
+            </div>
+          </div>
+          <div class="content">
+            <div class="titlebar">
+              <div>
+                <div class="eyebrow">Option A · 推荐方向</div>
+                <h1>接入配置拆为新服务接入与采集路由</h1>
+                <div class="sub">接入页只展示未登记服务；路由页承接查看配置、变更、发布预览和回滚。</div>
+              </div>
+              <div class="actions">
+                <span class="chip primary">未登记 7</span>
+                <span class="chip success">采集中 18</span>
+                <span class="chip warning">待发布 3</span>
+              </div>
+            </div>
+            <div class="tabs">
+              <div class="tab active">新服务接入 <span class="chip primary">7</span></div>
+              <div class="tab">采集路由 <span class="chip">21</span></div>
+              <div class="tab">下游端点</div>
+              <div class="tab">采集域</div>
+            </div>
+            <div class="metric-row">
+              <div class="metric"><div class="label">当前列表</div><div class="value">7</div><div class="hint">unregistered services</div></div>
+              <div class="metric"><div class="label">路由登记</div><div class="value">0</div><div class="hint">hidden from access</div></div>
+              <div class="metric"><div class="label">可发布集群</div><div class="value">3</div><div class="hint">read-only filtered</div></div>
+              <div class="metric"><div class="label">下游端点</div><div class="value">4</div><div class="hint">VL / Kafka</div></div>
+            </div>
+            <div class="layout-a-access">
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><span class="dot"></span> 未登记服务</div>
+                  <span class="chip">service pool</span>
+                </div>
+                <div class="panel-head">
+                  <div class="toolbar">
+                    <div class="input">搜索服务</div>
+                    <span class="chip primary">K8s</span>
+                    <span class="chip">prod</span>
+                  </div>
+                </div>
+                <div class="service-list">
+                  <div class="service-card selected">
+                    <div class="service-main">
+                      <div class="service-name">payment-api</div>
+                      <span class="chip primary">待接入</span>
+                    </div>
+                    <div class="meta-grid">
+                      <span class="chip">prod</span><span class="chip">payments</span><span class="chip">k8s业务</span><span class="chip">cmdb</span>
+                    </div>
+                    <div class="kv"><span>集群</span><b>test03</b><span>空间</span><b>payments</b></div>
+                  </div>
+                  <div class="service-card">
+                    <div class="service-main">
+                      <div class="service-name">order-worker</div>
+                      <span class="chip primary">待接入</span>
+                    </div>
+                    <div class="meta-grid">
+                      <span class="chip">prod</span><span class="chip">order</span><span class="chip">Deployment</span>
+                    </div>
+                    <div class="kv"><span>集群</span><b>test03</b><span>空间</span><b>orders</b></div>
+                  </div>
+                  <div class="service-card">
+                    <div class="service-main">
+                      <div class="service-name">edge-nginx-access-log</div>
+                      <span class="chip primary">待接入</span>
+                    </div>
+                    <div class="meta-grid">
+                      <span class="chip">staging</span><span class="chip">platform</span><span class="chip">DaemonSet</span>
+                    </div>
+                    <div class="kv"><span>集群</span><b>test04</b><span>空间</span><b>ingress</b></div>
+                  </div>
+                </div>
+              </section>
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><span class="dot"></span> 运行目标与采集草稿</div>
+                  <span class="chip primary">payment-api</span>
+                </div>
+                <div class="scope-grid">
+                  <div class="cluster-list">
+                    <div class="cluster-card active">
+                      <div class="service-main"><strong>test03</strong><span class="chip success">可发布</span></div>
+                      <div class="mono">v1.28 · direct</div>
+                    </div>
+                    <div class="cluster-card">
+                      <div class="service-main"><strong>test04</strong><span class="chip success">可发布</span></div>
+                      <div class="mono">v1.27 · proxy</div>
+                    </div>
+                  </div>
+                  <div class="panel">
+                    <div class="panel-head">
+                      <div class="panel-title">资源浏览器</div>
+                      <span class="chip">3 workloads</span>
+                    </div>
+                    <table class="workload-table">
+                      <thead><tr><th>Workload</th><th>类型</th><th>Pods</th><th>Selector</th></tr></thead>
+                      <tbody>
+                        <tr><td><strong>payment-api</strong></td><td>Deployment</td><td class="mono">8 / 8</td><td class="mono">app=payment-api</td></tr>
+                        <tr><td>payment-cron</td><td>CronJob</td><td class="mono">1 / 1</td><td class="mono">app=payment-cron</td></tr>
+                        <tr><td>payment-canary</td><td>Deployment</td><td class="mono">1 / 1</td><td class="mono">track=canary</td></tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+                <div class="route-tabs">
+                  <div class="route-tab active">来源</div>
+                  <div class="route-tab">解析</div>
+                  <div class="route-tab">下游</div>
+                  <div class="route-tab">草稿</div>
+                </div>
+                <div class="code">receivers:
+  file_log/payments-payment-api:
+    include:
+      - /var/log/pods/payments_payment-api_*/*/*.log
+processors:
+  k8s_attributes:
+  resource/payments-payment-api:
+exporters:
+  otlp_http/logs_downstream:
+service:
+  pipelines:
+    logs/payments-payment-api:</div>
+                <div class="flow-actions">
+                  <button>预检路由</button>
+                  <button class="button primary">登记路由</button>
+                </div>
+              </section>
+              <aside class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><span class="dot"></span> 本次接入</div>
+                  <span class="chip">draft</span>
+                </div>
+                <div class="summary">
+                  <div class="summary-item"><small>服务</small><strong>payment-api</strong></div>
+                  <div class="summary-item"><small>范围</small><strong>test03 / payments / Deployment/payment-api</strong></div>
+                  <div class="summary-item"><small>下游</small><strong>VictoriaLogs prod-write</strong></div>
+                  <div class="summary-item"><small>动作</small><strong>登记路由，不在接入页发布</strong></div>
+                  <div class="summary-item"><small>进入下一步</small><strong>采集路由 / payment-api / 发布预览</strong></div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="option" data-option="a-routes">
+      <div class="app">
+        <aside class="side">
+          <div class="brand"><span class="mark"></span> NovaObs</div>
+          <nav class="nav">
+            <span>平台总览</span>
+            <span>服务目录</span>
+            <span class="active">Logs <b>4</b></span>
+            <span>Pipeline</span>
+            <span>Agent</span>
+            <span>K8s 运维</span>
+            <span>告警中心</span>
+          </nav>
+        </aside>
+        <section class="main">
+          <div class="topbar">
+            <div class="search">搜索 route id、service、config hash</div>
+            <div class="topmeta">
+              <span class="chip success">18 collecting</span>
+              <span class="chip warning">3 pending</span>
+              <span>15m window</span>
+            </div>
+          </div>
+          <div class="content">
+            <div class="titlebar">
+              <div>
+                <div class="eyebrow">Option A · 采集路由 Tab</div>
+                <h1>已登记路由独立运营台</h1>
+                <div class="sub">查看 collector.yaml、变更配置、发布预览、回滚都在路由上下文内完成。</div>
+              </div>
+              <div class="actions">
+                <button>导出</button>
+                <button>同步状态</button>
+                <button class="button primary">批量发布预览</button>
+              </div>
+            </div>
+            <div class="tabs">
+              <div class="tab">新服务接入 <span class="chip">7</span></div>
+              <div class="tab active">采集路由 <span class="chip primary">21</span></div>
+              <div class="tab">下游端点</div>
+              <div class="tab">采集域</div>
+            </div>
+            <div class="route-layout">
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><span class="dot"></span> 路由列表</div>
+                  <div class="toolbar">
+                    <div class="input">服务 / 集群 / hash</div>
+                    <span class="chip primary">采集中</span>
+                    <span class="chip">K8s</span>
+                    <span class="chip">prod</span>
+                  </div>
+                </div>
+                <table class="route-table">
+                  <thead>
+                    <tr><th>服务</th><th>运行目标</th><th>采集配置</th><th>部署清单</th><th>状态</th><th>操作</th></tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td><strong>logplatform</strong><div class="mono">route r-log-1827</div></td>
+                      <td><div class="mono">test03 / logplatform</div><div>Deployment/prometheus</div></td>
+                      <td><span class="chip primary">ccfg a8d2c914</span></td>
+                      <td><span class="chip">manifest 87bb12e0</span></td>
+                      <td><span class="chip success">采集中</span><div class="mono">applied 42s ago</div></td>
+                      <td><button>查看配置</button> <button>变更</button></td>
+                    </tr>
+                    <tr>
+                      <td><strong>mtu-test</strong><div class="mono">route r-mtu-0219</div></td>
+                      <td><div class="mono">test03 / default</div><div>Deployment/mtu-test</div></td>
+                      <td><span class="chip primary">ccfg 7f31bd22</span></td>
+                      <td><span class="chip">manifest 87bb12e0</span></td>
+                      <td><span class="chip warning">待发布</span><div class="mono">preview ready</div></td>
+                      <td><button>发布预览</button> <button>撤销</button></td>
+                    </tr>
+                    <tr>
+                      <td><strong>calico</strong><div class="mono">route r-cal-3812</div></td>
+                      <td><div class="mono">test03 / kube-system</div><div>DaemonSet/calico-node</div></td>
+                      <td><span class="chip primary">ccfg d9042e10</span></td>
+                      <td><span class="chip">manifest 87bb12e0</span></td>
+                      <td><span class="chip danger">同步失败</span><div class="mono">agent rejected</div></td>
+                      <td><button>差异</button> <button>重试</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </section>
+              <aside class="drawer">
+                <div class="panel-head">
+                  <div class="panel-title"><span class="dot"></span> logplatform</div>
+                  <span class="chip success">采集中</span>
+                </div>
+                <div class="drawer-body">
+                  <div class="summary-item"><small>采集配置 hash</small><strong class="mono">a8d2c914b621</strong></div>
+                  <div class="summary-item"><small>部署清单 hash</small><strong class="mono">87bb12e0c390</strong></div>
+                  <div class="summary-item"><small>配置查看</small><strong>完整 collector.yaml，非 K8s 部署清单</strong></div>
+                  <div class="code">receivers:
+  file_log/logplatform-prometheus:
+    include:
+      - /var/log/pods/logplatform_prometheus_*/*/*.log
+service:
+  pipelines:
+    logs/logplatform-prometheus:
+      receivers: [file_log/logplatform-prometheus]
+      exporters: [otlp_http/logs_downstream]</div>
+                  <div class="actions">
+                    <button>查看部署清单</button>
+                    <button>变更配置</button>
+                    <button class="button primary">发布预览</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="option" data-option="b">
+      <div class="app">
+        <aside class="side">
+          <div class="brand"><span class="mark"></span> NovaObs</div>
+          <nav class="nav">
+            <span>平台总览</span>
+            <span>服务目录</span>
+            <span class="active">Logs <b>4</b></span>
+            <span>Pipeline</span>
+            <span>Agent</span>
+            <span>K8s 运维</span>
+            <span>告警中心</span>
+          </nav>
+        </aside>
+        <section class="main">
+          <div class="topbar">
+            <div class="search">搜索服务池或路由池</div>
+            <div class="topmeta"><span class="chip primary">split pool</span><span class="chip success">Remote Config applied</span></div>
+          </div>
+          <div class="content">
+            <div class="titlebar">
+              <div>
+                <div class="eyebrow">Option B</div>
+                <h1>服务池与路由池并排</h1>
+                <div class="sub">同屏显示两个池子，适合快速对照，但接入与运营仍在同一屏。</div>
+              </div>
+              <div class="actions"><span class="chip primary">未登记服务 7</span><span class="chip success">已登记路由 21</span></div>
+            </div>
+            <div class="split-b">
+              <section class="panel">
+                <div class="pool-header">
+                  <strong>未登记服务池</strong>
+                  <span class="chip primary">access only</span>
+                </div>
+                <div class="mini-card-row">
+                  <div class="service-card selected">
+                    <div class="service-main"><div class="service-name">payment-api</div><span class="chip primary">待接入</span></div>
+                    <div class="meta-grid"><span class="chip">test03</span><span class="chip">payments</span><span class="chip">prod</span></div>
+                  </div>
+                  <div class="service-card">
+                    <div class="service-main"><div class="service-name">order-worker</div><span class="chip primary">待接入</span></div>
+                    <div class="meta-grid"><span class="chip">test03</span><span class="chip">orders</span><span class="chip">prod</span></div>
+                  </div>
+                  <div class="service-card">
+                    <div class="service-main"><div class="service-name">edge-nginx-access-log</div><span class="chip primary">待接入</span></div>
+                    <div class="meta-grid"><span class="chip">test04</span><span class="chip">ingress</span><span class="chip">staging</span></div>
+                  </div>
+                </div>
+              </section>
+              <section class="panel">
+                <div class="pool-header">
+                  <strong>已登记路由池</strong>
+                  <div class="toolbar"><span class="chip success">采集中 18</span><span class="chip warning">待发布 3</span></div>
+                </div>
+                <div class="mini-card-row">
+                  <div class="route-card active">
+                    <div><strong>logplatform</strong><div class="mono">test03/logplatform · Deployment/prometheus</div><div class="meta-grid"><span class="chip primary">ccfg a8d2c914</span><span class="chip">manifest 87bb12e0</span></div></div>
+                    <div><span class="chip success">采集中</span></div>
+                  </div>
+                  <div class="route-card">
+                    <div><strong>mtu-test</strong><div class="mono">test03/default · Deployment/mtu-test</div><div class="meta-grid"><span class="chip primary">ccfg 7f31bd22</span><span class="chip">manifest 87bb12e0</span></div></div>
+                    <div><span class="chip warning">待发布</span></div>
+                  </div>
+                  <div class="route-card">
+                    <div><strong>calico</strong><div class="mono">test03/kube-system · DaemonSet/calico-node</div><div class="meta-grid"><span class="chip primary">ccfg d9042e10</span><span class="chip">manifest 87bb12e0</span></div></div>
+                    <div><span class="chip danger">失败</span></div>
+                  </div>
+                </div>
+                <div class="flow-actions">
+                  <button>查看配置</button>
+                  <button>变更配置</button>
+                  <button class="button primary">发布预览</button>
+                </div>
+              </section>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <section class="option" data-option="c">
+      <div class="app">
+        <aside class="side">
+          <div class="brand"><span class="mark"></span> NovaObs</div>
+          <nav class="nav">
+            <span>平台总览</span>
+            <span>服务目录</span>
+            <span class="active">Logs <b>4</b></span>
+            <span>Pipeline</span>
+            <span>Agent</span>
+            <span>K8s 运维</span>
+            <span>告警中心</span>
+          </nav>
+        </aside>
+        <section class="main">
+          <div class="topbar">
+            <div class="search">搜索 route、service、agent group、audit id</div>
+            <div class="topmeta"><span class="chip success">采集策略已同步</span><span class="chip">config a8d2c914</span></div>
+          </div>
+          <div class="content">
+            <div class="titlebar">
+              <div>
+                <div class="eyebrow">Option C</div>
+                <h1>路由中心优先，新接入作为抽屉</h1>
+                <div class="sub">默认进入路由运营视角，新增接入从右侧抽屉发起，适合以日常运维为主的团队。</div>
+              </div>
+              <div class="actions">
+                <button>刷新 Agent 状态</button>
+                <button class="button primary">新增接入</button>
+              </div>
+            </div>
+            <div class="wizard-c">
+              <section class="panel">
+                <div class="panel-head">
+                  <div class="panel-title"><span class="dot"></span> 采集路由中心</div>
+                  <div class="toolbar"><span class="chip success">18 collecting</span><span class="chip warning">3 pending</span><span class="chip danger">1 failed</span></div>
+                </div>
+                <div class="pipeline-line">
+                  <div class="stage active"><small>01 SOURCE</small><strong>logplatform</strong><div class="mono">Deployment/prometheus</div></div>
+                  <div class="stage"><small>02 COLLECTOR</small><strong>logs-k8s-test03</strong><div class="mono">Remote Config applied</div></div>
+                  <div class="stage"><small>03 CONFIG</small><strong>ccfg a8d2c914</strong><div class="mono">collector.yaml</div></div>
+                  <div class="stage"><small>04 MANIFEST</small><strong>87bb12e0</strong><div class="mono">DaemonSet</div></div>
+                  <div class="stage"><small>05 AUDIT</small><strong>audit 49ce12</strong><div class="mono">42s ago</div></div>
+                </div>
+                <table class="route-table">
+                  <thead><tr><th>服务</th><th>状态</th><th>Collector</th><th>配置</th><th>最近动作</th><th>操作</th></tr></thead>
+                  <tbody>
+                    <tr><td><strong>logplatform</strong><div class="mono">test03/logplatform</div></td><td><span class="chip success">采集中</span></td><td>logs-k8s-test03</td><td><span class="chip primary">a8d2c914</span></td><td class="mono">applied 42s ago</td><td><button>配置</button> <button>变更</button></td></tr>
+                    <tr><td><strong>mtu-test</strong><div class="mono">test03/default</div></td><td><span class="chip warning">待发布</span></td><td>logs-k8s-test03</td><td><span class="chip primary">7f31bd22</span></td><td class="mono">preview ready</td><td><button>发布</button> <button>撤销</button></td></tr>
+                    <tr><td><strong>calico</strong><div class="mono">test03/kube-system</div></td><td><span class="chip danger">失败</span></td><td>logs-k8s-test03</td><td><span class="chip primary">d9042e10</span></td><td class="mono">agent rejected</td><td><button>差异</button> <button>重试</button></td></tr>
+                  </tbody>
+                </table>
+              </section>
+              <aside class="drawer">
+                <div class="panel-head">
+                  <div class="panel-title"><span class="dot"></span> 新增接入抽屉</div>
+                  <span class="chip primary">未登记服务</span>
+                </div>
+                <div class="drawer-body">
+                  <div class="input">搜索未登记服务</div>
+                  <div class="service-card selected">
+                    <div class="service-main"><div class="service-name">payment-api</div><span class="chip primary">待接入</span></div>
+                    <div class="kv"><span>集群</span><b>test03</b><span>空间</span><b>payments</b></div>
+                  </div>
+                  <div class="service-card">
+                    <div class="service-main"><div class="service-name">order-worker</div><span class="chip primary">待接入</span></div>
+                    <div class="kv"><span>集群</span><b>test03</b><span>空间</span><b>orders</b></div>
+                  </div>
+                  <div class="summary-item"><small>下一步</small><strong>选择 Workload、解析规则、下游端点后登记路由</strong></div>
+                  <div class="actions">
+                    <button>预检</button>
+                    <button class="button primary">登记路由</button>
+                  </div>
+                </div>
+              </aside>
+            </div>
+            <div class="riskbar">
+              <span>route ops only · publish / change / rollback stay in registered route context</span>
+              <span>collector domain logs-k8s-test03 · deployment manifest 1 : collector config N</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </section>
+  </main>
+  <script>
+    const show = new URLSearchParams(window.location.search).get('show');
+    if (show) {
+      document.querySelector('.deck')?.classList.add('single');
+      document.querySelectorAll('[data-option]').forEach((option) => {
+        if (option.getAttribute('data-option') !== show) option.hidden = true;
+      });
+    }
+  </script>
+</body>
+</html>

@@ -124,12 +124,12 @@ export function LogsExplorePage() {
         )}
       </LogsSection>
 
-      <LogsSection title="详情" meta={activeRoute?.route.configHash || 'route context'} bodyClassName="p-0">
+      <LogsSection title="详情" meta={activeRoute?.route.collectorConfigHash || 'route context'} bodyClassName="p-0">
         <LogsInfoCell label="服务" value={selectedServiceName} tone="primary" />
         <LogsInfoCell label="来源" value={activeRoute ? logSourceLabel(activeRoute.route.sourceType) : '-'} />
         <LogsInfoCell label="范围" value={routeScope(activeRoute)} />
         <LogsInfoCell label="端点" value={activeRoute?.endpoint?.name || '-'} />
-        <LogsInfoCell label="配置 Hash" value={activeRoute?.route.configHash || '-'} />
+        <LogsInfoCell label="采集配置 hash" value={activeRoute?.route.collectorConfigHash || '-'} />
         <LogsInfoCell label="发布状态" value={activeRoute?.route.lastPublishStatus || activeRoute?.route.status || '-'} />
         <div className="border-t border-outline/70 p-3">
           <div className="mb-2 text-xs font-semibold text-on-surface">动作</div>

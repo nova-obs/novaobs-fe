@@ -69,7 +69,7 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
           source_id: 'source-001',
           source_type: 'k8s_stdout',
           endpoint_id: 'sink-001',
-          config_hash: 'hash-001',
+          collector_config_hash: 'collector-hash-001',
           status: 'ready',
         },
         source: {
@@ -81,7 +81,8 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
           workload_kind: 'Deployment',
           workload_name: 'order-api',
           parse_rules: [{ name: 'json-parser', rule_type: 'json', enabled: true }],
-          collector_yaml: 'receivers:\n  filelog/novaobs:\n',
+          collector_config_hash: 'collector-hash-001',
+          deployment_manifest_hash: 'manifest-hash-001',
         },
         endpoint: { id: 'sink-001', name: 'vl-prod', sink_type: 'vl', write_url: 'http://vl/insert' },
       }],
@@ -90,7 +91,9 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
 
   assert.equal(result.routes[0].source?.clusterId, 'test03');
   assert.equal(result.routes[0].source?.agentNamespace, 'novaobs-system');
-  assert.equal(result.routes[0].source?.collectorYAML, 'receivers:\n  filelog/novaobs:\n');
+  assert.equal(result.routes[0].source?.collectorYAML, '');
+  assert.equal(result.routes[0].route.collectorConfigHash, 'collector-hash-001');
+  assert.equal(result.routes[0].source?.deploymentManifestHash, 'manifest-hash-001');
   assert.equal(result.routes[0].source?.parseRules[0].ruleType, 'json');
   assert.equal(result.routes[0].endpoint?.sinkType, 'vl');
 });
@@ -201,9 +204,7 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
         workloadKind: 'Deployment',
         workloadName: 'api',
         workloadSelector: { app: 'api' },
-        runtimeLogPaths: ['/data/docker/containers'],
         parseRules: [{ name: 'text', ruleType: 'regex', pattern: '^(?P<level>[A-Z]+) (?P<message>.*)$' }],
-        collectorYAML: 'receivers:\n  filelog/custom:\n',
       },
       vm: {
         hostGroup: 'legacy-vms',
@@ -215,7 +216,8 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
       source: { id: 'src-001', source_type: 'k8s_stdout', cluster_id: 'test03', namespace: 'logplatform' },
       endpoint: { id: 'vl-001', name: 'vl-prod' },
       agent_yaml: 'apiVersion: apps/v1\nkind: DaemonSet\n',
-      config_hash: 'abc123',
+      collector_config_hash: 'collector-abc123',
+      deployment_manifest_hash: 'manifest-abc123',
       mode: 'preview',
       publish_blocked: false,
       warnings: [],
@@ -231,12 +233,13 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
   assert.equal(request.body.endpoint_id, '');
   assert.equal(request.body.k8s.cluster_id, 'test03');
   assert.deepEqual(request.body.k8s.workload_selector, { app: 'api' });
-  assert.deepEqual(request.body.k8s.runtime_log_paths, ['/data/docker/containers']);
+  assert.equal(request.body.k8s.runtime_log_paths, undefined);
   assert.equal(request.body.k8s.parse_rules[0].rule_type, 'regex');
-  assert.equal(request.body.k8s.collector_yaml, 'receivers:\n  filelog/custom:\n');
+  assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(request.body.vm.collector_yaml, undefined);
   assert.equal(request.body.vm.host_group, undefined);
-  assert.equal(result.configHash, 'abc123');
+  assert.equal(result.collectorConfigHash, 'collector-abc123');
+  assert.equal(result.deploymentManifestHash, 'manifest-abc123');
 });
 
 test('更新 Logs route 时使用 PATCH 并保留 route_id', async () => {
@@ -253,12 +256,11 @@ test('更新 Logs route 时使用 PATCH 并保留 route_id', async () => {
         agentNamespace: 'novaobs-system',
         workloadKind: 'Deployment',
         workloadName: 'api',
-        collectorYAML: 'receivers:\n  filelog/custom:\n',
       },
     }),
     {
       route: { id: 'route-001', service_id: 'svc-001', source_type: 'k8s_stdout', endpoint_id: 'sink-001', status: 'ready' },
-      source: { id: 'source-001', source_type: 'k8s_stdout', cluster_id: 'test03', namespace: 'logplatform', collector_yaml: 'receivers:\n  filelog/custom:\n' },
+      source: { id: 'source-001', source_type: 'k8s_stdout', cluster_id: 'test03', namespace: 'logplatform' },
       endpoint: { id: 'sink-001', name: 'vl-prod', sink_type: 'vl' },
     },
   );
@@ -266,9 +268,31 @@ test('更新 Logs route 时使用 PATCH 并保留 route_id', async () => {
   assert.equal(request.path, '/api/v1/logs/routes/route-001');
   assert.equal(request.init.method, 'PATCH');
   assert.equal(request.body.route_id, 'route-001');
-  assert.equal(request.body.k8s.collector_yaml, 'receivers:\n  filelog/custom:\n');
+  assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(result.route.id, 'route-001');
-  assert.equal(result.source?.collectorYAML, 'receivers:\n  filelog/custom:\n');
+  assert.equal(result.source?.collectorYAML, '');
+});
+
+test('查看 Logs route 采集配置 hash 对应完整 collector_yaml', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.getRouteCollectorConfig('route-001'),
+    {
+      route_id: 'route-001',
+      collector_config_hash: 'collector-hash-001',
+      deployment_manifest_hash: 'manifest-hash-001',
+      source_type: 'k8s_stdout',
+      collector_yaml: 'receivers:\n  file_log/logplatform-prometheus:\nservice:\n  pipelines:\n    logs/logplatform-prometheus:\n',
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/logs/routes/route-001/collector-config');
+  assert.equal(request.init.method, undefined);
+  assert.equal(result.routeId, 'route-001');
+  assert.equal(result.collectorConfigHash, 'collector-hash-001');
+  assert.equal(result.deploymentManifestHash, 'manifest-hash-001');
+  assert.equal(result.sourceType, 'k8s_stdout');
+  assert.equal(result.collectorYAML.includes('file_log/logplatform-prometheus'), true);
+  assert.equal(result.collectorYAML.includes('kind: DaemonSet'), false);
 });
 
 test('VM Logs route payload 不携带 K8s 残留配置', async () => {
@@ -293,7 +317,7 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
       source: { id: 'src-vm', source_type: 'vm_file', host_group: 'billing-vms' },
       endpoint: { id: 'sink-vm', name: 'vl-vm' },
       agent_yaml: '',
-      config_hash: 'vm123',
+      collector_config_hash: 'vm123',
       mode: 'preview',
       publish_blocked: false,
       warnings: [],
@@ -350,7 +374,8 @@ test('发布 Logs route 时传递 preview confirmation token', async () => {
         route_id: 'route-001',
         agent_group_id: 'ag-001',
         source_type: 'k8s_stdout',
-        config_hash: 'abc123',
+        collector_config_hash: 'collector-abc123',
+        deployment_manifest_hash: 'manifest-abc123',
         rendered_yaml: 'apiVersion: apps/v1\n',
         status: 'published',
         audit_id: 'audit-001',
@@ -364,6 +389,8 @@ test('发布 Logs route 时传递 preview confirmation token', async () => {
   assert.equal(request.body.confirmation_token, 'token-001');
   assert.equal(result.auditId, 'audit-001');
   assert.equal(result.plan?.sourceType, 'k8s_stdout');
+  assert.equal(result.plan?.collectorConfigHash, 'collector-abc123');
+  assert.equal(result.plan?.deploymentManifestHash, 'manifest-abc123');
   assert.equal(result.resources[0].kind, 'Namespace');
   assert.equal(result.resources[1].namespace, 'novaobs-system');
   assert.equal(result.diffs[1].operation, 'apply');

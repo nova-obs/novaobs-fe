@@ -64,7 +64,7 @@ export interface ServiceGraphLogRouteSummary {
       agentGroupId: string;
       endpointId: string;
       status: string;
-      configHash: string;
+      collectorConfigHash: string;
       lastPublishStatus: string;
     };
     source?: {

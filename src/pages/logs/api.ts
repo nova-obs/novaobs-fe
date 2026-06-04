@@ -50,12 +50,13 @@ export interface LogSource {
   workloadName: string;
   container: string;
   workloadSelector: Record<string, string>;
-  runtimeLogPaths: string[];
   hostGroup: string;
   hostSelector: Record<string, string>;
   pathPattern: string;
   parseRules: LogParseRule[];
   collectorYAML: string;
+  collectorConfigHash: string;
+  deploymentManifestHash: string;
 }
 
 export interface LogRoute {
@@ -67,7 +68,7 @@ export interface LogRoute {
   agentGroupId: string;
   endpointId: string;
   status: string;
-  configHash: string;
+  collectorConfigHash: string;
   lastProbeStatus: string;
   lastProbeMessage: string;
   lastProbeAt: string;
@@ -159,10 +160,8 @@ export interface LogRouteInput {
     workloadName?: string;
     container?: string;
     workloadSelector?: Record<string, string>;
-    runtimeLogPaths?: string[];
     pathPattern?: string;
     parseRules?: LogParseRule[];
-    collectorYAML?: string;
   };
   vm?: {
     hostGroup?: string;
@@ -197,11 +196,20 @@ export interface LogRoutePreview {
   source: LogSource;
   endpoint: LogEndpoint;
   agentYAML: string;
-  configHash: string;
+  collectorConfigHash: string;
+  deploymentManifestHash: string;
   mode: string;
   publishBlocked: boolean;
   publishBlockedReason: string;
   warnings: string[];
+}
+
+export interface LogRouteCollectorConfig {
+  routeId: string;
+  collectorConfigHash: string;
+  deploymentManifestHash: string;
+  sourceType: LogSourceType;
+  collectorYAML: string;
 }
 
 export interface LogPublishResult {
@@ -219,7 +227,8 @@ export interface LogPublishResult {
     routeId: string;
     agentGroupId: string;
     sourceType: LogSourceType;
-    configHash: string;
+    collectorConfigHash: string;
+    deploymentManifestHash: string;
     renderedYAML: string;
     status: string;
     previewId: string;
@@ -294,12 +303,13 @@ function mapSource(raw: any): LogSource {
     workloadName: raw.workload_name ?? raw.workloadName ?? '',
     container: raw.container ?? '',
     workloadSelector: raw.workload_selector ?? raw.workloadSelector ?? {},
-    runtimeLogPaths: Array.isArray(raw.runtime_log_paths ?? raw.runtimeLogPaths) ? (raw.runtime_log_paths ?? raw.runtimeLogPaths).map(String) : [],
     hostGroup: raw.host_group ?? raw.hostGroup ?? '',
     hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
     parseRules: mapParseRules(raw.parse_rules ?? raw.parseRules),
-    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
+    collectorYAML: raw.custom_collector_yaml ?? raw.customCollectorYAML ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
   };
 }
 
@@ -313,7 +323,7 @@ function mapRoute(raw: any): LogRoute {
     agentGroupId: raw.agent_group_id ?? raw.agentGroupId ?? '',
     endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
     status: raw.status ?? '',
-    configHash: raw.config_hash ?? raw.configHash ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     lastProbeStatus: raw.last_probe_status ?? raw.lastProbeStatus ?? '',
     lastProbeMessage: raw.last_probe_message ?? raw.lastProbeMessage ?? '',
     lastProbeAt: raw.last_probe_at ?? raw.lastProbeAt ?? '',
@@ -441,11 +451,22 @@ function mapPreview(raw: any): LogRoutePreview {
     source: mapSource(raw.source ?? {}),
     endpoint: mapEndpoint(raw.endpoint ?? {}),
     agentYAML: raw.agent_yaml ?? raw.agentYAML ?? '',
-    configHash: raw.config_hash ?? raw.configHash ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
     mode: raw.mode ?? '',
     publishBlocked: Boolean(raw.publish_blocked ?? raw.publishBlocked),
     publishBlockedReason: raw.publish_blocked_reason ?? raw.publishBlockedReason ?? '',
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+  };
+}
+
+function mapRouteCollectorConfig(raw: any): LogRouteCollectorConfig {
+  return {
+    routeId: raw.route_id ?? raw.routeId ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
+    sourceType: raw.source_type ?? raw.sourceType ?? 'k8s_stdout',
+    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
   };
 }
 
@@ -474,7 +495,8 @@ function mapPublish(raw: any): LogPublishResult {
       routeId: raw.plan.route_id ?? raw.plan.routeId ?? '',
       agentGroupId: raw.plan.agent_group_id ?? raw.plan.agentGroupId ?? '',
       sourceType: raw.plan.source_type ?? raw.plan.sourceType ?? 'vm_file',
-      configHash: raw.plan.config_hash ?? raw.plan.configHash ?? '',
+      collectorConfigHash: raw.plan.collector_config_hash ?? raw.plan.collectorConfigHash ?? '',
+      deploymentManifestHash: raw.plan.deployment_manifest_hash ?? raw.plan.deploymentManifestHash ?? '',
       renderedYAML: raw.plan.rendered_yaml ?? raw.plan.renderedYAML ?? '',
       status: raw.plan.status ?? '',
       previewId: raw.plan.preview_id ?? raw.plan.previewId ?? '',
@@ -502,10 +524,8 @@ function toRoutePayload(input: LogRouteInput) {
       workload_name: input.k8s?.workloadName,
       container: input.k8s?.container,
       workload_selector: input.k8s?.workloadSelector ?? {},
-      runtime_log_paths: input.k8s?.runtimeLogPaths ?? [],
       path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
-      collector_yaml: input.k8s?.collectorYAML,
     },
     vm: isVM ? {
       host_group: input.vm?.hostGroup,
@@ -631,6 +651,9 @@ export const logsApi = {
       method: 'PATCH',
       body: JSON.stringify(toRoutePayload({ ...input, routeId })),
     }));
+  },
+  async getRouteCollectorConfig(routeId: string): Promise<LogRouteCollectorConfig> {
+    return mapRouteCollectorConfig(await apiRequest<any>(`/logs/routes/${routeId}/collector-config`));
   },
   async probeRoute(routeId: string): Promise<LogProbeResult> {
     const raw = await apiRequest<any>(`/logs/routes/${routeId}/probe`, { method: 'POST' });

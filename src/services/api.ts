@@ -597,7 +597,7 @@ function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
             agentGroupId: item.route?.agent_group_id ?? item.route?.agentGroupId ?? '',
             endpointId: item.route?.endpoint_id ?? item.route?.endpointId ?? '',
             status: item.route?.status ?? '',
-            configHash: item.route?.config_hash ?? item.route?.configHash ?? '',
+            collectorConfigHash: item.route?.collector_config_hash ?? item.route?.collectorConfigHash ?? '',
             lastPublishStatus: item.route?.last_publish_status ?? item.route?.lastPublishStatus ?? '',
           },
           source: item.source ? {

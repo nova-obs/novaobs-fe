@@ -4,7 +4,7 @@ import { Bell, Clock, Database, RadioTower, RefreshCw, Search, ServerCog } from 
 const logsNav = [
   { to: '/logs/explore', label: '日志分析', meta: '下游查询', icon: Search },
   { to: '/logs/onboarding', label: '接入配置', icon: RadioTower },
-  { to: '/logs/agents', label: '采集 Agent', icon: ServerCog },
+  { to: '/logs/agents', label: '采集路由', icon: ServerCog },
   { to: '/logs/alerts', label: '日志告警', icon: Bell },
 ];
 
