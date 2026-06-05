@@ -313,6 +313,89 @@ test('Agent Detail 缺少 runtime 字段时 mapper 不应导致页面白屏', as
   }
 });
 
+test('Agent Detail runtime 映射采集域稳定运行身份字段', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({
+    instance_uid: 'opamp-uid-b',
+    runtime: {
+      id: 'runtime-1',
+      instance_uid: 'opamp-uid-b',
+      opamp_instance_uid: 'opamp-uid-b',
+      runtime_identity: 'k8s:test03:group-001:node-01',
+      collector_group_id: 'group-001',
+      cluster_id: 'test03',
+      namespace: 'novaobs-system',
+      agent_namespace: 'novaobs-system',
+      pod_uid: 'pod-uid-b',
+      pod_name: 'novaobs-logs-agent-b',
+      node_name: 'node-01',
+      pod_ip: '10.0.0.12',
+      ip: '10.0.0.99',
+      remote_config_status: 'applied',
+    },
+    agent: {
+      state: {},
+      identifying_attributes: [],
+      non_identifying_attributes: [],
+    },
+    services: [],
+    onboardings: [],
+    configuration: { config_sources: { service_enrichment_patches: [], service_pipeline_patches: [], source_breakdown: [], warnings: [], errors: [] } },
+  });
+
+  try {
+    const detail = await api.getAgentDetail('opamp-uid-b');
+    assert.equal(detail.runtime.runtimeIdentity, 'k8s:test03:group-001:node-01');
+    assert.equal(detail.runtime.clusterId, 'test03');
+    assert.equal(detail.runtime.agentNamespace, 'novaobs-system');
+    assert.equal(detail.runtime.podUid, 'pod-uid-b');
+    assert.equal(detail.runtime.podIp, '10.0.0.12');
+    assert.equal(detail.runtime.opampInstanceUid, 'opamp-uid-b');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('获取 Collector 实例时保留 runtime_identity 与 OpAMP 实例 UID', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse([
+      {
+        id: 'runtime-1',
+        instance_uid: 'opamp-uid-b',
+        opamp_instance_uid: 'opamp-uid-b',
+        runtime_identity: 'k8s:test03:group-001:node-01',
+        collector_group_id: 'group-001',
+        cluster_id: 'test03',
+        namespace: 'novaobs-system',
+        agent_namespace: 'novaobs-system',
+        pod_uid: 'pod-uid-b',
+        pod_name: 'novaobs-logs-agent-b',
+        node_name: 'node-01',
+        pod_ip: '10.0.0.12',
+        remote_config_status: 'applied',
+      },
+    ]);
+  };
+
+  try {
+    const instances = await api.getCollectorInstances('group-001');
+    assert.equal(requests[0].path, '/api/v1/collector-groups/group-001/instances');
+    assert.equal(instances[0].instanceUid, 'opamp-uid-b');
+    assert.equal(instances[0].runtimeIdentity, 'k8s:test03:group-001:node-01');
+    assert.equal(instances[0].clusterId, 'test03');
+    assert.equal(instances[0].namespace, 'novaobs-system');
+    assert.equal(instances[0].agentNamespace, 'novaobs-system');
+    assert.equal(instances[0].podUid, 'pod-uid-b');
+    assert.equal(instances[0].podIp, '10.0.0.12');
+    assert.equal(instances[0].opampInstanceUid, 'opamp-uid-b');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('发布 Collector Group 配置时调用 config/publish', async () => {
   const request = await captureRequest(
     () => api.publishCollectorGroupConfig('507f1f77bcf86cd799439013'),

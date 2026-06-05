@@ -61,9 +61,7 @@ export function LogsAgentsPage() {
   const activeLifecycle = activeRoute ? routeLifecycle(activeRoute) : null;
   const activeServiceName = activeService ? serviceDisplayName(activeService) : activeRoute?.route.serviceId ?? '-';
   const activeScope = routeScope(activeRoute);
-  const activeAgentScope = activeGroup?.cluster
-    ? `${activeGroup.cluster} / ${activeGroup.namespace || '-'}`
-    : activeGroup?.environment || '-';
+  const activeAgentScope = collectorDomainScope(activeGroup, instances[0]);
 
   return (
     <div className="logs-routes-workbench grid min-h-[720px] gap-3 xl:grid-cols-[340px_minmax(0,1fr)_320px]">
@@ -119,27 +117,40 @@ export function LogsAgentsPage() {
             <table className="console-table min-w-[960px] w-full">
               <thead>
                 <tr>
-                  <th>Instance UID</th>
+                  <th>运行身份</th>
                   <th>运行态</th>
+                  <th>K8s 范围</th>
+                  <th>Pod / Node</th>
                   <th>Remote Config</th>
                   <th>Hash</th>
-                  <th>节点</th>
                   <th>最后心跳</th>
                 </tr>
               </thead>
               <tbody>
                 {instances.map((item) => (
-                  <tr key={item.instanceUid}>
-                    <td><Link className="font-mono text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.instanceUid}</Link></td>
+                  <tr key={item.runtimeIdentity || item.instanceUid}>
+                    <td>
+                      <Link className="font-mono text-xs font-semibold text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.runtimeIdentity || item.podName || item.hostname || item.instanceUid}</Link>
+                      <div className="mt-1 break-all font-mono text-[11px] text-muted">opamp_instance_uid {item.opampInstanceUid || item.instanceUid || '-'}</div>
+                    </td>
                     <td>
                       <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-semibold ${item.healthy ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-500/30 bg-amber-50 text-amber-700'}`}>
                         {item.healthy ? <ShieldCheck className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
                         {item.runtimeStatus || '-'}
                       </span>
                     </td>
+                    <td className="font-mono text-xs">
+                      <div>{item.clusterId || activeGroup?.cluster || '-'}</div>
+                      <div className="mt-1 text-[11px] text-muted">{item.namespace || activeGroup?.namespace || '-'}</div>
+                      <div className="mt-1 text-[11px] text-muted">agent ns {item.agentNamespace || activeGroup?.namespace || '-'}</div>
+                    </td>
+                    <td className="font-mono text-xs">
+                      <div>{item.podName || '-'}</div>
+                      <div className="mt-1 text-[11px] text-muted">pod_uid {shortIdentity(item.podUid)}</div>
+                      <div className="mt-1 text-[11px] text-muted">{item.nodeName || item.hostname || '-'} · {item.podIp || item.ip || '-'}</div>
+                    </td>
                     <td>{item.remoteConfigStatus}</td>
                     <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
-                    <td className="font-mono text-xs">{item.nodeName || item.hostname || item.ip || '-'}</td>
                     <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
                   </tr>
                 ))}
@@ -155,7 +166,11 @@ export function LogsAgentsPage() {
         <LogsInfoCell label="来源" value={activeRoute ? logSourceLabel(activeRoute.route.sourceType) : '-'} />
         <LogsInfoCell label="下游" value={activeRoute?.endpoint ? `${activeRoute.endpoint.name} · ${logSinkLabel(activeRoute.endpoint.sinkType)}` : '-'} />
         <LogsInfoCell label="采集域" value={activeGroup?.displayName || activeGroup?.name || '-'} />
+        <LogsInfoCell label="采集域模式" value={activeGroup?.mode || '-'} />
         <LogsInfoCell label="采集域范围" value={activeGroup ? activeAgentScope : '-'} />
+        <LogsInfoCell label="Agent Namespace" value={instances[0]?.agentNamespace || activeGroup?.namespace || '-'} />
+        <LogsInfoCell label="运行实例" value={`${instances.length} / ${onlineCount}`} />
+        <LogsInfoCell label="运行身份来源" value="runtime_identity -> opamp_instance_uid" />
         <LogsInfoCell label="采集配置" value={activeRoute?.route.collectorConfigHash || '-'} />
         <LogsInfoCell label="部署状态" value={activeLifecycle?.detail || '-'} />
         <LogsInfoCell label="Audit" value={activeRoute?.route.lastAuditId || '-'} />
@@ -246,9 +261,22 @@ function routeScope(route?: LogRouteView | null) {
   return `${source.clusterId || '-'} / ${source.namespace || '-'} / ${source.workloadKind || '-'}/${source.workloadName || '-'}`;
 }
 
+function collectorDomainScope(group?: { mode?: string; cluster?: string; namespace?: string; environment?: string } | null, instance?: { clusterId?: string; agentNamespace?: string } | null) {
+  if (!group) return '-';
+  if (group.mode === 'dedicated_collector' || group.mode === 'daemonset' || group.cluster) {
+    return `${instance?.clusterId || group.cluster || '-'} / ${instance?.agentNamespace || group.namespace || '-'}`;
+  }
+  return group.environment || '-';
+}
+
 function shortHash(value?: string) {
   if (!value) return '-';
   return value.length > 12 ? value.slice(0, 12) : value;
+}
+
+function shortIdentity(value?: string) {
+  if (!value) return '-';
+  return value.length > 16 ? value.slice(0, 16) : value;
 }
 
 function ErrorLine({ message }: { message: string }) {
