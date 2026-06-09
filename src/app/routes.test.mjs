@@ -9,7 +9,7 @@ test('路由定义覆盖主路径', () => {
     '/onboarding',
     '/logs',
     '/monitoring',
-    '/platform/access',
+    '/platform',
     '/k8s',
     '/agents/:uid',
     '/alerts',
@@ -32,6 +32,11 @@ test('Logs 使用模块内四个入口，Pipeline 独立入口已移除', () => 
   assert.equal(paths.includes('/collectors'), false);
 });
 
+test('平台管理使用模块内入口承载访问控制和观测接入配置', () => {
+  const platform = routeDefinitions.find((r) => r.path === '/platform');
+  assert.deepEqual(platform?.children?.map((item) => item.path ?? 'index'), ['index', 'access', 'observability']);
+});
+
 test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/onboarding'), '服务接入');
   assert.equal(getRouteTitle('/logs'), 'Logs 日志分析');
@@ -40,6 +45,7 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/logs/agents'), 'Logs 采集路由');
   assert.equal(getRouteTitle('/monitoring'), '监控');
   assert.equal(getRouteTitle('/platform/access'), '平台管理');
+  assert.equal(getRouteTitle('/platform/observability'), '平台管理');
   assert.equal(getRouteTitle('/k8s'), 'K8s 运维');
   assert.equal(getRouteTitle('/k8s/namespaces'), 'K8s 运维');
   assert.equal(getRouteTitle('/agents/018f4f9a'), 'Agent Detail');
@@ -51,6 +57,7 @@ test('浏览器标签页标题包含当前模块和产品名', () => {
   assert.equal(getDocumentTitle('/logs/onboarding'), 'Logs 接入配置 - NovaObs');
   assert.equal(getDocumentTitle('/monitoring'), '监控 - NovaObs');
   assert.equal(getDocumentTitle('/platform/access'), '平台管理 - NovaObs');
+  assert.equal(getDocumentTitle('/platform/observability'), '平台管理 - NovaObs');
   assert.equal(getDocumentTitle('/k8s/namespaces'), 'K8s 运维 - NovaObs');
   assert.equal(getDocumentTitle('/'), '平台总览 - NovaObs');
 });

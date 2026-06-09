@@ -54,18 +54,13 @@ test('Logs 接入配置先绑定服务对应的 K8s 运行目标', () => {
   assert.equal(source.includes('运行目标未绑定时禁用日志下游端点'), true);
   assert.equal(source.includes('搜索端点 / URL / 集群'), true);
   assert.equal(source.includes('console-table min-w-[760px]'), true);
-  assert.equal(source.includes('新增端点'), true);
-  assert.equal(source.includes('编辑端点'), true);
-  assert.equal(source.includes('endpointEditId'), true);
-  assert.equal(source.includes('closeEndpointForm'), true);
-  assert.equal(source.includes('endpointCreateOpen && endpointEditId === endpoint.id'), true);
-  assert.equal(source.includes('setEndpointEditId(endpoint.id)'), true);
-  assert.equal(source.includes('logsApi.updateEndpoint(endpointEditId'), true);
-  assert.equal(source.includes('当前端点配置已保存'), true);
-  assert.equal(source.includes('编辑中'), true);
-  assert.equal(source.includes('endpointCreateOpen'), true);
-  assert.equal(source.includes('aria-expanded={endpointCreateOpen}'), true);
-  assert.equal(source.includes('端点信息'), true);
+  assert.equal(source.includes('管理端点'), true);
+  assert.equal(source.includes('to="/platform/observability"'), true);
+  assert.equal(source.includes('接入配置只选择已登记端点'), true);
+  assert.equal(source.includes('新增端点'), false);
+  assert.equal(source.includes('编辑端点'), false);
+  assert.equal(source.includes('endpointEditId'), false);
+  assert.equal(source.includes('endpointCreateOpen'), false);
   assert.equal(source.includes('请选择服务后再预览配置'), true);
   assert.equal(source.includes('servicePickerOpen'), false);
   assert.equal(source.includes('aria-autocomplete="list"'), false);
@@ -226,7 +221,7 @@ test('Logs 接入配置在操作前展示缺失项和阻塞原因', () => {
   assert.equal(source.includes('预览前还需'), true);
   assert.equal(source.includes('先完成配置预览'), true);
   assert.equal(source.includes('先保存路由'), true);
-  assert.equal(source.includes('选择或创建当前集群可用的日志下游端点'), true);
+  assert.equal(source.includes('选择当前集群可用的日志下游端点'), true);
   assert.equal(source.includes('填写主机组或主机标签'), true);
   assert.equal(source.includes('选择 AgentGroup'), false);
   assert.equal(source.includes('接入成功后自动创建'), false);
@@ -240,10 +235,11 @@ test('Logs 接入配置使用发布预览替代直接发布按钮', () => {
   assert.equal(source.includes('function PublishPreviewPanel'), true);
 });
 
-test('Logs 接入配置创建端点后保留已保存端点内容', () => {
-  assert.equal(source.includes('endpointToForm(endpoint)'), true);
-  assert.equal(source.includes('当前端点配置已保存'), true);
-  assert.equal(source.includes('setEndpointForm(emptyEndpoint);'), false);
+test('Logs 接入配置不再维护日志下游端点', () => {
+  assert.equal(source.includes('logsApi.createEndpoint'), false);
+  assert.equal(source.includes('logsApi.updateEndpoint'), false);
+  assert.equal(source.includes('endpointToForm(endpoint)'), false);
+  assert.equal(source.includes('平台管理统一维护'), true);
 });
 
 test('Logs 接入配置刷新后可从已登记路由恢复草稿', () => {
