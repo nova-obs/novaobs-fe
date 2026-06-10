@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, Copy, Play, Plus, RefreshCw, Save, Search, Server, Settings2, Sparkles, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, Sparkles, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
-import { logSinkLabel, logSourceLabel, logsApi, type LogAccessSource, type LogEndpoint, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSinkType, type LogSource, type LogSourceType, type LogsAgentGroupSummary, type LogsServiceSummary, type LogsWorkload } from './api';
+import { logSinkLabel, logSourceLabel, logsApi, type LogAccessSource, type LogEndpoint, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsAgentGroupSummary, type LogsServiceSummary, type LogsWorkload } from './api';
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
@@ -13,59 +13,12 @@ const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
   { value: 'vm', label: 'VM' },
 ];
 
-const emptyEndpoint = {
-  name: '',
-  description: '',
-  sinkType: 'vl' as LogSinkType,
-  streamName: '',
-  writeURL: '',
-  queryURL: '',
-  vmuiURL: '',
-  secretRef: '',
-  scopeType: 'global',
-  clusterId: '',
-};
-
 const defaultParseSample = '{"level":"INFO","message":"service started"}';
 const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
 const collectorEndpointPlaceholder = '<logs-downstream-write-address>';
 
-const sinkOptions: Array<{ value: LogSinkType; label: string }> = [
-  { value: 'vl', label: 'VL' },
-  { value: 'es', label: 'ES' },
-  { value: 'kafka', label: 'Kafka' },
-];
-
 type ParserMode = 'none' | 'json' | 'regex';
-
-function endpointToForm(endpoint: LogEndpoint) {
-  return {
-    name: endpoint.name ?? '',
-    description: endpoint.description ?? '',
-    sinkType: endpoint.sinkType || 'vl',
-    streamName: endpoint.streamName ?? '',
-    writeURL: endpoint.writeURL ?? '',
-    queryURL: endpoint.queryURL ?? '',
-    vmuiURL: endpoint.vmuiURL ?? '',
-    secretRef: endpoint.secretRef ?? '',
-    scopeType: endpoint.scopeType || 'global',
-    clusterId: endpoint.clusterId ?? '',
-  };
-}
-
-function endpointFormMatchesEndpoint(form: typeof emptyEndpoint, endpoint: LogEndpoint) {
-  return form.name === endpoint.name
-    && form.description === endpoint.description
-    && form.sinkType === endpoint.sinkType
-    && form.streamName === endpoint.streamName
-    && form.writeURL === endpoint.writeURL
-    && form.queryURL === endpoint.queryURL
-    && form.vmuiURL === endpoint.vmuiURL
-    && form.secretRef === endpoint.secretRef
-    && form.scopeType === endpoint.scopeType
-    && form.clusterId === endpoint.clusterId;
-}
 
 function serviceMatchesAccessSource(service: LogsServiceSummary, source: LogAccessSource) {
   if (source === 'vm') {
@@ -96,21 +49,6 @@ function publishStatusLabel(status: string) {
 function formatMissing(items: string[]) {
   if (items.length <= 3) return items.join('、');
   return `${items.slice(0, 3).join('、')} 等 ${items.length} 项`;
-}
-
-function endpointMissingFields(form: typeof emptyEndpoint) {
-  const base = [
-    form.name ? '' : '名称',
-    form.writeURL ? '' : form.sinkType === 'kafka' ? 'Brokers' : '写入地址',
-  ];
-  if (form.sinkType === 'vl') {
-    base.push(form.queryURL ? '' : '查询地址');
-    base.push(form.vmuiURL ? '' : 'VMUI URL');
-  }
-  if (form.sinkType === 'kafka') {
-    base.push(form.streamName ? '' : 'Topic');
-  }
-  return base.filter(Boolean);
 }
 
 function safeSegment(value: string) {
@@ -490,9 +428,6 @@ export function LogsOnboardingPage() {
   const [parserDraftMode, setParserDraftMode] = useState<ParserMode>('none');
   const [parserDraftRuleName, setParserDraftRuleName] = useState(defaultParserRuleName);
   const [parserDraftPattern, setParserDraftPattern] = useState(defaultParserPattern);
-  const [endpointForm, setEndpointForm] = useState(emptyEndpoint);
-  const [endpointCreateOpen, setEndpointCreateOpen] = useState(false);
-  const [endpointEditId, setEndpointEditId] = useState('');
   const [selectedRouteId, setSelectedRouteId] = useState('');
   const [routeEditMode, setRouteEditMode] = useState(false);
   const [preview, setPreview] = useState<LogRoutePreview | null>(null);
@@ -643,16 +578,7 @@ export function LogsOnboardingPage() {
     return availableEndpoints.filter((endpoint) => `${endpoint.name} ${endpoint.sinkType} ${endpoint.scopeType} ${endpoint.clusterId} ${endpoint.writeURL} ${endpoint.streamName}`.toLowerCase().includes(query));
   }, [availableEndpoints, endpointQuery]);
   const selectedEndpoint = availableEndpoints.find((item) => item.id === endpointId) ?? null;
-  const editingEndpoint = endpoints.find((item) => item.id === endpointEditId) ?? null;
   const effectiveEndpoint = selectedEndpoint ?? (sourceType !== 'vm_file' ? availableEndpoints[0] ?? null : null);
-  const endpointDraftSaved = Boolean(endpointEditId && editingEndpoint && endpointFormMatchesEndpoint(endpointForm, editingEndpoint));
-  const endpointFormTitle = endpointEditId ? '编辑端点' : '端点信息';
-  const endpointSaveLabel = endpointDraftSaved ? '已保存' : endpointEditId ? '更新' : '保存';
-  const endpointActionLabel = endpointEditId ? '更新端点' : '新增端点';
-  const closeEndpointForm = () => {
-    setEndpointCreateOpen(false);
-    setEndpointEditId('');
-  };
   const selectedCluster = clusters.find((item) => item.id === clusterId) ?? null;
   const restoredWorkload = workloadFromRouteSource(restoredSource);
   const selectedWorkloadFromApi = workloads.find((item) => workloadIdentity(item) === workloadKey) ?? null;
@@ -727,23 +653,6 @@ export function LogsOnboardingPage() {
     }
     setEndpointId((current) => current && availableEndpoints.some((item) => item.id === current) ? current : availableEndpoints[0]?.id ?? '');
   }, [availableEndpoints, clusterId, sourceType]);
-
-  const createEndpointMutation = useMutation({
-    mutationFn: () => {
-      const payload = {
-        ...endpointForm,
-        clusterId: endpointForm.scopeType === 'k8s_cluster' ? (endpointForm.clusterId || clusterId) : '',
-      };
-      return endpointEditId ? logsApi.updateEndpoint(endpointEditId, payload) : logsApi.createEndpoint(payload);
-    },
-    onSuccess: async (endpoint) => {
-      setEndpointId(endpoint.id);
-      setEndpointForm(endpointToForm(endpoint));
-      setEndpointEditId(endpoint.id);
-      setEndpointCreateOpen(false);
-      await queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
-    },
-  });
 
   const syncK8sServicesMutation = useMutation({
     mutationFn: () => logsApi.syncK8sServices({
@@ -970,7 +879,6 @@ export function LogsOnboardingPage() {
     setSourceMode(source.sourceType === 'vm_file' ? 'vm' : 'k8s');
     setServiceId(route.route.serviceId);
     setEndpointId(route.route.endpointId);
-    setEndpointForm(route.endpoint ? endpointToForm(route.endpoint) : emptyEndpoint);
     setCollectorConfigYaml(source.sourceType === 'vm_file' ? source.collectorYAML ?? '' : '');
     setParserMode(parserForm.mode);
     setParserRuleName(parserForm.name);
@@ -999,7 +907,7 @@ export function LogsOnboardingPage() {
     { key: 'service', label: '选择服务', done: Boolean(serviceId) },
     {
       key: 'endpoint',
-      label: sourceType === 'vm_file' ? '选择日志下游端点' : '选择或创建当前集群可用的日志下游端点',
+      label: sourceType === 'vm_file' ? '选择日志下游端点' : '选择当前集群可用的日志下游端点',
       done: hasEndpointForSource,
     },
     { key: 'parser', label: '修正解析规则', done: parseValid },
@@ -1017,9 +925,6 @@ export function LogsOnboardingPage() {
   ];
   const previewMissing = previewRequirements.filter((item) => !item.done).map((item) => item.label);
   const canPreview = previewMissing.length === 0;
-  const endpointCreateMissing = endpointMissingFields(endpointForm);
-  const endpointDraftTouched = Boolean(endpointForm.sinkType !== 'vl' || endpointForm.name || endpointForm.streamName || endpointForm.writeURL || endpointForm.queryURL || endpointForm.vmuiURL || endpointForm.secretRef);
-  const canCreateEndpoint = endpointCreateMissing.length === 0;
   const collectorConfigApplied = sourceType === 'vm_file' ? Boolean(collectorConfigYaml.trim()) : true;
   const collectorConfigState = !parseValid ? '需修正' : sourceType === 'vm_file' ? collectorConfigApplied ? '已应用' : '未配置' : '自动生成';
   const parseDraftValid = parserDraftMode !== 'regex' || parserDraftPattern.includes('?P<');
@@ -1321,29 +1226,13 @@ export function LogsOnboardingPage() {
               <div className="flex flex-wrap items-center gap-1.5">
                 <span className="rounded-lg bg-primary-soft px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">{selectedEndpointLabel}</span>
                 <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
-                <button
-                  type="button"
-                  className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
-                  aria-expanded={endpointCreateOpen}
-                  disabled={endpointBlocked}
-                  title={endpointBlocked ? endpointDisabledReason : undefined}
-                  onClick={() => {
-                    if (endpointCreateOpen && !endpointEditId) {
-                      setEndpointCreateOpen(false);
-                      return;
-                    }
-                    setEndpointEditId('');
-                    setEndpointForm({
-                      ...emptyEndpoint,
-                      scopeType: sourceType === 'vm_file' ? 'vm' : 'k8s_cluster',
-                      clusterId: sourceType === 'vm_file' ? '' : clusterId,
-                    });
-                    setEndpointCreateOpen(true);
-                  }}
+                <Link
+                  className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
+                  to="/platform/observability"
                 >
-                  <Plus className="h-3.5 w-3.5" />
-                  {endpointCreateOpen && !endpointEditId ? '收起' : '新增端点'}
-                </button>
+                  <Settings2 className="h-3.5 w-3.5" />
+                  管理端点
+                </Link>
               </div>
             </div>
             <div className="space-y-3 p-3">
@@ -1374,13 +1263,6 @@ export function LogsOnboardingPage() {
                               onClick={() => {
                                 if (endpointBlocked) return;
                                 setEndpointId(endpoint.id);
-                                if (endpointCreateOpen && endpointEditId === endpoint.id) {
-                                  closeEndpointForm();
-                                  return;
-                                }
-                                setEndpointEditId(endpoint.id);
-                                setEndpointForm(endpointToForm(endpoint));
-                                setEndpointCreateOpen(true);
                               }}
                             >
                               <td className="font-semibold">{endpoint.name}</td>
@@ -1389,7 +1271,7 @@ export function LogsOnboardingPage() {
                               <td className="max-w-[280px] truncate font-mono text-xs text-muted">{endpoint.writeURL || '-'}</td>
                               <td>
                                 <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${selected ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
-                                  {endpointCreateOpen && endpointEditId === endpoint.id ? '编辑中' : selected ? '已选择' : '可选择'}
+                                  {selected ? '已选择' : '可选择'}
                                 </span>
                               </td>
                             </tr>
@@ -1400,43 +1282,9 @@ export function LogsOnboardingPage() {
                   </div>
                 )}
               </div>
-              {endpointCreateOpen && !endpointBlocked ? <div className="rounded-lg border border-outline bg-white/72 p-3">
-                <div className="mb-3 flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm font-semibold text-on-surface">{endpointFormTitle}</div>
-                    <span className={`w-fit rounded border px-2 py-0.5 font-mono text-[11px] font-semibold ${canCreateEndpoint ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-300 bg-amber-50 text-warning'}`}>
-                      {endpointDraftSaved ? 'saved' : canCreateEndpoint ? (endpointEditId ? 'edit ready' : 'ready') : 'pending'}
-                    </span>
-                  </div>
-                  <button type="button" className="w-fit rounded-md border border-outline bg-white px-2.5 py-1 text-[11px] font-semibold text-muted transition-all hover:bg-surface-low active:translate-y-px" onClick={closeEndpointForm}>
-                    收起
-                  </button>
-                </div>
-                <div className="grid gap-3 lg:grid-cols-4">
-                  <input className="console-input" placeholder="名称" value={endpointForm.name} onChange={(event) => setEndpointForm({ ...endpointForm, name: event.target.value })} />
-                  <select className="console-input" value={endpointForm.sinkType} onChange={(event) => setEndpointForm({ ...endpointForm, sinkType: event.target.value as LogSinkType })}>
-                    {sinkOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-                  </select>
-                  <select className="console-input" value={endpointForm.scopeType} onChange={(event) => setEndpointForm({ ...endpointForm, scopeType: event.target.value, clusterId: event.target.value === 'k8s_cluster' ? clusterId : '' })}>
-                    <option value="global">全局端点</option>
-                    <option value="k8s_cluster">K8s 集群端点</option>
-                    <option value="vm">VM 端点</option>
-                  </select>
-                  <input className="console-input" placeholder="Cluster ID" value={endpointForm.scopeType === 'k8s_cluster' ? (endpointForm.clusterId || clusterId) : ''} onChange={(event) => setEndpointForm({ ...endpointForm, clusterId: event.target.value })} disabled={endpointForm.scopeType !== 'k8s_cluster'} />
-                  <input className="console-input lg:col-span-2" placeholder={endpointForm.sinkType === 'kafka' ? 'Brokers：kafka-0:9092,kafka-1:9092' : '写入地址'} value={endpointForm.writeURL} onChange={(event) => setEndpointForm({ ...endpointForm, writeURL: event.target.value })} />
-                  {endpointForm.sinkType !== 'vl' ? <input className="console-input" placeholder={endpointForm.sinkType === 'kafka' ? 'Topic' : 'Index / Stream'} value={endpointForm.streamName} onChange={(event) => setEndpointForm({ ...endpointForm, streamName: event.target.value })} /> : null}
-                  {endpointForm.sinkType === 'vl' ? <input className="console-input" placeholder="查询地址" value={endpointForm.queryURL} onChange={(event) => setEndpointForm({ ...endpointForm, queryURL: event.target.value })} /> : null}
-                  {endpointForm.sinkType === 'vl' ? <input className="console-input" placeholder="VMUI URL" value={endpointForm.vmuiURL} onChange={(event) => setEndpointForm({ ...endpointForm, vmuiURL: event.target.value })} /> : null}
-                  <input className="console-input" placeholder="Secret Ref" value={endpointForm.secretRef} onChange={(event) => setEndpointForm({ ...endpointForm, secretRef: event.target.value })} />
-                  <button className="inline-flex h-9 items-center justify-center gap-2 rounded bg-primary px-3 text-sm font-semibold text-white disabled:opacity-60" disabled={!canCreateEndpoint || createEndpointMutation.isPending || endpointDraftSaved} onClick={() => createEndpointMutation.mutate()} title={endpointDraftSaved ? '当前端点配置已保存' : canCreateEndpoint ? endpointActionLabel : `${endpointActionLabel}还需：${formatMissing(endpointCreateMissing)}`}>
-                    {createEndpointMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : endpointEditId ? <Save className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                    {endpointSaveLabel}
-                  </button>
-                </div>
-                {endpointDraftSaved ? <SuccessLine message={`当前端点配置已保存：${editingEndpoint?.name}`} /> : null}
-                {endpointDraftTouched && endpointCreateMissing.length > 0 ? <WarnLine message={`${endpointActionLabel}还需：${formatMissing(endpointCreateMissing)}`} /> : null}
-                {createEndpointMutation.error ? <ErrorLine message={(createEndpointMutation.error as Error).message} /> : null}
-              </div> : null}
+              <div className="rounded-lg border border-outline bg-white/72 px-3 py-2 text-xs text-muted">
+                日志下游端点由平台管理统一维护；接入配置只选择已登记端点。
+              </div>
             </div>
             {collectingConfigLocked ? (
               <RunningConfigVeil />

@@ -25,7 +25,9 @@ import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MonitoringPage } from '../pages/monitoring/MonitoringPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
+import { ObservabilitySettingsPage } from '../pages/platform/ObservabilitySettingsPage';
 import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPage';
+import { PlatformLayout } from '../pages/platform/PlatformLayout';
 import { ServicesPage } from '../pages/services/ServicesPage';
 
 export interface RouteDefinition {
@@ -78,13 +80,19 @@ const logsChildRoutes: RouteDefinition[] = [
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
 ];
 
+const platformChildRoutes: RouteDefinition[] = [
+  { index: true, title: '平台管理', element: <Navigate to="/platform/access" replace /> },
+  { path: 'access', title: '平台管理', element: <PlatformAccessAdminPage /> },
+  { path: 'observability', title: '平台管理', element: <ObservabilitySettingsPage /> },
+];
+
 export const routeDefinitions: RouteDefinition[] = [
   { path: '/', title: '平台总览', element: <OverviewPage /> },
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/logs/onboarding" replace /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
   { path: '/monitoring', title: '监控', element: <MonitoringPage /> },
-  { path: '/platform/access', title: '平台管理', element: <PlatformAccessAdminPage /> },
+  { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },
   { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },
   { path: '/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },
   { path: '/alerts', title: '告警中心', element: <AlertsPage /> },
