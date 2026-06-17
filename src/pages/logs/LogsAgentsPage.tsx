@@ -13,6 +13,7 @@ export function LogsAgentsPage() {
   const initialRouteId = params.get('route_id') ?? '';
   const [selectedRouteId, setSelectedRouteId] = useState(initialRouteId);
   const [collectorConfigRoute, setCollectorConfigRoute] = useState<LogRouteView | null>(null);
+  const [agentInstancesOpen, setAgentInstancesOpen] = useState(false);
   const { data: workspace, isLoading: workspaceLoading, error: workspaceError, refetch: refetchWorkspace } = useQuery({
     queryKey: ['logs-onboarding-workspace'],
     queryFn: logsApi.getWorkspace,
@@ -25,6 +26,9 @@ export function LogsAgentsPage() {
   const activeGroupId = activeRoute?.route.agentGroupId ?? '';
   const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
   const activeService = activeRoute ? services.find((service) => service.id === activeRoute.route.serviceId) ?? null : null;
+  const activeDomainRoutes = useMemo(() => (
+    activeRoute ? runningRoutes.filter((route) => sameCollectorDomain(route, activeRoute)) : []
+  ), [activeRoute, runningRoutes]);
 
   useEffect(() => {
     if (runningRoutes.length === 0) {
@@ -106,56 +110,82 @@ export function LogsAgentsPage() {
       </LogsSection>
 
       <LogsSection
-        title="实例状态"
-        meta={instancesLoading ? 'loading' : `${instances.length} instances · ${onlineCount} healthy`}
+        title="采集域状态"
+        meta={activeRoute ? `${activeDomainRoutes.length} routes · ${instances.length} instances` : 'route domain'}
         bodyClassName="p-0"
         action={<LogsToolbarButton onClick={() => refetchInstances()} disabled={!activeGroupId}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
       >
         {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
-        {!activeRoute ? <LogsEmptyState title="未选择运行中路由" /> : !activeGroupId ? <LogsEmptyState title="路由未绑定采集域" /> : instances.length === 0 ? <LogsEmptyState title="实例心跳为空" /> : (
-          <div className="overflow-auto">
-            <table className="console-table min-w-[960px] w-full">
-              <thead>
-                <tr>
-                  <th>运行身份</th>
-                  <th>运行态</th>
-                  <th>K8s 范围</th>
-                  <th>Pod / Node</th>
-                  <th>Remote Config</th>
-                  <th>Hash</th>
-                  <th>最后心跳</th>
-                </tr>
-              </thead>
-              <tbody>
-                {instances.map((item) => (
-                  <tr key={item.runtimeIdentity || item.instanceUid}>
-                    <td>
-                      <Link className="font-mono text-xs font-semibold text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.runtimeIdentity || item.podName || item.hostname || item.instanceUid}</Link>
-                      <div className="mt-1 break-all font-mono text-[11px] text-muted">opamp_instance_uid {item.opampInstanceUid || item.instanceUid || '-'}</div>
-                    </td>
-                    <td>
-                      <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-semibold ${item.healthy ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-500/30 bg-amber-50 text-amber-700'}`}>
-                        {item.healthy ? <ShieldCheck className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-                        {item.runtimeStatus || '-'}
-                      </span>
-                    </td>
-                    <td className="font-mono text-xs">
-                      <div>{item.clusterId || activeGroup?.cluster || '-'}</div>
-                      <div className="mt-1 text-[11px] text-muted">{item.namespace || activeGroup?.namespace || '-'}</div>
-                      <div className="mt-1 text-[11px] text-muted">agent ns {item.agentNamespace || activeGroup?.namespace || '-'}</div>
-                    </td>
-                    <td className="font-mono text-xs">
-                      <div>{item.podName || '-'}</div>
-                      <div className="mt-1 text-[11px] text-muted">pod_uid {shortIdentity(item.podUid)}</div>
-                      <div className="mt-1 text-[11px] text-muted">{item.nodeName || item.hostname || '-'} · {item.podIp || item.ip || '-'}</div>
-                    </td>
-                    <td>{item.remoteConfigStatus}</td>
-                    <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
-                    <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+        {!activeRoute ? <LogsEmptyState title="未选择运行中路由" /> : !activeGroupId ? <LogsEmptyState title="路由未绑定采集域" /> : (
+          <div className="space-y-3 p-3">
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
+              <DomainMetric label="采集配置 hash" value={activeRoute.route.collectorConfigHash || activeRoute.source?.collectorConfigHash || '-'} tone="primary" />
+              <DomainMetric label="部署清单 hash" value={activeRoute.source?.deploymentManifestHash || '-'} />
+              <DomainMetric label="下游端点" value={activeRoute.endpoint ? `${activeRoute.endpoint.name} · ${logSinkLabel(activeRoute.endpoint.sinkType)}` : '-'} />
+              <DomainMetric label="发布状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
+              <DomainMetric label="Audit" value={activeRoute.route.lastAuditId || '-'} />
+              <DomainMetric label="Preview" value={activeRoute.route.lastPreviewId || '-'} />
+              <DomainMetric label="采集域" value={activeGroup?.displayName || activeGroup?.name || '-'} tone="primary" />
+              <DomainMetric label="路由数" value={`${activeDomainRoutes.length}`} />
+              <DomainMetric label="最近发布时间" value={activeRoute.route.lastPublishedAt || '-'} />
+            </div>
+            <section className="overflow-hidden rounded-lg border border-outline bg-white">
+              <button type="button" className="flex w-full items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-3 py-2.5 text-left" onClick={() => setAgentInstancesOpen((open) => !open)}>
+                <div>
+                  <div className="text-sm font-semibold text-on-surface">Agent 实例</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-muted">{instancesLoading ? 'loading' : `${instances.length} instances · ${onlineCount} healthy`}</div>
+                </div>
+                <span className="rounded border border-outline bg-white px-2 py-1 text-[11px] font-semibold text-primary">{agentInstancesOpen ? '收起' : '展开'}</span>
+              </button>
+              {agentInstancesOpen ? (
+                instances.length === 0 ? <LogsEmptyState title="暂无 Agent 心跳数据" description="采集域状态不依赖心跳数据，后续可接入 Collector metrics 或 OpAMP 心跳补齐实例视图。" /> : (
+                  <div className="overflow-auto">
+                    <table className="console-table min-w-[960px] w-full">
+                      <thead>
+                        <tr>
+                          <th>运行身份</th>
+                          <th>运行态</th>
+                          <th>K8s 范围</th>
+                          <th>Pod / Node</th>
+                          <th>Remote Config</th>
+                          <th>Hash</th>
+                          <th>最后心跳</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {instances.map((item) => (
+                          <tr key={item.runtimeIdentity || item.instanceUid}>
+                            <td>
+                              <Link className="font-mono text-xs font-semibold text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.runtimeIdentity || item.podName || item.hostname || item.instanceUid}</Link>
+                              <div className="mt-1 break-all font-mono text-[11px] text-muted">opamp_instance_uid {item.opampInstanceUid || item.instanceUid || '-'}</div>
+                            </td>
+                            <td>
+                              <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-semibold ${item.healthy ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-500/30 bg-amber-50 text-amber-700'}`}>
+                                {item.healthy ? <ShieldCheck className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+                                {item.runtimeStatus || '-'}
+                              </span>
+                            </td>
+                            <td className="font-mono text-xs">
+                              <div>{item.clusterId || activeGroup?.cluster || '-'}</div>
+                              <div className="mt-1 text-[11px] text-muted">{item.namespace || activeGroup?.namespace || '-'}</div>
+                              <div className="mt-1 text-[11px] text-muted">agent ns {item.agentNamespace || activeGroup?.namespace || '-'}</div>
+                            </td>
+                            <td className="font-mono text-xs">
+                              <div>{item.podName || '-'}</div>
+                              <div className="mt-1 text-[11px] text-muted">pod_uid {shortIdentity(item.podUid)}</div>
+                              <div className="mt-1 text-[11px] text-muted">{item.nodeName || item.hostname || '-'} · {item.podIp || item.ip || '-'}</div>
+                            </td>
+                            <td>{item.remoteConfigStatus}</td>
+                            <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
+                            <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )
+              ) : null}
+            </section>
           </div>
         )}
       </LogsSection>
@@ -259,6 +289,28 @@ function routeScope(route?: LogRouteView | null) {
   if (!source) return '-';
   if (source.sourceType === 'vm_file') return `${source.hostGroup || 'VM'} · ${source.pathPattern || '-'}`;
   return `${source.clusterId || '-'} / ${source.namespace || '-'} / ${source.workloadKind || '-'}/${source.workloadName || '-'}`;
+}
+
+function sameCollectorDomain(left: LogRouteView, right: LogRouteView) {
+  const leftSource = left.source;
+  const rightSource = right.source;
+  if (!leftSource || !rightSource || leftSource.sourceType !== rightSource.sourceType) return false;
+  if (leftSource.sourceType === 'vm_file') {
+    return (leftSource.hostGroup || '') === (rightSource.hostGroup || '');
+  }
+  return leftSource.clusterId === rightSource.clusterId
+    && (leftSource.agentNamespace || 'novaobs-system') === (rightSource.agentNamespace || 'novaobs-system');
+}
+
+function DomainMetric({ label, value, tone }: { label: string; value: string; tone?: 'primary' }) {
+  return (
+    <div className={`rounded-lg border px-3 py-2 ${
+      tone === 'primary' ? 'border-primary/20 bg-primary-soft/45' : 'border-outline bg-surface-lowest'
+    }`}>
+      <div className="text-[11px] font-semibold text-muted">{label}</div>
+      <div className={`mt-1 break-all font-mono text-xs font-semibold ${tone === 'primary' ? 'text-primary' : 'text-on-surface'}`}>{value}</div>
+    </div>
+  );
 }
 
 function collectorDomainScope(group?: { mode?: string; cluster?: string; namespace?: string; environment?: string } | null, instance?: { clusterId?: string; agentNamespace?: string } | null) {

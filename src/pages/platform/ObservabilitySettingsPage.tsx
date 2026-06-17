@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, Plus, RefreshCw, Save, Search, X } from 'lucide-react';
+import { Database, Plus, RefreshCw, Save, Search, Settings, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { logSinkLabel, logsApi, type LogEndpoint, type LogSinkType } from '../logs/api';
+import { k8sApi } from '../k8s/api';
 
 const emptyEndpoint = {
   name: '',
@@ -194,7 +195,70 @@ export function ObservabilitySettingsPage() {
           </section>
         </div>
       </DataPanel>
+      <ClusterCollectorConfigPanel />
     </div>
+  );
+}
+
+function ClusterCollectorConfigPanel() {
+  const queryClient = useQueryClient();
+  const clustersQuery = useQuery({ queryKey: ['k8s-clusters'], queryFn: () => k8sApi.listClusters(), retry: false });
+  const clusters = clustersQuery.data ?? [];
+  const [clusterId, setClusterId] = useState('');
+  const [agentNamespace, setAgentNamespace] = useState('cattle-logging-system');
+  const [processorPatch, setProcessorPatch] = useState('');
+
+  const selectedClusterId = clusterId || clusters[0]?.id || '';
+
+  const configQuery = useQuery({
+    queryKey: ['logs-cluster-config', selectedClusterId, agentNamespace],
+    queryFn: () => logsApi.getClusterConfig(selectedClusterId, agentNamespace),
+    enabled: Boolean(selectedClusterId),
+    retry: false,
+  });
+
+  useEffect(() => {
+    setProcessorPatch(configQuery.data?.processorPatch ?? '');
+  }, [configQuery.data]);
+
+  const saveMutation = useMutation({
+    mutationFn: () => logsApi.upsertClusterConfig({ clusterId: selectedClusterId, agentNamespace, processorPatch }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['logs-cluster-config', selectedClusterId, agentNamespace] }),
+  });
+
+  const saved = processorPatch === (configQuery.data?.processorPatch ?? '');
+
+  return (
+    <DataPanel title="集群 Collector 基础配置" meta="processor patch per cluster">
+      <div className="max-w-2xl space-y-3 p-3">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <Field label="集群">
+            <select className="console-input" value={selectedClusterId} onChange={(event) => { setClusterId(event.target.value); setProcessorPatch(''); }}>
+              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
+            </select>
+          </Field>
+          <Field label="Agent Namespace">
+            <input className="console-input" value={agentNamespace} onChange={(event) => setAgentNamespace(event.target.value)} placeholder="cattle-logging-system" />
+          </Field>
+        </div>
+        <Field label="Processor Patch（YAML）">
+          <textarea className="console-input w-full font-mono text-xs" rows={8} value={processorPatch} onChange={(event) => setProcessorPatch(event.target.value)} placeholder="processors:&#10;  - type: batch&#10;    ..." />
+        </Field>
+        <div className="flex items-center gap-3">
+          <button
+            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-white disabled:opacity-60"
+            disabled={saved || saveMutation.isPending || !selectedClusterId}
+            onClick={() => saveMutation.mutate()}
+          >
+            {saveMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+            保存
+          </button>
+          {configQuery.data?.updatedAt ? <span className="text-[11px] text-muted">上次更新：{new Date(configQuery.data.updatedAt).toLocaleString()}</span> : null}
+        </div>
+        {saveMutation.isSuccess && saved ? <InlineNotice tone="success" message="集群 Collector 配置已保存" /> : null}
+        {saveMutation.error ? <InlineNotice tone="danger" message={(saveMutation.error as Error).message} /> : null}
+      </div>
+    </DataPanel>
   );
 }
 

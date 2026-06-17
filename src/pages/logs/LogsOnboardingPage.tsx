@@ -1,12 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, Sparkles, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
-import { logSinkLabel, logSourceLabel, logsApi, type LogAccessSource, type LogEndpoint, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsAgentGroupSummary, type LogsServiceSummary, type LogsWorkload } from './api';
+import { logSinkLabel, logSourceLabel, logsApi, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsAgentGroupSummary, type LogsServiceSummary, type LogsWorkload } from './api';
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
+import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
+import { LogsPublishPreviewPanel } from './LogsPublishPreviewPanel';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
   { value: 'k8s', label: 'K8s' },
@@ -16,21 +17,13 @@ const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
 const defaultParseSample = '{"level":"INFO","message":"service started"}';
 const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
-const collectorEndpointPlaceholder = '<logs-downstream-write-address>';
-
-type ParserMode = 'none' | 'json' | 'regex';
+const defaultK8sRuntimeLogPaths = '/data/docker/containers';
 
 function serviceMatchesAccessSource(service: LogsServiceSummary, source: LogAccessSource) {
   if (source === 'vm') {
     return service.identityType === 'host_process';
   }
   return service.identityType === 'k8s_workload' || service.source === 'k8s';
-}
-
-interface RequirementItem {
-  key: string;
-  label: string;
-  done: boolean;
 }
 
 function shortHash(value?: string) {
@@ -75,269 +68,18 @@ function findCollectorDomain(groups: LogsAgentGroupSummary[], type: LogSourceTyp
   return groups.find((item) => item.name === expectedName) ?? null;
 }
 
-type CollectorDraftInput = {
-  sourceType: LogSourceType;
-  clusterId: string;
-  namespace: string;
-  agentNamespace: string;
-  workloadName: string;
-  hostGroup: string;
-  vmPath: string;
-  endpoint?: LogEndpoint | null;
-  serviceName: string;
-  parseRules: LogParseRule[];
-};
-
-function renderCollectorConfigDraft(input: CollectorDraftInput) {
-  const includePath = input.sourceType === 'vm_file' ? input.vmPath || '/data/logs/*.log' : k8sLogIncludePath(input.namespace, input.workloadName);
-  const exporter = renderDownstreamExporterDraft(input.endpoint);
-  const routeSuffix = input.sourceType === 'vm_file' ? 'novaobs' : safeSegment(`${input.namespace || 'namespace'}-${input.workloadName || input.serviceName || 'workload'}`);
-  const scopeAttributes = input.sourceType === 'vm_file'
-    ? [
-      `        - key: host.group`,
-      `          value: ${input.hostGroup || 'default'}`,
-      `          action: upsert`,
-    ]
-    : [
-      `        - key: k8s.cluster.name`,
-      `          value: ${input.clusterId || 'cluster'}`,
-      `          action: upsert`,
-      `        - key: k8s.namespace.name`,
-      `          value: ${input.namespace || 'namespace'}`,
-      `          action: upsert`,
-    ];
-  const parserOperators = renderParserOperators(input.parseRules);
-  const extensions = input.sourceType === 'vm_file' ? [] : [
-    'extensions:',
-    '  file_storage/filelog_offsets:',
-    '    directory: /var/lib/otelcol/filelog_offsets',
-    '    create_directory: true',
-  ];
-  const receiverName = input.sourceType === 'vm_file' ? 'file_log/novaobs' : `file_log/${routeSuffix}`;
-  const resourceProcessor = input.sourceType === 'vm_file' ? 'resource/novaobs' : `resource/${routeSuffix}`;
-  return [
-    ...extensions,
-    'receivers:',
-    `  ${receiverName}:`,
-    '    include:',
-    `      - ${includePath}`,
-    ...(input.sourceType === 'vm_file' ? [] : [
-      '    exclude:',
-      '      - /var/log/pods/*_novaobs-logs-agent-*_*/*/*.log',
-      '      - /var/log/pods/*/*/*.gz',
-      '      - /var/log/pods/*/*/*.tmp',
-      '      - /var/log/pods/*/*/*.log.*',
-      '    poll_interval: 10s',
-      '    max_concurrent_files: 128',
-      '    max_batches: 2',
-      '    max_log_size: 1MiB',
-      '    file_cache_advise: true',
-    ]),
-    '    start_at: end',
-    '    include_file_path: true',
-    '    include_file_name: false',
-    ...(input.sourceType === 'vm_file' ? [] : [
-      '    storage: file_storage/filelog_offsets',
-      '    retry_on_failure:',
-      '      enabled: true',
-      '      initial_interval: 1s',
-      '      max_interval: 30s',
-      '      max_elapsed_time: 0',
-    ]),
-    ...(parserOperators.length ? ['    operators:', ...parserOperators] : []),
-    'processors:',
-    ...(input.sourceType === 'vm_file' ? [] : [
-      '  memory_limiter:',
-      '    check_interval: 1s',
-      '    limit_mib: 512',
-      '    spike_limit_mib: 128',
-    '  k8s_attributes:',
-      '    auth_type: serviceAccount',
-      '    passthrough: false',
-      '    filter:',
-      '      node_from_env_var: KUBE_NODE_NAME',
-      '    extract:',
-      '      metadata:',
-      '        - k8s.namespace.name',
-      '        - k8s.pod.name',
-      '        - k8s.container.name',
-      '        - k8s.deployment.name',
-      '        - k8s.statefulset.name',
-      '        - k8s.daemonset.name',
-      '        - k8s.cronjob.name',
-      '        - k8s.job.name',
-    ]),
-    `  ${resourceProcessor}:`,
-    '    attributes:',
-    `        - key: service.name`,
-    `          value: ${input.serviceName || input.workloadName || 'unknown-service'}`,
-    `          action: upsert`,
-    ...scopeAttributes,
-    '  batch:',
-    '    timeout: 1s',
-    'exporters:',
-    ...exporter.lines,
-    'service:',
-    ...(input.sourceType === 'vm_file' ? [] : [
-      '  extensions: [file_storage/filelog_offsets]',
-    ]),
-    '  pipelines:',
-    '    logs:',
-    `      receivers: [${receiverName}]`,
-    `      processors: [${input.sourceType === 'vm_file' ? 'resource/novaobs, batch' : `memory_limiter, k8s_attributes, ${resourceProcessor}, batch`}]`,
-    `      exporters: [${exporter.name}]`,
-    '',
-  ].join('\n');
-}
-
-function renderCollectorDomainConfigDraft(inputs: CollectorDraftInput[]) {
-  if (inputs.length === 0) {
-    return '暂无当前采集域配置';
-  }
-  if (inputs[0].sourceType === 'vm_file') {
-    return renderCollectorConfigDraft(inputs[0]);
-  }
-  const normalized = inputs.map((input) => ({
-    input,
-    suffix: safeSegment(`${input.namespace || 'namespace'}-${input.workloadName || input.serviceName || 'workload'}`),
-    exporter: renderDownstreamExporterDraft(input.endpoint),
-  }));
-  const exporters = Array.from(new Map(normalized.map((item) => [item.exporter.name, item.exporter])).values());
-  return [
-    'extensions:',
-    '  file_storage/filelog_offsets:',
-    '    directory: /var/lib/otelcol/filelog_offsets',
-    '    create_directory: true',
-    'receivers:',
-    ...normalized.flatMap(({ input, suffix }) => [
-      `  file_log/${suffix}:`,
-      '    include:',
-      `      - ${k8sLogIncludePath(input.namespace, input.workloadName)}`,
-      '    exclude:',
-      '      - /var/log/pods/*_novaobs-logs-agent-*_*/*/*.log',
-      '      - /var/log/pods/*/*/*.gz',
-      '      - /var/log/pods/*/*/*.tmp',
-      '      - /var/log/pods/*/*/*.log.*',
-      '    poll_interval: 10s',
-      '    max_concurrent_files: 128',
-      '    max_batches: 2',
-      '    max_log_size: 1MiB',
-      '    file_cache_advise: true',
-      '    include_file_path: true',
-      '    include_file_name: false',
-      '    start_at: end',
-      '    storage: file_storage/filelog_offsets',
-    ]),
-    'processors:',
-    '  memory_limiter:',
-    '    check_interval: 1s',
-    '    limit_mib: 512',
-    '    spike_limit_mib: 128',
-    '  k8s_attributes:',
-    '    auth_type: serviceAccount',
-    '    passthrough: false',
-    '    filter:',
-    '      node_from_env_var: KUBE_NODE_NAME',
-    ...normalized.flatMap(({ input, suffix }) => [
-      `  resource/${suffix}:`,
-      '    attributes:',
-      '      - key: service.name',
-      `        value: ${input.serviceName || input.workloadName || 'unknown-service'}`,
-      '        action: upsert',
-      '      - key: k8s.cluster.name',
-      `        value: ${input.clusterId || 'cluster'}`,
-      '        action: upsert',
-      '      - key: k8s.namespace.name',
-      `        value: ${input.namespace || 'namespace'}`,
-      '        action: upsert',
-    ]),
-    '  batch:',
-    '    timeout: 1s',
-    'exporters:',
-    ...exporters.flatMap((item) => item.lines),
-    'service:',
-    '  extensions: [file_storage/filelog_offsets]',
-    '  pipelines:',
-    ...normalized.flatMap(({ input, suffix, exporter }) => [
-      `    logs/${suffix}:`,
-      `      receivers: [file_log/${suffix}]`,
-      `      processors: [memory_limiter, k8s_attributes, resource/${suffix}, batch]`,
-      `      exporters: [${exporter.name}]`,
-      `      # service: ${input.serviceName || input.workloadName || '-'}`,
-    ]),
-    '',
-  ].join('\n');
-}
-
-function routeCollectorPatchDraft(input: CollectorDraftInput) {
-  return renderCollectorConfigDraft(input);
-}
-
 function k8sLogIncludePath(namespace: string, workloadName: string) {
   const ns = namespace || '*';
   const workload = workloadName ? `${workloadName}*` : '*';
   return `/var/log/pods/${ns}_${workload}_*/*/*.log`;
 }
 
-function renderDownstreamExporterDraft(endpoint?: LogEndpoint | null) {
-  const sinkType = endpoint?.sinkType || 'vl';
-  const address = endpoint?.writeURL || collectorEndpointPlaceholder;
-  if (sinkType === 'es') {
-    return {
-      name: 'elasticsearch/logs_downstream',
-      lines: [
-        '  elasticsearch/logs_downstream:',
-        '    endpoints:',
-        `      - ${address}`,
-        ...(endpoint?.streamName ? [`    logs_index: ${endpoint.streamName}`] : []),
-      ],
-    };
-  }
-  if (sinkType === 'kafka') {
-    const brokers = splitEndpointList(address);
-    return {
-      name: 'kafka/logs_downstream',
-      lines: [
-        '  kafka/logs_downstream:',
-        '    brokers:',
-        ...brokers.map((broker) => `      - ${broker}`),
-        `    topic: ${endpoint?.streamName || '<kafka-topic>'}`,
-      ],
-    };
-  }
-  return {
-    name: 'otlp_http/logs_downstream',
-    lines: [
-      '  otlp_http/logs_downstream:',
-      `    logs_endpoint: ${address}`,
-    ],
-  };
-}
-
-function splitEndpointList(value: string) {
-  return value.split(',').map((item) => item.trim()).filter(Boolean);
+function parseRuntimeLogPaths(value: string) {
+  return Array.from(new Set(value.split(/[\n,]/).map((item) => item.trim().replace(/\/+$/, '')).filter(Boolean)));
 }
 
 function selectorToText(selector?: Record<string, string>) {
   return Object.entries(selector ?? {}).map(([key, value]) => `${key}=${value}`).join(',');
-}
-
-function renderParserOperators(rules: LogParseRule[]) {
-  return rules.flatMap((rule) => {
-    if (rule.ruleType === 'json') {
-      return [
-        `      - id: ${rule.name || 'json-parser'}`,
-        '        type: json_parser',
-        '        parse_from: body',
-      ];
-    }
-    return [
-      `      - id: ${rule.name || 'regex-parser'}`,
-      '        type: regex_parser',
-      '        parse_from: body',
-      `        regex: '${(rule.pattern || '').replace(/'/g, "''")}'`,
-    ];
-  });
 }
 
 function buildParserRules(mode: ParserMode, name: string, pattern: string): LogParseRule[] {
@@ -367,32 +109,6 @@ function resolveServiceWorkloadKey(service: LogsServiceSummary, workloads: LogsW
   return matched ? workloadIdentity(matched) : '';
 }
 
-function sameCollectorDomain(source: LogSource | null | undefined, sourceType: LogSourceType, clusterId: string, agentNamespace: string, hostGroup: string) {
-  if (!source || source.sourceType !== sourceType) return false;
-  if (sourceType === 'vm_file') {
-    return (source.hostGroup ?? '') === hostGroup;
-  }
-  return source.clusterId === clusterId && (source.agentNamespace || 'novaobs-system') === (agentNamespace || 'novaobs-system');
-}
-
-function collectorInputFromRoute(route: LogRouteView, services: LogsServiceSummary[]) {
-  const source = route.source;
-  if (!source) return null;
-  const service = services.find((item) => item.id === route.route.serviceId);
-  return {
-    sourceType: source.sourceType,
-    clusterId: source.clusterId,
-    namespace: source.namespace,
-    agentNamespace: source.agentNamespace || 'novaobs-system',
-    workloadName: source.workloadName || service?.name || '',
-    hostGroup: source.hostGroup,
-    vmPath: source.pathPattern,
-    endpoint: route.endpoint,
-    serviceName: service?.displayName || service?.name || route.route.name,
-    parseRules: source.parseRules ?? [],
-  } satisfies CollectorDraftInput;
-}
-
 export function LogsOnboardingPage() {
   const queryClient = useQueryClient();
   const [routeParams] = useSearchParams();
@@ -411,6 +127,7 @@ export function LogsOnboardingPage() {
   const [clusterId, setClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [agentNamespace, setAgentNamespace] = useState('novaobs-system');
+  const [runtimeLogPathsText, setRuntimeLogPathsText] = useState(defaultK8sRuntimeLogPaths);
   const [workloadKey, setWorkloadKey] = useState('');
   const [workloadQuery, setWorkloadQuery] = useState('');
   const [hostGroup, setHostGroup] = useState('');
@@ -422,9 +139,7 @@ export function LogsOnboardingPage() {
   const [parserRuleName, setParserRuleName] = useState(defaultParserRuleName);
   const [parserPattern, setParserPattern] = useState(defaultParserPattern);
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
-  const [parseRulesDrawerOpen, setParseRulesDrawerOpen] = useState(false);
   const [parseSample, setParseSample] = useState(defaultParseSample);
-  const [collectorConfigDraft, setCollectorConfigDraft] = useState('');
   const [parserDraftMode, setParserDraftMode] = useState<ParserMode>('none');
   const [parserDraftRuleName, setParserDraftRuleName] = useState(defaultParserRuleName);
   const [parserDraftPattern, setParserDraftPattern] = useState(defaultParserPattern);
@@ -457,12 +172,11 @@ export function LogsOnboardingPage() {
     const service = sourceServices.find((item) => item.id === selectedRoute.route.serviceId);
     return service ? [service] : [];
   }, [routeUpdateMode, selectedRoute, sourceServices]);
-  const editingRouteScopedServices = routeScopedServices;
   const accessServices = useMemo(() => (
     routeScopedServices ?? sourceServices.filter((service) => !runningRouteServiceIds.has(service.id))
   ), [routeScopedServices, runningRouteServiceIds, sourceServices]);
-  const serviceListSourceCount = editingRouteScopedServices ? accessServices.length : sourceServices.length;
-  const serviceListTotalCount = editingRouteScopedServices ? accessServices.length : services.length;
+  const serviceListSourceCount = routeScopedServices ? accessServices.length : sourceServices.length;
+  const serviceListTotalCount = routeScopedServices ? accessServices.length : services.length;
   const serviceListMeta = isLoading ? 'loading' : `${serviceListSourceCount}/${serviceListTotalCount} services · ${routes.length} routes`;
   const routeUpdateMissing = routeUpdateMode && Boolean(onboardingRouteId) && !isLoading && !selectedRoute;
   const restoredSource = selectedRoute?.source ?? createdRoute?.source ?? null;
@@ -584,7 +298,6 @@ export function LogsOnboardingPage() {
   const selectedWorkloadFromApi = workloads.find((item) => workloadIdentity(item) === workloadKey) ?? null;
   const selectedWorkload = selectedWorkloadFromApi ?? (routeUpdateMode ? restoredWorkload : null);
   const selectedRouteMatchesDraft = selectedRoute ? routeMatchesCurrentDraft(selectedRoute) : false;
-  const shouldUseSavedCollectorYaml = sourceType === 'vm_file' && Boolean(collectorConfigYaml.trim() && selectedRouteMatchesDraft);
   const filteredWorkloads = useMemo(() => {
     const query = workloadQuery.trim().toLowerCase();
     if (!query) return workloads;
@@ -605,29 +318,6 @@ export function LogsOnboardingPage() {
   const currentParseRules = useMemo(() => buildParserRules(parserMode, parserRuleName, parserPattern), [parserMode, parserRuleName, parserPattern]);
   const draftParseRules = useMemo(() => buildParserRules(parserDraftMode, parserDraftRuleName, parserDraftPattern), [parserDraftMode, parserDraftRuleName, parserDraftPattern]);
   const serviceScopeWorkloadKey = selectedService ? resolveServiceWorkloadKey(selectedService, workloads) : '';
-  const currentCollectorInput = buildCollectorDraftInput();
-  const collectorDomainInputs = useMemo(() => (
-    routes
-      .filter((route) => route.source?.sourceType === sourceType && sameCollectorDomain(route.source, sourceType, clusterId, agentNamespace, hostGroup))
-      .map((route) => collectorInputFromRoute(route, services))
-      .filter(Boolean) as CollectorDraftInput[]
-  ), [agentNamespace, clusterId, hostGroup, routes, services, sourceType]);
-  const currentCollectorDomainConfig = useMemo(() => renderCollectorDomainConfigDraft(
-    routes
-      .filter((route) => route.source?.sourceType === sourceType && sameCollectorDomain(route.source, sourceType, clusterId, agentNamespace, hostGroup))
-      .filter((route) => route.route.id !== selectedRouteId)
-      .map((route) => collectorInputFromRoute(route, services))
-      .filter(Boolean) as CollectorDraftInput[],
-  ), [agentNamespace, clusterId, hostGroup, routes, selectedRouteId, services, sourceType]);
-  const runningCollectorDomainConfig = useMemo(() => renderCollectorDomainConfigDraft(collectorDomainInputs), [collectorDomainInputs]);
-  const patchedCollectorDomainConfig = useMemo(() => renderCollectorDomainConfigDraft([
-    ...routes
-      .filter((route) => route.source?.sourceType === sourceType && sameCollectorDomain(route.source, sourceType, clusterId, agentNamespace, hostGroup))
-      .filter((route) => route.route.id !== selectedRouteId)
-      .map((route) => collectorInputFromRoute(route, services))
-      .filter(Boolean) as CollectorDraftInput[],
-    currentCollectorInput,
-  ]), [agentNamespace, clusterId, currentCollectorInput, hostGroup, routes, selectedRouteId, services, sourceType]);
 
   useEffect(() => {
     if (routeUpdateMode) return;
@@ -706,11 +396,6 @@ export function LogsOnboardingPage() {
     },
   });
 
-  const probeMutation = useMutation({
-    mutationFn: (routeId: string) => logsApi.probeRoute(routeId),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] }),
-  });
-
   const publishMutation = useMutation({
     mutationFn: (confirmation?: { previewId?: string; confirmationToken?: string }) => {
       if (!createdRoute) throw new Error('请先保存路由');
@@ -741,6 +426,7 @@ export function LogsOnboardingPage() {
         workloadKind: selectedWorkload?.kind || restoredSource?.workloadKind,
         workloadName: selectedWorkload?.name || restoredSource?.workloadName,
         workloadSelector: selectedWorkload?.selector ?? {},
+        runtimeLogPaths: parseRuntimeLogPaths(runtimeLogPathsText),
         parseRules: buildParseRules(),
       },
       vm: sourceType === 'vm_file' ? {
@@ -768,6 +454,7 @@ export function LogsOnboardingPage() {
         workloadKind: workload.kind,
         workloadName: workload.name,
         workloadSelector: workload.selector ?? {},
+        runtimeLogPaths: parseRuntimeLogPaths(runtimeLogPathsText),
         parseRules: buildParseRules(),
       },
       vm: {},
@@ -780,27 +467,10 @@ export function LogsOnboardingPage() {
   }
 
   function openParseDialog() {
-    setCollectorConfigDraft(shouldUseSavedCollectorYaml ? collectorConfigYaml : routeCollectorPatchDraft(currentCollectorInput));
     setParserDraftMode(parserMode);
     setParserDraftRuleName(parserRuleName);
     setParserDraftPattern(parserPattern);
-    setParseRulesDrawerOpen(false);
     setParseDialogOpen(true);
-  }
-
-  function buildCollectorDraftInput(): CollectorDraftInput {
-    return {
-      sourceType,
-      clusterId,
-      namespace,
-      agentNamespace,
-      workloadName: selectedWorkload?.name || restoredSource?.workloadName || selectedService?.name || '',
-      hostGroup,
-      vmPath,
-      endpoint: effectiveEndpoint,
-      serviceName: selectedService?.displayName || selectedService?.name || '',
-      parseRules: currentParseRules,
-    };
   }
 
   function applyServiceRuntimeScope(service: LogsServiceSummary) {
@@ -858,15 +528,10 @@ export function LogsOnboardingPage() {
 
   function applyParseDraft() {
     if (!parseDraftValid) return;
-    setCollectorConfigYaml(sourceType === 'vm_file' ? collectorConfigDraft : '');
     setParserMode(parserDraftMode);
     setParserRuleName(parserDraftRuleName);
     setParserPattern(parserDraftPattern);
     setParseDialogOpen(false);
-  }
-
-  function regenerateCollectorConfigDraft() {
-    setCollectorConfigDraft(routeCollectorPatchDraft({ ...currentCollectorInput, parseRules: draftParseRules }));
   }
 
   function loadRouteDraft(route: LogRouteView, options: { edit?: boolean } = {}) {
@@ -879,7 +544,8 @@ export function LogsOnboardingPage() {
     setSourceMode(source.sourceType === 'vm_file' ? 'vm' : 'k8s');
     setServiceId(route.route.serviceId);
     setEndpointId(route.route.endpointId);
-    setCollectorConfigYaml(source.sourceType === 'vm_file' ? source.collectorYAML ?? '' : '');
+    setCollectorConfigYaml(source.collectorYAML ?? '');
+    setRuntimeLogPathsText(defaultK8sRuntimeLogPaths);
     setParserMode(parserForm.mode);
     setParserRuleName(parserForm.name);
     setParserPattern(parserForm.pattern);
@@ -901,9 +567,9 @@ export function LogsOnboardingPage() {
     setWorkloadQuery('');
   }
 
-  const hasEndpointForSource = sourceType === 'vm_file' ? Boolean(effectiveEndpoint) : Boolean(effectiveEndpoint);
+  const hasEndpointForSource = Boolean(effectiveEndpoint);
   const parseValid = parserMode !== 'regex' || parserPattern.includes('?P<');
-  const previewRequirements: RequirementItem[] = [
+  const previewRequirements = [
     { key: 'service', label: '选择服务', done: Boolean(serviceId) },
     {
       key: 'endpoint',
@@ -925,8 +591,7 @@ export function LogsOnboardingPage() {
   ];
   const previewMissing = previewRequirements.filter((item) => !item.done).map((item) => item.label);
   const canPreview = previewMissing.length === 0;
-  const collectorConfigApplied = sourceType === 'vm_file' ? Boolean(collectorConfigYaml.trim()) : true;
-  const collectorConfigState = !parseValid ? '需修正' : sourceType === 'vm_file' ? collectorConfigApplied ? '已应用' : '未配置' : '自动生成';
+  const collectorConfigState = !parseValid ? '需修正' : sourceType === 'vm_file' ? collectorConfigYaml.trim() ? '自定义' : '后端生成' : '后端生成';
   const parseDraftValid = parserDraftMode !== 'regex' || parserDraftPattern.includes('?P<');
   const selectedServiceLabel = selectedService?.displayName || selectedService?.name || '-';
   const selectedAgentLabel = selectedGroup?.displayName || selectedGroup?.name || derivedCollectorDomainLabel(sourceType, clusterId, agentNamespace, hostGroup);
@@ -948,7 +613,6 @@ export function LogsOnboardingPage() {
   const activeStep = preview ? 4 : runtimeTargetReady && hasEndpointForSource ? 3 : runtimeTargetReady ? 2 : 1;
   const previewDisabledReason = previewMissing.length ? `预览前还需：${formatMissing(previewMissing)}` : '';
   const saveDisabledReason = preview ? '' : '先完成配置预览';
-  const probeDisabledReason = createdRoute ? '' : '先保存路由';
   const publishDisabledReason = !createdRoute
     ? '先保存路由'
     : preview?.publishBlocked
@@ -956,16 +620,16 @@ export function LogsOnboardingPage() {
       : '';
   const lockedDisabledReason = collectingConfigLocked ? '当前采集配置处于查看态，请点击更新配置进入编辑。' : '';
   const actionHint = collectingConfigLocked
-    ? '当前展示生产采集配置，可先查看后从服务卡片进入更新配置。'
+    ? '当前服务已有运行路由，请从采集路由页查看配置或进入更新。'
     : previewMissing.length
     ? previewDisabledReason
     : !preview
-      ? '配置已满足预览条件，可以生成 Agent YAML。'
+      ? '配置已满足预览条件，可以生成部署清单预览。'
       : !createdRoute
-        ? '预览已生成，保存路由后可做连通性检查和发布。'
+        ? '预览已生成，保存草稿后可生成发布预览。'
         : publishDisabledReason
           ? `发布阻断：${publishDisabledReason}`
-          : '路由已保存，可以检查连通性或发布。';
+          : '路由已保存，可以生成发布预览。';
 
   if (error) {
     return (
@@ -1147,6 +811,10 @@ export function LogsOnboardingPage() {
                             <input className="console-input mt-1.5 h-8 w-full text-xs" value={agentNamespace} onChange={(event) => setAgentNamespace(event.target.value)} />
                           </label>
                         </div>
+                        <label className="mt-3 block text-xs font-semibold text-muted">
+                          Runtime 日志目录
+                          <input className="console-input mt-1.5 h-8 w-full font-mono text-xs" value={runtimeLogPathsText} onChange={(event) => setRuntimeLogPathsText(event.target.value)} placeholder="/data/docker/containers" />
+                        </label>
                       </div>
 
                       <div className="overflow-hidden rounded-lg border border-outline bg-white/70">
@@ -1292,12 +960,12 @@ export function LogsOnboardingPage() {
           </div>
         </DataPanel>
 
-        <DataPanel title="配置预览" meta={preview ? `collector ${shortHash(preview.collectorConfigHash)}` : '等待预览'}>
+        <DataPanel title="发布预览" meta={preview ? `config ${shortHash(preview.collectorConfigHash)}` : '等待预览'}>
           <div className="relative min-h-[260px]">
           <div className="mb-3 flex flex-col gap-3 rounded-lg border border-outline bg-surface-lowest px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${
-                collectorConfigState === '已应用'
+                collectorConfigState === '自定义' || collectorConfigState === '后端生成'
                   ? 'border-primary/20 bg-primary-soft text-primary'
                   : collectorConfigState === '需修正'
                     ? 'border-warning/30 bg-amber-50 text-warning'
@@ -1305,24 +973,23 @@ export function LogsOnboardingPage() {
               }`}>
                 {collectorConfigState}
               </span>
-              <span className="font-mono text-xs text-muted">collector.yaml</span>
+              <span className="font-mono text-xs text-muted">route draft</span>
             </div>
             <button className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" onClick={openParseDialog}>
               <Settings2 className="h-3.5 w-3.5" />
-              {sourceType === 'vm_file' ? 'Collector 配置' : '采集域配置'}
+              解析规则
             </button>
           </div>
           {!parseValid ? <WarnLine message="Regex 需要使用命名捕获组，例如 (?P<level>INFO)。" /> : null}
-          <MutationErrors errors={[previewMutation.error, createRouteMutation.error, probeMutation.error, publishMutation.error]} />
+          <MutationErrors errors={[previewMutation.error, createRouteMutation.error, publishMutation.error]} />
           {preview?.publishBlocked ? <WarnLine message={preview.publishBlockedReason} /> : null}
           {preview?.warnings.map((item) => <WarnLine key={item} message={item} />)}
-          {probeMutation.data ? <SuccessLine message={probeMutation.data.message} /> : null}
           {publishMutation.data && !pendingPublish ? <SuccessLine message={publishMutation.data.message || publishMutation.data.status} /> : null}
-          {pendingPublish ? <PublishPreviewPanel preview={pendingPublish} /> : null}
+          {pendingPublish ? <LogsPublishPreviewPanel preview={pendingPublish} /> : null}
           {preview ? (
             <div className="mt-4">
               <div className="mb-2 flex items-center justify-between">
-                <div className="font-mono text-xs text-muted">采集配置 hash {preview.collectorConfigHash}</div>
+                <div className="font-mono text-xs text-muted">部署清单预览 · 采集配置 hash {preview.collectorConfigHash}</div>
                 <button className="rounded p-1.5 text-muted hover:bg-surface-low hover:text-primary" onClick={() => navigator.clipboard?.writeText(preview.agentYAML)} title="复制 YAML">
                   <Copy className="h-4 w-4" />
                 </button>
@@ -1331,19 +998,7 @@ export function LogsOnboardingPage() {
                 {preview.agentYAML}
               </pre>
             </div>
-          ) : collectingConfigLocked && (sourceType === 'vm_file' ? collectorConfigYaml.trim() : runningCollectorDomainConfig.trim()) ? (
-            <div className="mt-4">
-              <div className="mb-2 flex items-center justify-between">
-                <div className="font-mono text-xs text-muted">当前采集配置 · {shortHash(collectingRoute?.route.collectorConfigHash)}</div>
-                <button className="rounded p-1.5 text-muted hover:bg-surface-low hover:text-primary" onClick={() => navigator.clipboard?.writeText(sourceType === 'vm_file' ? collectorConfigYaml : runningCollectorDomainConfig)} title="复制 YAML">
-                  <Copy className="h-4 w-4" />
-                </button>
-              </div>
-              <pre className="max-h-[460px] overflow-auto rounded border border-outline bg-white p-3 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">
-                {sourceType === 'vm_file' ? collectorConfigYaml : runningCollectorDomainConfig}
-              </pre>
-            </div>
-          ) : <Empty label="配置预览为空" />}
+          ) : <Empty label="部署清单预览为空" />}
           {collectingConfigLocked ? (
             <RunningConfigVeil />
           ) : null}
@@ -1362,158 +1017,27 @@ export function LogsOnboardingPage() {
             parser={collectorConfigState}
             collectorHash={preview?.collectorConfigHash || createdRoute?.route.collectorConfigHash || '-'}
             publish={selectedPublishLabel}
-            requirements={previewRequirements}
-            showRequirements={!collectingConfigLocked}
           />
         </aside>
       </div>
 
-      {parseDialogOpen && typeof document !== 'undefined' ? createPortal((
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/28 px-4 py-6 backdrop-blur-sm">
-          <div className="w-full max-w-[1320px] overflow-hidden rounded-lg border border-outline bg-white shadow-[0_24px_80px_rgba(24,52,96,0.28)]">
-            <div className="flex items-center justify-between border-b border-outline bg-surface-lowest px-4 py-3">
-              <div className="flex min-w-0 items-center gap-3">
-                <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary-soft text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.9)]">
-                  <Settings2 className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex min-w-0 flex-wrap items-center gap-2">
-                    <div className="text-base font-semibold leading-5 text-on-surface">{sourceType === 'vm_file' ? 'Collector 配置' : '采集域配置'}</div>
-                    <span className="rounded border border-outline bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted">collector.yaml</span>
-                  </div>
-                  <div className="mt-1 truncate font-mono text-[11px] text-muted">{selectedServiceLabel} · {selectedScopeLabel}</div>
-                </div>
-              </div>
-              <button className="rounded p-1.5 text-muted hover:bg-surface-low hover:text-on-surface" onClick={() => setParseDialogOpen(false)} title="关闭">
-                <XCircle className="h-4 w-4" />
-              </button>
-            </div>
-            <div className="grid max-h-[86vh] min-h-[720px] grid-rows-[minmax(430px,1fr)_auto] divide-y divide-outline overflow-hidden">
-              <section className="flex min-h-0 flex-col">
-                <div className="flex items-center justify-between gap-3 border-b border-outline px-4 py-3">
-                  <div className="text-sm font-semibold text-on-surface">{sourceType === 'vm_file' ? 'Collector 配置' : '采集域配置对照'}</div>
-                  <div className="flex gap-2">
-                    {sourceType === 'vm_file' ? <button className="inline-flex h-8 items-center rounded border border-outline bg-white px-3 text-xs font-semibold text-on-surface" onClick={regenerateCollectorConfigDraft}>
-                      从当前选择生成
-                    </button> : null}
-                    <button className="inline-flex h-8 items-center rounded border border-outline bg-white px-3 text-xs font-semibold text-on-surface" onClick={() => navigator.clipboard?.writeText(patchedCollectorDomainConfig)}>
-                      复制
-                    </button>
-                  </div>
-                </div>
-                <div className="collector-config-compare-grid grid min-h-0 flex-1 divide-y divide-outline overflow-hidden lg:grid-cols-[0.95fr_1.1fr_0.95fr] lg:divide-x lg:divide-y-0">
-                  <section className="read-only flex min-h-0 flex-col bg-surface-low/55">
-                    <div className="flex items-start justify-between gap-3 border-b border-outline bg-surface-low px-4 py-2.5">
-                      <div>
-                        <div className="text-sm font-semibold text-on-surface">当前运行配置</div>
-                        <div className="mt-0.5 font-mono text-[11px] text-muted">{selectedAgentLabel}</div>
-                      </div>
-                      <span className="rounded border border-outline bg-white px-2 py-0.5 text-[11px] font-semibold text-muted">只读</span>
-                    </div>
-                    <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[11px] leading-5 text-muted whitespace-pre-wrap">{currentCollectorDomainConfig}</pre>
-                  </section>
-                  <section className="read-only flex min-h-0 flex-col bg-surface-lowest">
-                    <div className="flex items-start justify-between gap-3 border-b border-outline bg-white px-4 py-2.5">
-                      <div>
-                        <div className="text-sm font-semibold text-on-surface">Patch 后配置</div>
-                        <div className="mt-0.5 font-mono text-[11px] text-muted">{shortHash(preview?.collectorConfigHash || createdRoute?.route.collectorConfigHash || '')}</div>
-                      </div>
-                      <span className="rounded border border-primary/20 bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary">只读</span>
-                    </div>
-                    <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">{patchedCollectorDomainConfig}</pre>
-                  </section>
-                  <section className={`${sourceType === 'vm_file' ? 'editable bg-white shadow-[inset_3px_0_0_rgba(13,91,215,0.72)]' : 'read-only bg-surface-lowest'} flex min-h-0 flex-col`}>
-                    <div className="flex items-start justify-between gap-3 border-b border-primary/20 bg-primary-soft/40 px-4 py-2.5">
-                      <div>
-                        <div className="text-sm font-semibold text-on-surface">{sourceType === 'vm_file' ? '本次 Collector YAML' : '本服务采集配置'}</div>
-                        <div className="mt-0.5 font-mono text-[11px] text-muted">{selectedServiceLabel}</div>
-                      </div>
-                      <span className="rounded border border-primary/25 bg-white px-2 py-0.5 text-[11px] font-semibold text-primary">{sourceType === 'vm_file' ? '可编辑' : '只读'}</span>
-                    </div>
-                    {sourceType === 'vm_file' ? <textarea
-                      className="min-h-0 flex-1 resize-none border-0 bg-white p-4 font-mono text-xs leading-5 text-on-surface outline-none focus:bg-primary-soft/10"
-                      value={collectorConfigDraft}
-                      onChange={(event) => setCollectorConfigDraft(event.target.value)}
-                      spellCheck={false}
-                    /> : <pre className="min-h-0 flex-1 overflow-auto p-4 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">{routeCollectorPatchDraft({ ...currentCollectorInput, parseRules: draftParseRules })}</pre>}
-                  </section>
-                </div>
-              </section>
-              <section className="规则自检抽屉 flex min-h-0 flex-col bg-surface-lowest">
-                <button
-                  type="button"
-                  className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left transition-colors hover:bg-surface-low"
-                  aria-expanded={parseRulesDrawerOpen}
-                  onClick={() => setParseRulesDrawerOpen((open) => !open)}
-                >
-                  <div>
-                    <div className="text-sm font-semibold text-on-surface">解析规则自检</div>
-                    <div className="mt-0.5 font-mono text-[11px] text-muted">{parserDraftMode === 'none' ? '未启用解析' : parserDraftMode}</div>
-                  </div>
-                  <span className="rounded border border-outline bg-white px-3 py-1 text-xs font-semibold text-primary">
-                    {parseRulesDrawerOpen ? '收起自检' : '展开自检'}
-                  </span>
-                </button>
-                {parseRulesDrawerOpen ? <div className="grid min-h-[260px] divide-y divide-outline overflow-hidden border-t border-outline bg-white lg:grid-cols-[0.9fr_1.1fr_0.9fr] lg:divide-x lg:divide-y-0">
-                <section className="flex min-h-0 flex-col">
-                  <div className="border-b border-outline px-4 py-3">
-                    <div className="text-sm font-semibold text-on-surface">日志样本</div>
-                  </div>
-                  <textarea className="min-h-0 flex-1 resize-none border-0 bg-white p-4 font-mono text-xs leading-5 text-on-surface outline-none" value={parseSample} onChange={(event) => setParseSample(event.target.value)} />
-                </section>
-                <section className="flex min-h-0 flex-col">
-                  <div className="border-b border-outline px-4 py-3">
-                    <div className="text-sm font-semibold text-on-surface">解析规则自检</div>
-                  </div>
-                  <div className="grid gap-3 overflow-auto p-4">
-                    <label className="text-xs font-semibold text-muted">
-                      规则类型
-                      <select className="console-input mt-1 w-full" value={parserDraftMode} onChange={(event) => setParserDraftMode(event.target.value as ParserMode)}>
-                        <option value="none">不解析</option>
-                        <option value="json">JSON</option>
-                        <option value="regex">Regex</option>
-                      </select>
-                    </label>
-                    <label className="text-xs font-semibold text-muted">
-                      规则名
-                      <input className="console-input mt-1 w-full" value={parserDraftRuleName} onChange={(event) => setParserDraftRuleName(event.target.value)} disabled={parserDraftMode === 'none'} />
-                    </label>
-                    <label className="text-xs font-semibold text-muted">
-                      Regex Pattern
-                      <textarea className="console-input mt-1 min-h-[88px] w-full resize-none font-mono text-xs leading-5" value={parserDraftPattern} onChange={(event) => setParserDraftPattern(event.target.value)} disabled={parserDraftMode !== 'regex'} />
-                    </label>
-                    {parserDraftMode === 'regex' && !parseDraftValid ? <WarnLine message="Regex 需要使用命名捕获组，例如 (?P<level>INFO)。" /> : null}
-                  </div>
-                </section>
-                <section className="flex min-h-0 flex-col">
-                  <div className="flex items-center justify-between border-b border-outline px-4 py-3">
-                    <div>
-                      <div className="text-sm font-semibold text-on-surface">预览</div>
-                    </div>
-                    <button className="inline-flex h-8 items-center gap-2 rounded border border-primary bg-white px-3 text-xs font-semibold text-primary disabled:opacity-60" disabled={parsePreviewMutation.isPending || !parseDraftValid} onClick={() => parsePreviewMutation.mutate()}>
-                      {parsePreviewMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
-                      预览
-                    </button>
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-auto p-4">
-                    {parsePreviewMutation.error ? <ErrorLine message={(parsePreviewMutation.error as Error).message} /> : null}
-                    {parsePreviewMutation.data?.errors.map((item) => <ErrorLine key={item} message={item} />)}
-                    {parsePreviewMutation.data?.warnings.map((item) => <WarnLine key={item} message={item} />)}
-                    <pre className="min-h-[170px] rounded border border-outline bg-surface-lowest p-3 font-mono text-xs leading-5 text-on-surface whitespace-pre-wrap">
-                      {parsePreviewMutation.data ? JSON.stringify(parsePreviewMutation.data.fields, null, 2) : '未预览'}
-                    </pre>
-                  </div>
-                </section>
-                </div> : null}
-              </section>
-            </div>
-            <div className="flex items-center justify-end gap-2 border-t border-outline bg-surface-lowest px-4 py-3">
-              <button className="rounded-lg border border-outline bg-white px-4 py-2 text-sm font-semibold text-on-surface" onClick={() => setParseDialogOpen(false)}>取消</button>
-              <button className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!parseDraftValid || parsePreviewMutation.data?.status === 'error'} onClick={applyParseDraft}>应用</button>
-            </div>
-          </div>
-        </div>
-      ), document.body) : null}
+      <LogsParseRuleDialog
+        open={parseDialogOpen}
+        serviceLabel={selectedServiceLabel}
+        scopeLabel={selectedScopeLabel}
+        parseSample={parseSample}
+        parserDraftMode={parserDraftMode}
+        parserDraftRuleName={parserDraftRuleName}
+        parserDraftPattern={parserDraftPattern}
+        parseDraftValid={parseDraftValid}
+        parsePreviewMutation={parsePreviewMutation}
+        onParseSampleChange={setParseSample}
+        onParserDraftModeChange={setParserDraftMode}
+        onParserDraftRuleNameChange={setParserDraftRuleName}
+        onParserDraftPatternChange={setParserDraftPattern}
+        onClose={() => setParseDialogOpen(false)}
+        onApply={applyParseDraft}
+      />
 
       <div className="logs-onboarding-action-bar sticky bottom-3 z-[4] mt-4 rounded-lg border border-primary/20 bg-white/95 p-3 shadow-[0_12px_36px_rgba(24,52,96,0.18)] backdrop-blur">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1527,17 +1051,13 @@ export function LogsOnboardingPage() {
             </div>
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成 Agent 配置预览'}>
+            <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成部署清单预览'}>
               {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              预览配置
+              生成预览
             </button>
             <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary bg-white px-4 text-sm font-semibold text-primary transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !preview || createRouteMutation.isPending} onClick={() => createRouteMutation.mutate()} title={lockedDisabledReason || saveDisabledReason || (selectedRouteId ? '更新日志路由' : '保存日志路由')}>
               {createRouteMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {selectedRouteId ? '更新路由' : '保存路由'}
-            </button>
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-outline bg-white px-4 text-sm font-semibold text-on-surface transition-all active:translate-y-px disabled:opacity-60" disabled={!createdRoute || probeMutation.isPending} onClick={() => createdRoute && probeMutation.mutate(createdRoute.route.id)} title={probeDisabledReason || '检查日志路由连通性'}>
-              <RefreshCw className={`h-4 w-4 ${probeMutation.isPending ? 'animate-spin' : ''}`} />
-              连通性检查
+              {selectedRouteId ? '更新路由' : '保存草稿'}
             </button>
             <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
               {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
@@ -1569,8 +1089,8 @@ function workloadFromRouteSource(source: LogSource | null): LogsWorkload | null 
     key: `${source.workloadKind}/${source.workloadName}`,
     name: source.workloadName,
     kind: source.workloadKind,
-    selector: source.workloadSelector ?? {},
-    templateLabels: source.workloadSelector ?? {},
+    selector: {},
+    templateLabels: {},
     serviceAccounts: [],
     podsTotal: 0,
     podsRunning: 0,
@@ -1609,86 +1129,7 @@ function StepCard({ index, title, description, active, done }: { index: number; 
   );
 }
 
-function PublishPreviewPanel({ preview }: { preview: LogPublishResult }) {
-  const rows = preview.diffs.length > 0
-    ? preview.diffs.map((item) => ({
-      key: `${item.clusterId}/${item.namespace}/${item.apiVersion}/${item.kind}/${item.name}`,
-      operation: publishOperationLabel(item.operation),
-      clusterId: item.clusterId,
-      namespace: item.namespace || 'cluster',
-      apiVersion: item.apiVersion,
-      kind: item.kind,
-      name: item.name,
-      hash: shortHash(item.afterHash),
-    }))
-    : preview.resources.map((item) => ({
-      key: `${item.clusterId}/${item.namespace}/${item.apiVersion}/${item.kind}/${item.name}`,
-      operation: 'dry-run',
-      clusterId: item.clusterId,
-      namespace: item.namespace || 'cluster',
-      apiVersion: item.apiVersion,
-      kind: item.kind,
-      name: item.name,
-      hash: '-',
-    }));
-  return (
-    <div className="mt-4 overflow-hidden rounded-lg border border-primary/25 bg-primary-soft/35">
-      <div className="flex flex-col gap-3 border-b border-primary/15 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">发布预览</div>
-          <div className="mt-1 flex flex-wrap gap-2 font-mono text-[11px] text-muted">
-            <span>preview {shortHash(preview.previewId)}</span>
-            <span>audit {shortHash(preview.auditId)}</span>
-            <span>{rows.length} resources</span>
-          </div>
-        </div>
-        <span className="inline-flex w-fit rounded border border-primary/20 bg-white px-2 py-1 font-mono text-[11px] font-semibold text-primary">等待确认</span>
-      </div>
-      {preview.warnings.map((item) => <WarnLine key={item} message={item} />)}
-      <div className="overflow-auto bg-white/70">
-        <table className="console-table min-w-[760px] w-full">
-          <thead>
-            <tr>
-              <th>动作</th>
-              <th>资源</th>
-              <th>Namespace</th>
-              <th>Cluster</th>
-              <th>API</th>
-              <th>Hash</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((row) => (
-              <tr key={row.key}>
-                <td><span className="rounded border border-outline bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">{row.operation}</span></td>
-                <td className="font-mono text-xs font-semibold text-on-surface">{row.kind}/{row.name}</td>
-                <td className="font-mono text-xs text-muted">{row.namespace}</td>
-                <td className="font-mono text-xs text-muted">{row.clusterId || '-'}</td>
-                <td className="font-mono text-xs text-muted">{row.apiVersion}</td>
-                <td className="font-mono text-xs text-muted">{row.hash}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function publishOperationLabel(value: string) {
-  switch (value) {
-    case 'create':
-      return 'create';
-    case 'update':
-      return 'update';
-    case 'delete':
-      return 'delete';
-    default:
-      return value || 'apply';
-  }
-}
-
-function SummaryCard({ service, source, scope, agent, endpoint, parser, collectorHash, publish, requirements, showRequirements }: { service: string; source: string; scope: string; agent: string; endpoint: string; parser: string; collectorHash: string; publish: string; requirements: RequirementItem[]; showRequirements: boolean }) {
+function SummaryCard({ service, source, scope, agent, endpoint, parser, collectorHash, publish }: { service: string; source: string; scope: string; agent: string; endpoint: string; parser: string; collectorHash: string; publish: string }) {
   return (
     <DataPanel title="本次接入" meta="summary">
       <div className="space-y-3">
@@ -1707,19 +1148,6 @@ function SummaryCard({ service, source, scope, agent, endpoint, parser, collecto
             <div className="mt-1 break-all font-mono text-xs text-on-surface">{value}</div>
           </div>
         ))}
-        {showRequirements ? (
-          <div className="rounded border border-outline bg-surface-lowest px-3 py-2">
-            <div className="text-[11px] text-muted">配置检查</div>
-            <div className="mt-2 grid gap-1.5">
-              {requirements.map((item) => (
-                <div key={item.key} className="flex items-center justify-between gap-3 text-xs">
-                  <span className="truncate text-muted">{item.label}</span>
-                  <span className={`shrink-0 font-mono font-semibold ${item.done ? 'text-primary' : 'text-warning'}`}>{item.done ? 'ready' : 'missing'}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ) : null}
       </div>
     </DataPanel>
   );

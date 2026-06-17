@@ -1,18 +1,12 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { ActivitySquare, ClipboardList, RadioTower, ShieldCheck, SlidersHorizontal } from 'lucide-react';
+import { RadioTower, ShieldCheck } from 'lucide-react';
 
 const platformNav = [
   { to: '/platform/access', label: '访问控制', meta: 'IAM / RBAC', icon: ShieldCheck },
   { to: '/platform/observability', label: '观测接入配置', meta: '日志下游', icon: RadioTower },
-  { to: '/platform/agent-policies', label: 'Agent 部署策略', meta: '后续', icon: SlidersHorizontal, disabled: true },
-  { to: '/platform/cluster-policies', label: '集群平台策略', meta: '后续', icon: ActivitySquare, disabled: true },
-  { to: '/platform/audit', label: '审计记录', meta: '后续', icon: ClipboardList, disabled: true },
 ];
 
 export function PlatformLayout() {
-  const activeItems = platformNav.filter((item) => !item.disabled);
-  const plannedItems = platformNav.filter((item) => item.disabled);
-
   return (
     <div className="grid gap-4 xl:grid-cols-[248px_minmax(0,1fr)]">
       <aside className="console-panel relative overflow-hidden p-3">
@@ -23,7 +17,7 @@ export function PlatformLayout() {
           <div className="mt-2 font-mono text-[11px] text-muted">IAM · Settings · Audit</div>
         </div>
         <nav className="relative mt-4 space-y-1" aria-label="平台管理导航">
-          {activeItems.map((item) => {
+          {platformNav.map((item) => {
             const Icon = item.icon;
             return (
               <NavLink
@@ -43,21 +37,6 @@ export function PlatformLayout() {
             );
           })}
         </nav>
-        <div className="relative mt-5 rounded-lg border border-outline bg-white/48 p-2">
-          <div className="px-1 pb-2 text-[11px] font-semibold text-muted">后续配置域</div>
-          <div className="space-y-1">
-            {plannedItems.map((item) => {
-              const Icon = item.icon;
-              return (
-                <div key={item.to} className="grid min-h-9 grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted/75">
-                  <Icon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="truncate">{item.label}</span>
-                  <span className="rounded border border-outline bg-white/68 px-1.5 py-0.5 font-mono text-[10px]">{item.meta}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
       </aside>
 
       <div className="min-w-0 space-y-4">

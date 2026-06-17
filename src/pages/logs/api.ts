@@ -48,8 +48,6 @@ export interface LogSource {
   agentNamespace: string;
   workloadKind: string;
   workloadName: string;
-  container: string;
-  workloadSelector: Record<string, string>;
   hostGroup: string;
   hostSelector: Record<string, string>;
   pathPattern: string;
@@ -160,8 +158,10 @@ export interface LogRouteInput {
     workloadName?: string;
     container?: string;
     workloadSelector?: Record<string, string>;
+    runtimeLogPaths?: string[];
     pathPattern?: string;
     parseRules?: LogParseRule[];
+    operatorsYAML?: string;
   };
   vm?: {
     hostGroup?: string;
@@ -273,6 +273,13 @@ export interface LogParsePreviewResult {
   errors: string[];
 }
 
+export interface LogCollectorClusterConfig {
+  clusterId: string;
+  agentNamespace: string;
+  processorPatch: string;
+  updatedAt?: string;
+}
+
 function mapEndpoint(raw: any): LogEndpoint {
   return {
     id: String(raw.id ?? ''),
@@ -301,8 +308,6 @@ function mapSource(raw: any): LogSource {
     agentNamespace: raw.agent_namespace ?? raw.agentNamespace ?? '',
     workloadKind: raw.workload_kind ?? raw.workloadKind ?? '',
     workloadName: raw.workload_name ?? raw.workloadName ?? '',
-    container: raw.container ?? '',
-    workloadSelector: raw.workload_selector ?? raw.workloadSelector ?? {},
     hostGroup: raw.host_group ?? raw.hostGroup ?? '',
     hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
@@ -522,10 +527,11 @@ function toRoutePayload(input: LogRouteInput) {
       agent_namespace: input.k8s?.agentNamespace,
       workload_kind: input.k8s?.workloadKind,
       workload_name: input.k8s?.workloadName,
-      container: input.k8s?.container,
       workload_selector: input.k8s?.workloadSelector ?? {},
+      runtime_log_paths: input.k8s?.runtimeLogPaths,
       path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
+      operators_yaml: input.k8s?.operatorsYAML ?? '',
     },
     vm: isVM ? {
       host_group: input.vm?.hostGroup,
@@ -673,5 +679,30 @@ export const logsApi = {
         confirmation_token: confirmation?.confirmationToken,
       }),
     }));
+  },
+  async getClusterConfig(clusterId: string, agentNamespace: string): Promise<LogCollectorClusterConfig> {
+    const raw = await apiRequest<any>(`/logs/cluster-config?cluster_id=${encodeURIComponent(clusterId)}&agent_namespace=${encodeURIComponent(agentNamespace)}`);
+    return {
+      clusterId: raw.cluster_id ?? raw.clusterId ?? clusterId,
+      agentNamespace: raw.agent_namespace ?? raw.agentNamespace ?? agentNamespace,
+      processorPatch: raw.processor_patch ?? raw.processorPatch ?? '',
+      updatedAt: raw.updated_at ?? raw.updatedAt,
+    };
+  },
+  async upsertClusterConfig(config: { clusterId: string; agentNamespace: string; processorPatch: string }): Promise<LogCollectorClusterConfig> {
+    const raw = await apiRequest<any>('/logs/cluster-config', {
+      method: 'PUT',
+      body: JSON.stringify({
+        cluster_id: config.clusterId,
+        agent_namespace: config.agentNamespace,
+        processor_patch: config.processorPatch,
+      }),
+    });
+    return {
+      clusterId: raw.cluster_id ?? raw.clusterId ?? config.clusterId,
+      agentNamespace: raw.agent_namespace ?? raw.agentNamespace ?? config.agentNamespace,
+      processorPatch: raw.processor_patch ?? raw.processorPatch ?? '',
+      updatedAt: raw.updated_at ?? raw.updatedAt,
+    };
   },
 };
