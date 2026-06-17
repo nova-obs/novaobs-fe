@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, ExternalLink, ListFilter, RefreshCw, Rows3, Search, Table2 } from 'lucide-react';
+import { Bell, ExternalLink, ListFilter, RefreshCw, Search } from 'lucide-react';
 import { logSinkLabel, logsApi, logSourceLabel, type LogRouteView } from './api';
 import { LogsEmptyState, LogsInfoCell, LogsSection, LogsToolbarButton } from './LogsPrimitives';
 
@@ -25,8 +25,6 @@ export function LogsExplorePage() {
   const routes = workspace?.routes ?? [];
   const services = workspace?.services ?? [];
   const [routeId, setRouteId] = useState('');
-  const [viewMode, setViewMode] = useState<'list' | 'table'>('list');
-  const [query, setQuery] = useState('{service=~".+"}');
   const [routeQuery, setRouteQuery] = useState('');
   const activeRoute = useMemo(() => routes.find((item) => item.route.id === routeId) ?? routes[0] ?? null, [routeId, routes]);
   const visibleRoutes = useMemo(() => {
@@ -77,23 +75,17 @@ export function LogsExplorePage() {
       </LogsSection>
 
       <LogsSection
-        title="Explore"
+        title="日志分析"
         meta={activeRoute ? `${selectedServiceName} · ${activeRoute.endpoint?.name || 'endpoint -'}` : 'select route'}
         bodyClassName="p-0"
         action={
           <div className="flex items-center gap-1.5">
-            <LogsToolbarButton active={viewMode === 'list'} onClick={() => setViewMode('list')}><Rows3 className="h-3.5 w-3.5" />List</LogsToolbarButton>
-            <LogsToolbarButton active={viewMode === 'table'} onClick={() => setViewMode('table')}><Table2 className="h-3.5 w-3.5" />Table</LogsToolbarButton>
             <LogsToolbarButton onClick={() => refetch()}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>
           </div>
         }
       >
         <div className="border-b border-outline/70 bg-white/62 p-3">
-          <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_180px_auto]">
-            <label className="min-w-0">
-              <span className="mb-1 block text-[11px] font-semibold text-muted">Log query / {activeSinkLabel}</span>
-              <input className="console-input h-9 w-full font-mono text-xs" value={query} onChange={(event) => setQuery(event.target.value)} />
-            </label>
+          <div className="grid gap-2 lg:grid-cols-[220px_minmax(0,1fr)_auto] lg:items-end">
             <label>
               <span className="mb-1 block text-[11px] font-semibold text-muted">路由</span>
               <select className="console-input h-9 w-full" value={activeRoute?.route.id ?? ''} onChange={(event) => setRouteId(event.target.value)}>
@@ -103,14 +95,24 @@ export function LogsExplorePage() {
                 ))}
               </select>
             </label>
-            <div className="flex items-end gap-2">
+            <div className="min-w-0 rounded-lg border border-outline bg-white/72 px-3 py-2">
+              <div className="text-[11px] font-semibold text-muted">下游查询入口 / {activeSinkLabel}</div>
+              <div className="mt-1 truncate font-mono text-xs font-semibold text-on-surface">{vmuiURL || '未登记 VMUI 地址'}</div>
+            </div>
+            <div className="flex flex-wrap items-end gap-2">
               {vmuiURL ? (
                 <a className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-semibold text-white transition-all active:translate-y-px" href={vmuiURL} target="_blank" rel="noreferrer">
                   <ExternalLink className="h-4 w-4" />打开 VMUI
                 </a>
               ) : (
-                <button className="h-9 rounded-md border border-outline bg-white px-3 text-sm font-semibold text-muted" disabled>未登记查询入口</button>
+                <button className="h-9 rounded-md border border-outline bg-white px-3 text-sm font-semibold text-muted" disabled>未登记 VMUI</button>
               )}
+              <Link className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-outline bg-white px-3 text-sm font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to="/logs/alerts">
+                <Bell className="h-4 w-4" />创建告警
+              </Link>
+              <Link className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-outline bg-white px-3 text-sm font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/agents?agent_group_id=${activeRoute?.route.agentGroupId || ''}&route_id=${activeRoute?.route.id || ''}`}>
+                <ListFilter className="h-4 w-4" />查看采集路由
+              </Link>
             </div>
           </div>
         </div>
@@ -138,7 +140,7 @@ export function LogsExplorePage() {
               <Bell className="h-3.5 w-3.5" />创建告警
             </Link>
             <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/agents?agent_group_id=${activeRoute?.route.agentGroupId || ''}&route_id=${activeRoute?.route.id || ''}`}>
-              <ListFilter className="h-3.5 w-3.5" />Agent 状态
+              <ListFilter className="h-3.5 w-3.5" />查看采集路由
             </Link>
           </div>
         </div>

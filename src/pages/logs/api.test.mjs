@@ -305,7 +305,6 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
       k8s: {
         clusterId: 'test03',
         namespace: 'logplatform',
-        collectorYAML: 'legacy k8s collector yaml',
       },
       vm: {
         hostGroup: 'billing-vms',
