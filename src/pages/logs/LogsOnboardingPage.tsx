@@ -17,7 +17,8 @@ const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
 const defaultParseSample = '{"level":"INFO","message":"service started"}';
 const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
-const defaultK8sRuntimeLogPaths = '/data/docker/containers';
+
+type OnboardingStep = 1 | 2 | 3;
 
 function serviceMatchesAccessSource(service: LogsServiceSummary, source: LogAccessSource) {
   if (source === 'vm') {
@@ -47,12 +48,14 @@ function k8sLogIncludePath(namespace: string, workloadName: string) {
   return `/var/log/pods/${ns}_${workload}_*/*/*.log`;
 }
 
-function renderK8sRouteFragmentDraft(input: {
+export function renderK8sRouteFragmentDraft(input: {
   namespace: string;
   workloadName: string;
   serviceName: string;
   environment: string;
   endpointWriteURL: string;
+  accountId: string;
+  projectId: string;
   parseRules: LogParseRule[];
 }) {
   const suffix = safeSegment(`${input.namespace}-${input.workloadName}`);
@@ -72,6 +75,12 @@ ${enabledRules.map((rule) => {
   const pipelineProcessors = enabledRules.length
     ? `memory_limiter, k8s_attributes, resource/${suffix}, transform/${suffix}, batch`
     : `memory_limiter, k8s_attributes, resource/${suffix}, batch`;
+  const tenantHeaders = input.accountId && input.projectId
+    ? `
+    headers:
+      AccountID: ${JSON.stringify(input.accountId)}
+      ProjectID: ${JSON.stringify(input.projectId)}`
+    : '';
   return `receivers:
   file_log/${suffix}:
     include:
@@ -109,7 +118,7 @@ processors:
 ${transformProcessor}
 exporters:
   otlp_http/endpoint_${suffix}:
-    logs_endpoint: "${input.endpointWriteURL}"
+    logs_endpoint: "${input.endpointWriteURL}"${tenantHeaders}
 service:
   pipelines:
     logs/${suffix}:
@@ -124,10 +133,6 @@ function fragmentPlaceholderWarnings(fragment: string, expected: Array<{ label: 
   return expected
     .filter((item) => item.value && !text.includes(item.value))
     .map((item) => `${item.label} 已不同于表单生成值`);
-}
-
-function parseRuntimeLogPaths(value: string) {
-  return Array.from(new Set(value.split(/[\n,]/).map((item) => item.trim().replace(/\/+$/, '')).filter(Boolean)));
 }
 
 function selectorToText(selector?: Record<string, string>) {
@@ -171,6 +176,7 @@ export function LogsOnboardingPage() {
     queryFn: logsApi.getWorkspace,
   });
 
+  const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
   const [sourceMode, setSourceMode] = useState<LogAccessSource>('k8s');
   const [serviceQuery, setServiceQuery] = useState('');
   const [serviceId, setServiceId] = useState('');
@@ -179,7 +185,6 @@ export function LogsOnboardingPage() {
   const [clusterId, setClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
   const [agentNamespace, setAgentNamespace] = useState('novaobs-system');
-  const [runtimeLogPathsText, setRuntimeLogPathsText] = useState(defaultK8sRuntimeLogPaths);
   const [workloadKey, setWorkloadKey] = useState('');
   const [workloadQuery, setWorkloadQuery] = useState('');
   const [hostGroup, setHostGroup] = useState('');
@@ -378,9 +383,11 @@ export function LogsOnboardingPage() {
       serviceName: selectedService?.displayName || selectedService?.name || workloadName,
       environment: selectedService?.environment || syncEnvironment,
       endpointWriteURL: effectiveEndpoint.writeURL,
+      accountId: effectiveEndpoint.accountId,
+      projectId: effectiveEndpoint.projectId,
       parseRules: buildParseRules(),
     });
-  }, [effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.displayName, selectedService?.environment, selectedService?.name, selectedWorkload?.name, sourceType]);
+  }, [effectiveEndpoint?.accountId, effectiveEndpoint?.projectId, effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.displayName, selectedService?.environment, selectedService?.name, selectedWorkload?.name, sourceType]);
   const fragmentWarnings = useMemo(() => {
     if (sourceType === 'vm_file') return [];
     return fragmentPlaceholderWarnings(collectorConfigYaml, [
@@ -440,7 +447,10 @@ export function LogsOnboardingPage() {
 
   const previewMutation = useMutation({
     mutationFn: () => logsApi.previewRoute(buildRouteInput()),
-    onSuccess: (result) => setPreview(result),
+    onSuccess: (result) => {
+      setPreview(result);
+      setCurrentStep(3);
+    },
   });
 
   const parsePreviewMutation = useMutation<LogParsePreviewResult>({
@@ -503,7 +513,6 @@ export function LogsOnboardingPage() {
         workloadKind: selectedWorkload?.kind || restoredSource?.workloadKind,
         workloadName: selectedWorkload?.name || restoredSource?.workloadName,
         workloadSelector: selectedWorkload?.selector ?? {},
-        runtimeLogPaths: parseRuntimeLogPaths(runtimeLogPathsText),
         parseRules: buildParseRules(),
         collectorFragmentYAML: collectorConfigYaml,
       },
@@ -532,7 +541,6 @@ export function LogsOnboardingPage() {
         workloadKind: workload.kind,
         workloadName: workload.name,
         workloadSelector: workload.selector ?? {},
-        runtimeLogPaths: parseRuntimeLogPaths(runtimeLogPathsText),
         parseRules: buildParseRules(),
         collectorFragmentYAML: collectorConfigYaml,
       },
@@ -564,6 +572,7 @@ export function LogsOnboardingPage() {
       return;
     }
     setRouteEditMode(false);
+    setCurrentStep(1);
     setSelectedRouteId('');
     setCreatedRoute(null);
     setCollectorConfigYaml('');
@@ -621,13 +630,13 @@ export function LogsOnboardingPage() {
     const parserForm = parserFormFromRules(source.parseRules);
     suspendDraftResetRef.current = true;
     setSelectedRouteId(route.route.id);
+    setCurrentStep(1);
     setRouteEditMode(Boolean(options.edit));
     setSourceMode(source.sourceType === 'vm_file' ? 'vm' : 'k8s');
     setServiceId(route.route.serviceId);
     setEndpointId(route.route.endpointId);
     setCollectorConfigYaml(source.collectorYAML ?? '');
     setCollectorFragmentTouched(Boolean(source.collectorFragmentYAML || source.collectorYAML));
-    setRuntimeLogPathsText(defaultK8sRuntimeLogPaths);
     setParserMode(parserForm.mode);
     setParserRuleName(parserForm.name);
     setParserPattern(parserForm.pattern);
@@ -672,6 +681,7 @@ export function LogsOnboardingPage() {
         { key: 'agent-namespace', label: '填写 Agent Namespace', done: Boolean(agentNamespace) },
       ]),
   ];
+  const targetMissing = previewRequirements.filter((item) => item.key !== 'parser' && !item.done).map((item) => item.label);
   const previewMissing = previewRequirements.filter((item) => !item.done).map((item) => item.label);
   const canPreview = previewMissing.length === 0;
   const collectorConfigState = !parseValid
@@ -696,7 +706,8 @@ export function LogsOnboardingPage() {
     : Boolean(serviceId && selectedWorkload);
   const endpointBlocked = !runtimeTargetReady;
   const endpointDisabledReason = endpointBlocked ? '运行目标未绑定时禁用日志下游端点' : '';
-  const activeStep = preview ? 4 : runtimeTargetReady && hasEndpointForSource ? 3 : runtimeTargetReady ? 2 : 1;
+  const targetStepReady = runtimeTargetReady && hasEndpointForSource;
+  const targetDisabledReason = targetMissing.length ? `当前步骤还需：${formatMissing(targetMissing)}` : '';
   const previewDisabledReason = previewMissing.length ? `预览前还需：${formatMissing(previewMissing)}` : '';
   const saveDisabledReason = preview ? '' : '先完成配置预览';
   const publishDisabledReason = !createdRoute
@@ -705,13 +716,17 @@ export function LogsOnboardingPage() {
       ? preview.publishBlockedReason || '当前配置被后端策略阻断'
       : '';
   const lockedDisabledReason = collectingConfigLocked ? '当前采集配置处于查看态，请点击更新配置进入编辑。' : '';
-  const actionHint = collectingConfigLocked
-    ? '当前服务已有运行路由，请从采集路由页查看配置或进入更新。'
-    : previewMissing.length
-      ? previewDisabledReason
-      : publishDisabledReason
-        ? `发布阻断：${publishDisabledReason}`
-        : '';
+  const actionHint = currentStep === 1
+    ? targetDisabledReason
+    : currentStep === 2
+      ? parseValid ? '' : '请先修正解析规则'
+      : collectingConfigLocked
+        ? '当前服务已有运行路由，请从采集路由页查看配置或进入更新。'
+        : previewMissing.length
+          ? previewDisabledReason
+          : publishDisabledReason
+            ? `发布阻断：${publishDisabledReason}`
+            : '';
 
   if (error) {
     return (
@@ -742,6 +757,7 @@ export function LogsOnboardingPage() {
                   onClick={() => {
                     if (routeUpdateMode) return;
                     setSourceMode(item.value);
+                    setCurrentStep(1);
                     setCollectorConfigYaml('');
                     setCollectorFragmentTouched(false);
                     setServiceQuery('');
@@ -764,14 +780,14 @@ export function LogsOnboardingPage() {
               同步服务
             </button>
           </div>
-          <div className="grid divide-y divide-outline/70 md:grid-cols-4 md:divide-x md:divide-y-0">
-            <StepCard index={1} title="服务与运行目标" active={activeStep === 1} done={activeStep > 1} />
-            <StepCard index={2} title="日志端点" active={activeStep === 2} done={activeStep > 2} />
-            <StepCard index={3} title="采集配置" active={activeStep === 3} done={activeStep > 3} />
-            <StepCard index={4} title="预览发布" active={activeStep === 4} done={Boolean(createdRoute)} />
+          <div className="grid divide-y divide-outline/70 md:grid-cols-3 md:divide-x md:divide-y-0">
+            <StepCard index={1} title="目标与端点" active={currentStep === 1} done={targetStepReady} enabled onSelect={() => setCurrentStep(1)} />
+            <StepCard index={2} title="采集配置" active={currentStep === 2} done={Boolean(preview)} enabled={targetStepReady} onSelect={() => setCurrentStep(2)} />
+            <StepCard index={3} title="预览发布" active={currentStep === 3} done={Boolean(createdRoute)} enabled={Boolean(preview)} onSelect={() => setCurrentStep(3)} />
           </div>
         </section>
 
+        {currentStep === 1 ? (
         <DataPanel title="服务与运行目标" meta="service / runtime target">
           {routeUpdateMissing ? <WarnLine message="未找到待更新的采集路由，请从采集路由页重新进入。" /> : null}
           <div className="logs-runtime-configuration-panel grid gap-3 xl:grid-cols-[380px_minmax(0,1fr)]">
@@ -894,10 +910,6 @@ export function LogsOnboardingPage() {
                             <input className="console-input mt-1.5 h-8 w-full text-xs" value={agentNamespace} onChange={(event) => setAgentNamespace(event.target.value)} />
                           </label>
                         </div>
-                        <label className="mt-3 block text-xs font-semibold text-muted">
-                          Runtime 日志目录
-                          <input className="console-input mt-1.5 h-8 w-full font-mono text-xs" value={runtimeLogPathsText} onChange={(event) => setRuntimeLogPathsText(event.target.value)} placeholder="/data/docker/containers" />
-                        </label>
                       </div>
 
                       <div className="overflow-hidden rounded-lg border border-outline bg-white/70">
@@ -1036,7 +1048,9 @@ export function LogsOnboardingPage() {
           </div>
           {!serviceId ? <WarnLine message="请选择服务后再预览配置" /> : null}
         </DataPanel>
+        ) : null}
 
+        {currentStep === 2 ? (
         <DataPanel title="业务采集配置" meta={sourceType === 'vm_file' ? 'collector.yaml' : 'route collector fragment'}>
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
             <div className="overflow-hidden rounded-lg border border-outline bg-surface-lowest">
@@ -1097,7 +1111,9 @@ export function LogsOnboardingPage() {
             </aside>
           </div>
         </DataPanel>
+        ) : null}
 
+        {currentStep === 3 ? (
         <DataPanel title="发布预览" meta={preview ? `config ${shortHash(preview.collectorConfigHash)}` : '等待预览'}>
           <div className="relative min-h-[260px]">
           <div className="mb-3 flex flex-col gap-3 rounded-lg border border-outline bg-surface-lowest px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
@@ -1151,6 +1167,7 @@ export function LogsOnboardingPage() {
           ) : null}
           </div>
         </DataPanel>
+        ) : null}
 
       </div>
 
@@ -1186,23 +1203,41 @@ export function LogsOnboardingPage() {
             ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成部署清单预览'}>
-              {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              生成预览
-            </button>
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary bg-white px-4 text-sm font-semibold text-primary transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !preview || createRouteMutation.isPending} onClick={() => createRouteMutation.mutate()} title={lockedDisabledReason || saveDisabledReason || (selectedRouteId ? '更新日志路由' : '保存日志路由')}>
-              {createRouteMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              {selectedRouteId ? '更新路由' : '保存草稿'}
-            </button>
-            <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
-              {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-              发布预览
-            </button>
-            {pendingPublish ? (
-              <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={publishMutation.isPending} onClick={() => publishMutation.mutate({ previewId: pendingPublish.previewId, confirmationToken: pendingPublish.confirmationToken })}>
-                确认发布
+            {currentStep > 1 ? (
+              <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-outline bg-white px-4 text-sm font-semibold text-muted transition-all hover:border-primary/40 hover:text-on-surface active:translate-y-px" onClick={() => setCurrentStep(currentStep === 3 ? 2 : 1)}>
+                上一步
               </button>
             ) : null}
+            {currentStep === 1 ? (
+              <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={!targetStepReady} onClick={() => setCurrentStep(2)} title={targetStepReady ? '进入采集配置' : targetDisabledReason}>
+                下一步：采集配置
+              </button>
+            ) : currentStep === 2 ? (
+              <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成部署清单预览'}>
+                {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                生成预览
+              </button>
+            ) : (
+              <>
+                <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-outline bg-white px-4 text-sm font-semibold text-muted transition-all hover:border-primary/40 hover:text-on-surface active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '重新生成部署清单预览'}>
+                  {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  重新预览
+                </button>
+                <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary bg-white px-4 text-sm font-semibold text-primary transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !preview || createRouteMutation.isPending} onClick={() => createRouteMutation.mutate()} title={lockedDisabledReason || saveDisabledReason || (selectedRouteId ? '更新日志路由' : '保存日志路由')}>
+                  {createRouteMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  {selectedRouteId ? '更新路由' : '保存草稿'}
+                </button>
+                <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
+                  {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  发布预览
+                </button>
+                {pendingPublish ? (
+                  <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={publishMutation.isPending} onClick={() => publishMutation.mutate({ previewId: pendingPublish.previewId, confirmationToken: pendingPublish.confirmationToken })}>
+                    确认发布
+                  </button>
+                ) : null}
+              </>
+            )}
           </div>
         </div>
       </div>
@@ -1246,11 +1281,11 @@ function RunningConfigVeil() {
   );
 }
 
-function StepCard({ index, title, active, done }: { index: number; title: string; active: boolean; done: boolean }) {
+function StepCard({ index, title, active, done, enabled, onSelect }: { index: number; title: string; active: boolean; done: boolean; enabled: boolean; onSelect: () => void }) {
   return (
-    <div className={`px-3 py-2.5 transition-colors ${
+    <button type="button" className={`px-3 py-2.5 text-left transition-colors ${
       active ? 'bg-primary-soft/70' : done ? 'bg-white/68' : 'bg-white/36'
-    }`}>
+    } disabled:cursor-not-allowed disabled:opacity-55`} disabled={!enabled} aria-current={active ? 'step' : undefined} onClick={onSelect}>
       <div className="flex items-center gap-2">
         <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold ${
           done ? 'border-primary bg-primary text-white' : active ? 'border-primary bg-white text-primary' : 'border-outline bg-white text-muted'
@@ -1259,7 +1294,7 @@ function StepCard({ index, title, active, done }: { index: number; title: string
         </span>
         <span className={`text-xs font-semibold ${active || done ? 'text-on-surface' : 'text-muted'}`}>{title}</span>
       </div>
-    </div>
+    </button>
   );
 }
 

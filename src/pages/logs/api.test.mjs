@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { logSourceLabel, logsApi } from './api.ts';
+import { buildVictoriaLogsVMUIURL, logSourceLabel, logsApi } from './api.ts';
 
 function jsonResponse(data, status = 200) {
   return {
@@ -39,7 +39,7 @@ test('获取 Logs 接入工作台时调用统一 onboarding workspace 接口', a
       services: [{ id: 'svc-001', name: 'order-api', environment: 'prod' }],
       collector_groups: [{ id: 'ag-001', name: 'prod-ds', mode: 'daemonset', online_instances: 2 }],
       clusters: [{ id: 'test03', name: 'test03', version: 'v1.28.3', access_mode: 'direct/ro', read_only: true }],
-      endpoints: [{ id: 'vl-001', name: 'vl-prod', sink_type: 'vl', stream_name: '', write_url: 'http://vl/insert', vmui_url: 'http://vl/select/vmui', scope_type: 'k8s_cluster', cluster_id: 'test03' }],
+      endpoints: [{ id: 'vl-001', name: 'vl-prod', sink_type: 'vl', stream_name: '', write_url: 'http://vl/insert', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527', scope_type: 'k8s_cluster', cluster_id: 'test03' }],
       routes: [],
     },
   );
@@ -52,6 +52,29 @@ test('获取 Logs 接入工作台时调用统一 onboarding workspace 接口', a
   assert.equal(result.endpoints[0].sinkType, 'vl');
   assert.equal(result.endpoints[0].scopeType, 'k8s_cluster');
   assert.equal(result.endpoints[0].clusterId, 'test03');
+  assert.equal(result.endpoints[0].accountId, '9527');
+  assert.equal(result.endpoints[0].projectId, '9527');
+});
+
+test('VictoriaLogs VMUI 地址固定到端点登记的租户', () => {
+  assert.equal(
+    buildVictoriaLogsVMUIURL({
+      vmuiURL: 'http://vl:9428/select/vmui/#/?query=error',
+      sinkType: 'vl',
+      accountId: '9527',
+      projectId: '9527',
+    }),
+    'http://vl:9428/select/vmui/#/?query=error&accountID=9527&projectID=9527',
+  );
+  assert.equal(
+    buildVictoriaLogsVMUIURL({
+      vmuiURL: 'http://vmauth:8427/customer/logs/select/vmui/',
+      sinkType: 'vl',
+      accountId: '9527',
+      projectId: '9527',
+    }),
+    'http://vmauth:8427/customer/logs/select/vmui/#/?accountID=9527&projectID=9527',
+  );
 });
 
 test('获取 Logs 接入工作台时保留已登记路由草稿配置', async () => {
@@ -124,6 +147,26 @@ test('创建 Logs 下游端点时传递端点类型和 stream 名称', async () 
   assert.equal(request.body.write_url, 'kafka-0:9092,kafka-1:9092');
   assert.equal(result.sinkType, 'kafka');
   assert.equal(result.streamName, 'novaobs-logs');
+});
+
+test('创建 VictoriaLogs 端点时传递租户 AccountID 和 ProjectID', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.createEndpoint({
+      name: 'vl-tenant-9527',
+      sinkType: 'vl',
+      writeURL: 'http://vl:9428/insert/opentelemetry/v1/logs',
+      queryURL: 'http://vl:9428/select/logsql/query',
+      vmuiURL: 'http://vl:9428/select/vmui/',
+      accountId: '9527',
+      projectId: '9527',
+    }),
+    { id: 'vl-9527', name: 'vl-tenant-9527', sink_type: 'vl', account_id: '9527', project_id: '9527' },
+  );
+
+  assert.equal(request.body.account_id, '9527');
+  assert.equal(request.body.project_id, '9527');
+  assert.equal(result.accountId, '9527');
+  assert.equal(result.projectId, '9527');
 });
 
 test('更新 Logs 下游端点时使用 PATCH 并保留端点 ID', async () => {
@@ -204,6 +247,7 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
         workloadKind: 'Deployment',
         workloadName: 'api',
         workloadSelector: { app: 'api' },
+        runtimeLogPaths: ['/data/docker/containers'],
         collectorFragmentYAML: 'receivers:\n  file_log/api:\nservice:\n  pipelines:\n    logs/api:\n',
         parseRules: [{ name: 'text', ruleType: 'regex', pattern: '^(?P<level>[A-Z]+) (?P<message>.*)$' }],
       },

@@ -48,6 +48,11 @@ test('顶层框架引入搜索和用户入口', () => {
   assert.equal(sessionSource.includes('signed_out=1'), true);
 });
 
+test('登录表单通过提交事件调用平台登录', () => {
+  assert.equal(source.includes('<form className="console-panel relative w-full max-w-sm p-8" onSubmit={submit}>'), true);
+  assert.equal(source.includes('<button type="submit"'), true);
+});
+
 test('主侧边导航支持桌面端收起和展开', () => {
   assert.equal(source.includes('sidebar-collapse-toggle'), true);
   assert.equal(source.includes('isSidebarCollapsed'), true);

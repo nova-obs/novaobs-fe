@@ -20,4 +20,11 @@ test('观测接入配置先集中维护日志下游端点', () => {
   assert.equal(observabilitySource.includes('日志下游端点'), true);
   assert.equal(observabilitySource.includes('新增日志下游端点'), true);
   assert.equal(observabilitySource.includes('编辑日志下游端点'), true);
+  assert.equal(observabilitySource.includes('AccountID'), true);
+  assert.equal(observabilitySource.includes('ProjectID'), true);
+  assert.equal(observabilitySource.includes('生成租户 ID'), true);
+  assert.equal(observabilitySource.includes('ClusterCollectorConfigPanel'), false);
+  assert.equal(observabilitySource.includes('集群 Collector 基础配置'), false);
+  assert.equal(observabilitySource.includes('logsApi.getClusterConfig'), false);
+  assert.equal(observabilitySource.includes('logsApi.upsertClusterConfig'), false);
 });

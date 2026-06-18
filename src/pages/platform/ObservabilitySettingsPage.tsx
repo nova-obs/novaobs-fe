@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, Plus, RefreshCw, Save, Search, Settings, X } from 'lucide-react';
+import { Database, Plus, RefreshCw, Save, Search, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { logSinkLabel, logsApi, type LogEndpoint, type LogSinkType } from '../logs/api';
-import { k8sApi } from '../k8s/api';
 
 const emptyEndpoint = {
   name: '',
@@ -13,6 +12,8 @@ const emptyEndpoint = {
   writeURL: '',
   queryURL: '',
   vmuiURL: '',
+  accountId: '',
+  projectId: '',
   secretRef: '',
   scopeType: 'global',
   clusterId: '',
@@ -143,7 +144,7 @@ export function ObservabilitySettingsPage() {
                   <input className="console-input" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="vl-test03" />
                 </Field>
                 <Field label="类型">
-                  <select className="console-input" value={form.sinkType} onChange={(event) => setForm({ ...form, sinkType: event.target.value as LogSinkType })}>
+                  <select className="console-input" value={form.sinkType} onChange={(event) => setForm({ ...form, sinkType: event.target.value as LogSinkType, accountId: '', projectId: '' })}>
                     {sinkOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
                   </select>
                 </Field>
@@ -173,6 +174,17 @@ export function ObservabilitySettingsPage() {
                     <Field label="VMUI URL">
                       <input className="console-input" value={form.vmuiURL} onChange={(event) => setForm({ ...form, vmuiURL: event.target.value })} />
                     </Field>
+                    <Field label="AccountID">
+                      <input className="console-input font-mono" inputMode="numeric" value={form.accountId} onChange={(event) => setForm({ ...form, accountId: event.target.value })} placeholder="默认 0" />
+                    </Field>
+                    <Field label="ProjectID">
+                      <input className="console-input font-mono" inputMode="numeric" value={form.projectId} onChange={(event) => setForm({ ...form, projectId: event.target.value })} placeholder="默认 0" />
+                    </Field>
+                    <div className="flex items-end">
+                      <button type="button" className="quiet-button h-9 px-3 text-xs" onClick={() => setForm({ ...form, ...generateVictoriaLogsTenant() })}>
+                        生成租户 ID
+                      </button>
+                    </div>
                   </>
                 ) : null}
                 <Field label="Secret Ref">
@@ -195,70 +207,7 @@ export function ObservabilitySettingsPage() {
           </section>
         </div>
       </DataPanel>
-      <ClusterCollectorConfigPanel />
     </div>
-  );
-}
-
-function ClusterCollectorConfigPanel() {
-  const queryClient = useQueryClient();
-  const clustersQuery = useQuery({ queryKey: ['k8s-clusters'], queryFn: () => k8sApi.listClusters(), retry: false });
-  const clusters = clustersQuery.data ?? [];
-  const [clusterId, setClusterId] = useState('');
-  const [agentNamespace, setAgentNamespace] = useState('cattle-logging-system');
-  const [processorPatch, setProcessorPatch] = useState('');
-
-  const selectedClusterId = clusterId || clusters[0]?.id || '';
-
-  const configQuery = useQuery({
-    queryKey: ['logs-cluster-config', selectedClusterId, agentNamespace],
-    queryFn: () => logsApi.getClusterConfig(selectedClusterId, agentNamespace),
-    enabled: Boolean(selectedClusterId),
-    retry: false,
-  });
-
-  useEffect(() => {
-    setProcessorPatch(configQuery.data?.processorPatch ?? '');
-  }, [configQuery.data]);
-
-  const saveMutation = useMutation({
-    mutationFn: () => logsApi.upsertClusterConfig({ clusterId: selectedClusterId, agentNamespace, processorPatch }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['logs-cluster-config', selectedClusterId, agentNamespace] }),
-  });
-
-  const saved = processorPatch === (configQuery.data?.processorPatch ?? '');
-
-  return (
-    <DataPanel title="集群 Collector 基础配置" meta="processor patch per cluster">
-      <div className="max-w-2xl space-y-3 p-3">
-        <div className="grid gap-3 sm:grid-cols-2">
-          <Field label="集群">
-            <select className="console-input" value={selectedClusterId} onChange={(event) => { setClusterId(event.target.value); setProcessorPatch(''); }}>
-              {clusters.map((c) => <option key={c.id} value={c.id}>{c.name || c.id}</option>)}
-            </select>
-          </Field>
-          <Field label="Agent Namespace">
-            <input className="console-input" value={agentNamespace} onChange={(event) => setAgentNamespace(event.target.value)} placeholder="cattle-logging-system" />
-          </Field>
-        </div>
-        <Field label="Processor Patch（YAML）">
-          <textarea className="console-input w-full font-mono text-xs" rows={8} value={processorPatch} onChange={(event) => setProcessorPatch(event.target.value)} placeholder="processors:&#10;  - type: batch&#10;    ..." />
-        </Field>
-        <div className="flex items-center gap-3">
-          <button
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-white disabled:opacity-60"
-            disabled={saved || saveMutation.isPending || !selectedClusterId}
-            onClick={() => saveMutation.mutate()}
-          >
-            {saveMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
-            保存
-          </button>
-          {configQuery.data?.updatedAt ? <span className="text-[11px] text-muted">上次更新：{new Date(configQuery.data.updatedAt).toLocaleString()}</span> : null}
-        </div>
-        {saveMutation.isSuccess && saved ? <InlineNotice tone="success" message="集群 Collector 配置已保存" /> : null}
-        {saveMutation.error ? <InlineNotice tone="danger" message={(saveMutation.error as Error).message} /> : null}
-      </div>
-    </DataPanel>
   );
 }
 
@@ -271,6 +220,8 @@ function endpointToForm(endpoint: LogEndpoint) {
     writeURL: endpoint.writeURL ?? '',
     queryURL: endpoint.queryURL ?? '',
     vmuiURL: endpoint.vmuiURL ?? '',
+    accountId: endpoint.accountId ?? '',
+    projectId: endpoint.projectId ?? '',
     secretRef: endpoint.secretRef ?? '',
     scopeType: endpoint.scopeType || 'global',
     clusterId: endpoint.clusterId ?? '',
@@ -286,6 +237,8 @@ function endpointFormMatchesEndpoint(form: typeof emptyEndpoint, endpoint: LogEn
     && form.writeURL === endpoint.writeURL
     && form.queryURL === endpoint.queryURL
     && form.vmuiURL === endpoint.vmuiURL
+    && form.accountId === endpoint.accountId
+    && form.projectId === endpoint.projectId
     && form.secretRef === endpoint.secretRef
     && form.scopeType === endpoint.scopeType
     && form.clusterId === endpoint.clusterId
@@ -298,7 +251,20 @@ function endpointMissingFields(form: typeof emptyEndpoint) {
   if (!form.writeURL.trim()) missing.push('写入地址');
   if (form.scopeType === 'k8s_cluster' && !form.clusterId.trim()) missing.push('Cluster ID');
   if (form.sinkType === 'kafka' && !form.streamName.trim()) missing.push('Topic');
+  if (form.sinkType === 'vl' && Boolean(form.accountId.trim()) !== Boolean(form.projectId.trim())) missing.push('完整租户 ID');
+  if (form.sinkType === 'vl' && form.accountId && !isUint32(form.accountId)) missing.push('有效的 AccountID');
+  if (form.sinkType === 'vl' && form.projectId && !isUint32(form.projectId)) missing.push('有效的 ProjectID');
   return missing;
+}
+
+function isUint32(value: string) {
+  return /^\d+$/.test(value) && BigInt(value) <= 4294967295n;
+}
+
+function generateVictoriaLogsTenant() {
+  const ids = new Uint32Array(2);
+  crypto.getRandomValues(ids);
+  return { accountId: String(ids[0]), projectId: String(ids[1]) };
 }
 
 function formatMissing(items: string[]) {

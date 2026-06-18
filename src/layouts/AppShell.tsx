@@ -311,7 +311,7 @@ function LoginView({ onSuccess }: { onSuccess: (session: PlatformSession) => voi
 
   return (
     <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-surface px-4 text-on-surface">
-      <section className="console-panel relative w-full max-w-sm p-8">
+      <form className="console-panel relative w-full max-w-sm p-8" onSubmit={submit}>
         <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-soft text-primary">
           <UserCircle2 className="h-6 w-6" />
         </div>
@@ -328,11 +328,11 @@ function LoginView({ onSuccess }: { onSuccess: (session: PlatformSession) => voi
           </label>
         </div>
         {error ? <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-warning">{error}</div> : null}
-        <button className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60" disabled={!username.trim() || pending}>
+        <button type="submit" className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60" disabled={!username.trim() || pending}>
           <LogIn className="h-4 w-4" />
           {pending ? '登录中' : '登录'}
         </button>
-      </section>
+      </form>
     </main>
   );
 }
