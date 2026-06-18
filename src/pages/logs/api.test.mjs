@@ -204,6 +204,7 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
         workloadKind: 'Deployment',
         workloadName: 'api',
         workloadSelector: { app: 'api' },
+        collectorFragmentYAML: 'receivers:\n  file_log/api:\nservice:\n  pipelines:\n    logs/api:\n',
         parseRules: [{ name: 'text', ruleType: 'regex', pattern: '^(?P<level>[A-Z]+) (?P<message>.*)$' }],
       },
       vm: {
@@ -216,6 +217,7 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
       source: { id: 'src-001', source_type: 'k8s_stdout', cluster_id: 'test03', namespace: 'logplatform' },
       endpoint: { id: 'vl-001', name: 'vl-prod' },
       agent_yaml: 'apiVersion: apps/v1\nkind: DaemonSet\n',
+      collector_yaml: 'receivers:\n  file_log/api:\n',
       collector_config_hash: 'collector-abc123',
       deployment_manifest_hash: 'manifest-abc123',
       mode: 'preview',
@@ -235,11 +237,13 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
   assert.deepEqual(request.body.k8s.workload_selector, { app: 'api' });
   assert.equal(request.body.k8s.runtime_log_paths, undefined);
   assert.equal(request.body.k8s.parse_rules[0].rule_type, 'regex');
+  assert.equal(request.body.k8s.collector_fragment_yaml.includes('file_log/api'), true);
   assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(request.body.vm.collector_yaml, undefined);
   assert.equal(request.body.vm.host_group, undefined);
   assert.equal(result.collectorConfigHash, 'collector-abc123');
   assert.equal(result.deploymentManifestHash, 'manifest-abc123');
+  assert.equal(result.collectorYAML.includes('file_log/api'), true);
 });
 
 test('更新 Logs route 时使用 PATCH 并保留 route_id', async () => {

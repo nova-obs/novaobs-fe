@@ -13,6 +13,7 @@ test('Logs 接入配置收敛为接入和发布路径', () => {
   assert.equal(onboardingSource.includes('logs-onboarding-toolbar'), true);
   assert.equal(onboardingSource.includes('服务与运行目标'), true);
   assert.equal(onboardingSource.includes('日志下游端点'), true);
+  assert.equal(onboardingSource.includes('业务采集配置'), true);
   assert.equal(onboardingSource.includes('发布预览'), true);
   assert.equal(onboardingSource.includes('生成预览'), true);
   assert.equal(onboardingSource.includes('保存草稿'), true);
@@ -40,6 +41,31 @@ test('Logs 接入配置不再前端渲染 collector YAML', () => {
   assert.equal(onboardingSource.includes('logsApi.getRouteCollectorConfig'), false);
   assert.equal(onboardingSource.includes('LogsParseRuleDialog'), true);
   assert.equal(onboardingSource.includes('LogsPublishPreviewPanel'), true);
+});
+
+test('Logs 接入配置以 route collector fragment 作为主要编辑对象', () => {
+  assert.equal(onboardingSource.includes('renderK8sRouteFragmentDraft'), true);
+  assert.equal(onboardingSource.includes('collectorFragmentYAML'), true);
+  assert.equal(onboardingSource.includes('collector_fragment_yaml'), false);
+  assert.equal(onboardingSource.includes('route collector fragment'), true);
+  assert.equal(onboardingSource.includes('重新生成示例'), true);
+  assert.equal(onboardingSource.includes('表单占位已变更'), true);
+  assert.equal(onboardingSource.includes('发布时会与同集群其他业务片段合并成完整 collector.yaml'), true);
+  assert.equal(onboardingSource.includes('完整 collector.yaml · 同集群业务片段合并结果'), true);
+});
+
+test('Logs 接入配置将端点选择合并到运行目标表单并保持主区域等宽', () => {
+  assert.equal(onboardingSource.includes('logs-runtime-configuration-panel'), true);
+  assert.equal(onboardingSource.includes('logs-runtime-configuration-panel grid items-start'), false);
+  assert.equal(onboardingSource.includes('logs-endpoint-picker'), true);
+  assert.equal(onboardingSource.includes('<DataPanel title="日志下游端点"'), false);
+  assert.equal(onboardingSource.indexOf('logs-endpoint-picker') < onboardingSource.indexOf('<DataPanel title="业务采集配置"'), true);
+  assert.equal(onboardingSource.includes('xl:grid-cols-[minmax(0,1fr)_360px]'), false);
+  assert.equal(onboardingSource.includes('<SummaryCard'), false);
+  assert.equal(onboardingSource.includes('logs-onboarding-action-bar'), true);
+  assert.equal(onboardingSource.includes('lg:sticky lg:bottom-3'), true);
+  assert.equal(servicePickerSource.includes('logs-service-picker-panel relative flex min-h-[560px] flex-col'), true);
+  assert.equal(servicePickerSource.includes('xl:h-full'), true);
 });
 
 test('Logs 接入配置保留 route 更新和只读集群过滤', () => {

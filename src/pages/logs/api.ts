@@ -52,6 +52,7 @@ export interface LogSource {
   hostSelector: Record<string, string>;
   pathPattern: string;
   parseRules: LogParseRule[];
+  collectorFragmentYAML: string;
   collectorYAML: string;
   collectorConfigHash: string;
   deploymentManifestHash: string;
@@ -162,6 +163,7 @@ export interface LogRouteInput {
     pathPattern?: string;
     parseRules?: LogParseRule[];
     operatorsYAML?: string;
+    collectorFragmentYAML?: string;
   };
   vm?: {
     hostGroup?: string;
@@ -196,6 +198,7 @@ export interface LogRoutePreview {
   source: LogSource;
   endpoint: LogEndpoint;
   agentYAML: string;
+  collectorYAML: string;
   collectorConfigHash: string;
   deploymentManifestHash: string;
   mode: string;
@@ -312,6 +315,7 @@ function mapSource(raw: any): LogSource {
     hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
     parseRules: mapParseRules(raw.parse_rules ?? raw.parseRules),
+    collectorFragmentYAML: raw.collector_fragment_yaml ?? raw.collectorFragmentYAML ?? '',
     collectorYAML: raw.custom_collector_yaml ?? raw.customCollectorYAML ?? '',
     collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
@@ -456,6 +460,7 @@ function mapPreview(raw: any): LogRoutePreview {
     source: mapSource(raw.source ?? {}),
     endpoint: mapEndpoint(raw.endpoint ?? {}),
     agentYAML: raw.agent_yaml ?? raw.agentYAML ?? '',
+    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
     collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
     mode: raw.mode ?? '',
@@ -532,6 +537,7 @@ function toRoutePayload(input: LogRouteInput) {
       path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
       operators_yaml: input.k8s?.operatorsYAML ?? '',
+      collector_fragment_yaml: input.k8s?.collectorFragmentYAML ?? '',
     },
     vm: isVM ? {
       host_group: input.vm?.hostGroup,

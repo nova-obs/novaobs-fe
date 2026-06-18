@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, Sparkles, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
-import { logSinkLabel, logSourceLabel, logsApi, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsAgentGroupSummary, type LogsServiceSummary, type LogsWorkload } from './api';
+import { logSinkLabel, logsApi, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload } from './api';
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsPublishPreviewPanel } from './LogsPublishPreviewPanel';
@@ -31,14 +31,6 @@ function shortHash(value?: string) {
   return value.length > 12 ? value.slice(0, 12) : value;
 }
 
-function publishStatusLabel(status: string) {
-  if (status === 'applied' || status === 'ready_for_agent_sync') return '已发布';
-  if (status === 'previewed') return '待确认';
-  if (status === 'pending_publish') return '待发布';
-  if (status === 'failed' || status === 'error') return '失败';
-  return status || '-';
-}
-
 function formatMissing(items: string[]) {
   if (items.length <= 3) return items.join('、');
   return `${items.slice(0, 3).join('、')} 等 ${items.length} 项`;
@@ -49,29 +41,89 @@ function safeSegment(value: string) {
   return normalized || 'default';
 }
 
-function derivedCollectorDomainName(type: LogSourceType, clusterId: string, agentNamespace: string, environment: string, hostGroup: string) {
-  if (type === 'vm_file') {
-    return `logs-vm-${safeSegment(environment || 'prod')}-${safeSegment(hostGroup || 'hosts')}`;
-  }
-  return `logs-k8s-${safeSegment(clusterId)}-${safeSegment(agentNamespace || 'novaobs-system')}`;
-}
-
-function derivedCollectorDomainLabel(type: LogSourceType, clusterId: string, agentNamespace: string, hostGroup: string) {
-  if (type === 'vm_file') {
-    return `${hostGroup || 'VM 主机'} / 自动维护`;
-  }
-  return `${clusterId || '-'} / ${agentNamespace || 'novaobs-system'} / 自动维护`;
-}
-
-function findCollectorDomain(groups: LogsAgentGroupSummary[], type: LogSourceType, clusterId: string, agentNamespace: string, environment: string, hostGroup: string) {
-  const expectedName = derivedCollectorDomainName(type, clusterId, agentNamespace, environment, hostGroup);
-  return groups.find((item) => item.name === expectedName) ?? null;
-}
-
 function k8sLogIncludePath(namespace: string, workloadName: string) {
   const ns = namespace || '*';
   const workload = workloadName ? `${workloadName}*` : '*';
   return `/var/log/pods/${ns}_${workload}_*/*/*.log`;
+}
+
+function renderK8sRouteFragmentDraft(input: {
+  namespace: string;
+  workloadName: string;
+  serviceName: string;
+  environment: string;
+  endpointWriteURL: string;
+  parseRules: LogParseRule[];
+}) {
+  const suffix = safeSegment(`${input.namespace}-${input.workloadName}`);
+  const include = k8sLogIncludePath(input.namespace, input.workloadName);
+  const enabledRules = input.parseRules.filter((rule) => rule.enabled !== false);
+  const transformProcessor = enabledRules.length ? `
+  transform/${suffix}:
+    log_statements:
+      - context: log
+        statements:
+${enabledRules.map((rule) => {
+  if (rule.ruleType === 'json') {
+    return `          - "merge_maps(attributes, ParseJSON(body), \\"upsert\\")"`;
+  }
+  return `          - ${JSON.stringify(`merge_maps(attributes, ExtractPatterns(body, ${JSON.stringify(rule.pattern || '')}), "upsert")`)}`;
+}).join('\n')}` : '';
+  const pipelineProcessors = enabledRules.length
+    ? `memory_limiter, k8s_attributes, resource/${suffix}, transform/${suffix}, batch`
+    : `memory_limiter, k8s_attributes, resource/${suffix}, batch`;
+  return `receivers:
+  file_log/${suffix}:
+    include:
+      - "${include}"
+    exclude:
+      - "/var/log/pods/*_novaobs-logs-agent-*_*/*/*.log"
+      - "/var/log/pods/*/*/*.gz"
+      - "/var/log/pods/*/*/*.tmp"
+      - "/var/log/pods/*/*/*.log.*"
+    poll_interval: 10s
+    max_concurrent_files: 64
+    max_batches: 2
+    max_log_size: 1MiB
+    file_cache_advise: true
+    include_file_path: true
+    include_file_name: false
+    start_at: end
+    storage: file_storage/filelog_offsets
+    retry_on_failure:
+      enabled: true
+      initial_interval: 1s
+      max_interval: 30s
+      max_elapsed_time: 0
+    operators:
+      - type: container
+processors:
+  resource/${suffix}:
+    attributes:
+      - key: service.name
+        value: "${input.serviceName || input.workloadName}"
+        action: upsert
+      - key: deployment.environment
+        value: "${input.environment || 'prod'}"
+        action: upsert
+${transformProcessor}
+exporters:
+  otlp_http/endpoint_${suffix}:
+    logs_endpoint: "${input.endpointWriteURL}"
+service:
+  pipelines:
+    logs/${suffix}:
+      receivers: [file_log/${suffix}]
+      processors: [${pipelineProcessors}]
+      exporters: [otlp_http/endpoint_${suffix}]
+`;
+}
+
+function fragmentPlaceholderWarnings(fragment: string, expected: Array<{ label: string; value: string }>) {
+  const text = fragment || '';
+  return expected
+    .filter((item) => item.value && !text.includes(item.value))
+    .map((item) => `${item.label} 已不同于表单生成值`);
 }
 
 function parseRuntimeLogPaths(value: string) {
@@ -135,6 +187,7 @@ export function LogsOnboardingPage() {
   const [vmPath, setVmPath] = useState('');
   const syncEnvironment = 'prod';
   const [collectorConfigYaml, setCollectorConfigYaml] = useState('');
+  const [collectorFragmentTouched, setCollectorFragmentTouched] = useState(false);
   const [parserMode, setParserMode] = useState<ParserMode>('none');
   const [parserRuleName, setParserRuleName] = useState(defaultParserRuleName);
   const [parserPattern, setParserPattern] = useState(defaultParserPattern);
@@ -152,7 +205,6 @@ export function LogsOnboardingPage() {
   const routeUpdateMode = routeParams.get('mode') === 'update';
 
   const services = workspace?.services ?? [];
-  const groups = workspace?.collectorGroups ?? [];
   const endpoints = workspace?.endpoints ?? [];
   const clusters = workspace?.clusters ?? [];
   const routes = workspace?.routes ?? [];
@@ -281,7 +333,6 @@ export function LogsOnboardingPage() {
   const collectingRoute = selectedServiceRoutes.find(isCollectingRoute) ?? null;
   const collectingConfigLocked = Boolean(collectingRoute && !routeEditMode);
   const selectedService = sourceServices.find((item) => item.id === serviceId) ?? null;
-  const selectedGroup = groups.find((item) => item.id === createdRoute?.route.agentGroupId) ?? findCollectorDomain(groups, sourceType, clusterId, agentNamespace, selectedService?.environment || syncEnvironment, hostGroup);
   const availableEndpoints = useMemo(() => {
     if (sourceType === 'vm_file') return endpoints.filter((item) => item.scopeType !== 'k8s_cluster');
     return endpoints.filter((item) => item.scopeType === 'global' || (item.scopeType === 'k8s_cluster' && item.clusterId === clusterId));
@@ -318,6 +369,27 @@ export function LogsOnboardingPage() {
   const currentParseRules = useMemo(() => buildParserRules(parserMode, parserRuleName, parserPattern), [parserMode, parserRuleName, parserPattern]);
   const draftParseRules = useMemo(() => buildParserRules(parserDraftMode, parserDraftRuleName, parserDraftPattern), [parserDraftMode, parserDraftRuleName, parserDraftPattern]);
   const serviceScopeWorkloadKey = selectedService ? resolveServiceWorkloadKey(selectedService, workloads) : '';
+  const generatedK8sFragment = useMemo(() => {
+    if (sourceType === 'vm_file' || !namespace || !(selectedWorkload?.name || restoredSource?.workloadName) || !effectiveEndpoint?.writeURL) return '';
+    const workloadName = selectedWorkload?.name || restoredSource?.workloadName || '';
+    return renderK8sRouteFragmentDraft({
+      namespace,
+      workloadName,
+      serviceName: selectedService?.displayName || selectedService?.name || workloadName,
+      environment: selectedService?.environment || syncEnvironment,
+      endpointWriteURL: effectiveEndpoint.writeURL,
+      parseRules: buildParseRules(),
+    });
+  }, [effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.displayName, selectedService?.environment, selectedService?.name, selectedWorkload?.name, sourceType]);
+  const fragmentWarnings = useMemo(() => {
+    if (sourceType === 'vm_file') return [];
+    return fragmentPlaceholderWarnings(collectorConfigYaml, [
+      { label: 'Namespace', value: namespace || restoredSource?.namespace || '' },
+      { label: 'Workload', value: selectedWorkload?.name || restoredSource?.workloadName || '' },
+      { label: '日志路径', value: k8sLogIncludePath(namespace || restoredSource?.namespace || '', selectedWorkload?.name || restoredSource?.workloadName || '') },
+      { label: '下游端点', value: effectiveEndpoint?.writeURL || '' },
+    ]);
+  }, [collectorConfigYaml, effectiveEndpoint?.writeURL, namespace, restoredSource?.namespace, restoredSource?.workloadName, selectedWorkload?.name, sourceType]);
 
   useEffect(() => {
     if (routeUpdateMode) return;
@@ -325,6 +397,11 @@ export function LogsOnboardingPage() {
       setWorkloadKey(serviceScopeWorkloadKey);
     }
   }, [routeUpdateMode, serviceScopeWorkloadKey, sourceType, workloadKey]);
+
+  useEffect(() => {
+    if (sourceType === 'vm_file' || collectorFragmentTouched || !generatedK8sFragment) return;
+    setCollectorConfigYaml(generatedK8sFragment);
+  }, [collectorFragmentTouched, generatedK8sFragment, sourceType]);
 
   useEffect(() => {
     if (!selectedRouteId || !selectedRoute || selectedRouteMatchesDraft || suspendDraftResetRef.current) {
@@ -428,6 +505,7 @@ export function LogsOnboardingPage() {
         workloadSelector: selectedWorkload?.selector ?? {},
         runtimeLogPaths: parseRuntimeLogPaths(runtimeLogPathsText),
         parseRules: buildParseRules(),
+        collectorFragmentYAML: collectorConfigYaml,
       },
       vm: sourceType === 'vm_file' ? {
         hostGroup,
@@ -456,6 +534,7 @@ export function LogsOnboardingPage() {
         workloadSelector: workload.selector ?? {},
         runtimeLogPaths: parseRuntimeLogPaths(runtimeLogPathsText),
         parseRules: buildParseRules(),
+        collectorFragmentYAML: collectorConfigYaml,
       },
       vm: {},
     };
@@ -487,6 +566,8 @@ export function LogsOnboardingPage() {
     setRouteEditMode(false);
     setSelectedRouteId('');
     setCreatedRoute(null);
+    setCollectorConfigYaml('');
+    setCollectorFragmentTouched(false);
     setServiceId(service.id);
     setServiceQuery('');
     if (sourceMode === 'k8s' && service.cluster && service.namespace) {
@@ -545,6 +626,7 @@ export function LogsOnboardingPage() {
     setServiceId(route.route.serviceId);
     setEndpointId(route.route.endpointId);
     setCollectorConfigYaml(source.collectorYAML ?? '');
+    setCollectorFragmentTouched(Boolean(source.collectorFragmentYAML || source.collectorYAML));
     setRuntimeLogPathsText(defaultK8sRuntimeLogPaths);
     setParserMode(parserForm.mode);
     setParserRuleName(parserForm.name);
@@ -564,6 +646,7 @@ export function LogsOnboardingPage() {
     setNamespace(source.namespace ?? '');
     setAgentNamespace(source.agentNamespace || 'novaobs-system');
     setWorkloadKey(source.workloadKind && source.workloadName ? `${source.workloadKind}/${source.workloadName}` : '');
+    setCollectorConfigYaml(source.collectorFragmentYAML ?? '');
     setWorkloadQuery('');
   }
 
@@ -591,13 +674,16 @@ export function LogsOnboardingPage() {
   ];
   const previewMissing = previewRequirements.filter((item) => !item.done).map((item) => item.label);
   const canPreview = previewMissing.length === 0;
-  const collectorConfigState = !parseValid ? '需修正' : sourceType === 'vm_file' ? collectorConfigYaml.trim() ? '自定义' : '后端生成' : '后端生成';
+  const collectorConfigState = !parseValid
+    ? '需修正'
+    : sourceType === 'vm_file'
+      ? collectorConfigYaml.trim() ? '自定义' : '后端生成'
+      : fragmentWarnings.length > 0
+        ? '手动编辑'
+        : '示例片段';
   const parseDraftValid = parserDraftMode !== 'regex' || parserDraftPattern.includes('?P<');
   const selectedServiceLabel = selectedService?.displayName || selectedService?.name || '-';
-  const selectedAgentLabel = selectedGroup?.displayName || selectedGroup?.name || derivedCollectorDomainLabel(sourceType, clusterId, agentNamespace, hostGroup);
   const selectedEndpointLabel = effectiveEndpoint ? `${effectiveEndpoint.name} · ${logSinkLabel(effectiveEndpoint.sinkType)}` : '未选择下游端点';
-  const activeRouteForSummary = selectedRoute ?? createdRoute;
-  const selectedPublishLabel = publishMutation.data?.status ? publishStatusLabel(publishMutation.data.status) : activeRouteForSummary ? routeLifecycle(activeRouteForSummary).label : '-';
   const selectedScopeLabel = sourceType === 'vm_file'
     ? `${hostGroup || 'VM'} · ${vmPath || '-'}`
     : `${selectedCluster?.name || clusterId || restoredSource?.clusterId || '-'} / ${namespace || restoredSource?.namespace || '-'} / ${selectedWorkload ? `${selectedWorkload.kind}/${selectedWorkload.name}` : restoredSource?.workloadName ? `${restoredSource.workloadKind}/${restoredSource.workloadName}` : '-'}`;
@@ -641,8 +727,7 @@ export function LogsOnboardingPage() {
 
   return (
     <div className="relative pb-24">
-      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="space-y-4">
+      <div className="space-y-4">
         <section className="logs-onboarding-toolbar console-panel overflow-hidden">
           <div className="grid gap-3 border-b border-outline/70 bg-white/74 px-3 py-3 xl:grid-cols-[220px_minmax(0,1fr)_auto] xl:items-center">
             <div className="min-w-0">
@@ -661,6 +746,8 @@ export function LogsOnboardingPage() {
                   onClick={() => {
                     if (routeUpdateMode) return;
                     setSourceMode(item.value);
+                    setCollectorConfigYaml('');
+                    setCollectorFragmentTouched(false);
                     setServiceQuery('');
                   }}
                 >
@@ -691,7 +778,7 @@ export function LogsOnboardingPage() {
 
         <DataPanel title="服务与运行目标" meta="service / runtime target">
           {routeUpdateMissing ? <WarnLine message="未找到待更新的采集路由，请从采集路由页重新进入。" /> : null}
-          <div className="grid gap-3 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <div className="logs-runtime-configuration-panel grid gap-3 xl:grid-cols-[380px_minmax(0,1fr)]">
             <ServicePickerPanel
               services={filteredServices}
               sourceServiceCount={serviceListSourceCount}
@@ -875,6 +962,80 @@ export function LogsOnboardingPage() {
                   </div>
                 )}
               </div>
+              <section className={`logs-endpoint-picker border-t border-outline ${endpointBlocked ? 'bg-surface/60' : 'bg-surface-lowest'}`}>
+                <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+                  <div>
+                    <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+                      <span className={`h-2 w-2 rounded-full ${hasEndpointForSource ? 'bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]' : 'bg-outline'}`} />
+                      日志下游端点
+                    </div>
+                    <div className="mt-0.5 text-[11px] font-semibold text-muted">运行目标确定后选择当前作用域可用的写入端点</div>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className={`rounded-lg px-2 py-0.5 font-mono text-[11px] font-semibold ${hasEndpointForSource ? 'bg-primary-soft text-primary' : 'bg-white text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>{selectedEndpointLabel}</span>
+                    <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
+                    <Link
+                      className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
+                      to="/platform/observability"
+                    >
+                      <Settings2 className="h-3.5 w-3.5" />
+                      管理端点
+                    </Link>
+                  </div>
+                </div>
+                <div className={`space-y-3 p-3 ${endpointBlocked ? 'opacity-60' : ''}`}>
+                  {endpointDisabledReason ? <WarnLine message={endpointDisabledReason} /> : null}
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                    <input className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed" value={endpointQuery} onChange={(event) => setEndpointQuery(event.target.value)} placeholder="搜索端点 / URL / 集群" disabled={endpointBlocked} />
+                  </div>
+                  <div className="overflow-hidden rounded-lg border border-outline bg-white">
+                    {filteredEndpoints.length === 0 ? <div className="px-3"><Empty label="暂无匹配端点" /></div> : (
+                      <div className="overflow-auto">
+                        <table className="console-table min-w-[700px] w-full">
+                          <thead>
+                            <tr>
+                              <th>端点</th>
+                              <th>类型</th>
+                              <th>作用域</th>
+                              <th>写入地址</th>
+                              <th>状态</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {filteredEndpoints.map((endpoint) => {
+                              const selected = endpoint.id === effectiveEndpoint?.id;
+                              return (
+                                <tr
+                                  key={endpoint.id}
+                                  className={`transition-colors ${endpointBlocked ? 'cursor-not-allowed' : 'cursor-pointer'} ${selected ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : endpointBlocked ? '' : 'hover:bg-surface-low/70'}`}
+                                  onClick={() => {
+                                    if (endpointBlocked) return;
+                                    setEndpointId(endpoint.id);
+                                  }}
+                                >
+                                  <td className="font-semibold">{endpoint.name}</td>
+                                  <td>{logSinkLabel(endpoint.sinkType)}</td>
+                                  <td className="font-mono text-xs text-muted">{endpoint.scopeType}{endpoint.clusterId ? ` · ${endpoint.clusterId}` : ''}</td>
+                                  <td className="max-w-[280px] truncate font-mono text-xs text-muted">{endpoint.writeURL || '-'}</td>
+                                  <td>
+                                    <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${selected ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
+                                      {selected ? '已选择' : '可选择'}
+                                    </span>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
+                  <div className="rounded-lg border border-outline bg-white/72 px-3 py-2 text-xs text-muted">
+                    日志下游端点由平台管理统一维护；接入配置只选择已登记端点。
+                  </div>
+                </div>
+              </section>
               {collectingConfigLocked ? (
                 <RunningConfigVeil />
               ) : null}
@@ -883,81 +1044,66 @@ export function LogsOnboardingPage() {
           {!serviceId ? <WarnLine message="请选择服务后再预览配置" /> : null}
         </DataPanel>
 
-        <DataPanel title="日志下游端点" meta="downstream">
-          {endpointDisabledReason ? <WarnLine message={endpointDisabledReason} /> : null}
-          <div className={`relative overflow-hidden rounded-lg border border-outline bg-surface-lowest ${endpointBlocked ? 'opacity-60' : ''}`}>
-            <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
-              <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
-                <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]" />
-                日志下游端点
+        <DataPanel title="业务采集配置" meta={sourceType === 'vm_file' ? 'collector.yaml' : 'route collector fragment'}>
+          <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
+            <div className="overflow-hidden rounded-lg border border-outline bg-surface-lowest">
+              <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-on-surface">{sourceType === 'vm_file' ? 'VM Collector 配置' : '业务 Route 采集片段'}</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-muted">{sourceType === 'vm_file' ? '完整 VM collector.yaml，可留空由后端生成' : '发布时会与同集群其他业务片段合并成完整 collector.yaml'}</div>
+                </div>
+                {sourceType !== 'vm_file' ? (
+                  <button
+                    className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-xs font-semibold text-primary transition-all active:translate-y-px disabled:opacity-60"
+                    disabled={!generatedK8sFragment}
+                    onClick={() => {
+                      setCollectorConfigYaml(generatedK8sFragment);
+                      setCollectorFragmentTouched(false);
+                    }}
+                  >
+                    <RefreshCw className="h-3.5 w-3.5" />
+                    重新生成示例
+                  </button>
+                ) : null}
               </div>
-              <div className="flex flex-wrap items-center gap-1.5">
-                <span className="rounded-lg bg-primary-soft px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">{selectedEndpointLabel}</span>
-                <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
-                <Link
-                  className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
-                  to="/platform/observability"
-                >
-                  <Settings2 className="h-3.5 w-3.5" />
-                  管理端点
-                </Link>
-              </div>
+              <textarea
+                className={`min-h-[440px] w-full resize-y border-0 bg-white p-3 font-mono text-[12px] leading-5 text-on-surface outline-none ${sourceType !== 'vm_file' && fragmentWarnings.length > 0 ? 'shadow-[inset_4px_0_0_rgba(180,35,47,0.72)]' : ''}`}
+                value={collectorConfigYaml}
+                onChange={(event) => {
+                  setCollectorConfigYaml(event.target.value);
+                  setCollectorFragmentTouched(true);
+                }}
+                placeholder={sourceType === 'vm_file' ? '可粘贴完整 VM collector.yaml；留空时后端按表单生成。' : '选择服务、Workload 和端点后生成 route collector fragment 示例。'}
+                spellCheck={false}
+              />
             </div>
-            <div className="space-y-3 p-3">
-              <div className="relative">
-                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-                <input className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed" value={endpointQuery} onChange={(event) => setEndpointQuery(event.target.value)} placeholder="搜索端点 / URL / 集群" disabled={endpointBlocked} />
+            <aside className="space-y-3">
+              <div className="rounded-lg border border-outline bg-white px-3 py-3">
+                <div className="text-xs font-semibold text-muted">编辑状态</div>
+                <div className="mt-1 font-mono text-sm font-semibold text-on-surface">{collectorConfigState}</div>
+                <div className="mt-2 text-xs leading-5 text-muted">
+                  {sourceType === 'vm_file'
+                    ? 'VM 场景允许直接维护完整 collector.yaml。'
+                    : '表单只负责生成初稿；发布以编辑器内容为准。'}
+                </div>
               </div>
-              <div className="overflow-hidden rounded-lg border border-outline bg-white">
-                {filteredEndpoints.length === 0 ? <div className="px-3"><Empty label="暂无匹配端点" /></div> : (
-                  <div className="overflow-auto">
-                    <table className="console-table min-w-[760px] w-full">
-                      <thead>
-                        <tr>
-                          <th>端点</th>
-                          <th>类型</th>
-                          <th>作用域</th>
-                          <th>写入地址</th>
-                          <th>状态</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredEndpoints.map((endpoint) => {
-                          const selected = endpoint.id === effectiveEndpoint?.id;
-                          return (
-                            <tr
-                              key={endpoint.id}
-                              className={`transition-colors ${endpointBlocked ? 'cursor-not-allowed' : 'cursor-pointer'} ${selected ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : endpointBlocked ? '' : 'hover:bg-surface-low/70'}`}
-                              onClick={() => {
-                                if (endpointBlocked) return;
-                                setEndpointId(endpoint.id);
-                              }}
-                            >
-                              <td className="font-semibold">{endpoint.name}</td>
-                              <td>{logSinkLabel(endpoint.sinkType)}</td>
-                              <td className="font-mono text-xs text-muted">{endpoint.scopeType}{endpoint.clusterId ? ` · ${endpoint.clusterId}` : ''}</td>
-                              <td className="max-w-[280px] truncate font-mono text-xs text-muted">{endpoint.writeURL || '-'}</td>
-                              <td>
-                                <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${selected ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
-                                  {selected ? '已选择' : '可选择'}
-                                </span>
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+              {sourceType !== 'vm_file' ? (
+                <div className={`rounded-lg border px-3 py-3 ${fragmentWarnings.length > 0 ? 'border-danger/30 bg-red-50 text-danger' : 'border-primary/20 bg-primary-soft text-primary'}`}>
+                  <div className="text-xs font-semibold">{fragmentWarnings.length > 0 ? '表单占位已变更' : '表单占位一致'}</div>
+                  <div className="mt-2 space-y-1 text-xs leading-5">
+                    {fragmentWarnings.length > 0
+                      ? fragmentWarnings.map((item) => <div key={item}>{item}</div>)
+                      : <div>当前片段仍包含服务、Workload、日志路径和下游端点生成值。</div>}
                   </div>
-                )}
-              </div>
-              <div className="rounded-lg border border-outline bg-white/72 px-3 py-2 text-xs text-muted">
-                日志下游端点由平台管理统一维护；接入配置只选择已登记端点。
-              </div>
-            </div>
-            {collectingConfigLocked ? (
-              <RunningConfigVeil />
-            ) : null}
+                </div>
+              ) : null}
+              <button className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" onClick={openParseDialog}>
+                <Settings2 className="h-3.5 w-3.5" />
+                表单生成解析片段
+              </button>
+            </aside>
           </div>
+          {sourceType !== 'vm_file' && fragmentWarnings.length > 0 ? <WarnLine message="编辑器中的关键字段已不同于当前表单值。平台不会阻止发布，但请确认这是预期修改。" /> : null}
         </DataPanel>
 
         <DataPanel title="发布预览" meta={preview ? `config ${shortHash(preview.collectorConfigHash)}` : '等待预览'}>
@@ -987,7 +1133,7 @@ export function LogsOnboardingPage() {
           {publishMutation.data && !pendingPublish ? <SuccessLine message={publishMutation.data.message || publishMutation.data.status} /> : null}
           {pendingPublish ? <LogsPublishPreviewPanel preview={pendingPublish} /> : null}
           {preview ? (
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
               <div className="mb-2 flex items-center justify-between">
                 <div className="font-mono text-xs text-muted">部署清单预览 · 采集配置 hash {preview.collectorConfigHash}</div>
                 <button className="rounded p-1.5 text-muted hover:bg-surface-low hover:text-primary" onClick={() => navigator.clipboard?.writeText(preview.agentYAML)} title="复制 YAML">
@@ -997,6 +1143,15 @@ export function LogsOnboardingPage() {
               <pre className="max-h-[460px] overflow-auto rounded border border-outline bg-white p-3 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">
                 {preview.agentYAML}
               </pre>
+              <div className="mb-2 flex items-center justify-between">
+                <div className="font-mono text-xs text-muted">完整 collector.yaml · 同集群业务片段合并结果</div>
+                <button className="rounded p-1.5 text-muted hover:bg-surface-low hover:text-primary" onClick={() => navigator.clipboard?.writeText(preview.collectorYAML)} title="复制 collector.yaml">
+                  <Copy className="h-4 w-4" />
+                </button>
+              </div>
+              <pre className="max-h-[460px] overflow-auto rounded border border-outline bg-white p-3 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">
+                {preview.collectorYAML || 'collector.yaml 为空'}
+              </pre>
             </div>
           ) : <Empty label="部署清单预览为空" />}
           {collectingConfigLocked ? (
@@ -1005,20 +1160,6 @@ export function LogsOnboardingPage() {
           </div>
         </DataPanel>
 
-        </div>
-
-        <aside className="space-y-4 xl:sticky xl:top-4">
-          <SummaryCard
-            service={selectedServiceLabel}
-            source={logSourceLabel(sourceType)}
-            scope={selectedScopeLabel}
-            agent={selectedAgentLabel}
-            endpoint={selectedEndpointLabel}
-            parser={collectorConfigState}
-            collectorHash={preview?.collectorConfigHash || createdRoute?.route.collectorConfigHash || '-'}
-            publish={selectedPublishLabel}
-          />
-        </aside>
       </div>
 
       <LogsParseRuleDialog
@@ -1039,7 +1180,7 @@ export function LogsOnboardingPage() {
         onApply={applyParseDraft}
       />
 
-      <div className="logs-onboarding-action-bar sticky bottom-3 z-[4] mt-4 rounded-lg border border-primary/20 bg-white/95 p-3 shadow-[0_12px_36px_rgba(24,52,96,0.18)] backdrop-blur">
+      <div className="logs-onboarding-action-bar z-[4] mt-4 rounded-lg border border-primary/20 bg-white/95 p-3 shadow-[0_12px_36px_rgba(24,52,96,0.18)] backdrop-blur lg:sticky lg:bottom-3">
         <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
           <div className="min-w-0">
             <div className="text-xs font-semibold text-muted">当前选择</div>
@@ -1126,30 +1267,6 @@ function StepCard({ index, title, description, active, done }: { index: number; 
       </div>
       <p className="mt-1 truncate pl-7 font-mono text-[11px] text-muted">{description}</p>
     </div>
-  );
-}
-
-function SummaryCard({ service, source, scope, agent, endpoint, parser, collectorHash, publish }: { service: string; source: string; scope: string; agent: string; endpoint: string; parser: string; collectorHash: string; publish: string }) {
-  return (
-    <DataPanel title="本次接入" meta="summary">
-      <div className="space-y-3">
-        {[
-          ['服务', service],
-          ['来源', source],
-          ['采集范围', scope],
-          ['采集域', agent],
-          ['下游端点', endpoint],
-          ['配置', parser],
-          ['采集配置 hash', shortHash(collectorHash)],
-          ['发布状态', publish],
-        ].map(([label, value]) => (
-          <div key={label} className="rounded border border-outline bg-surface-lowest px-3 py-2">
-            <div className="text-[11px] text-muted">{label}</div>
-            <div className="mt-1 break-all font-mono text-xs text-on-surface">{value}</div>
-          </div>
-        ))}
-      </div>
-    </DataPanel>
   );
 }
 
