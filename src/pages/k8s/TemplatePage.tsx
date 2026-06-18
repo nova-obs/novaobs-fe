@@ -194,9 +194,7 @@ export function K8sTemplatePage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            变量默认值从真实 Kubernetes 资源上下文派生；模板本身仍由 NovaObs 管理，渲染和变更受 RBAC 与审计控制。
-          </div>
+
         </div>
         {clusterError || namespaceError || resourceError || baseTemplateError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">

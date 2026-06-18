@@ -213,9 +213,7 @@ export function K8sDeploymentPage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            预览、发布、删除和回滚统一走 NovaObs RBAC 与审计；真实目标从 Kubernetes 只读 API 派生。
-          </div>
+
         </div>
         {clusterError || namespaceError || resourceError || historyError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">

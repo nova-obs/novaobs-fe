@@ -144,9 +144,7 @@ export function K8sKubeconfigPage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            目标来自真实 Kubernetes API 只读列表；生成动作只写 NovaObs platform/secret，导出明文单独授权并审计。
-          </div>
+
         </div>
         {clusterError || namespaceError || serviceAccountError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">

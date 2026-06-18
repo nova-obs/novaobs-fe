@@ -179,14 +179,14 @@ test('K8s 资源页面展示完整资源身份字段', () => {
 
 test('K8s 部署历史和审计页面展示追踪上下文', () => {
   assert.equal(deploymentHistorySource.includes('部署历史'), true);
-  assert.equal(deploymentHistorySource.includes('/api/v1/k8s/deployment-history'), true);
+  assert.equal(deploymentHistorySource.includes('k8sApi.listDeploymentHistory'), true);
   assert.equal(deploymentHistorySource.includes('useK8sOpsContext'), true);
   assert.equal(deploymentHistorySource.includes('k8sApi.listNamespaces'), true);
   assert.equal(deploymentHistorySource.includes("listDeploymentHistory('prod')"), false);
   assert.equal(deploymentHistorySource.includes('cluster/prod'), false);
   assert.equal(auditSource.includes('操作审计'), true);
   assert.equal(auditSource.includes('Trace'), true);
-  assert.equal(auditSource.includes('/api/v1/k8s/audit-events'), true);
+  assert.equal(auditSource.includes('k8sApi.listAuditEvents'), true);
   assert.equal(auditSource.includes('useK8sOpsContext'), true);
   assert.equal(auditSource.includes('k8sApi.listNamespaces'), true);
   assert.equal(auditSource.includes("listAuditEvents('prod')"), false);
