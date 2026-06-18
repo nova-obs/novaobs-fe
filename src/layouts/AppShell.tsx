@@ -82,8 +82,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const activeK8sClusterName = getK8sFocusClusterName(location.pathname);
 
   return (
-    <div className="relative flex h-[100dvh] overflow-hidden bg-app-radial text-on-surface">
-      <div className="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(115deg,transparent_0%,rgba(13,91,215,0.12)_38%,transparent_64%),linear-gradient(25deg,transparent_12%,rgba(0,164,255,0.1)_46%,transparent_72%)]" />
+    <div className="relative flex h-[100dvh] overflow-hidden bg-surface text-on-surface">
       <aside className={['relative hidden h-[100dvh] max-h-[100dvh] shrink-0 flex-col transition-[width,padding] duration-300 ease-[cubic-bezier(0.16,1,0.3,1)] md:flex', isK8sClusterFocus ? 'w-[72px] p-2' : isSidebarCollapsed ? 'w-[84px] p-2' : 'w-52 p-2.5'].join(' ')}>
         {isK8sClusterFocus ? (
           <K8sFocusRail
@@ -279,7 +278,7 @@ function getK8sFocusClusterName(pathname: string) {
 
 function SessionLoadingView() {
   return (
-    <main className="flex min-h-[100dvh] items-center justify-center bg-app-radial px-4 text-on-surface">
+    <main className="flex min-h-[100dvh] items-center justify-center bg-surface px-4 text-on-surface">
       <section className="console-panel w-full max-w-md px-6 py-6 text-center">
         <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-lg bg-primary-soft text-primary">
           <CheckCircle2 className="h-6 w-6" />

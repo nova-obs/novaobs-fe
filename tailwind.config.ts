@@ -35,10 +35,6 @@ export default {
       boxShadow: {
         panel: '0 22px 50px -34px rgba(16, 32, 55, 0.42), 0 1px 0 rgba(255, 255, 255, 0.9) inset',
       },
-      backgroundImage: {
-        'app-radial':
-          'radial-gradient(circle at 14% 10%, rgba(13, 91, 215, 0.16), transparent 30%), radial-gradient(circle at 88% 8%, rgba(0, 164, 255, 0.14), transparent 26%), linear-gradient(135deg, #f7faff 0%, #eef4fb 46%, #f8fbff 100%)',
-      },
     },
   },
   plugins: [],

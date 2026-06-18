@@ -82,12 +82,12 @@ test('顶层框架提供轻量路由切换过渡', () => {
 });
 
 test('顶层框架使用柔和观测控制面视觉语言', () => {
-  assert.equal(source.includes('h-[100dvh] overflow-hidden bg-app-radial'), true);
+  assert.equal(source.includes('h-[100dvh] overflow-hidden bg-app-radial'), false);
   assert.equal(source.includes('h-[100dvh] max-h-[100dvh]'), true);
   assert.equal(source.includes('relative flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden'), true);
   assert.equal(source.includes('min-h-0 flex-1 overflow-y-auto'), true);
   assert.equal(source.includes('border-r border-outline'), false);
-  assert.equal(source.includes('bg-app-radial'), true);
+  assert.equal(source.includes('bg-app-radial'), false);
   assert.equal(source.includes('OBS Console'), false);
   assert.equal(source.includes('Telemetry Atlas'), false);
   assert.equal(source.includes('统一可观测性控制面'), false);

@@ -40,25 +40,8 @@ export function PlatformLayout() {
       </aside>
 
       <div className="min-w-0 space-y-4">
-        <div className="console-panel flex flex-col justify-between gap-3 px-4 py-3 md:flex-row md:items-center">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              Platform Control Plane
-            </div>
-            <h2 className="mt-2 font-display text-2xl font-semibold tracking-tight text-on-surface">平台管理</h2>
-            <p className="mt-1 text-sm text-muted">集中维护访问控制、观测接入和平台运行策略。</p>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary-soft/70 px-3 font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-              <ShieldCheck className="h-3.5 w-3.5" />
-              RBAC enabled
-            </span>
-            <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-white/55 px-3 font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-              <RadioTower className="h-3.5 w-3.5" />
-              Observability settings
-            </span>
-          </div>
+        <div className="console-panel px-4 py-3">
+          <h2 className="font-display text-2xl font-semibold tracking-tight text-on-surface">平台管理</h2>
         </div>
         <Outlet />
       </div>
