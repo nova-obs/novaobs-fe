@@ -88,7 +88,7 @@ test('顶层框架使用柔和观测控制面视觉语言', () => {
   assert.equal(source.includes('min-h-0 flex-1 overflow-y-auto'), true);
   assert.equal(source.includes('border-r border-outline'), false);
   assert.equal(source.includes('bg-app-radial'), true);
-  assert.equal(source.includes('OBS Console'), true);
+  assert.equal(source.includes('OBS Console'), false);
   assert.equal(source.includes('Telemetry Atlas'), false);
   assert.equal(source.includes('统一可观测性控制面'), false);
   assert.equal(source.includes('Prod / CN-SHANGHAI-A'), false);

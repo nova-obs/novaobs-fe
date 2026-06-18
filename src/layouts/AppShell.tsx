@@ -1,7 +1,7 @@
 import type { FormEvent, PropsWithChildren } from 'react';
 import { useEffect, useState } from 'react';
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowLeft, CheckCircle2, ChevronDown, Clock3, KeyRound, LogIn, LogOut, PanelLeftClose, PanelLeftOpen, Search, ShieldCheck, Sparkles, UserCircle2, X } from 'lucide-react';
+import { Activity, ArrowLeft, CheckCircle2, ChevronDown, Clock3, LogIn, LogOut, PanelLeftClose, PanelLeftOpen, Search, UserCircle2, X } from 'lucide-react';
 import { primaryNavigation } from './navigation';
 import { fetchPlatformSession, isSignedOutLocation, loginPlatformUser, resetClientSignedOut, sessionDisplayName, type PlatformSession, type SessionStatus, useLogoutAction } from './session';
 
@@ -100,12 +100,11 @@ export function AppShell({ children }: PropsWithChildren) {
           <div className={isSidebarCollapsed ? 'relative flex flex-col items-center gap-3 px-2 py-4' : 'relative px-3 py-3'}>
             <div className={isSidebarCollapsed ? 'flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft/80 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]' : 'flex min-w-0 items-center gap-3 pr-10'} title="NovaObs">
               <span className={isSidebarCollapsed ? '' : 'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft/85 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]'}>
-                <Sparkles className={isSidebarCollapsed ? 'h-4 w-4' : 'h-4 w-4'} />
+                <Activity className="h-4 w-4" />
               </span>
               {isSidebarCollapsed ? null : (
                 <span className="min-w-0">
                   <span className="block truncate font-display text-base font-semibold tracking-tight text-on-surface">NovaObs</span>
-                  <span className="mt-0.5 block truncate font-mono text-[10px] font-semibold uppercase tracking-[0.12em] text-muted">OBS Console</span>
                 </span>
               )}
             </div>
@@ -296,7 +295,7 @@ function SessionLoadingView() {
 }
 
 function LoginView({ onSuccess }: { onSuccess: (session: PlatformSession) => void }) {
-  const [username, setUsername] = useState('dev-admin');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [pending, setPending] = useState(false);
@@ -316,60 +315,30 @@ function LoginView({ onSuccess }: { onSuccess: (session: PlatformSession) => voi
   }
 
   return (
-    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-app-radial px-4 text-on-surface">
-      <div className="pointer-events-none absolute inset-0 opacity-[0.24] [background-image:linear-gradient(115deg,transparent_0%,rgba(13,91,215,0.14)_38%,transparent_64%),linear-gradient(25deg,transparent_12%,rgba(0,164,255,0.12)_46%,transparent_72%)]" />
-      <section className="console-panel relative grid w-full max-w-5xl gap-0 overflow-hidden p-0 md:grid-cols-[1fr_440px]">
-        <div className="hidden min-h-[520px] flex-col justify-between bg-primary/[0.035] px-8 py-8 md:flex">
-          <div>
-            <div className="inline-flex items-center gap-2 rounded-lg bg-primary-soft/70 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">
-              <Sparkles className="h-3.5 w-3.5" />
-              OBS Console
-            </div>
-            <h1 className="mt-6 max-w-sm font-display text-4xl font-semibold tracking-tight text-on-surface">NovaObs</h1>
-            <p className="mt-4 max-w-md text-sm leading-6 text-muted">Platform IAM · RBAC · Audit</p>
-          </div>
-          <div className="grid gap-3">
-            <LoginSignal icon={ShieldCheck} label="权限主体" value="IAM User / Group / ServiceAccount" />
-            <LoginSignal icon={KeyRound} label="会话凭据" value="HttpOnly Cookie / SameSite=Lax" />
-            <LoginSignal icon={CheckCircle2} label="接入范围" value="所有 /api/v1 业务模块" />
-          </div>
+    <main className="relative flex min-h-[100dvh] items-center justify-center overflow-hidden bg-surface px-4 text-on-surface">
+      <section className="console-panel relative w-full max-w-sm p-8">
+        <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-soft text-primary">
+          <UserCircle2 className="h-6 w-6" />
         </div>
-        <form className="px-6 py-7 md:px-8 md:py-10" onSubmit={submit}>
-          <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-primary-soft text-primary">
-            <UserCircle2 className="h-6 w-6" />
-          </div>
-          <h2 className="mt-5 font-display text-2xl font-semibold tracking-tight">登录</h2>
-          <p className="mt-2 text-sm leading-6 text-muted">平台 IAM 账号</p>
-          <div className="mt-6 grid gap-3">
-            <label className="grid gap-1.5 text-xs font-semibold text-muted">
-              用户名
-              <input className="console-input h-11 w-full" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="username" autoComplete="username" />
-            </label>
-            <label className="grid gap-1.5 text-xs font-semibold text-muted">
-              密码
-              <input className="console-input h-11 w-full" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="password" type="password" autoComplete="current-password" />
-            </label>
-          </div>
-          {error ? <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-warning">{error}</div> : null}
-          <button className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60" disabled={!username.trim() || pending}>
-            <LogIn className="h-4 w-4" />
-            {pending ? '登录中' : '登录'}
-          </button>
-        </form>
+        <h2 className="mt-5 font-display text-2xl font-semibold tracking-tight">登录</h2>
+        <p className="mt-2 text-sm leading-6 text-muted">平台 IAM 账号</p>
+        <div className="mt-6 grid gap-3">
+          <label className="grid gap-1.5 text-xs font-semibold text-muted">
+            用户名
+            <input className="console-input h-11 w-full" value={username} onChange={(event) => setUsername(event.target.value)} placeholder="username" autoComplete="username" />
+          </label>
+          <label className="grid gap-1.5 text-xs font-semibold text-muted">
+            密码
+            <input className="console-input h-11 w-full" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="password" type="password" autoComplete="current-password" />
+          </label>
+        </div>
+        {error ? <div className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-warning">{error}</div> : null}
+        <button className="mt-5 inline-flex h-11 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-60" disabled={!username.trim() || pending}>
+          <LogIn className="h-4 w-4" />
+          {pending ? '登录中' : '登录'}
+        </button>
       </section>
     </main>
-  );
-}
-
-function LoginSignal({ icon: Icon, label, value }: { icon: typeof ShieldCheck; label: string; value: string }) {
-  return (
-    <div className="flex items-center gap-3 rounded-lg bg-white/50 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-      <Icon className="h-4 w-4 text-primary" />
-      <div>
-        <div className="text-xs font-semibold text-on-surface">{label}</div>
-        <div className="mt-0.5 font-mono text-[11px] text-muted">{value}</div>
-      </div>
-    </div>
   );
 }
 
