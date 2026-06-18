@@ -1,6 +1,6 @@
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, ChevronDown, CircleDot, RefreshCw } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react';
 import { k8sApi } from './api';
 import { getK8sNavigationByPath, getK8sNavigationGroupItems, k8sClusterPath, k8sNavigationGroups } from './navigation';
 
@@ -84,14 +84,7 @@ export function K8sOpsLayout() {
       <div className="min-w-0 space-y-4">
         <div className="console-panel flex flex-col justify-between gap-3 px-4 py-3 md:flex-row md:items-center">
           <div className="min-w-0">
-            <div className="flex items-center gap-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">
-              <CircleDot className="h-3.5 w-3.5" />
-              Kubernetes Operations
-            </div>
-            <h1 className="mt-2 font-display text-2xl font-semibold tracking-tight text-on-surface">{current?.label ?? 'Dashboard'}</h1>
-            <p className="mt-1 text-sm text-muted">
-              {activeCluster ? `${activeCluster.name || activeCluster.id} · ${current?.description ?? '集群态势与资源变更入口。'}` : current?.description ?? '选择集群后展开资源、访问控制和交付运维能力。'}
-            </p>
+            <h1 className="font-display text-2xl font-semibold tracking-tight text-on-surface">{current?.label ?? 'Dashboard'}</h1>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
             <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary-soft/70 px-3 font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
