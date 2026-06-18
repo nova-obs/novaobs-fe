@@ -119,7 +119,7 @@ test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => 
   assert.equal(platformAccessSource.includes("key: 'bindings'"), true);
   assert.equal(platformAccessSource.includes('新增授权'), true);
   assert.equal(platformAccessSource.includes('已授权绑定'), true);
-  assert.equal(platformAccessSource.includes('授权流程'), true);
+  assert.equal(platformAccessSource.includes('授权流程'), false);
   assert.equal(platformAccessSource.includes('选择授权主体'), true);
   assert.equal(platformAccessSource.includes('选择权限包'), true);
   assert.equal(platformAccessSource.includes('选择授权范围'), true);
