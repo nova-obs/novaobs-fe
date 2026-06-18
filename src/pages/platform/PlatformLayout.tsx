@@ -10,7 +10,6 @@ export function PlatformLayout() {
   return (
     <div className="grid gap-4 xl:grid-cols-[248px_minmax(0,1fr)]">
       <aside className="console-panel relative overflow-hidden p-3">
-        <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-[linear-gradient(135deg,rgba(13,91,215,0.12),transparent_58%),radial-gradient(ellipse_at_80%_12%,rgba(0,164,255,0.12),transparent_45%)]" />
         <div className="relative rounded-lg bg-white/52 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
           <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.16em] text-primary">Platform</div>
           <h1 className="mt-1 font-display text-lg font-semibold tracking-tight text-on-surface">平台管理</h1>

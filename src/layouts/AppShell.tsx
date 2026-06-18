@@ -93,9 +93,6 @@ export function AppShell({ children }: PropsWithChildren) {
           />
         ) : (
         <div className="atlas-sidebar-panel flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 h-80 opacity-70 [background-image:radial-gradient(ellipse_at_16%_92%,rgba(13,91,215,0.14),transparent_42%),radial-gradient(ellipse_at_78%_96%,rgba(0,164,255,0.1),transparent_38%)]" />
-          <div className="pointer-events-none absolute -bottom-16 -left-14 h-72 w-72 rounded-full border border-primary/10 opacity-70" />
-          <div className="pointer-events-none absolute bottom-10 left-2 h-40 w-52 rotate-[-12deg] rounded-[55%] bg-primary/[0.055] blur-2xl" />
           <div className={isSidebarCollapsed ? 'relative flex flex-col items-center gap-3 px-2 py-4' : 'relative px-3 py-3'}>
             <div className={isSidebarCollapsed ? 'flex h-10 w-10 items-center justify-center rounded-lg bg-primary-soft/80 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]' : 'flex min-w-0 items-center gap-3 pr-10'} title="NovaObs">
               <span className={isSidebarCollapsed ? '' : 'flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary-soft/85 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]'}>
@@ -230,7 +227,6 @@ function K8sFocusRail({
 }) {
   return (
     <div className="k8s-focus-mode atlas-sidebar-panel flex min-h-0 flex-1 flex-col items-center overflow-hidden px-2 py-3">
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 h-72 opacity-70 [background-image:radial-gradient(ellipse_at_48%_92%,rgba(13,91,215,0.16),transparent_46%),radial-gradient(ellipse_at_72%_14%,rgba(0,164,255,0.1),transparent_36%)]" />
       <Link
         className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-white/78 text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.88),0_10px_24px_rgba(13,91,215,0.12)] transition hover:bg-white active:translate-y-px"
         title="返回 K8s 集群总览"
