@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, Sparkles, XCircle } from 'lucide-react';
+import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
 import { logSinkLabel, logsApi, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload } from './api';
@@ -708,14 +708,10 @@ export function LogsOnboardingPage() {
   const actionHint = collectingConfigLocked
     ? '当前服务已有运行路由，请从采集路由页查看配置或进入更新。'
     : previewMissing.length
-    ? previewDisabledReason
-    : !preview
-      ? '配置已满足预览条件，可以生成部署清单预览。'
-      : !createdRoute
-        ? '预览已生成，保存草稿后可生成发布预览。'
-        : publishDisabledReason
-          ? `发布阻断：${publishDisabledReason}`
-          : '路由已保存，可以生成发布预览。';
+      ? previewDisabledReason
+      : publishDisabledReason
+        ? `发布阻断：${publishDisabledReason}`
+        : '';
 
   if (error) {
     return (
@@ -764,15 +760,15 @@ export function LogsOnboardingPage() {
               title={routeUpdateMode ? '运行路由更新时不触发服务同步' : undefined}
               onClick={() => syncK8sServicesMutation.mutate()}
             >
-              {syncK8sServicesMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
+              {syncK8sServicesMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               同步服务
             </button>
           </div>
           <div className="grid divide-y divide-outline/70 md:grid-cols-4 md:divide-x md:divide-y-0">
-            <StepCard index={1} title="服务与运行目标" description={sourceType === 'vm_file' ? '服务 / 主机 / 路径' : '服务 / 集群 / Namespace / Workload'} active={activeStep === 1} done={activeStep > 1} />
-            <StepCard index={2} title="日志端点" description={hasEndpointForSource ? selectedEndpointLabel : '等待运行目标'} active={activeStep === 2} done={activeStep > 2} />
-            <StepCard index={3} title="采集配置" description={collectorConfigState} active={activeStep === 3} done={activeStep > 3} />
-            <StepCard index={4} title="预览发布" description={preview ? shortHash(preview.collectorConfigHash) : '等待预览'} active={activeStep === 4} done={Boolean(createdRoute)} />
+            <StepCard index={1} title="服务与运行目标" active={activeStep === 1} done={activeStep > 1} />
+            <StepCard index={2} title="日志端点" active={activeStep === 2} done={activeStep > 2} />
+            <StepCard index={3} title="采集配置" active={activeStep === 3} done={activeStep > 3} />
+            <StepCard index={4} title="预览发布" active={activeStep === 4} done={Boolean(createdRoute)} />
           </div>
         </section>
 
@@ -1031,9 +1027,6 @@ export function LogsOnboardingPage() {
                       </div>
                     )}
                   </div>
-                  <div className="rounded-lg border border-outline bg-white/72 px-3 py-2 text-xs text-muted">
-                    日志下游端点由平台管理统一维护；接入配置只选择已登记端点。
-                  </div>
                 </div>
               </section>
               {collectingConfigLocked ? (
@@ -1103,7 +1096,6 @@ export function LogsOnboardingPage() {
               </button>
             </aside>
           </div>
-          {sourceType !== 'vm_file' && fragmentWarnings.length > 0 ? <WarnLine message="编辑器中的关键字段已不同于当前表单值。平台不会阻止发布，但请确认这是预期修改。" /> : null}
         </DataPanel>
 
         <DataPanel title="发布预览" meta={preview ? `config ${shortHash(preview.collectorConfigHash)}` : '等待预览'}>
@@ -1187,9 +1179,11 @@ export function LogsOnboardingPage() {
             <div className="mt-1 truncate text-sm font-semibold text-on-surface">
               {selectedScopeLabel} · {selectedServiceLabel} · {selectedEndpointLabel}
             </div>
-            <div className={`mt-1 text-xs font-semibold ${previewMissing.length || publishDisabledReason ? 'text-warning' : 'text-primary'}`}>
-              {actionHint}
-            </div>
+            {actionHint ? (
+              <div className={`mt-1 text-xs font-semibold ${previewMissing.length || publishDisabledReason ? 'text-warning' : 'text-primary'}`}>
+                {actionHint}
+              </div>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
             <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成部署清单预览'}>
@@ -1252,7 +1246,7 @@ function RunningConfigVeil() {
   );
 }
 
-function StepCard({ index, title, description, active, done }: { index: number; title: string; description: string; active: boolean; done: boolean }) {
+function StepCard({ index, title, active, done }: { index: number; title: string; active: boolean; done: boolean }) {
   return (
     <div className={`px-3 py-2.5 transition-colors ${
       active ? 'bg-primary-soft/70' : done ? 'bg-white/68' : 'bg-white/36'
@@ -1265,7 +1259,6 @@ function StepCard({ index, title, description, active, done }: { index: number; 
         </span>
         <span className={`text-xs font-semibold ${active || done ? 'text-on-surface' : 'text-muted'}`}>{title}</span>
       </div>
-      <p className="mt-1 truncate pl-7 font-mono text-[11px] text-muted">{description}</p>
     </div>
   );
 }
