@@ -60,7 +60,7 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('isNewAccessView'), true);
   assert.equal(clusterSource.includes('isCredentialView'), true);
   assert.equal(clusterSource.includes('新集群登记'), true);
-  assert.equal(clusterSource.includes('凭据维护在集群卡片内处理'), true);
+  assert.equal(clusterSource.includes('凭据维护在集群卡片内处理'), false);
   assert.equal(clusterSource.includes('进入凭据维护'), true);
   assert.equal(clusterSource.includes('只读探测'), false);
   assert.equal(clusterSource.includes('ClusterOverviewCard'), true);
@@ -100,7 +100,7 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(navigationSource.includes("segment: 'credentials'"), true);
   assert.equal(clusterSource.includes('集群凭据 API 暂未连接'), false);
   assert.equal(clusterSource.includes('kubeconfig'), true);
-  assert.equal(clusterSource.includes('不在页面回显'), true);
+  assert.equal(clusterSource.includes('不在页面回显'), false);
 });
 
 test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => {
