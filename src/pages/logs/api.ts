@@ -23,12 +23,33 @@ export interface LogEndpoint {
   writeURL: string;
   queryURL: string;
   vmuiURL: string;
+  accountId: string;
+  projectId: string;
   secretRef: string;
   scopeType: string;
   clusterId: string;
   status: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export function buildVictoriaLogsVMUIURL(endpoint?: Pick<LogEndpoint, 'vmuiURL' | 'sinkType' | 'accountId' | 'projectId'> | null): string {
+  const rawURL = endpoint?.vmuiURL?.trim() ?? '';
+  if (!rawURL || endpoint?.sinkType !== 'vl' || !endpoint.accountId || !endpoint.projectId) return rawURL;
+  try {
+    const parsed = new URL(rawURL);
+    if (!/\/select\/vmui\/?$/.test(parsed.pathname)) return rawURL;
+    const hashValue = parsed.hash.replace(/^#/, '');
+    const separator = hashValue.indexOf('?');
+    const hashPath = separator >= 0 ? hashValue.slice(0, separator) || '/' : hashValue || '/';
+    const params = new URLSearchParams(separator >= 0 ? hashValue.slice(separator + 1) : '');
+    params.set('accountID', endpoint.accountId);
+    params.set('projectID', endpoint.projectId);
+    parsed.hash = `${hashPath}?${params.toString()}`;
+    return parsed.toString();
+  } catch {
+    return rawURL;
+  }
 }
 
 export interface LogParseRule {
@@ -52,6 +73,7 @@ export interface LogSource {
   hostSelector: Record<string, string>;
   pathPattern: string;
   parseRules: LogParseRule[];
+  collectorFragmentYAML: string;
   collectorYAML: string;
   collectorConfigHash: string;
   deploymentManifestHash: string;
@@ -158,10 +180,10 @@ export interface LogRouteInput {
     workloadName?: string;
     container?: string;
     workloadSelector?: Record<string, string>;
-    runtimeLogPaths?: string[];
     pathPattern?: string;
     parseRules?: LogParseRule[];
     operatorsYAML?: string;
+    collectorFragmentYAML?: string;
   };
   vm?: {
     hostGroup?: string;
@@ -196,6 +218,7 @@ export interface LogRoutePreview {
   source: LogSource;
   endpoint: LogEndpoint;
   agentYAML: string;
+  collectorYAML: string;
   collectorConfigHash: string;
   deploymentManifestHash: string;
   mode: string;
@@ -273,13 +296,6 @@ export interface LogParsePreviewResult {
   errors: string[];
 }
 
-export interface LogCollectorClusterConfig {
-  clusterId: string;
-  agentNamespace: string;
-  processorPatch: string;
-  updatedAt?: string;
-}
-
 function mapEndpoint(raw: any): LogEndpoint {
   return {
     id: String(raw.id ?? ''),
@@ -290,6 +306,8 @@ function mapEndpoint(raw: any): LogEndpoint {
     writeURL: raw.write_url ?? raw.writeURL ?? '',
     queryURL: raw.query_url ?? raw.queryURL ?? '',
     vmuiURL: raw.vmui_url ?? raw.vmuiURL ?? '',
+    accountId: String(raw.account_id ?? raw.accountId ?? ''),
+    projectId: String(raw.project_id ?? raw.projectId ?? ''),
     secretRef: raw.secret_ref ?? raw.secretRef ?? '',
     scopeType: raw.scope_type ?? raw.scopeType ?? '',
     clusterId: raw.cluster_id ?? raw.clusterId ?? '',
@@ -312,6 +330,7 @@ function mapSource(raw: any): LogSource {
     hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
     parseRules: mapParseRules(raw.parse_rules ?? raw.parseRules),
+    collectorFragmentYAML: raw.collector_fragment_yaml ?? raw.collectorFragmentYAML ?? '',
     collectorYAML: raw.custom_collector_yaml ?? raw.customCollectorYAML ?? '',
     collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
@@ -456,6 +475,7 @@ function mapPreview(raw: any): LogRoutePreview {
     source: mapSource(raw.source ?? {}),
     endpoint: mapEndpoint(raw.endpoint ?? {}),
     agentYAML: raw.agent_yaml ?? raw.agentYAML ?? '',
+    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
     collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
     mode: raw.mode ?? '',
@@ -528,10 +548,10 @@ function toRoutePayload(input: LogRouteInput) {
       workload_kind: input.k8s?.workloadKind,
       workload_name: input.k8s?.workloadName,
       workload_selector: input.k8s?.workloadSelector ?? {},
-      runtime_log_paths: input.k8s?.runtimeLogPaths,
       path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
       operators_yaml: input.k8s?.operatorsYAML ?? '',
+      collector_fragment_yaml: input.k8s?.collectorFragmentYAML ?? '',
     },
     vm: isVM ? {
       host_group: input.vm?.hostGroup,
@@ -601,6 +621,8 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
+        account_id: input.accountId,
+        project_id: input.projectId,
         secret_ref: input.secretRef,
         scope_type: input.scopeType,
         cluster_id: input.clusterId,
@@ -619,6 +641,8 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
+        account_id: input.accountId,
+        project_id: input.projectId,
         secret_ref: input.secretRef,
         scope_type: input.scopeType,
         cluster_id: input.clusterId,
@@ -679,30 +703,5 @@ export const logsApi = {
         confirmation_token: confirmation?.confirmationToken,
       }),
     }));
-  },
-  async getClusterConfig(clusterId: string, agentNamespace: string): Promise<LogCollectorClusterConfig> {
-    const raw = await apiRequest<any>(`/logs/cluster-config?cluster_id=${encodeURIComponent(clusterId)}&agent_namespace=${encodeURIComponent(agentNamespace)}`);
-    return {
-      clusterId: raw.cluster_id ?? raw.clusterId ?? clusterId,
-      agentNamespace: raw.agent_namespace ?? raw.agentNamespace ?? agentNamespace,
-      processorPatch: raw.processor_patch ?? raw.processorPatch ?? '',
-      updatedAt: raw.updated_at ?? raw.updatedAt,
-    };
-  },
-  async upsertClusterConfig(config: { clusterId: string; agentNamespace: string; processorPatch: string }): Promise<LogCollectorClusterConfig> {
-    const raw = await apiRequest<any>('/logs/cluster-config', {
-      method: 'PUT',
-      body: JSON.stringify({
-        cluster_id: config.clusterId,
-        agent_namespace: config.agentNamespace,
-        processor_patch: config.processorPatch,
-      }),
-    });
-    return {
-      clusterId: raw.cluster_id ?? raw.clusterId ?? config.clusterId,
-      agentNamespace: raw.agent_namespace ?? raw.agentNamespace ?? config.agentNamespace,
-      processorPatch: raw.processor_patch ?? raw.processorPatch ?? '',
-      updatedAt: raw.updated_at ?? raw.updatedAt,
-    };
   },
 };

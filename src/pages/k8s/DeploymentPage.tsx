@@ -213,9 +213,7 @@ export function K8sDeploymentPage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            预览、发布、删除和回滚统一走 NovaObs RBAC 与审计；真实目标从 Kubernetes 只读 API 派生。
-          </div>
+
         </div>
         {clusterError || namespaceError || resourceError || historyError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
@@ -224,7 +222,7 @@ export function K8sDeploymentPage() {
         ) : null}
       </section>
 
-      <DataPanel title="发布部署" meta="preview / apply / delete / rollback 统一走 NovaObs RBAC 与审计">
+      <DataPanel title="发布部署">
         {permissionError ? (
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             <ShieldAlert className="h-4 w-4" />
@@ -286,7 +284,7 @@ export function K8sDeploymentPage() {
                   </div>
                 ) : (
                   <div className="mt-3 rounded-lg bg-surface-lowest/60 px-3 py-3 text-xs font-medium text-muted">
-                    先执行预览，NovaObs 会展示 create / update / delete、解析后的 API 版本和确认指纹。
+                    暂无预览
                   </div>
                 )}
                 {previewWarnings.length ? (

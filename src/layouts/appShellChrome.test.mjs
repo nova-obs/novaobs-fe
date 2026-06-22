@@ -48,6 +48,11 @@ test('顶层框架引入搜索和用户入口', () => {
   assert.equal(sessionSource.includes('signed_out=1'), true);
 });
 
+test('登录表单通过提交事件调用平台登录', () => {
+  assert.equal(source.includes('<form className="console-panel relative w-full max-w-sm p-8" onSubmit={submit}>'), true);
+  assert.equal(source.includes('<button type="submit"'), true);
+});
+
 test('主侧边导航支持桌面端收起和展开', () => {
   assert.equal(source.includes('sidebar-collapse-toggle'), true);
   assert.equal(source.includes('isSidebarCollapsed'), true);
@@ -82,13 +87,13 @@ test('顶层框架提供轻量路由切换过渡', () => {
 });
 
 test('顶层框架使用柔和观测控制面视觉语言', () => {
-  assert.equal(source.includes('h-[100dvh] overflow-hidden bg-app-radial'), true);
+  assert.equal(source.includes('h-[100dvh] overflow-hidden bg-app-radial'), false);
   assert.equal(source.includes('h-[100dvh] max-h-[100dvh]'), true);
   assert.equal(source.includes('relative flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden'), true);
   assert.equal(source.includes('min-h-0 flex-1 overflow-y-auto'), true);
   assert.equal(source.includes('border-r border-outline'), false);
-  assert.equal(source.includes('bg-app-radial'), true);
-  assert.equal(source.includes('OBS Console'), true);
+  assert.equal(source.includes('bg-app-radial'), false);
+  assert.equal(source.includes('OBS Console'), false);
   assert.equal(source.includes('Telemetry Atlas'), false);
   assert.equal(source.includes('统一可观测性控制面'), false);
   assert.equal(source.includes('Prod / CN-SHANGHAI-A'), false);

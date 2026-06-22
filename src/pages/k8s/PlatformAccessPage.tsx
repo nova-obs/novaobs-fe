@@ -227,15 +227,7 @@ export function K8sPlatformAccessPage() {
         {activeTab === 'grant' ? (
           <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
             <section className="grid gap-4">
-              <div className="flex items-center justify-between gap-3 rounded-lg border border-[rgba(13,91,215,0.12)] bg-white/45 px-4 py-3">
-                <div>
-                  <div className="text-sm font-semibold text-on-surface">授权流程</div>
-                  <div className="mt-1 text-xs text-muted">按主体、权限包、授权范围、确认执行顺序完成授权。</div>
-                </div>
-                <span className="rounded-lg bg-primary-soft px-2 py-1 text-[11px] font-semibold text-primary">推荐给用户组授权</span>
-              </div>
-
-              <GrantStep index="01" title="选择授权主体" meta="平台 IAM 中的用户、用户组或服务账号">
+              <GrantStep index="01" title="选择授权主体">
                 <div className="grid gap-3 md:grid-cols-[minmax(220px,1fr)_180px]">
                   <label className="block">
                     <span className="text-xs font-semibold text-muted">授权主体</span>
@@ -272,7 +264,7 @@ export function K8sPlatformAccessPage() {
                 </label>
               </GrantStep>
 
-              <GrantStep index="02" title="选择权限包" meta="先选推荐包，需要时再进入高级自定义权限">
+              <GrantStep index="02" title="选择权限包">
                 <div className="grid gap-2 md:grid-cols-2">
                   {!profiles.length && profilesQuery.isLoading ? (
                     <div className="rounded-lg bg-white/45 px-3 py-3 text-xs text-muted">正在加载权限包：只读观察者、集群运维管理员...</div>
@@ -316,7 +308,7 @@ export function K8sPlatformAccessPage() {
                 </details>
               </GrantStep>
 
-              <GrantStep index="03" title="选择授权范围" meta="当前集群固定来自工作台上下文，命名空间可按多选或整集群授权">
+              <GrantStep index="03" title="选择授权范围">
                 <div className="grid gap-3 lg:grid-cols-[260px_minmax(0,1fr)]">
                   <div className="rounded-lg bg-white/55 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
                     <div className="text-xs font-semibold text-muted">当前集群</div>
@@ -402,7 +394,7 @@ export function K8sPlatformAccessPage() {
                 ) : null}
               </GrantStep>
 
-              <GrantStep index="04" title="确认授权" meta="确认将授予的权限明细">
+              <GrantStep index="04" title="确认授权">
                 <div className="grid gap-2">
                   {permissionIds.map((id) => {
                     const permission = permissionById.get(id);
@@ -513,14 +505,13 @@ function AccessTabNav({ activeTab, onChange }: { activeTab: AccessTab; onChange:
   );
 }
 
-function GrantStep({ index, title, meta, children }: { index: string; title: string; meta: string; children: ReactNode }) {
+function GrantStep({ index, title, children }: { index: string; title: string; children: ReactNode }) {
   return (
     <section className="console-panel px-4 py-3">
       <div className="mb-3 flex items-start gap-3">
         <span className="grid h-7 w-7 shrink-0 place-items-center rounded-lg bg-primary-soft font-mono text-xs font-semibold text-primary">{index}</span>
         <div className="min-w-0">
           <div className="text-sm font-semibold text-on-surface">{title}</div>
-          <div className="mt-1 text-xs text-muted">{meta}</div>
         </div>
       </div>
       {children}

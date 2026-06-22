@@ -205,10 +205,7 @@ export function K8sClusterPage() {
       <div className="space-y-4">
         <section className="console-panel px-4 py-3">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div>
-              <div className="text-xs font-semibold text-primary">新集群登记</div>
-              <div className="mt-1 text-sm text-muted">凭据维护在集群卡片内处理。</div>
-            </div>
+            <div className="text-xs font-semibold text-primary">新集群登记</div>
             <Link className="quiet-button h-9 justify-center bg-white/70 px-3 text-xs text-primary" to="/k8s">
               返回集群总览
             </Link>
@@ -286,7 +283,6 @@ export function K8sClusterPage() {
                 onChange={(event) => setKubeconfig(event.target.value)}
               />
             </label>
-            <p className="mt-2 text-[11px] text-muted">kubeconfig 不在页面回显；保存前执行 probe。</p>
             <button className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || createCredential.isPending} onClick={() => createCredential.mutate()}>
               <KeyRound className="h-4 w-4" />
               录入初始凭据
@@ -486,7 +482,6 @@ export function K8sClusterPage() {
             ) : (
               <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
                 <div className="font-semibold text-on-surface">暂无集群凭据</div>
-                <p className="mt-2 text-sm text-muted">录入后只展示 Secret 元数据，kubeconfig 明文不在页面回显。</p>
               </div>
             )}
           </div>
@@ -522,7 +517,6 @@ export function K8sClusterPage() {
               onChange={(event) => setKubeconfig(event.target.value)}
             />
           </label>
-          <p className="mt-2 text-[11px] text-muted">kubeconfig 不在页面回显；轮换创建新的 Secret 版本。</p>
           <div className="mt-4 grid grid-cols-2 gap-2">
             <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || createCredential.isPending} onClick={() => createCredential.mutate()}>
               <KeyRound className="h-4 w-4" />

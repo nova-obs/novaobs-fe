@@ -10,8 +10,8 @@ const logsNav = [
 
 function LogsWorkspace() {
   return (
-    <div className="logs-workbench space-y-3 route-transition-page">
-      <div className="console-panel overflow-hidden">
+    <div className="logs-workbench route-transition-page flex h-full min-h-0 flex-col gap-3">
+      <div className="console-panel shrink-0 overflow-hidden">
         <div className="grid gap-3 border-b border-outline/70 bg-white/76 px-3 py-3 xl:grid-cols-[minmax(180px,260px)_1fr_auto] xl:items-center">
           <div className="min-w-0">
             <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Logs</div>
@@ -51,7 +51,7 @@ function LogsWorkspace() {
           </div>
         </div>
       </div>
-      <div className="route-transition-page">
+      <div className="route-transition-page min-h-0 flex-1">
         <Outlet />
       </div>
     </div>

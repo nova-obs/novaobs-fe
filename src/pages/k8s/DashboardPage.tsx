@@ -52,7 +52,6 @@ export function DashboardPage() {
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <section className="console-panel relative min-h-[330px] overflow-hidden p-5">
-          <div className="absolute inset-0 opacity-80 [background-image:radial-gradient(circle_at_24%_22%,rgba(13,91,215,0.12),transparent_28%),radial-gradient(circle_at_72%_64%,rgba(0,164,255,0.1),transparent_32%),linear-gradient(120deg,rgba(255,255,255,0.52),transparent_52%)]" />
           <div className="relative flex items-start justify-between gap-3">
             <div>
               <div className="flex items-center gap-2">
@@ -82,11 +81,6 @@ export function DashboardPage() {
             </div>
 
             <div className="relative hidden overflow-hidden rounded-lg bg-white/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)] md:block">
-              <svg className="absolute inset-0 h-full w-full text-primary/35" viewBox="0 0 100 100" aria-hidden="true">
-                <path d="M12 54 C24 32 38 34 48 24 C62 10 72 32 88 20" fill="none" stroke="currentColor" strokeWidth="0.55" strokeDasharray="1.5 2.5" />
-                <path d="M18 78 C30 62 42 68 54 52 C66 35 74 48 88 38" fill="none" stroke="currentColor" strokeWidth="0.55" strokeDasharray="1.5 2.5" />
-                <path d="M24 24 C34 45 52 44 64 64 C70 74 80 72 90 82" fill="none" stroke="currentColor" strokeWidth="0.45" strokeDasharray="1 3" />
-              </svg>
               <ClusterNode className="left-[24%] top-[42%]" icon={Network} label="API Server" meta={signalMeta(signals, 'api-server')} />
               <ClusterNode className="left-[58%] top-[28%]" icon={Boxes} label="Workloads" meta={`${stats?.workloads ?? 0} active`} />
               <ClusterNode className="left-[75%] top-[62%]" icon={Database} label="Namespaces" meta={`${stats?.namespaces ?? 0} domains`} />

@@ -56,31 +56,19 @@ body {
 @layer components {
   .console-panel {
     @apply rounded-lg shadow-panel;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.97) 0%, rgba(248, 251, 255, 0.94) 100%),
-      radial-gradient(circle at 18% 0%, rgba(13, 91, 215, 0.045), transparent 34%);
-    border: 1px solid rgba(205, 218, 235, 0.86);
-    backdrop-filter: blur(14px) saturate(1.03);
+    background: #ffffff;
+    border: 1px solid #d8e2ef;
   }
 
   .atlas-sidebar-panel {
     @apply relative rounded-lg shadow-panel;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.96) 0%, rgba(246, 250, 255, 0.92) 48%, rgba(232, 241, 252, 0.94) 100%),
-      radial-gradient(circle at 18% 10%, rgba(13, 91, 215, 0.12), transparent 35%),
-      radial-gradient(circle at 92% 86%, rgba(0, 164, 255, 0.1), transparent 38%);
-    border: 1px solid rgba(216, 226, 239, 0.78);
-    backdrop-filter: blur(18px) saturate(1.08);
+    background: #ffffff;
+    border: 1px solid #d8e2ef;
   }
 
   .atlas-nav-active {
-    background:
-      linear-gradient(135deg, rgba(229, 240, 255, 0.98), rgba(255, 255, 255, 0.72)),
-      radial-gradient(circle at 18% 24%, rgba(13, 91, 215, 0.18), transparent 42%);
-    box-shadow:
-      inset 3px 0 0 rgba(13, 91, 215, 0.82),
-      inset 0 1px 0 rgba(255, 255, 255, 0.92),
-      0 16px 32px -24px rgba(13, 91, 215, 0.6);
+    background: #e5f0ff;
+    box-shadow: inset 3px 0 0 rgba(13, 91, 215, 0.82);
   }
 
   .console-input {
@@ -116,9 +104,8 @@ body {
 
   .soft-tile {
     @apply rounded-lg shadow-panel;
-    background:
-      linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(248, 251, 255, 0.82));
-    border: 1px solid rgba(216, 226, 239, 0.82);
+    background: #ffffff;
+    border: 1px solid #d8e2ef;
   }
 
   .quiet-button {

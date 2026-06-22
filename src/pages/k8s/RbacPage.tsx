@@ -111,9 +111,7 @@ export function K8sRbacPage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            Role 与 RoleBinding 通过 Kubernetes API 实时只读读取，写操作仍由 NovaObs RBAC、审计和能力开关控制。
-          </div>
+
         </div>
         {clusterError || namespaceError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">

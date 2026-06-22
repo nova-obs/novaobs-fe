@@ -60,7 +60,7 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('isNewAccessView'), true);
   assert.equal(clusterSource.includes('isCredentialView'), true);
   assert.equal(clusterSource.includes('新集群登记'), true);
-  assert.equal(clusterSource.includes('凭据维护在集群卡片内处理'), true);
+  assert.equal(clusterSource.includes('凭据维护在集群卡片内处理'), false);
   assert.equal(clusterSource.includes('进入凭据维护'), true);
   assert.equal(clusterSource.includes('只读探测'), false);
   assert.equal(clusterSource.includes('ClusterOverviewCard'), true);
@@ -100,7 +100,7 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(navigationSource.includes("segment: 'credentials'"), true);
   assert.equal(clusterSource.includes('集群凭据 API 暂未连接'), false);
   assert.equal(clusterSource.includes('kubeconfig'), true);
-  assert.equal(clusterSource.includes('不在页面回显'), true);
+  assert.equal(clusterSource.includes('不在页面回显'), false);
 });
 
 test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => {
@@ -119,7 +119,7 @@ test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => 
   assert.equal(platformAccessSource.includes("key: 'bindings'"), true);
   assert.equal(platformAccessSource.includes('新增授权'), true);
   assert.equal(platformAccessSource.includes('已授权绑定'), true);
-  assert.equal(platformAccessSource.includes('授权流程'), true);
+  assert.equal(platformAccessSource.includes('授权流程'), false);
   assert.equal(platformAccessSource.includes('选择授权主体'), true);
   assert.equal(platformAccessSource.includes('选择权限包'), true);
   assert.equal(platformAccessSource.includes('选择授权范围'), true);
@@ -179,14 +179,14 @@ test('K8s 资源页面展示完整资源身份字段', () => {
 
 test('K8s 部署历史和审计页面展示追踪上下文', () => {
   assert.equal(deploymentHistorySource.includes('部署历史'), true);
-  assert.equal(deploymentHistorySource.includes('/api/v1/k8s/deployment-history'), true);
+  assert.equal(deploymentHistorySource.includes('k8sApi.listDeploymentHistory'), true);
   assert.equal(deploymentHistorySource.includes('useK8sOpsContext'), true);
   assert.equal(deploymentHistorySource.includes('k8sApi.listNamespaces'), true);
   assert.equal(deploymentHistorySource.includes("listDeploymentHistory('prod')"), false);
   assert.equal(deploymentHistorySource.includes('cluster/prod'), false);
   assert.equal(auditSource.includes('操作审计'), true);
   assert.equal(auditSource.includes('Trace'), true);
-  assert.equal(auditSource.includes('/api/v1/k8s/audit-events'), true);
+  assert.equal(auditSource.includes('k8sApi.listAuditEvents'), true);
   assert.equal(auditSource.includes('useK8sOpsContext'), true);
   assert.equal(auditSource.includes('k8sApi.listNamespaces'), true);
   assert.equal(auditSource.includes("listAuditEvents('prod')"), false);

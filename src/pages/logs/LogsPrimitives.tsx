@@ -12,7 +12,7 @@ interface LogsSectionProps extends PropsWithChildren {
 export function LogsSection({ title, meta, action, className = '', bodyClassName = 'p-3', children }: LogsSectionProps) {
   return (
     <section className={`console-panel overflow-hidden ${className}`}>
-      <div className="flex min-h-11 items-center justify-between gap-3 border-b border-outline/70 bg-white/72 px-3 py-2">
+      <div className="flex min-h-11 shrink-0 items-center justify-between gap-3 border-b border-outline/70 bg-white/72 px-3 py-2">
         <div className="min-w-0">
           <h2 className="truncate text-sm font-semibold text-on-surface">{title}</h2>
           {meta ? <p className="mt-0.5 truncate font-mono text-[11px] text-muted">{meta}</p> : null}

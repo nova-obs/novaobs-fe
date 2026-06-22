@@ -52,9 +52,7 @@ export function K8sAuditPage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            审计事件来自 `/api/v1/k8s/audit-events` 与 NovaObs 平台审计流，并按真实集群和命名空间聚合展示。
-          </div>
+
         </div>
         {clusterError || namespaceError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">

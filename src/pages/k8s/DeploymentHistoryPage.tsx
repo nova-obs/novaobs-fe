@@ -52,9 +52,7 @@ export function K8sDeploymentHistoryPage() {
               ))}
             </select>
           </label>
-          <div className="text-sm text-muted">
-            部署历史按真实集群筛选，通过 `/api/v1/k8s/deployment-history` 读取；回滚仍要求完整资源身份和 NovaObs RBAC 审计。
-          </div>
+
         </div>
         {clusterError || namespaceError ? (
           <Warning text={clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError)} />

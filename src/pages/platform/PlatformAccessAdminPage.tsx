@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bot, KeyRound, Link2, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCog, UsersRound } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import { EmptyState } from '../../components/EmptyState';
 import {
   platformApi,
   type PlatformBinding,
@@ -352,7 +353,7 @@ function UsersTable({ users, current, confirmDeleteKey, pending, onConfirmKey, o
           })}
         </tbody>
       </table>
-      {!users.length ? <EmptyState text="暂无本地用户，请先创建登录账号。" /> : null}
+      {!users.length ? <EmptyState title="暂无本地用户，请先创建登录账号。" /> : null}
     </section>
   );
 }
@@ -394,7 +395,7 @@ function GroupsTable({ groups, current, confirmDeleteKey, pending, onConfirmKey,
           })}
         </tbody>
       </table>
-      {!groups.length ? <EmptyState text="暂无用户组。" /> : null}
+      {!groups.length ? <EmptyState title="暂无用户组。" /> : null}
     </section>
   );
 }
@@ -431,7 +432,7 @@ function MembershipsTable({ memberships, confirmDeleteKey, pending, onConfirmKey
           ))}
         </tbody>
       </table>
-      {!memberships.length ? <EmptyState text="暂无组成员。" /> : null}
+      {!memberships.length ? <EmptyState title="暂无组成员。" /> : null}
     </section>
   );
 }
@@ -469,7 +470,7 @@ function ServiceAccountsTable({ serviceAccounts, confirmDeleteKey, pending, onCo
           })}
         </tbody>
       </table>
-      {!serviceAccounts.length ? <EmptyState text="暂无服务账号。" /> : null}
+      {!serviceAccounts.length ? <EmptyState title="暂无服务账号。" /> : null}
     </section>
   );
 }
@@ -504,7 +505,7 @@ function RolesTable({ roles, confirmDeleteKey, pending, onConfirmKey, onDelete }
           ))}
         </tbody>
       </table>
-      {!roles.length ? <EmptyState text="暂无角色。开发态 dev-admin 不通过角色授予权限。" /> : null}
+      {!roles.length ? <EmptyState title="暂无角色。开发态 dev-admin 不通过角色授予权限。" /> : null}
     </section>
   );
 }
@@ -539,7 +540,7 @@ function BindingsTable({ bindings, confirmDeleteKey, pending, onConfirmKey, onDe
           ))}
         </tbody>
       </table>
-      {!bindings.length ? <EmptyState text="暂无授权绑定。" /> : null}
+      {!bindings.length ? <EmptyState title="暂无授权绑定。" /> : null}
     </section>
   );
 }
@@ -581,7 +582,7 @@ function EffectivePermissionsWorkspace({ subjects, activePreviewSubject, effecti
             ))}
           </tbody>
         </table>
-        {!effectivePermissions.length && !isLoading ? <EmptyState text="当前主体暂无有效权限。" /> : null}
+        {!effectivePermissions.length && !isLoading ? <EmptyState title="当前主体暂无有效权限。" /> : null}
       </section>
     </div>
   );
@@ -845,9 +846,7 @@ function DeleteActionButton({
   );
 }
 
-function EmptyState({ text }: { text: string }) {
-  return <div className="mt-3 rounded-lg bg-white/45 px-4 py-6 text-center text-sm text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">{text}</div>;
-}
+
 
 function subjectValue(item?: PlatformSubject) {
   if (!item) return '';

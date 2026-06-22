@@ -25,7 +25,6 @@ export interface K8sNavigationItem {
   segment: string;
   group: string;
   icon: LucideIcon;
-  description: string;
   requiresCluster?: boolean;
 }
 
@@ -43,23 +42,23 @@ export const k8sNavigationGroups: K8sNavigationGroup[] = [
 ];
 
 export const k8sNavigationItems: K8sNavigationItem[] = [
-  { id: 'fleet', label: '集群总览', path: '/k8s', segment: '', group: 'overview', icon: Boxes, description: '已登记集群与接入状态' },
-  { id: 'access-entry', label: '集群接入', path: '/k8s/access', segment: 'access', group: 'overview', icon: Network, description: '新增集群登记与初始凭据录入' },
-  { id: 'dashboard', label: 'Dashboard', path: '/k8s/clusters/:clusterId', segment: '', group: 'overview', icon: Gauge, description: '集群态势与同步状态', requiresCluster: true },
-  { id: 'namespaces', label: '命名空间', path: '/k8s/clusters/:clusterId/namespaces', segment: 'namespaces', group: 'resources', icon: Folder, description: '租户边界与资源域', requiresCluster: true },
-  { id: 'runtime-topology', label: '运行时拓扑', path: '/k8s/clusters/:clusterId/runtime-topology', segment: 'runtime-topology', group: 'resources', icon: GitBranch, description: 'Service、Workload 与 Istio 治理关系', requiresCluster: true },
-  { id: 'cluster-credentials', label: '接入凭据', path: '/k8s/clusters/:clusterId/credentials', segment: 'credentials', group: 'access', icon: KeyRound, description: '已登记集群的凭据维护', requiresCluster: true },
-  { id: 'platform-access', label: '访问授权', path: '/k8s/clusters/:clusterId/platform-access', segment: 'platform-access', group: 'access', icon: UserRoundCog, description: '消费平台 IAM 主体并授予 K8s 权限', requiresCluster: true },
-  { id: 'service-accounts', label: 'ServiceAccount', path: '/k8s/clusters/:clusterId/service-accounts', segment: 'service-accounts', group: 'access', icon: ShieldUser, description: '服务身份与权限', requiresCluster: true },
-  { id: 'rbac', label: 'RBAC', path: '/k8s/clusters/:clusterId/rbac', segment: 'rbac', group: 'access', icon: ShieldCheck, description: 'Role 与 Binding', requiresCluster: true },
-  { id: 'kubeconfig', label: 'Kubeconfig', path: '/k8s/clusters/:clusterId/kubeconfig', segment: 'kubeconfig', group: 'access', icon: KeyRound, description: '访问凭据托管', requiresCluster: true },
-  { id: 'resource-view', label: '资源视图', path: '/k8s/clusters/:clusterId/resource-view', segment: 'resource-view', group: 'delivery', icon: Grid3X3, description: '资源拓扑与状态', requiresCluster: true },
-  { id: 'templates', label: '模板管理', path: '/k8s/clusters/:clusterId/templates', segment: 'templates', group: 'delivery', icon: ScrollText, description: 'YAML 模板与参数', requiresCluster: true },
-  { id: 'releases', label: '发布部署', path: '/k8s/clusters/:clusterId/releases', segment: 'releases', group: 'delivery', icon: Layers3, description: '部署编排与发布', requiresCluster: true },
-  { id: 'deploy-history', label: '部署历史', path: '/k8s/clusters/:clusterId/deploy-history', segment: 'deploy-history', group: 'delivery', icon: History, description: '发布记录与回滚', requiresCluster: true },
-  { id: 'audit', label: '操作审计', path: '/k8s/clusters/:clusterId/audit', segment: 'audit', group: 'delivery', icon: FileClock, description: '变更审计与追踪', requiresCluster: true },
-  { id: 'certificates', label: '证书中心', path: '/k8s/clusters/:clusterId/certificates', segment: 'certificates', group: 'security', icon: FileKey2, description: '证书与过期风险', requiresCluster: true },
-  { id: 'terminal', label: '受控终端', path: '/k8s/clusters/:clusterId/terminal', segment: 'terminal', group: 'security', icon: SquareTerminal, description: '只读命令与审计', requiresCluster: true },
+  { id: 'fleet', label: '集群总览', path: '/k8s', segment: '', group: 'overview', icon: Boxes },
+  { id: 'access-entry', label: '集群接入', path: '/k8s/access', segment: 'access', group: 'overview', icon: Network },
+  { id: 'dashboard', label: 'Dashboard', path: '/k8s/clusters/:clusterId', segment: '', group: 'overview', icon: Gauge, requiresCluster: true },
+  { id: 'namespaces', label: '命名空间', path: '/k8s/clusters/:clusterId/namespaces', segment: 'namespaces', group: 'resources', icon: Folder, requiresCluster: true },
+  { id: 'runtime-topology', label: '运行时拓扑', path: '/k8s/clusters/:clusterId/runtime-topology', segment: 'runtime-topology', group: 'resources', icon: GitBranch, requiresCluster: true },
+  { id: 'cluster-credentials', label: '接入凭据', path: '/k8s/clusters/:clusterId/credentials', segment: 'credentials', group: 'access', icon: KeyRound, requiresCluster: true },
+  { id: 'platform-access', label: '访问授权', path: '/k8s/clusters/:clusterId/platform-access', segment: 'platform-access', group: 'access', icon: UserRoundCog, requiresCluster: true },
+  { id: 'service-accounts', label: 'ServiceAccount', path: '/k8s/clusters/:clusterId/service-accounts', segment: 'service-accounts', group: 'access', icon: ShieldUser, requiresCluster: true },
+  { id: 'rbac', label: 'RBAC', path: '/k8s/clusters/:clusterId/rbac', segment: 'rbac', group: 'access', icon: ShieldCheck, requiresCluster: true },
+  { id: 'kubeconfig', label: 'Kubeconfig', path: '/k8s/clusters/:clusterId/kubeconfig', segment: 'kubeconfig', group: 'access', icon: KeyRound, requiresCluster: true },
+  { id: 'resource-view', label: '资源视图', path: '/k8s/clusters/:clusterId/resource-view', segment: 'resource-view', group: 'delivery', icon: Grid3X3, requiresCluster: true },
+  { id: 'templates', label: '模板管理', path: '/k8s/clusters/:clusterId/templates', segment: 'templates', group: 'delivery', icon: ScrollText, requiresCluster: true },
+  { id: 'releases', label: '发布部署', path: '/k8s/clusters/:clusterId/releases', segment: 'releases', group: 'delivery', icon: Layers3, requiresCluster: true },
+  { id: 'deploy-history', label: '部署历史', path: '/k8s/clusters/:clusterId/deploy-history', segment: 'deploy-history', group: 'delivery', icon: History, requiresCluster: true },
+  { id: 'audit', label: '操作审计', path: '/k8s/clusters/:clusterId/audit', segment: 'audit', group: 'delivery', icon: FileClock, requiresCluster: true },
+  { id: 'certificates', label: '证书中心', path: '/k8s/clusters/:clusterId/certificates', segment: 'certificates', group: 'security', icon: FileKey2, requiresCluster: true },
+  { id: 'terminal', label: '受控终端', path: '/k8s/clusters/:clusterId/terminal', segment: 'terminal', group: 'security', icon: SquareTerminal, requiresCluster: true },
 ];
 
 export const getK8sNavigationByPath = (path: string) => {

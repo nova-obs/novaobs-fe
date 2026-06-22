@@ -226,7 +226,7 @@ export function ServicePickerPanel({
   onEditRoute: (route: LogRouteView) => void;
 }) {
   return (
-    <section className="logs-service-picker-panel relative flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest xl:min-h-[640px]">
+    <section className="logs-service-picker-panel relative flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest xl:h-full xl:min-h-[640px]">
       <div className="flex items-center justify-between gap-2 border-b border-outline bg-white/72 px-3 py-2.5">
         <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
           <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]" />

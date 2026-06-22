@@ -68,16 +68,17 @@ export function LogsAgentsPage() {
   const activeAgentScope = collectorDomainScope(activeGroup, instances[0]);
 
   return (
-    <div className="logs-routes-workbench grid min-h-[720px] gap-3 xl:grid-cols-[340px_minmax(0,1fr)_320px]">
+    <div className="logs-routes-workbench grid min-h-[720px] gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[340px_minmax(0,1fr)_320px] xl:overflow-hidden">
       <LogsSection
         title="运行中路由"
         meta={workspaceLoading ? 'loading' : `${runningRoutes.length} running routes`}
-        bodyClassName="p-0"
+        className="min-h-0 flex flex-col"
+        bodyClassName="min-h-0 flex flex-1 flex-col overflow-hidden p-0"
         action={<LogsToolbarButton onClick={() => refetchWorkspace()}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
       >
         {workspaceError ? <ErrorLine message={(workspaceError as Error).message} /> : null}
         {runningRoutes.length === 0 ? <LogsEmptyState title="暂无运行中采集路由" description="已登记但未发布的路由继续留在接入配置中处理。" /> : (
-          <div className="max-h-[720px] overflow-y-auto">
+          <div className="min-h-0 flex-1 overflow-y-auto">
             {runningRoutes.map((route) => {
               const active = route.route.id === (activeRoute?.route.id ?? '');
               const lifecycle = routeLifecycle(route);
@@ -112,21 +113,17 @@ export function LogsAgentsPage() {
       <LogsSection
         title="采集域状态"
         meta={activeRoute ? `${activeDomainRoutes.length} routes · ${instances.length} instances` : 'route domain'}
-        bodyClassName="p-0"
+        className="min-h-0 flex flex-col"
+        bodyClassName="min-h-0 flex-1 overflow-y-auto p-0"
         action={<LogsToolbarButton onClick={() => refetchInstances()} disabled={!activeGroupId}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>}
       >
         {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
         {!activeRoute ? <LogsEmptyState title="未选择运行中路由" /> : !activeGroupId ? <LogsEmptyState title="路由未绑定采集域" /> : (
           <div className="space-y-3 p-3">
-            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-3">
-              <DomainMetric label="采集配置 hash" value={activeRoute.route.collectorConfigHash || activeRoute.source?.collectorConfigHash || '-'} tone="primary" />
-              <DomainMetric label="部署清单 hash" value={activeRoute.source?.deploymentManifestHash || '-'} />
-              <DomainMetric label="下游端点" value={activeRoute.endpoint ? `${activeRoute.endpoint.name} · ${logSinkLabel(activeRoute.endpoint.sinkType)}` : '-'} />
+            <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
               <DomainMetric label="发布状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
-              <DomainMetric label="Audit" value={activeRoute.route.lastAuditId || '-'} />
-              <DomainMetric label="Preview" value={activeRoute.route.lastPreviewId || '-'} />
-              <DomainMetric label="采集域" value={activeGroup?.displayName || activeGroup?.name || '-'} tone="primary" />
-              <DomainMetric label="路由数" value={`${activeDomainRoutes.length}`} />
+              <DomainMetric label="Agent 健康" value={`${onlineCount} / ${instances.length}`} tone={instances.length > 0 && onlineCount === instances.length ? 'primary' : undefined} />
+              <DomainMetric label="采集配置 hash" value={activeRoute.route.collectorConfigHash || activeRoute.source?.collectorConfigHash || '-'} tone="primary" />
               <DomainMetric label="最近发布时间" value={activeRoute.route.lastPublishedAt || '-'} />
             </div>
             <section className="overflow-hidden rounded-lg border border-outline bg-white">
@@ -138,7 +135,7 @@ export function LogsAgentsPage() {
                 <span className="rounded border border-outline bg-white px-2 py-1 text-[11px] font-semibold text-primary">{agentInstancesOpen ? '收起' : '展开'}</span>
               </button>
               {agentInstancesOpen ? (
-                instances.length === 0 ? <LogsEmptyState title="暂无 Agent 心跳数据" description="采集域状态不依赖心跳数据，后续可接入 Collector metrics 或 OpAMP 心跳补齐实例视图。" /> : (
+                instances.length === 0 ? <LogsEmptyState title="暂无 Agent 心跳数据" /> : (
                   <div className="overflow-auto">
                     <table className="console-table min-w-[960px] w-full">
                       <thead>
@@ -190,7 +187,7 @@ export function LogsAgentsPage() {
         )}
       </LogsSection>
 
-      <LogsSection title="路由上下文" meta={activeRoute?.route.collectorConfigHash || 'route context'} bodyClassName="p-0">
+      <LogsSection title="路由上下文" meta={activeRoute?.route.collectorConfigHash || 'route context'} className="min-h-0 flex flex-col" bodyClassName="min-h-0 flex-1 overflow-y-auto p-0">
         <LogsInfoCell label="服务" value={activeServiceName} tone="primary" />
         <LogsInfoCell label="范围" value={activeScope} />
         <LogsInfoCell label="来源" value={activeRoute ? logSourceLabel(activeRoute.route.sourceType) : '-'} />
@@ -199,10 +196,7 @@ export function LogsAgentsPage() {
         <LogsInfoCell label="采集域模式" value={activeGroup?.mode || '-'} />
         <LogsInfoCell label="采集域范围" value={activeGroup ? activeAgentScope : '-'} />
         <LogsInfoCell label="Agent Namespace" value={instances[0]?.agentNamespace || activeGroup?.namespace || '-'} />
-        <LogsInfoCell label="运行实例" value={`${instances.length} / ${onlineCount}`} />
-        <LogsInfoCell label="运行身份来源" value="runtime_identity -> opamp_instance_uid" />
-        <LogsInfoCell label="采集配置" value={activeRoute?.route.collectorConfigHash || '-'} />
-        <LogsInfoCell label="部署状态" value={activeLifecycle?.detail || '-'} />
+        <LogsInfoCell label="部署清单 hash" value={activeRoute?.source?.deploymentManifestHash || '-'} />
         <LogsInfoCell label="Audit" value={activeRoute?.route.lastAuditId || '-'} />
         <LogsInfoCell label="Preview" value={activeRoute?.route.lastPreviewId || '-'} />
         <div className="border-t border-outline/70 p-3">
