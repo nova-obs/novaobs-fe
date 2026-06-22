@@ -140,7 +140,7 @@ function RouteSelector({ routes, services, activeRoute, onSelect }: {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (!rect) return;
       const viewportPadding = 12;
-      const width = Math.min(Math.max(rect.width, 420), window.innerWidth - viewportPadding * 2);
+      const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
       const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - width - viewportPadding);
       const estimatedHeight = Math.min(Math.max(routes.length, 1) * 68 + 8, 288);
       const below = rect.bottom + 6;
