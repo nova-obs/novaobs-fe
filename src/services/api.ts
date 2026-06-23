@@ -1,6 +1,12 @@
 import type {
   AgentDetail,
   AlertRule,
+  AlertRuleSpec,
+  AlertRuleTestResult,
+  AlertRuleUpdateRecord,
+  NotificationPolicy,
+  AlertInstance,
+  AlertEvent,
   CheckResult,
   ChecklistItem,
   CollectorConfigSources,
@@ -633,19 +639,99 @@ function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
 function mapAlertRule(raw: any): AlertRule {
   return {
     id: String(raw.id),
-    name: raw.name,
-    source: raw.source ?? 'logs',
-    ruleType: raw.rule_type ?? raw.ruleType ?? 'count',
-    query: raw.query ?? '',
-    window: raw.window ?? '',
-    evalInterval: raw.eval_interval ?? raw.evalInterval ?? '',
-    lookbackDelay: raw.lookback_delay ?? raw.lookbackDelay ?? '',
-    condition: raw.condition ?? '',
-    groupBy: parseStringList(raw.group_by ?? raw.groupBy),
-    severity: raw.severity ?? 'medium',
-    ownerTeam: raw.owner_team ?? raw.ownerTeam ?? '',
-    alertRoute: raw.alert_route ?? raw.alertRoute ?? '',
-    status: raw.status ?? 'draft',
+    spec: mapAlertRuleSpec(raw.spec ?? {}),
+    state: raw.state ?? 'disabled',
+    applyStatus: raw.apply_status ?? raw.applyStatus ?? 'pending',
+    currentUpdateId: raw.current_update_id ?? raw.currentUpdateId ?? '',
+    appliedUpdateId: raw.applied_update_id ?? raw.appliedUpdateId ?? '',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapAlertRuleSpec(raw: any): AlertRuleSpec {
+  return {
+    name: raw.name ?? '',
+    description: raw.description ?? '',
+    scope: {
+      serviceId: raw.scope?.service_id ?? '',
+      serviceName: raw.scope?.service_name ?? '',
+      logRouteId: raw.scope?.log_route_id ?? '',
+      endpointId: raw.scope?.endpoint_id ?? '',
+      accountId: raw.scope?.account_id ?? '',
+      projectId: raw.scope?.project_id ?? '',
+    },
+    query: { mode: raw.query?.mode ?? 'contains', expression: raw.query?.expression ?? '' },
+    trigger: {
+      mode: 'window',
+      aggregation: raw.trigger?.aggregation ?? 'count',
+      operator: raw.trigger?.operator ?? 'gte',
+      threshold: Number(raw.trigger?.threshold ?? 1),
+      window: raw.trigger?.window ?? '1m',
+      evaluationInterval: raw.trigger?.evaluation_interval ?? '30s',
+      evaluationDelay: raw.trigger?.evaluation_delay ?? '0s',
+      pendingFor: raw.trigger?.pending_for ?? '0s',
+      keepFiringFor: raw.trigger?.keep_firing_for ?? '0s',
+    },
+    grouping: { fields: parseStringList(raw.grouping?.fields), maxInstances: Number(raw.grouping?.max_instances ?? 100) },
+    notification: {
+      policyId: raw.notification?.policy_id ?? '',
+      severity: raw.notification?.severity ?? 'warning',
+      ownerTeam: raw.notification?.owner_team ?? '',
+      runbookUrl: raw.notification?.runbook_url ?? '',
+    },
+    derivedMetric: raw.derived_metric ? {
+      enabled: Boolean(raw.derived_metric.enabled),
+      signal: raw.derived_metric.signal ?? '',
+      labels: raw.derived_metric.labels ?? {},
+    } : undefined,
+  };
+}
+
+function alertRuleSpecBody(spec: AlertRuleSpec) {
+  return {
+    name: spec.name,
+    description: spec.description,
+    scope: {
+      service_id: spec.scope.serviceId,
+      service_name: spec.scope.serviceName,
+      log_route_id: spec.scope.logRouteId,
+      endpoint_id: spec.scope.endpointId,
+      account_id: spec.scope.accountId,
+      project_id: spec.scope.projectId,
+    },
+    query: spec.query,
+    trigger: {
+      mode: spec.trigger.mode,
+      aggregation: spec.trigger.aggregation,
+      operator: spec.trigger.operator,
+      threshold: spec.trigger.threshold,
+      window: spec.trigger.window,
+      evaluation_interval: spec.trigger.evaluationInterval,
+      evaluation_delay: spec.trigger.evaluationDelay,
+      pending_for: spec.trigger.pendingFor,
+      keep_firing_for: spec.trigger.keepFiringFor,
+    },
+    grouping: { fields: spec.grouping.fields, max_instances: spec.grouping.maxInstances },
+    notification: {
+      policy_id: spec.notification.policyId,
+      severity: spec.notification.severity,
+      owner_team: spec.notification.ownerTeam,
+      runbook_url: spec.notification.runbookUrl || undefined,
+    },
+    derived_metric: spec.derivedMetric ? {
+      enabled: spec.derivedMetric.enabled,
+      signal: spec.derivedMetric.signal,
+      labels: spec.derivedMetric.labels,
+    } : undefined,
+  };
+}
+
+function mapNotificationPolicy(raw: any): NotificationPolicy {
+  return {
+    id: String(raw.id ?? ''), name: raw.name ?? '', description: raw.description ?? '', serviceId: raw.service_id ?? '',
+    alertmanagerReceiver: raw.alertmanager_receiver ?? '',
+    enabled: Boolean(raw.enabled), createdAt: raw.created_at ?? '', updatedAt: raw.updated_at ?? '',
   };
 }
 
@@ -917,8 +1003,111 @@ export const api = {
     return mapWorkspace(raw);
   },
   async getAlertRules(): Promise<AlertRule[]> {
-    const raw = await request<any[]>('/alert-rules');
+    const raw = await request<any[]>('/alerts/rules');
     return Array.isArray(raw) ? raw.map(mapAlertRule) : [];
+  },
+  async getAlertRule(id: string): Promise<AlertRule> {
+    return mapAlertRule(await request<any>(`/alerts/rules/${id}`));
+  },
+  async testAlertRule(spec: AlertRuleSpec, rangeMinutes = 5): Promise<AlertRuleTestResult> {
+    const rangeEnd = new Date();
+    const rangeStart = new Date(rangeEnd.getTime() - rangeMinutes * 60_000);
+    const raw = await request<any>('/alerts/rules/test', {
+      method: 'POST',
+      body: JSON.stringify({ spec: alertRuleSpecBody(spec), range_start: rangeStart.toISOString(), range_end: rangeEnd.toISOString() }),
+    });
+    return {
+      inputHash: raw.input_hash ?? '',
+      testToken: raw.test_token ?? '',
+      testedAt: raw.tested_at ?? '',
+      compiledQuery: raw.compiled_query ?? '',
+      matchedLogCount: Number(raw.matched_log_count ?? 0),
+      estimatedInstanceCount: Number(raw.estimated_instance_count ?? 0),
+      queryDurationMillis: Number(raw.query_duration_ms ?? 0),
+      partialResponse: Boolean(raw.partial_response),
+      topGroups: Array.isArray(raw.top_groups) ? raw.top_groups : [],
+      warnings: parseStringList(raw.warnings),
+    };
+  },
+  async createAlertRule(spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
+    const raw = await request<any>('/alerts/rules', {
+      method: 'POST',
+      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: '创建并启用日志告警' }),
+    });
+    return mapAlertRule(raw.rule);
+  },
+  async updateAlertRule(id: string, spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
+    const raw = await request<any>(`/alerts/rules/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: '更新日志告警' }),
+    });
+    return mapAlertRule(raw.rule);
+  },
+  async disableAlertRule(id: string): Promise<AlertRule> {
+    const raw = await request<any>(`/alerts/rules/${id}/disable`, { method: 'POST', body: JSON.stringify({ change_summary: '停用日志告警' }) });
+    return mapAlertRule(raw.rule);
+  },
+  async getAlertRuleUpdates(id: string): Promise<AlertRuleUpdateRecord[]> {
+    const raw = await request<any[]>(`/alerts/rules/${id}/updates`);
+    return Array.isArray(raw) ? raw.map((item) => ({
+      id: item.id ?? '', ruleId: item.rule_id ?? '', action: item.action ?? 'update',
+      changeSummary: item.change_summary ?? '', createdAt: item.created_at ?? '',
+      actor: { id: item.actor?.id ?? '', name: item.actor?.name ?? '' },
+    })) : [];
+  },
+  async rollbackAlertRule(id: string, updateId: string): Promise<AlertRule> {
+    const raw = await request<any>(`/alerts/rules/${id}/rollback`, {
+      method: 'POST', body: JSON.stringify({ update_id: updateId, change_summary: '从更新记录回退' }),
+    });
+    return mapAlertRule(raw.rule);
+  },
+  async getNotificationPolicies(serviceId?: string): Promise<NotificationPolicy[]> {
+    const search = new URLSearchParams();
+    if (serviceId) search.set('service_id', serviceId);
+    const raw = await request<any[]>(`/alerts/notification-policies${search.size ? `?${search}` : ''}`);
+    return Array.isArray(raw) ? raw.map(mapNotificationPolicy) : [];
+  },
+  async createNotificationPolicy(input: {
+    name: string; alertmanagerReceiver: string; serviceId?: string; description?: string;
+  }): Promise<NotificationPolicy> {
+    const raw = await request<any>('/alerts/notification-policies', {
+      method: 'POST', body: JSON.stringify({
+        name: input.name, description: input.description ?? '', service_id: input.serviceId ?? '',
+        alertmanager_receiver: input.alertmanagerReceiver, enabled: true,
+      }),
+    });
+    return mapNotificationPolicy(raw);
+  },
+  async setNotificationPolicyEnabled(policy: NotificationPolicy, enabled: boolean): Promise<NotificationPolicy> {
+    const raw = await request<any>(`/alerts/notification-policies/${policy.id}`, {
+      method: 'PUT', body: JSON.stringify({
+        name: policy.name, description: policy.description, service_id: policy.serviceId,
+        alertmanager_receiver: policy.alertmanagerReceiver, enabled,
+      }),
+    });
+    return mapNotificationPolicy(raw);
+  },
+  async getAlertInstances(params?: { ruleId?: string; state?: string }): Promise<AlertInstance[]> {
+    const search = new URLSearchParams();
+    if (params?.ruleId) search.set('rule_id', params.ruleId);
+    if (params?.state) search.set('state', params.state);
+    const raw = await request<any[]>(`/alerts/instances${search.size ? `?${search}` : ''}`);
+    return Array.isArray(raw) ? raw.map((item) => ({
+      fingerprint: item.fingerprint ?? '', ruleId: item.rule_id ?? '', serviceId: item.service_id ?? '',
+      state: item.state ?? 'resolved', labels: item.labels ?? {}, annotations: item.annotations ?? {},
+      startsAt: item.starts_at ?? '', endsAt: item.ends_at ?? '', lastReceivedAt: item.last_received_at ?? '',
+      lastEventId: item.last_event_id ?? '',
+    })) : [];
+  },
+  async getAlertEvents(ruleId: string, fingerprint?: string): Promise<AlertEvent[]> {
+    const search = new URLSearchParams({ rule_id: ruleId });
+    if (fingerprint) search.set('fingerprint', fingerprint);
+    const raw = await request<any[]>(`/alerts/events?${search}`);
+    return Array.isArray(raw) ? raw.map((item) => ({
+      id: item.id ?? '', fingerprint: item.fingerprint ?? '', ruleId: item.rule_id ?? '',
+      previousState: item.previous_state ?? '', state: item.state ?? 'resolved', labels: item.labels ?? {},
+      annotations: item.annotations ?? {}, occurredAt: item.occurred_at ?? '', receivedAt: item.received_at ?? '',
+    })) : [];
   },
   async getK8sDashboard(clusterId = 'prod'): Promise<K8sDashboardSnapshot> {
     const raw = await request<any>(`/k8sops/dashboard?cluster_id=${encodeURIComponent(clusterId)}`);

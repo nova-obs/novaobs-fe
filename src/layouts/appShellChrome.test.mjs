@@ -80,10 +80,10 @@ test('顶层框架提供轻量路由切换过渡', () => {
   assert.equal(source.includes('key={location.pathname}'), true);
   assert.equal(source.includes('route-transition-page'), true);
   assert.equal(styleSource.includes('@keyframes route-enter'), true);
-  assert.equal(styleSource.includes('translate3d(0, 8px, 0)'), true);
-  assert.equal(styleSource.includes('cubic-bezier(0.16, 1, 0.3, 1)'), true);
+  assert.equal(styleSource.includes('translate3d(0, 12px, 0)'), true);
+  assert.equal(styleSource.includes('cubic-bezier(0.22, 1, 0.36, 1)'), true);
   assert.equal(styleSource.includes('prefers-reduced-motion: reduce'), true);
-  assert.equal(styleSource.includes('will-change: opacity, transform'), true);
+  assert.equal(styleSource.includes('will-change: opacity, transform, filter'), true);
 });
 
 test('顶层框架使用柔和观测控制面视觉语言', () => {

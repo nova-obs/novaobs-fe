@@ -432,7 +432,7 @@ function ServiceGraphPanel({
           <div className="grid gap-4 lg:grid-cols-3">
             <RelationList icon={<Cpu className="h-4 w-4 text-primary" />} title="Agent" empty="暂无 Agent" items={graph.agents.map((agent) => ({ id: agent.instanceUid, title: agent.instanceUid, meta: `${agent.runtimeStatus} · ${agent.remoteConfigStatus || 'unset'}` }))} />
             <RelationList icon={<GitBranch className="h-4 w-4 text-primary" />} title="日志路由" empty="暂无日志路由" items={graph.logRoutes.routes.map((item) => ({ id: item.route.id, title: item.source?.sourceType === 'vm_file' ? item.source.pathPattern : `${item.source?.workloadKind || '-'} / ${item.source?.workloadName || '-'}`, meta: `${item.route.sourceType} · ${item.route.lastPublishStatus || item.route.status || 'unknown'}` }))} />
-            <RelationList icon={<Bell className="h-4 w-4 text-primary" />} title="告警规则" empty="暂无告警规则" items={graph.alertRules.map((rule) => ({ id: rule.id, title: rule.name, meta: `${rule.severity} · ${rule.status}` }))} />
+            <RelationList icon={<Bell className="h-4 w-4 text-primary" />} title="告警规则" empty="暂无告警规则" items={graph.alertRules.map((rule) => ({ id: rule.id, title: rule.spec.name, meta: `${rule.spec.notification.severity} · ${rule.state}` }))} />
           </div>
         </div>
       ) : null}

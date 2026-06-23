@@ -502,3 +502,47 @@ test('获取服务绑定 Agent 时调用 GET /services/:id/agents', async () => 
 
   assert.equal(request.path, '/api/v1/services/svc-001/agents');
 });
+
+test('日志告警测试和启用使用结构化规则契约', async () => {
+  const spec = {
+    name: '支付失败', description: '',
+    scope: { serviceId: 'svc-a', serviceName: 'payment', logRouteId: 'route-a', endpointId: 'vl-a', accountId: '1', projectId: '2' },
+    query: { mode: 'contains', expression: 'payment failed' },
+    trigger: { mode: 'window', aggregation: 'count', operator: 'gte', threshold: 3, window: '1m', evaluationInterval: '30s', evaluationDelay: '5s', pendingFor: '0s', keepFiringFor: '0s' },
+    grouping: { fields: ['deployment.environment'], maxInstances: 100 },
+    notification: { policyId: 'default-webhook', severity: 'warning', ownerTeam: 'pay', runbookUrl: '' },
+  };
+  const request = await captureRequest(
+    () => api.createAlertRule(spec, 'test-token'),
+    { rule: { id: 'rule-a', spec: { name: '支付失败' }, state: 'enabled', apply_status: 'pending' } },
+  );
+
+  assert.equal(request.path, '/api/v1/alerts/rules');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.body.test_token, 'test-token');
+  assert.equal(request.body.spec.scope.service_id, 'svc-a');
+  assert.equal(request.body.spec.trigger.evaluation_interval, '30s');
+  assert.deepEqual(request.body.spec.grouping.fields, ['deployment.environment']);
+  assert.equal('draft' in request.body, false);
+});
+
+test('日志告警实例和更新记录使用统一 alerts API', async () => {
+  const instances = await captureRequest(() => api.getAlertInstances({ state: 'firing' }), []);
+  assert.equal(instances.path, '/api/v1/alerts/instances?state=firing');
+  const updates = await captureRequest(() => api.getAlertRuleUpdates('rule-a'), []);
+  assert.equal(updates.path, '/api/v1/alerts/rules/rule-a/updates');
+});
+
+test('通知策略使用受管资源而不是规则中的自由文本配置', async () => {
+  const list = await captureRequest(() => api.getNotificationPolicies('svc-a'), []);
+  assert.equal(list.path, '/api/v1/alerts/notification-policies?service_id=svc-a');
+
+  const created = await captureRequest(
+    () => api.createNotificationPolicy({ name: '支付值班', alertmanagerReceiver: 'pay-oncall' }),
+    { id: 'policy-a', name: '支付值班', alertmanager_receiver: 'pay-oncall', enabled: true },
+  );
+  assert.equal(created.path, '/api/v1/alerts/notification-policies');
+  assert.equal(created.body.alertmanager_receiver, 'pay-oncall');
+  assert.equal('url' in created.body, false);
+  assert.equal('secret' in created.body, false);
+});

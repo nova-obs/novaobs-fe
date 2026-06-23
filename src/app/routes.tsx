@@ -20,6 +20,7 @@ import { K8sTemplatePage } from '../pages/k8s/TemplatePage';
 import { K8sTerminalPage } from '../pages/k8s/TerminalPage';
 import { LogsAgentsPage } from '../pages/logs/LogsAgentsPage';
 import { LogsAlertsPage } from '../pages/logs/LogsAlertsPage';
+import { LogsAlertRulePage } from '../pages/logs/LogsAlertRulePage';
 import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
 import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
@@ -77,6 +78,8 @@ const logsChildRoutes: RouteDefinition[] = [
   { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
   { path: 'onboarding', title: 'Logs 接入配置', element: <LogsOnboardingPage /> },
   { path: 'agents', title: 'Logs 采集路由', element: <LogsAgentsPage /> },
+  { path: 'alerts/new', title: '创建日志告警', element: <LogsAlertRulePage /> },
+  { path: 'alerts/:id', title: '更新日志告警', element: <LogsAlertRulePage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
 ];
 

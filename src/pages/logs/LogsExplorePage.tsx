@@ -107,7 +107,7 @@ export function LogsExplorePage() {
         <div className="border-t border-outline/70 p-3">
           <div className="mb-2 text-xs font-semibold text-on-surface">动作</div>
           <div className="grid gap-2">
-            <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to="/logs/alerts">
+            <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/alerts/new?route_id=${encodeURIComponent(activeRoute?.route.id || '')}`}>
               <Bell className="h-3.5 w-3.5" />创建告警
             </Link>
             <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/agents?agent_group_id=${activeRoute?.route.agentGroupId || ''}&route_id=${activeRoute?.route.id || ''}`}>

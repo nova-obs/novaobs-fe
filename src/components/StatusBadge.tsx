@@ -6,6 +6,7 @@ type StatusValue =
   | 'debug'
   | 'info'
   | 'warn'
+  | 'warning'
   | 'error'
   | 'enabled'
   | 'disabled'
@@ -24,6 +25,7 @@ const statusClass: Record<string, string> = {
   info: 'border-primary/25 bg-primary-soft text-primary',
   debug: 'border-outline bg-surface-low text-muted',
   warn: 'border-amber-200 bg-amber-50 text-amber-700',
+  warning: 'border-amber-200 bg-amber-50 text-amber-700',
   error: 'border-red-200 bg-red-50 text-red-700',
   pending: 'border-amber-200 bg-amber-50 text-amber-700',
   draft: 'border-amber-200 bg-amber-50 text-amber-700',
@@ -47,6 +49,7 @@ const statusText: Record<string, string> = {
   info: 'info',
   debug: 'debug',
   warn: 'warn',
+  warning: '警告',
   error: 'error',
   pending: '待接入',
   draft: '草稿',

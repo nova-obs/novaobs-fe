@@ -15,7 +15,7 @@ export function OverviewPage() {
   const serviceCount = overview?.serviceCount || services.length;
   const logThroughput = overview?.logThroughputPerMinute ?? 0;
   const healthyLogRouteCount = overview?.healthyLogRouteCount ?? 0;
-  const activeAlertCount = overview?.activeAlertCount || alertRules.filter((rule) => rule.status === 'enabled').length;
+  const activeAlertCount = overview?.activeAlertCount || alertRules.filter((rule) => rule.state === 'enabled').length;
 
   const metrics = [
     {
@@ -168,7 +168,7 @@ export function OverviewPage() {
           <div className="grid gap-2 text-xs">
             <InfoLine label="服务来源" value={services.length ? sourceSummary(services) : '-'} />
             <InfoLine label="配置同步" value={`${services.filter((item) => item.syncStatus === 'synced').length} synced`} />
-            <InfoLine label="告警路由" value={`${alertRules.filter((item) => item.status === 'enabled').length} enabled`} />
+            <InfoLine label="告警规则" value={`${alertRules.filter((item) => item.state === 'enabled').length} enabled`} />
             <InfoLine label="审计" value="platform audit" />
           </div>
         </DataPanel>
@@ -221,14 +221,14 @@ function AlertRuleRow({ rule }: { rule: AlertRule }) {
   return (
     <tr className="bg-white/35 hover:bg-white/60">
       <td>
-        <div className="font-semibold text-primary">{rule.name}</div>
-        <div className="max-w-[320px] truncate font-mono text-[11px] text-muted">{rule.query || '-'}</div>
+        <div className="font-semibold text-primary">{rule.spec.name}</div>
+        <div className="max-w-[320px] truncate font-mono text-[11px] text-muted">{rule.spec.query.expression || '-'}</div>
       </td>
-      <td className="font-mono text-xs">{rule.source || '-'}</td>
-      <td className="font-mono text-xs">{rule.window || '-'}</td>
-      <td><StateChip value={rule.severity} /></td>
-      <td className="text-xs text-muted">{rule.ownerTeam || '-'}</td>
-      <td><StateChip value={rule.status} /></td>
+      <td className="font-mono text-xs">logs</td>
+      <td className="font-mono text-xs">{rule.spec.trigger.window || '-'}</td>
+      <td><StateChip value={rule.spec.notification.severity} /></td>
+      <td className="text-xs text-muted">{rule.spec.notification.ownerTeam || '-'}</td>
+      <td><StateChip value={rule.state} /></td>
     </tr>
   );
 }

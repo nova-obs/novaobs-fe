@@ -23,10 +23,10 @@ test('K8s 运维使用嵌套路由承载模块子页面', () => {
   assert.equal(route?.children?.some((item) => item.path === 'rbac'), true);
 });
 
-test('Logs 使用模块内四个入口，Pipeline 独立入口已移除', () => {
+test('Logs 保留四个模块入口，并为日志告警提供创建流程', () => {
   const paths = routeDefinitions.map((r) => r.path);
   const logs = routeDefinitions.find((r) => r.path === '/logs');
-  assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'onboarding', 'agents', 'alerts']);
+  assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'onboarding', 'agents', 'alerts/new', 'alerts/:id', 'alerts']);
   assert.equal(paths.includes('/pipelines'), false);
   assert.ok(paths.includes('/agents/:uid'));
   assert.equal(paths.includes('/collectors'), false);

@@ -9,8 +9,8 @@ export function LogsAlertsPage() {
     queryKey: ['logs-alert-rules'],
     queryFn: api.getAlertRules,
   });
-  const logRules = rules.filter((rule) => rule.source === 'logs');
-  const enabledCount = logRules.filter((rule) => rule.status === 'enabled').length;
+  const logRules = rules;
+  const enabledCount = logRules.filter((rule) => rule.state === 'enabled').length;
 
   return (
     <div className="logs-alerts-workbench min-h-[680px]">
@@ -19,14 +19,14 @@ export function LogsAlertsPage() {
         meta={isLoading ? 'loading' : `${logRules.length} rules · ${enabledCount} enabled`}
         bodyClassName="p-0"
         action={
-          <Link className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-primary-soft px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" to="/logs/explore">从查询创建</Link>
+          <Link className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-primary-soft px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" to="/logs/alerts/new">创建告警</Link>
         }
       >
         {error ? <ErrorLine message={(error as Error).message} /> : null}
         {logRules.length === 0 ? (
           <LogsEmptyState
             title="日志告警规则为空"
-            action={<Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/explore">日志分析</Link>}
+            action={<Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/alerts/new">创建告警</Link>}
           />
         ) : (
           <div className="overflow-auto">
@@ -45,17 +45,17 @@ export function LogsAlertsPage() {
               <tbody>
                 {logRules.map((rule) => (
                   <tr key={rule.id}>
-                    <td className="font-semibold text-on-surface">{rule.name}</td>
-                    <td>{rule.severity}</td>
-                    <td className="font-mono text-xs">{rule.window || '-'}</td>
-                    <td>{rule.alertRoute || '-'}</td>
+                    <td className="font-semibold text-on-surface">{rule.spec.name}</td>
+                    <td>{rule.spec.notification.severity}</td>
+                    <td className="font-mono text-xs">{rule.spec.trigger.window || '-'}</td>
+                    <td>{rule.spec.notification.policyId || '-'}</td>
                     <td>
-                      <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${rule.status === 'enabled' ? 'border-primary/20 bg-primary-soft text-primary' : 'border-outline bg-white text-muted'}`}>
-                        {rule.status}
+                      <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${rule.state === 'enabled' ? 'border-primary/20 bg-primary-soft text-primary' : 'border-outline bg-white text-muted'}`}>
+                        {rule.state} · {rule.applyStatus}
                       </span>
                     </td>
-                    <td className="max-w-[420px] truncate font-mono text-xs text-muted">{rule.query}</td>
-                    <td><Link className="inline-flex items-center gap-1 text-primary hover:underline" to="/alerts"><ExternalLink className="h-3.5 w-3.5" />告警中心</Link></td>
+                    <td className="max-w-[420px] truncate font-mono text-xs text-muted">{rule.spec.query.expression}</td>
+                    <td><div className="flex items-center gap-3"><Link className="text-primary hover:underline" to={`/logs/alerts/${rule.id}`}>编辑</Link><Link className="inline-flex items-center gap-1 text-primary hover:underline" to="/alerts"><ExternalLink className="h-3.5 w-3.5" />告警中心</Link></div></td>
                   </tr>
                 ))}
               </tbody>
