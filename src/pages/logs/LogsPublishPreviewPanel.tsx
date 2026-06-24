@@ -21,7 +21,7 @@ function publishOperationLabel(value: string) {
 
 function WarnLine({ message }: { message: string }) {
   return (
-    <div className="mt-3 flex items-center gap-2 rounded border border-amber-500/30 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+    <div className="console-notice console-notice-warning mt-3">
       <AlertTriangle className="h-4 w-4" />{message}
     </div>
   );
@@ -51,7 +51,7 @@ export function LogsPublishPreviewPanel({ preview }: { preview: LogPublishResult
     }));
 
   return (
-    <div className="mt-4 overflow-hidden rounded-lg border border-primary/25 bg-primary-soft/35">
+    <div className="mt-4 overflow-hidden rounded-md border border-primary/25 bg-primary-soft/35">
       <div className="flex flex-col gap-3 border-b border-primary/15 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="text-sm font-semibold text-on-surface">发布预览</div>

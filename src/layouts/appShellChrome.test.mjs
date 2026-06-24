@@ -51,6 +51,8 @@ test('顶层框架引入搜索和用户入口', () => {
 test('登录表单通过提交事件调用平台登录', () => {
   assert.equal(source.includes('<form className="console-panel relative w-full max-w-sm p-8" onSubmit={submit}>'), true);
   assert.equal(source.includes('<button type="submit"'), true);
+  assert.equal(source.includes('font-display text-lg font-semibold tracking-tight">登录'), true);
+  assert.equal(source.includes('grid gap-1.5 text-[13px] font-semibold text-muted'), true);
 });
 
 test('主侧边导航支持桌面端收起和展开', () => {
@@ -80,10 +82,11 @@ test('顶层框架提供轻量路由切换过渡', () => {
   assert.equal(source.includes('key={location.pathname}'), true);
   assert.equal(source.includes('route-transition-page'), true);
   assert.equal(styleSource.includes('@keyframes route-enter'), true);
-  assert.equal(styleSource.includes('translate3d(0, 12px, 0)'), true);
+  assert.equal(styleSource.includes('translate3d(0, 4px, 0)'), true);
   assert.equal(styleSource.includes('cubic-bezier(0.22, 1, 0.36, 1)'), true);
   assert.equal(styleSource.includes('prefers-reduced-motion: reduce'), true);
-  assert.equal(styleSource.includes('will-change: opacity, transform, filter'), true);
+  assert.equal(styleSource.includes('will-change: opacity, transform;'), true);
+  assert.equal(styleSource.includes('filter: blur'), false);
 });
 
 test('顶层框架使用柔和观测控制面视觉语言', () => {

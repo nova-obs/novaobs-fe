@@ -75,13 +75,13 @@ export function ObservabilitySettingsPage() {
     <div className="space-y-4">
       <DataPanel title="观测接入配置" meta={`${endpoints.length} log endpoints`}>
         <div className="grid items-start gap-4 2xl:grid-cols-[360px_minmax(0,1fr)]">
-          <section className="overflow-hidden rounded-lg border border-outline bg-surface-lowest">
-            <div className="flex items-center justify-between gap-3 border-b border-outline bg-white/76 px-3 py-3">
+          <section className="overflow-hidden rounded-md border border-outline bg-surface-lowest">
+            <div className="console-panel-header">
               <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
                 <Database className="h-4 w-4 text-primary" />
                 日志下游端点
               </div>
-              <button className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-2.5 text-xs font-semibold text-white transition active:translate-y-px" onClick={startCreate}>
+              <button className="console-button console-button-primary" onClick={startCreate}>
                 <Plus className="h-3.5 w-3.5" />
                 新增
               </button>
@@ -91,7 +91,7 @@ export function ObservabilitySettingsPage() {
                 <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
                 <input className="console-input h-9 w-full pl-8 text-sm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索端点 / URL / 集群" />
               </div>
-              <div className="max-h-[460px] overflow-auto rounded-lg border border-outline bg-white">
+              <div className="max-h-[460px] overflow-auto rounded-md border border-outline bg-white">
                 {filteredEndpoints.length === 0 ? (
                   <div className="px-3 py-8 text-center text-sm text-muted">暂无日志下游端点</div>
                 ) : filteredEndpoints.map((endpoint) => {
@@ -108,7 +108,7 @@ export function ObservabilitySettingsPage() {
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{endpoint.name}</div>
-                        <span className="rounded border border-outline bg-white/80 px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">{logSinkLabel(endpoint.sinkType)}</span>
+                        <span className="rounded border border-outline bg-surface px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">{logSinkLabel(endpoint.sinkType)}</span>
                       </div>
                       <div className="mt-1 truncate font-mono text-[11px] text-muted">{endpoint.scopeType}{endpoint.clusterId ? ` · ${endpoint.clusterId}` : ''}</div>
                       <div className="mt-1 truncate font-mono text-[11px] text-muted">{endpoint.writeURL || '-'}</div>
@@ -119,20 +119,20 @@ export function ObservabilitySettingsPage() {
             </div>
           </section>
 
-          <section className="overflow-hidden rounded-lg border border-outline bg-surface-lowest">
-            <div className="flex flex-col gap-2 border-b border-outline bg-white/76 px-3 py-3 md:flex-row md:items-center md:justify-between">
+          <section className="overflow-hidden rounded-md border border-outline bg-surface-lowest">
+            <div className="console-panel-header flex-col md:flex-row md:items-center">
               <div>
                 <div className="text-sm font-semibold text-on-surface">{selectedEndpoint ? '编辑日志下游端点' : '新增日志下游端点'}</div>
                 <div className="mt-1 font-mono text-[11px] text-muted">{selectedEndpoint ? selectedEndpoint.id : 'new endpoint'}</div>
               </div>
               <div className="flex gap-2">
                 {selectedEndpoint ? (
-                  <button className="quiet-button h-8 px-2.5 text-xs" onClick={startCreate}>
+                  <button className="console-button" onClick={startCreate}>
                     <X className="h-3.5 w-3.5" />
                     取消选择
                   </button>
                 ) : null}
-                <button className="inline-flex h-8 items-center gap-1.5 rounded-md bg-primary px-3 text-xs font-semibold text-white disabled:opacity-60" disabled={!canSubmit || saveMutation.isPending} onClick={() => saveMutation.mutate()} title={missing.length > 0 ? `还需：${formatMissing(missing)}` : formSaved ? '当前配置已保存' : '保存端点'}>
+                <button className="console-button console-button-primary" disabled={!canSubmit || saveMutation.isPending} onClick={() => saveMutation.mutate()} title={missing.length > 0 ? `还需：${formatMissing(missing)}` : formSaved ? '当前配置已保存' : '保存端点'}>
                   {saveMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
                   保存
                 </button>

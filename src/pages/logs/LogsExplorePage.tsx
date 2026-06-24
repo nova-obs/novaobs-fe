@@ -40,7 +40,6 @@ export function LogsExplorePage() {
             <div className="logs-explore-context-panel min-w-0 overflow-hidden rounded-md border border-primary/25 bg-white shadow-[0_8px_18px_rgba(24,52,96,0.12)]">
               <div className="logs-explore-context-header flex h-7 items-center justify-between gap-2 border-b border-primary/15 bg-primary-soft/75 px-3 text-[11px] font-semibold text-primary">
                 <span>日志路由</span>
-                <span className="font-mono font-medium">{routes.length} routes</span>
               </div>
               <div className="p-2">
                 <RouteSelector routes={routes} services={services} activeRoute={activeRoute} onSelect={setRouteId} />
@@ -91,7 +90,7 @@ export function LogsExplorePage() {
         ) : (
           <LogsEmptyState
             title={routes.length === 0 ? '日志路由为空' : '当前下游未提供内嵌查询入口'}
-            action={routes.length === 0 ? <Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/onboarding">接入配置</Link> : undefined}
+            action={routes.length === 0 ? <Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/agents/new">创建采集路由</Link> : undefined}
           />
         )}
       </section>

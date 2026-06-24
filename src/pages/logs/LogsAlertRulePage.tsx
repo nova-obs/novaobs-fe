@@ -6,6 +6,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api } from '../../services/api';
 import type { AlertRuleSpec, AlertRuleTestResult } from '../../services/types';
 import { logsApi } from './api';
+import { LogsTaskPageHeader } from './LogsPrimitives';
 
 const fieldClass = 'mt-1.5 h-9 w-full rounded-md border border-outline bg-white px-3 text-sm text-on-surface outline-none focus:border-primary';
 
@@ -121,22 +122,31 @@ export function LogsAlertRulePage() {
   const compiledPreview = testCurrent ? testResult?.compiledQuery : previewLogsQL(spec);
 
   return (
-    <div className="min-h-[760px] rounded-lg border border-outline bg-surface-lowest shadow-[0_12px_30px_rgba(24,52,96,0.1)]">
-      <div className="flex flex-wrap items-center justify-between gap-3 border-b border-outline px-5 py-4">
-        <div className="min-w-0">
-          <h2 className="text-lg font-semibold text-on-surface">{ruleId ? '更新日志告警' : '创建日志告警'}</h2>
-          <div className="mt-2 flex flex-wrap items-center gap-1.5">
+    <div className="logs-task-page min-h-[760px] space-y-3">
+      <LogsTaskPageHeader
+        parentLabel="日志告警"
+        parentTo="/logs/alerts"
+        title={ruleId ? '更新日志告警' : '创建日志告警'}
+        description="定义匹配条件，测试通过后启用告警。"
+        meta={ruleId ? `rule ${ruleId.slice(0, 12)}` : 'new rule'}
+        context={
+          <>
             <ScopeChip label="服务" value={selectedService?.displayName || selectedService?.name || '-'} />
             <ScopeChip label="路由" value={selectedRoute?.route.name || selectedRoute?.route.id || '-'} />
             <ScopeChip label="数据源" value={selectedRoute?.endpoint ? `VictoriaLogs · ${selectedRoute.endpoint.name}` : '-'} />
-          </div>
-        </div>
-        <div className="flex items-center gap-2">{ruleId && ruleQuery.data?.state === 'enabled' ? <button className="inline-flex h-8 items-center rounded-md border border-red-200 bg-white px-3 text-xs font-semibold text-red-600 disabled:opacity-50" disabled={disableMutation.isPending} onClick={() => disableMutation.mutate()}>停用</button> : null}<Link className="inline-flex h-8 items-center rounded-md border border-outline bg-white px-3 text-xs font-semibold text-muted" to="/logs/alerts">取消</Link></div>
-      </div>
+          </>
+        }
+        action={(
+          <>
+            {ruleId && ruleQuery.data?.state === 'enabled' ? <button className="console-button console-button-danger" disabled={disableMutation.isPending} onClick={() => disableMutation.mutate()}>停用</button> : null}
+            <Link className="console-button" to="/logs/alerts">取消</Link>
+          </>
+        )}
+      />
 
-
-      <div className="grid xl:grid-cols-[minmax(0,1fr)_320px]">
-        <div className="space-y-4 p-5">
+      <div className="overflow-hidden border-y border-outline bg-surface-lowest">
+        <div className="grid xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="space-y-4 p-5">
           <Section number="01" title="匹配日志">
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="规则名称"><input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：支付失败日志" /></Field>
@@ -176,7 +186,7 @@ export function LogsAlertRulePage() {
             </div>
           </Section>
 
-          <details className="rounded-md border border-outline bg-surface-low/45">
+          <details className="border-y border-outline">
             <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-muted"><span>高级设置</span><ChevronDown className="h-4 w-4" /></summary>
             <div className="grid gap-3 border-t border-outline p-4 md:grid-cols-3">
               <Field label="按字段拆分（逗号分隔）"><input className={fieldClass} value={groupFields} onChange={(event) => setGroupFields(event.target.value)} placeholder="deployment.environment" /></Field>
@@ -184,9 +194,9 @@ export function LogsAlertRulePage() {
               <Field label="趋势指标"><select className={fieldClass} value={derivedMetric ? 'yes' : 'no'} onChange={(event) => { const enabled = event.target.value === 'yes'; setDerivedMetric(enabled); if (enabled) setGroupFields(''); }}><option value="no">不生成</option><option value="yes">生成规则级匹配计数</option></select></Field>
             </div>
           </details>
-        </div>
+          </div>
 
-        <aside className="flex flex-col border-t border-outline bg-surface-low/55 p-5 xl:border-l xl:border-t-0">
+          <aside className="flex flex-col border-t border-outline bg-surface-low/55 p-5 xl:border-l xl:border-t-0">
           <h3 className="text-base font-semibold text-on-surface">测试并启用</h3>
           <button type="button" className="mt-4 inline-flex h-9 items-center justify-center gap-2 rounded-md border border-primary bg-primary-soft text-sm font-semibold text-primary disabled:opacity-50" disabled={!formReady || testMutation.isPending} onClick={() => testMutation.mutate()}>
             {testMutation.isPending ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <FlaskConical className="h-4 w-4" />}测试规则
@@ -208,21 +218,22 @@ export function LogsAlertRulePage() {
               {createMutation.isPending ? '正在提交…' : ruleId ? '更新告警' : '启用告警'}
             </button>
           </div>
-        </aside>
+          </aside>
+        </div>
+        {ruleId ? (
+          <section className="border-t border-outline p-5">
+            <div className="mb-3"><h3 className="text-base font-semibold text-on-surface">更新记录</h3></div>
+            <div className="grid gap-2">
+              {(updatesQuery.data ?? []).map((update, index) => (
+                <div key={update.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-outline bg-white px-3 py-2">
+                  <div><div className="text-sm font-medium text-on-surface">{update.changeSummary || update.action}</div><div className="mt-0.5 font-mono text-[11px] text-muted">{new Date(update.createdAt).toLocaleString('zh-CN', { hour12: false })} · {update.actor.name || update.actor.id}</div></div>
+                  <button className="text-xs font-semibold text-primary disabled:opacity-40" disabled={index === 0 || rollbackMutation.isPending} onClick={() => rollbackMutation.mutate(update.id)}>回退到此记录</button>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
       </div>
-      {ruleId ? (
-        <section className="border-t border-outline p-5">
-          <div className="mb-3"><h3 className="text-base font-semibold text-on-surface">更新记录</h3></div>
-          <div className="grid gap-2">
-            {(updatesQuery.data ?? []).map((update, index) => (
-              <div key={update.id} className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-outline bg-white px-3 py-2">
-                <div><div className="text-sm font-medium text-on-surface">{update.changeSummary || update.action}</div><div className="mt-0.5 font-mono text-[11px] text-muted">{new Date(update.createdAt).toLocaleString('zh-CN', { hour12: false })} · {update.actor.name || update.actor.id}</div></div>
-                <button className="text-xs font-semibold text-primary disabled:opacity-40" disabled={index === 0 || rollbackMutation.isPending} onClick={() => rollbackMutation.mutate(update.id)}>回退到此记录</button>
-              </div>
-            ))}
-          </div>
-        </section>
-      ) : null}
     </div>
   );
 }
@@ -238,13 +249,13 @@ function previewLogsQL(spec: AlertRuleSpec) {
 
 function ScopeChip({ label, value }: { label: string; value: string }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border border-outline bg-surface-low/70 px-2 py-1 text-xs">
+    <span className="inline-flex min-w-0 items-center gap-1.5 text-xs">
       <span className="font-medium text-muted">{label}</span>
       <span className="max-w-[220px] truncate font-medium text-on-surface">{value}</span>
     </span>
   );
 }
-function Section({ number, title, children }: { number: string; title: string; children: ReactNode }) { return <section className="rounded-md border border-outline bg-white p-4"><div className="mb-3 flex items-center gap-2"><span className="font-mono text-xs font-bold text-primary">{number}</span><h3 className="text-base font-semibold text-on-surface">{title}</h3><span className="ml-0.5 text-sm font-bold leading-none text-danger" aria-label="必填" title="必填">*</span></div>{children}</section>; }
+function Section({ number, title, children }: { number: string; title: string; children: ReactNode }) { return <section className="border-b border-outline pb-4"><div className="mb-3 flex items-center gap-2"><span className="font-mono text-xs font-bold text-primary">{number}</span><h3 className="text-base font-semibold text-on-surface">{title}</h3><span className="ml-0.5 text-sm font-bold leading-none text-danger" aria-label="必填" title="必填">*</span></div>{children}</section>; }
 function Field({ label, className = '', children }: { label: string; className?: string; children: ReactNode }) { return <label className={`block text-xs font-medium text-muted ${className}`}><span className="inline-flex items-center gap-1">{label}<span className="text-danger leading-none" aria-hidden>*</span></span>{children}</label>; }
 function Result({ label, value }: { label: string; value: string }) { return <div className="flex items-center justify-between py-2"><span className="text-emerald-800/70">{label}</span><strong className="font-mono font-semibold text-emerald-800">{value}</strong></div>; }
 function ErrorBox({ message }: { message: string }) { return <div className="mt-3 rounded-md border border-red-300 bg-red-50 p-3 text-xs text-red-700">{message}</div>; }

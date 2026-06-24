@@ -66,9 +66,9 @@ export function AgentDetailPage() {
     return (
       <DataPanel title="加载失败" meta="Agent Detail">
         <div className="flex items-center gap-3 py-4">
-          <XCircle className="h-5 w-5 text-red-400" />
+          <XCircle className="h-5 w-5 text-danger" />
           <p className="text-sm text-muted">{(error as Error).message || '无法加载 Agent 详情'}</p>
-          <button className="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white" onClick={() => refetch()}>重试</button>
+          <button className="console-button console-button-primary" onClick={() => refetch()}>重试</button>
         </div>
       </DataPanel>
     );
@@ -81,8 +81,8 @@ export function AgentDetailPage() {
   const inSync = configuration.inSync;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
+    <div className="space-y-4">
+      <div className="page-header">
         <div className="min-w-0">
           <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted">
             <button className="inline-flex items-center gap-1 hover:text-primary" onClick={() => navigate(-1)}>
@@ -93,15 +93,15 @@ export function AgentDetailPage() {
             <span>/</span>
             <span className="text-primary">Agent Detail</span>
           </div>
-          <h1 className="truncate font-display text-2xl font-semibold text-on-surface">{detail.instanceUid}</h1>
+          <h1 className="page-title truncate">{detail.instanceUid}</h1>
           <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-            <span className={`font-semibold ${runtime.online ? 'text-primary' : 'text-muted'}`}>{runtime.online ? 'online' : 'offline'}</span>
-            <span className={`font-semibold ${runtime.healthy ? 'text-primary' : 'text-amber-500'}`}>{runtime.healthy ? 'healthy' : 'unhealthy'}</span>
+            <span className={`status-badge ${runtime.online ? 'border-emerald-600/20 bg-emerald-50 text-emerald-700' : 'border-outline bg-surface text-muted'}`}><span className="status-dot" aria-hidden />{runtime.online ? 'online' : 'offline'}</span>
+            <span className={`status-badge ${runtime.healthy ? 'border-emerald-600/20 bg-emerald-50 text-emerald-700' : 'border-warning/20 bg-amber-50 text-warning'}`}><span className="status-dot" aria-hidden />{runtime.healthy ? 'healthy' : 'unhealthy'}</span>
             <span className={`font-semibold ${runtimeStatusColor(runtime.runtimeStatus)}`}>{runtimeStatusLabel(runtime.runtimeStatus)}</span>
             <span className="text-muted">last seen: {ageText(runtime.lastSeenAt)}</span>
           </div>
         </div>
-        <button className="rounded p-2 text-muted hover:bg-surface-low hover:text-on-surface" onClick={() => refetch()} title="刷新">
+        <button className="console-icon-button" aria-label="刷新 Agent 详情" onClick={() => refetch()} title="刷新">
           <RefreshCw className="h-4 w-4" />
         </button>
       </div>
@@ -116,8 +116,8 @@ export function AgentDetailPage() {
         <Notice tone="amber" title="配置存在差异" message={`target ${shortHash(configuration.expectedConfigHash)} / effective ${shortHash(configuration.effectiveConfigHash)}`} />
       ) : null}
 
-      <div className="grid items-start gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="space-y-4">
+      <div className="console-workbench grid items-start gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
+        <div className="console-detail-rail space-y-4">
           <DataPanel title="运行态" meta={runtimeStatusLabel(runtime.runtimeStatus)}>
             <InfoGrid items={[
               ['服务', service ? service.displayName || service.name : runtime.serviceId || '-'],
@@ -139,7 +139,7 @@ export function AgentDetailPage() {
               ['最后心跳', formatTime(runtime.lastSeenAt)],
               ['能力位', String(runtime.capabilities)],
             ]} />
-            {runtime.lastError ? <p className="mt-3 rounded border border-red-500/30 bg-red-900/10 p-2 font-mono text-xs text-red-400">{runtime.lastError}</p> : null}
+            {runtime.lastError ? <p className="console-notice console-notice-danger mt-3 font-mono">{runtime.lastError}</p> : null}
           </DataPanel>
 
           <DataPanel title="服务绑定" meta={`${services.length} 个服务 · ${onboardings.length} 条接入记录`}>
@@ -177,6 +177,11 @@ export function AgentDetailPage() {
 
           <DataPanel title="配置来源" meta={`${configuration.configSources?.sourceBreakdown.length ?? 0} 个来源`}>
             <SourceBreakdown detail={detail} />
+            <div className="console-audit-meta mt-3 border-t border-outline pt-3">
+              <span>instance {shortHash(detail.instanceUid)}</span>
+              <span>last seen {formatTime(runtime.lastSeenAt)}</span>
+              <span>apply {configuration.applyStatus || 'unset'}</span>
+            </div>
           </DataPanel>
         </div>
       </div>
@@ -248,7 +253,7 @@ function SourceBreakdown({ detail }: { detail: AgentDetail }) {
             <span className="font-mono text-muted">{shortHash(source.hash)}</span>
           </div>
           <div className="mt-1 text-muted">{source.name || source.id} · {source.status || '-'}</div>
-          {source.warnings.length > 0 ? <div className="mt-1 text-amber-500">{source.warnings.join('; ')}</div> : null}
+          {source.warnings.length > 0 ? <div className="mt-1 text-warning">{source.warnings.join('; ')}</div> : null}
         </div>
       ))}
     </div>
@@ -257,13 +262,13 @@ function SourceBreakdown({ detail }: { detail: AgentDetail }) {
 
 function Notice({ tone, title, message }: { tone: 'amber' | 'red' | 'green'; title: string; message: string }) {
   const color = tone === 'red'
-    ? 'border-red-500/30 bg-red-900/10 text-red-400'
+    ? 'console-notice-danger'
     : tone === 'green'
-      ? 'border-primary/25 bg-primary-soft text-primary'
-      : 'border-amber-500/30 bg-amber-900/10 text-amber-500';
+      ? 'console-notice-success'
+      : 'console-notice-warning';
   const Icon = tone === 'red' ? XCircle : tone === 'green' ? CheckCircle : AlertTriangle;
   return (
-    <div className={`mt-3 flex items-start gap-2 rounded border p-3 ${color}`}>
+    <div className={`console-notice mt-3 ${color}`}>
       <Icon className="mt-0.5 h-4 w-4 shrink-0" />
       <div>
         <p className="text-sm font-semibold">{title}</p>

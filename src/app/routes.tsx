@@ -76,7 +76,9 @@ const k8sChildRoutes: RouteDefinition[] = [
 const logsChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <Navigate to="/logs/explore" replace /> },
   { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
-  { path: 'onboarding', title: 'Logs 接入配置', element: <LogsOnboardingPage /> },
+  { path: 'onboarding', title: '创建采集路由', element: <Navigate to="/logs/agents/new" replace /> },
+  { path: 'agents/new', title: '创建采集路由', element: <LogsOnboardingPage /> },
+  { path: 'agents/:id/edit', title: '更新采集路由', element: <LogsOnboardingPage /> },
   { path: 'agents', title: 'Logs 采集路由', element: <LogsAgentsPage /> },
   { path: 'alerts/new', title: '创建日志告警', element: <LogsAlertRulePage /> },
   { path: 'alerts/:id', title: '更新日志告警', element: <LogsAlertRulePage /> },
@@ -92,7 +94,7 @@ const platformChildRoutes: RouteDefinition[] = [
 export const routeDefinitions: RouteDefinition[] = [
   { path: '/', title: '平台总览', element: <OverviewPage /> },
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
-  { path: '/onboarding', title: '服务接入', element: <Navigate to="/logs/onboarding" replace /> },
+  { path: '/onboarding', title: '服务接入', element: <Navigate to="/logs/agents/new" replace /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
   { path: '/monitoring', title: '监控', element: <MonitoringPage /> },
   { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },
@@ -118,10 +120,17 @@ function findRouteTitle(routes: RouteDefinition[], normalizedPath: string, baseP
       ? normalizedPath === fullPath
       : fullPath === '/'
         ? normalizedPath === '/'
-        : normalizedPath === fullPath || normalizedPath.startsWith(`${fullPath}/`);
+        : routePathMatches(fullPath, normalizedPath);
     if (!matched) continue;
     const child = route.children ? findRouteTitle(route.children, normalizedPath, fullPath) : undefined;
     return child ?? route;
   }
   return undefined;
+}
+
+function routePathMatches(pattern: string, path: string) {
+  const patternSegments = pattern.split('/').filter(Boolean);
+  const pathSegments = path.split('/').filter(Boolean);
+  if (pathSegments.length < patternSegments.length) return false;
+  return patternSegments.every((segment, index) => segment.startsWith(':') || segment === pathSegments[index]);
 }

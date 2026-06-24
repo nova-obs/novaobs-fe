@@ -17,7 +17,7 @@ test('主导航包含第一阶段全部模块且路径唯一', () => {
 });
 
 test('根据路径解析当前导航项', () => {
-  assert.equal(getNavigationByPath('/logs/onboarding')?.id, 'logs');
+  assert.equal(getNavigationByPath('/logs/agents/new')?.id, 'logs');
   assert.equal(getNavigationByPath('/monitoring')?.id, 'monitoring');
   assert.equal(getNavigationByPath('/platform/access')?.id, 'platform-access');
   assert.equal(getNavigationByPath('/platform/observability')?.id, 'platform-access');

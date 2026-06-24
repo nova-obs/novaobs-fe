@@ -1,9 +1,8 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Bell, RadioTower, RefreshCw, Search, ServerCog } from 'lucide-react';
+import { Bell, Search, ServerCog } from 'lucide-react';
 
 const logsNav = [
   { to: '/logs/explore', label: '日志分析', meta: '下游查询', icon: Search },
-  { to: '/logs/onboarding', label: '接入配置', icon: RadioTower },
   { to: '/logs/agents', label: '采集路由', icon: ServerCog },
   { to: '/logs/alerts', label: '日志告警', icon: Bell },
 ];
@@ -13,21 +12,20 @@ function LogsWorkspace() {
 
   return (
     <div className="logs-workbench route-transition-page flex h-full min-h-0 flex-col gap-3">
-      <div className="console-panel shrink-0 overflow-hidden">
-        <div className="grid gap-3 border-b border-outline/70 bg-white/76 px-3 py-3 xl:grid-cols-[minmax(180px,260px)_1fr_auto] xl:items-center">
+      <div className="shrink-0 border-b border-outline bg-surface-lowest px-1">
+        <div className="flex flex-col gap-2 py-2 md:flex-row md:items-center">
           <div className="min-w-0">
-            <div className="font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-primary">Logs</div>
-            <h1 className="mt-0.5 truncate text-lg font-semibold tracking-tight text-on-surface">日志工作台</h1>
+            <h1 className="page-title truncate">Logs</h1>
           </div>
-          <nav className="flex min-w-0 items-center gap-1 overflow-x-auto" aria-label="Logs 模块导航">
+          <nav className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto md:ml-5" aria-label="Logs 模块导航">
             {logsNav.map((item) => {
               const Icon = item.icon;
               return (
                 <NavLink
                   key={item.to}
                   to={item.to}
-                  className={({ isActive }) => `inline-flex h-9 min-w-max items-center gap-2 rounded-md border px-3 text-sm font-semibold transition-colors duration-200 active:translate-y-px ${
-                    isActive ? 'border-primary bg-primary-soft text-primary' : 'border-transparent text-muted hover:border-outline hover:bg-white/86 hover:text-on-surface'
+                  className={({ isActive }) => `inline-flex h-8 min-w-max items-center gap-2 border-b-2 px-3 text-sm font-semibold transition-colors ${
+                    isActive ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'
                   }`}
                 >
                   <Icon className="h-4 w-4" />
@@ -37,12 +35,6 @@ function LogsWorkspace() {
               );
             })}
           </nav>
-          <div className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs">
-            <button className="inline-flex h-9 items-center gap-1.5 rounded-md border border-outline bg-white/85 px-2.5 font-semibold text-muted transition hover:border-primary/40 hover:text-on-surface" onClick={() => window.location.reload()}>
-              <RefreshCw className="h-3.5 w-3.5" />
-              刷新
-            </button>
-          </div>
         </div>
       </div>
       <div className="route-transition-page min-h-0 flex-1" key={location.pathname}>

@@ -23,10 +23,10 @@ test('K8s 运维使用嵌套路由承载模块子页面', () => {
   assert.equal(route?.children?.some((item) => item.path === 'rbac'), true);
 });
 
-test('Logs 保留四个模块入口，并为日志告警提供创建流程', () => {
+test('Logs 保留三个默认模块入口，并把创建更新归入对应父模块', () => {
   const paths = routeDefinitions.map((r) => r.path);
   const logs = routeDefinitions.find((r) => r.path === '/logs');
-  assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'onboarding', 'agents', 'alerts/new', 'alerts/:id', 'alerts']);
+  assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'onboarding', 'agents/new', 'agents/:id/edit', 'agents', 'alerts/new', 'alerts/:id', 'alerts']);
   assert.equal(paths.includes('/pipelines'), false);
   assert.ok(paths.includes('/agents/:uid'));
   assert.equal(paths.includes('/collectors'), false);
@@ -41,7 +41,9 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/onboarding'), '服务接入');
   assert.equal(getRouteTitle('/logs'), 'Logs 日志分析');
   assert.equal(getRouteTitle('/logs/explore'), 'Logs 日志分析');
-  assert.equal(getRouteTitle('/logs/onboarding'), 'Logs 接入配置');
+  assert.equal(getRouteTitle('/logs/onboarding'), '创建采集路由');
+  assert.equal(getRouteTitle('/logs/agents/new'), '创建采集路由');
+  assert.equal(getRouteTitle('/logs/agents/route-1/edit'), '更新采集路由');
   assert.equal(getRouteTitle('/logs/agents'), 'Logs 采集路由');
   assert.equal(getRouteTitle('/monitoring'), '监控');
   assert.equal(getRouteTitle('/platform/access'), '平台管理');
@@ -54,7 +56,8 @@ test('路由标题可按路径查找', () => {
 
 test('浏览器标签页标题包含当前模块和产品名', () => {
   assert.equal(getDocumentTitle('/logs'), 'Logs 日志分析 - NovaObs');
-  assert.equal(getDocumentTitle('/logs/onboarding'), 'Logs 接入配置 - NovaObs');
+  assert.equal(getDocumentTitle('/logs/agents/new'), '创建采集路由 - NovaObs');
+  assert.equal(getDocumentTitle('/logs/agents/route-1/edit'), '更新采集路由 - NovaObs');
   assert.equal(getDocumentTitle('/monitoring'), '监控 - NovaObs');
   assert.equal(getDocumentTitle('/platform/access'), '平台管理 - NovaObs');
   assert.equal(getDocumentTitle('/platform/observability'), '平台管理 - NovaObs');

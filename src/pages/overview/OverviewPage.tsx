@@ -58,13 +58,13 @@ export function OverviewPage() {
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+      <div className="page-header">
         <div>
-          <h1 className="font-display text-2xl font-semibold tracking-tight text-on-surface">平台总览</h1>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted">
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">最近 15 分钟</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">日志下游</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">OTel Collector</span>
+          <h1 className="page-title">平台总览</h1>
+          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-muted">
+            <span className="status-badge border-outline bg-surface-lowest">最近 15 分钟</span>
+            <span className="status-badge border-outline bg-surface-lowest">日志下游</span>
+            <span className="status-badge border-outline bg-surface-lowest">OTel Collector</span>
           </div>
         </div>
       </div>
@@ -88,9 +88,9 @@ export function OverviewPage() {
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <DataPanel title="服务目录快照" meta={servicesQuery.isLoading ? '加载中' : `${services.length} services`}>
           {servicesQuery.isLoading ? (
-            <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">正在读取服务目录</div>
+            <div className="console-empty-state text-sm font-semibold text-muted">正在读取服务目录</div>
           ) : services.length === 0 ? (
-            <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">服务目录为空</div>
+            <div className="console-empty-state text-sm font-semibold text-muted">服务目录为空</div>
           ) : (
             <div className="overflow-auto">
               <table className="console-table min-w-[900px] w-full">
@@ -138,9 +138,9 @@ export function OverviewPage() {
       <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
         <DataPanel title="告警规则" meta={alertRulesQuery.isLoading ? '加载中' : `${alertRules.length} rules`}>
           {alertRulesQuery.isLoading ? (
-            <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">正在读取告警规则</div>
+            <div className="console-empty-state text-sm font-semibold text-muted">正在读取告警规则</div>
           ) : alertRules.length === 0 ? (
-            <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">告警规则为空</div>
+            <div className="console-empty-state text-sm font-semibold text-muted">告警规则为空</div>
           ) : (
             <div className="overflow-auto">
               <table className="console-table min-w-[760px] w-full">
@@ -186,12 +186,12 @@ function MetricCard({ label, value, detail, source, icon: Icon, warning }: {
   warning?: boolean;
 }) {
   return (
-    <section className="console-panel px-4 py-3">
+    <section className="console-panel px-3 py-3">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-3xl tracking-tight text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{detail}</div>
+          <div className="text-xs font-semibold text-muted">{label}</div>
+          <div className="mt-2 font-mono text-2xl font-semibold tracking-tight text-on-surface">{value}</div>
+          <div className="mt-1.5 text-[11px] text-muted">{detail}</div>
         </div>
         <Icon className={`h-4 w-4 ${warning ? 'text-warning' : 'text-primary'}`} />
       </div>
@@ -204,12 +204,13 @@ function MetricCard({ label, value, detail, source, icon: Icon, warning }: {
 
 function ComponentLine({ name, source, status }: { name: string; source: string; status: string }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.7)]">
+    <div className="flex items-center justify-between gap-3 rounded-md border border-outline bg-surface px-3 py-2">
       <div className="min-w-0">
         <div className="truncate text-sm font-semibold text-on-surface">{name}</div>
         <div className="mt-0.5 text-[11px] text-muted">{source}</div>
       </div>
-      <span className={`inline-flex items-center gap-1.5 rounded-lg px-2 py-0.5 text-[11px] font-semibold ${status === 'active' ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
+      <span className={`status-badge ${status === 'active' ? 'border-emerald-600/20 bg-emerald-50 text-emerald-700' : 'border-outline bg-white text-muted'}`}>
+        <span className="status-dot" aria-hidden />
         <ShieldCheck className="h-3 w-3" />
         {status}
       </span>
@@ -235,7 +236,7 @@ function AlertRuleRow({ rule }: { rule: AlertRule }) {
 
 function InfoLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-lg bg-white/45 px-3 py-2">
+    <div className="flex items-center justify-between gap-4 rounded-md border border-outline bg-surface px-3 py-2">
       <span className="text-muted">{label}</span>
       <span className="font-mono font-semibold text-on-surface">{value}</span>
     </div>
@@ -246,7 +247,8 @@ function StateChip({ value }: { value: string }) {
   const warning = ['degraded', 'warning', 'failed', 'critical', 'high'].includes(value);
   const active = ['active', 'synced', 'enabled', 'low', 'medium'].includes(value);
   return (
-    <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${warning ? 'bg-amber-100 text-warning' : active ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
+    <span className={`status-badge ${warning ? 'border-warning/20 bg-amber-50 text-warning' : active ? 'border-emerald-600/20 bg-emerald-50 text-emerald-700' : 'border-outline bg-surface text-muted'}`}>
+      <span className="status-dot" aria-hidden />
       {value || 'unknown'}
     </span>
   );

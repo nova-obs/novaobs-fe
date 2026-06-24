@@ -32,14 +32,27 @@ export function K8sOpsLayout() {
   return (
     <div className={hasClusterContext ? 'grid gap-4 xl:grid-cols-[248px_minmax(0,1fr)]' : 'space-y-4'}>
       {hasClusterContext ? (
-      <aside className="console-panel relative overflow-hidden p-3">
-        <div className="relative rounded-lg bg-white/42 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
+      <>
+      <details className="console-panel group overflow-hidden xl:hidden">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5">
+          <div>
+            <div className="text-sm font-semibold text-on-surface">K8s 工作台导航</div>
+            <div className="mt-0.5 font-mono text-[11px] text-muted">{activeClusterId} · {current?.label ?? 'Dashboard'}</div>
+          </div>
+          <ChevronDown className="h-4 w-4 text-muted transition-transform group-open:rotate-180" />
+        </summary>
+        <div className="max-h-[58vh] overflow-y-auto border-t border-outline p-3">
+          <ClusterNavigation activeClusterId={activeClusterId} />
+        </div>
+      </details>
+      <aside className="console-panel relative hidden overflow-hidden p-3 xl:block">
+        <div className="relative border-b border-outline/70 px-2 pb-3">
           <div className="flex items-center justify-between gap-3">
             <div>
-              <div className="font-display text-lg font-semibold tracking-tight text-on-surface">K8s 运维</div>
+              <div className="page-title">K8s 运维</div>
               <div className="mt-1 font-mono text-[11px] text-muted">{activeClusterId ? `cluster/${activeClusterId}` : 'Fleet / registered clusters'}</div>
             </div>
-            <Link className="quiet-button h-8 px-2 text-xs text-muted hover:bg-white/70 hover:text-primary" aria-label="切换集群" to="/k8s">
+            <Link className="console-button px-2" aria-label="切换集群" to="/k8s">
               <ChevronDown className="h-3.5 w-3.5" />
             </Link>
           </div>
@@ -49,48 +62,22 @@ export function K8sOpsLayout() {
           </div>
         </div>
 
-        <nav className="relative mt-4 space-y-5">
-          {k8sNavigationGroups.map((group) => (
-            <div key={group.id}>
-              <div className="mb-2 px-2 text-[11px] font-semibold text-muted">{group.label}</div>
-              <div className="space-y-1">
-                {getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster).map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <NavLink
-                      key={item.id}
-                      to={k8sClusterPath(activeClusterId, item)}
-                      end={item.id === 'dashboard'}
-                      className={({ isActive }) =>
-                        [
-                          'group flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all active:translate-y-px',
-                          isActive ? 'atlas-nav-active text-primary' : 'text-muted hover:bg-white/45 hover:text-on-surface',
-                        ].join(' ')
-                      }
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    </NavLink>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
+        <ClusterNavigation activeClusterId={activeClusterId} />
       </aside>
+      </>
       ) : null}
 
       <div className="min-w-0 space-y-4">
-        <div className="console-panel flex flex-col justify-between gap-3 px-4 py-3 md:flex-row md:items-center">
+        <div className="console-panel flex flex-col justify-between gap-3 px-4 py-2.5 md:flex-row md:items-center">
           <div className="min-w-0">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-on-surface">{current?.label ?? 'Dashboard'}</h1>
+            <h1 className="page-title">{current?.label ?? 'Dashboard'}</h1>
           </div>
           <div className="flex flex-wrap gap-2 text-xs">
-            <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary-soft/70 px-3 font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <span className="status-badge border-primary/20 bg-primary-soft text-primary">
               <CheckCircle2 className="h-3.5 w-3.5" />
               权限接入 NovaObs RBAC
             </span>
-            <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-white/55 px-3 font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <span className="status-badge border-outline bg-surface text-muted">
               <RefreshCw className="h-3.5 w-3.5" />
               最近 15 分钟
             </span>
@@ -115,20 +102,53 @@ export function K8sOpsLayout() {
   );
 }
 
+function ClusterNavigation({ activeClusterId }: { activeClusterId: string }) {
+  return (
+    <nav className="relative mt-1 space-y-5 xl:mt-4">
+      {k8sNavigationGroups.map((group) => (
+        <div key={group.id}>
+          <div className="mb-2 px-2 text-[11px] font-semibold text-muted">{group.label}</div>
+          <div className="grid gap-1 sm:grid-cols-2 xl:grid-cols-1">
+            {getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster).map((item) => {
+              const Icon = item.icon;
+              return (
+                <NavLink
+                  key={item.id}
+                  to={k8sClusterPath(activeClusterId, item)}
+                  end={item.id === 'dashboard'}
+                  className={({ isActive }) =>
+                    [
+                      'group flex min-h-9 items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors active:translate-y-px',
+                      isActive ? 'atlas-nav-active text-primary' : 'text-muted hover:bg-surface hover:text-on-surface',
+                    ].join(' ')
+                  }
+                >
+                  <Icon className="h-4 w-4 shrink-0" />
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                </NavLink>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
+}
+
 function FleetTabs({ activePath }: { activePath: string }) {
   const tabs = [
     { path: '/k8s', label: '集群总览' },
     { path: '/k8s/access', label: '集群接入' },
   ];
   return (
-    <div className="console-panel flex flex-wrap items-center gap-2 px-3 py-3">
+    <div className="console-panel flex flex-wrap items-center gap-1.5 p-2">
       {tabs.map((item) => (
         <Link
           key={item.path}
           to={item.path}
           className={[
-            'inline-flex h-10 min-w-32 items-center justify-center rounded-lg px-4 text-sm font-semibold shadow-[inset_0_0_0_1px_rgba(216,226,239,0.9)] transition-all active:translate-y-px',
-            activePath === item.path ? 'bg-primary text-white shadow-[0_10px_24px_rgba(13,91,215,0.18)]' : 'bg-white/70 text-muted hover:bg-white hover:text-primary',
+            'inline-flex h-8 min-w-28 items-center justify-center rounded-md border px-3 text-xs font-semibold transition-colors active:translate-y-px',
+            activePath === item.path ? 'border-primary bg-primary text-white' : 'border-transparent bg-surface-lowest text-muted hover:border-outline hover:bg-surface hover:text-primary',
           ].join(' ')}
         >
           {item.label}
@@ -162,7 +182,7 @@ function ClusterWorkspaceBar({
           <span>{currentLabel}</span>
         </div>
         <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Link className="quiet-button h-9 bg-white/65 px-3 text-xs text-muted hover:text-primary" to="/k8s">
+          <Link className="console-button" to="/k8s">
             <ArrowLeft className="h-3.5 w-3.5" />
             返回集群列表
           </Link>
@@ -171,7 +191,7 @@ function ClusterWorkspaceBar({
       <label className="min-w-56 text-xs font-semibold text-muted">
         切换集群
         <select
-          className="console-input mt-2 h-9 w-full bg-white/70"
+          className="console-input mt-2 w-full"
           value={activeClusterId}
           onChange={(event) => onClusterChange(event.target.value)}
         >
@@ -186,7 +206,7 @@ function ClusterWorkspaceBar({
 
 function StatusCell({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-white/48 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+    <div className="rounded-md border border-outline bg-surface px-2.5 py-2">
       <div className="text-muted">{label}</div>
       <div className="mt-1 font-mono font-semibold text-on-surface">{value}</div>
     </div>

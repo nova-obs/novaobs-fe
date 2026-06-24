@@ -202,8 +202,6 @@ function PickerEmpty({ label }: { label: string }) {
 
 export function ServicePickerPanel({
   services,
-  sourceServiceCount,
-  totalServiceCount,
   selectedServiceId,
   serviceQuery,
   routeEditMode,
@@ -214,8 +212,6 @@ export function ServicePickerPanel({
   onEditRoute,
 }: {
   services: LogsServiceSummary[];
-  sourceServiceCount: number;
-  totalServiceCount: number;
   selectedServiceId: string;
   serviceQuery: string;
   routeEditMode: boolean;
@@ -226,13 +222,12 @@ export function ServicePickerPanel({
   onEditRoute: (route: LogRouteView) => void;
 }) {
   return (
-    <section className="logs-service-picker-panel relative flex min-h-[560px] flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest xl:h-full xl:min-h-[640px]">
-      <div className="flex items-center justify-between gap-2 border-b border-outline bg-white/72 px-3 py-2.5">
+    <section className="logs-service-picker-panel relative flex min-h-[560px] flex-col overflow-hidden bg-surface-lowest xl:h-full xl:min-h-[640px]">
+      <div className="flex items-center justify-between gap-2 border-b border-outline px-3 py-2.5">
         <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
           <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]" />
           服务
         </div>
-        <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{sourceServiceCount}/{totalServiceCount} services</span>
       </div>
       <div className="border-b border-outline px-3 py-3">
         <div className="relative">

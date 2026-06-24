@@ -158,43 +158,33 @@ export function ServicesPage() {
   const isPending = createMutation.isPending || updateMutation.isPending;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-start justify-between">
+    <div className="space-y-4">
+      <div className="page-header">
         <div>
-          <h1 className="font-display text-2xl font-semibold text-on-surface">服务目录</h1>
-          <div className="mt-2 flex flex-wrap gap-2 text-xs font-semibold text-muted">
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">服务</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">运行目标</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">日志路由</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">告警规则</span>
+          <h1 className="page-title">服务目录</h1>
+          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-muted">
+            <span className="status-badge border-outline bg-surface-lowest">服务</span>
+            <span className="status-badge border-outline bg-surface-lowest">运行目标</span>
+            <span className="status-badge border-outline bg-surface-lowest">日志路由</span>
+            <span className="status-badge border-outline bg-surface-lowest">告警规则</span>
           </div>
         </div>
-        <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={openCreate}>
-          <Plus className="mr-1 inline h-3.5 w-3.5" />新增服务
-        </button>
       </div>
 
       {error ? (
         <DataPanel title="加载失败" meta="error">
           <div className="flex items-center gap-3 py-4">
-            <XCircle className="h-5 w-5 text-red-400" />
+            <XCircle className="h-5 w-5 text-danger" />
             <p className="text-sm text-muted">{(error as Error).message || '无法加载服务列表'}</p>
-            <button className="rounded bg-primary px-3 py-1.5 text-xs font-semibold text-white" onClick={() => refetch()}>重试</button>
+            <button className="console-button console-button-primary" onClick={() => refetch()}>重试</button>
           </div>
         </DataPanel>
       ) : (
         <>
           <DataPanel title="筛选" meta={isLoading ? '加载中...' : `${data.length} 个服务`}>
-            <div className="grid gap-3 md:grid-cols-4">
-              <label className="text-sm font-semibold">
-                搜索
-                <div className="relative mt-2">
-                  <Search className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-                  <input className="console-input w-full pl-8" placeholder="名称 / CMDB ID / 业务 / 负责人…" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
-                </div>
-              </label>
-              <label className="text-sm font-semibold">
-                环境
+            <div className="console-toolbar-group grid gap-3 md:grid-cols-3">
+              <label className="console-field">
+                <span className="console-field-label">环境</span>
                 <select className="console-input mt-2 w-full" value={filters.environment} onChange={(e) => setFilters({ ...filters, environment: e.target.value })}>
                   <option value="">全部</option>
                   <option value="prod">prod</option>
@@ -202,8 +192,8 @@ export function ServicesPage() {
                   <option value="dev">dev</option>
                 </select>
               </label>
-              <label className="text-sm font-semibold">
-                状态
+              <label className="console-field">
+                <span className="console-field-label">状态</span>
                 <select className="console-input mt-2 w-full" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}>
                   <option value="">全部</option>
                   <option value="active">active</option>
@@ -211,8 +201,8 @@ export function ServicesPage() {
                   <option value="degraded">degraded</option>
                 </select>
               </label>
-              <label className="text-sm font-semibold">
-                来源
+              <label className="console-field">
+                <span className="console-field-label">来源</span>
                 <select className="console-input mt-2 w-full" value={filters.source} onChange={(e) => setFilters({ ...filters, source: e.target.value })}>
                   <option value="">全部</option>
                   <option value="manual">本地录入</option>
@@ -237,33 +227,48 @@ export function ServicesPage() {
                 <label className="text-sm font-semibold">SLO Level<input className="console-input mt-2 w-full" value={form.sloLevel ?? ''} onChange={(e) => setForm({ ...form, sloLevel: e.target.value })} /></label>
                 <label className="text-sm font-semibold">运行身份<select className="console-input mt-2 w-full" value={form.identityType ?? 'k8s_workload'} onChange={(e) => setForm({ ...form, identityType: e.target.value as typeof form.identityType })}><option value="k8s_workload">K8s Workload</option><option value="host_process">物理机 / VM 进程</option></select></label>
               </div>
-              <div className="mt-4 flex gap-2">
-                <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!form.name || !form.environment || isPending} onClick={() => (editingId ? updateMutation.mutate() : createMutation.mutate())}>
+              <div className="console-action-bar -mx-3 -mb-3 mt-4">
+                <div className="text-xs text-muted">{!form.name || !form.environment ? '填写服务名称和环境后可提交' : editingId ? `正在编辑 ${editingId}` : '将创建新的平台服务真值'}</div>
+                <div className="flex gap-2">
+                <button className="console-button console-button-primary h-9" title={!form.name || !form.environment ? '请先填写服务名称和环境' : undefined} disabled={!form.name || !form.environment || isPending} onClick={() => (editingId ? updateMutation.mutate() : createMutation.mutate())}>
                   {isPending ? <RefreshCw className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : null}
                   {editingId ? '保存修改' : '创建服务'}
                 </button>
-                <button className="rounded border border-outline px-4 py-2 text-sm font-semibold text-on-surface" onClick={() => { setShowForm(false); setEditingId(null); }}>取消</button>
+                <button className="console-button h-9" onClick={() => { setShowForm(false); setEditingId(null); }}>取消</button>
+                </div>
               </div>
-              {createMutation.error ? <p className="mt-2 text-sm text-red-400">{(createMutation.error as Error).message}</p> : null}
-              {updateMutation.error ? <p className="mt-2 text-sm text-red-400">{(updateMutation.error as Error).message}</p> : null}
+              {createMutation.error ? <p className="console-notice console-notice-danger mt-2">{(createMutation.error as Error).message}</p> : null}
+              {updateMutation.error ? <p className="console-notice console-notice-danger mt-2">{(updateMutation.error as Error).message}</p> : null}
             </DataPanel>
           ) : null}
 
           <DataPanel title="服务清单" meta={`${data.length} 个服务`}>
             {deleteMutation.error ? (
-              <div className="mb-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
+              <div className="console-notice console-notice-danger mb-3">
                 <XCircle className="h-4 w-4" />{(deleteMutation.error as Error).message}
               </div>
             ) : null}
+            <div className="console-list-toolbar -mx-3 -mt-3 mb-3">
+              <div className="console-list-toolbar-actions">
+                <button className="console-button console-button-primary" onClick={openCreate}><Plus className="h-3.5 w-3.5" />新增服务</button>
+                <button className="console-button" onClick={() => refetch()}><RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />刷新</button>
+                <span className="font-mono text-[11px] text-muted">当前 {data.length} 个服务</span>
+              </div>
+              <label className="console-list-toolbar-search">
+                <span className="sr-only">搜索服务</span>
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                <input className="console-input h-8 w-full pl-8" placeholder="名称 / CMDB ID / 业务 / 负责人…" value={filters.q} onChange={(e) => setFilters({ ...filters, q: e.target.value })} />
+              </label>
+            </div>
             {isLoading ? (
               <div className="flex items-center gap-2 py-4 text-sm text-muted"><RefreshCw className="h-4 w-4 animate-spin" />加载中...</div>
             ) : data.length === 0 ? (
-              <div className="flex flex-col items-center gap-3 py-8">
+              <div className="console-empty-state">
                 <p className="text-sm text-muted">服务清单为空</p>
-                <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white" onClick={openCreate}><Plus className="mr-1 inline h-3.5 w-3.5" />新增服务</button>
+                <button className="console-button console-button-primary" onClick={openCreate}><Plus className="h-3.5 w-3.5" />新增服务</button>
               </div>
             ) : (
-              <div className="overflow-auto">
+              <div className="console-resource-list">
                 <table className="console-table min-w-[1200px] w-full">
                   <thead>
                     <tr>
@@ -281,7 +286,7 @@ export function ServicesPage() {
                   </thead>
                   <tbody>
                     {data.map((svc) => (
-                      <tr key={svc.id} className="bg-surface-lowest hover:bg-surface-low">
+                      <tr key={svc.id} className={svc.id === activeServiceId ? 'console-selected-row' : ''}>
                         <td>
                           <div className="font-semibold text-primary">{svc.name}</div>
                           <div className="text-[11px] text-muted">{svc.displayName}</div>
@@ -296,11 +301,12 @@ export function ServicesPage() {
                         <td><StatusBadge value={svc.status} /></td>
                         <td>
                           <div className="flex items-center gap-1">
-                            <button title="编辑服务" className="rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => openEdit(svc)}><Edit3 className="h-3.5 w-3.5" /></button>
-                            <button title="查看观测关系" className="rounded p-1 text-muted hover:bg-surface-low hover:text-primary" onClick={() => { setConfirmDeleteServiceId(null); setSelectedServiceId(svc.id); }}><Eye className="h-3.5 w-3.5" /></button>
+                            <button aria-label="编辑服务" title="编辑服务" className="console-icon-button h-7 w-7" onClick={() => openEdit(svc)}><Edit3 className="h-3.5 w-3.5" /></button>
+                            <button aria-label="查看观测关系" title="查看观测关系" className="console-icon-button h-7 w-7" onClick={() => { setConfirmDeleteServiceId(null); setSelectedServiceId(svc.id); }}><Eye className="h-3.5 w-3.5" /></button>
                             <button
+                              aria-label={confirmDeleteServiceId === svc.id ? `确认删除服务 ${svc.name}` : `删除服务 ${svc.name}`}
                               title={confirmDeleteServiceId === svc.id ? '确认删除服务' : '删除服务'}
-                              className={`inline-flex items-center rounded border px-1.5 py-1 text-xs font-semibold ${
+                              className={`inline-flex items-center rounded border px-1.5 py-1 text-xs font-semibold ${confirmDeleteServiceId === svc.id ? 'console-danger-zone' : ''} ${
                                 confirmDeleteServiceId === svc.id
                                   ? 'border-red-500/30 bg-red-50 text-red-600'
                                   : 'border-transparent text-muted hover:border-red-500/20 hover:bg-red-50 hover:text-red-600'
@@ -328,6 +334,7 @@ export function ServicesPage() {
           </DataPanel>
 
           {activeServiceId ? (
+            <div className="console-detail-rail">
             <ServiceGraphPanel
               graph={graph}
               loading={graphLoading}
@@ -338,6 +345,7 @@ export function ServicesPage() {
               creatingTarget={createTargetMutation.isPending}
               createTargetError={createTargetMutation.error as Error | null}
             />
+            </div>
           ) : null}
         </>
       )}
@@ -370,7 +378,7 @@ function ServiceGraphPanel({
       {loading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-muted"><RefreshCw className="h-4 w-4 animate-spin" />加载中...</div>
       ) : error ? (
-        <div className="flex items-center gap-2 py-4 text-sm text-red-400"><XCircle className="h-4 w-4" />{error.message}</div>
+        <div className="console-notice console-notice-danger"><XCircle className="h-4 w-4" />{error.message}</div>
       ) : graph ? (
         <div className="space-y-5">
           <div className="grid gap-3 md:grid-cols-4">
@@ -420,11 +428,11 @@ function ServiceGraphPanel({
                     onChange={(e) => setTargetForm({ ...targetForm, identityAttributes: { ...targetForm.identityAttributes, [field.key]: e.target.value } })}
                   />
                 ))}
-                <button className="rounded bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={creatingTarget} onClick={onCreateTarget}>
+                <button className="console-button console-button-primary h-9" disabled={creatingTarget} onClick={onCreateTarget}>
                   {creatingTarget ? <RefreshCw className="mr-1 inline h-3.5 w-3.5 animate-spin" /> : null}
                   保存目标
                 </button>
-                {createTargetError ? <p className="text-sm text-red-400">{createTargetError.message}</p> : null}
+                {createTargetError ? <p className="console-notice console-notice-danger">{createTargetError.message}</p> : null}
               </div>
             </div>
           </div>
