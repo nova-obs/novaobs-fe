@@ -61,7 +61,16 @@ test('超级菜单明确区分模块身份、主功能菜单和辅助入口', ()
   assert.equal(source.includes('模块功能'), true);
   assert.equal(source.includes('border-l-[3px] border-primary'), true);
   assert.equal(source.includes('border border-outline/80 bg-surface-lowest'), true);
-  assert.equal(source.includes('max-h-[calc(100dvh-3.5rem)] overflow-y-auto'), true);
+  assert.equal(source.includes('max-h-[calc(100dvh-4rem)]'), true);
+  assert.equal(source.includes('overflow-y-auto'), true);
+});
+
+test('超级菜单作为独立悬浮区域与顶部导航保持间距', () => {
+  assert.equal(source.includes('px-3 pt-2 md:px-5'), true);
+  assert.equal(source.includes('mx-auto'), true);
+  assert.equal(source.includes('max-w-[1440px]'), true);
+  assert.equal(source.includes('rounded-lg border border-outline'), true);
+  assert.equal(source.includes('top-full'), true);
 });
 
 test('顶层框架不再保留全局侧栏和 K8s 聚焦侧栏', () => {

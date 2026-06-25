@@ -231,7 +231,7 @@ function MegaMenu({
     .filter((item) => ['logs-explore', 'k8s-fleet', 'platform-access'].includes(item.id));
 
   return (
-    <div id="novaobs-mega-menu" className="absolute inset-x-0 top-full">
+    <div id="novaobs-mega-menu" className="absolute inset-x-0 top-full px-3 pt-2 md:px-5">
       <button
         type="button"
         className="mega-menu-backdrop fixed inset-x-0 bottom-0 top-14 z-0 cursor-default bg-slate-950/20"
@@ -239,7 +239,7 @@ function MegaMenu({
         onClick={onClose}
       />
       <section
-        className="mega-menu-panel relative z-10 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-outline bg-surface-lowest shadow-[0_18px_40px_-24px_rgba(18,32,51,0.42)]"
+        className="mega-menu-panel relative z-10 mx-auto max-h-[calc(100dvh-4rem)] max-w-[1440px] overflow-y-auto rounded-lg border border-outline bg-surface-lowest shadow-[0_22px_48px_-20px_rgba(18,32,51,0.42)]"
         aria-label="NovaObs 超级菜单"
       >
         <div className="border-b border-outline px-3 py-2 lg:hidden">

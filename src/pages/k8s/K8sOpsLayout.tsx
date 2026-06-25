@@ -59,9 +59,9 @@ export function K8sOpsLayout() {
 
 function FleetNavigation() {
   return (
-    <div className="flex flex-col gap-2 border-b border-outline bg-surface-lowest px-1 pb-2 md:flex-row md:items-center">
-      <h1 className="page-title shrink-0">K8s 运维</h1>
-      <nav className="flex min-w-0 items-center gap-1 overflow-x-auto md:ml-5" aria-label="K8s 运维导航">
+    <div className="module-navigation-bar">
+      <h1 className="page-title module-navigation-title">K8s 运维</h1>
+      <nav className="module-navigation-tabs" aria-label="K8s 运维导航">
         <NavLink
           className={({ isActive }) => fleetTabClass(isActive)}
           end
@@ -167,7 +167,7 @@ function ClusterContextNavigation({
 
 function fleetTabClass(isActive: boolean) {
   return [
-    'inline-flex h-8 min-w-max items-center border-b-2 px-3 text-sm font-semibold transition-colors',
+    'module-navigation-link px-3 text-sm font-semibold transition-colors',
     isActive ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface',
   ].join(' ');
 }
