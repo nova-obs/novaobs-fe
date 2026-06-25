@@ -4,9 +4,12 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   ArrowRight,
+  Check,
   ChevronDown,
+  ChevronRight,
   CheckCircle2,
   Clock3,
+  Copy,
   Grid2X2,
   LogIn,
   LogOut,
@@ -38,7 +41,9 @@ export function AppShell({ children }: PropsWithChildren) {
   const navigationDomains = useMemo(() => getNavigationDomains(), []);
   const activeDomain = getNavigationDomainByPath(location.pathname) ?? navigationDomains[0];
   const activeItem = getNavigationByPath(location.pathname);
+  const workspaceLabel = getWorkspaceLabel(location.pathname, activeItem, activeDomain);
   const [openDomainId, setOpenDomainId] = useState<string | null>(null);
+  const [linkCopyStatus, setLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [session, setSession] = useState<PlatformSession | null>(null);
   const [authStatus, setAuthStatus] = useState<SessionStatus>('checking');
   const logoutAction = useLogoutAction({
@@ -76,6 +81,7 @@ export function AppShell({ children }: PropsWithChildren) {
 
   useEffect(() => {
     setOpenDomainId(null);
+    setLinkCopyStatus('idle');
   }, [location.pathname]);
 
   useEffect(() => {
@@ -110,6 +116,27 @@ export function AppShell({ children }: PropsWithChildren) {
 
   function toggleDomain(domainId: string) {
     setOpenDomainId((current) => current === domainId ? null : domainId);
+  }
+
+  async function copyCurrentLink() {
+    const currentLink = window.location.href;
+
+    try {
+      await navigator.clipboard.writeText(currentLink);
+      setLinkCopyStatus('copied');
+    } catch {
+      const fallbackInput = document.createElement('textarea');
+      fallbackInput.value = currentLink;
+      fallbackInput.setAttribute('readonly', '');
+      fallbackInput.style.position = 'fixed';
+      fallbackInput.style.opacity = '0';
+      document.body.appendChild(fallbackInput);
+      fallbackInput.select();
+
+      const copied = document.execCommand('copy');
+      fallbackInput.remove();
+      setLinkCopyStatus(copied ? 'copied' : 'failed');
+    }
   }
 
   return (
@@ -170,12 +197,6 @@ export function AppShell({ children }: PropsWithChildren) {
             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 rounded bg-surface-low px-1.5 py-0.5 font-mono text-[10px] text-muted">⌘K</span>
           </div>
 
-          <StatusPill>
-            <Clock3 className="h-3.5 w-3.5" />
-            最近 15 分钟
-            <ChevronDown className="h-3.5 w-3.5" />
-          </StatusPill>
-
           <div className="platform-account-session flex shrink-0 items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary" title={activeDisplayName}>
               <UserCircle2 className="h-4 w-4" />
@@ -201,11 +222,41 @@ export function AppShell({ children }: PropsWithChildren) {
       </header>
 
       <main className="relative min-h-0 flex-1 overflow-hidden">
-        <section
-          key={location.pathname}
-          className="app-workspace route-transition-page h-full min-h-0 overflow-y-auto px-3 py-3 md:px-5 md:py-4"
-        >
-          {children}
+        <section className="app-workspace h-full min-h-0 px-3 py-3 md:px-5 md:py-4">
+          <div className="content-workbench-frame">
+            <header className="content-workbench-header">
+              <div className="content-workbench-location">
+                <span>{activeDomain.label}</span>
+                <ChevronRight className="h-3.5 w-3.5 text-muted/60" />
+                <strong>{workspaceLabel}</strong>
+              </div>
+              <div className="content-workbench-tools">
+                <StatusPill>
+                  <Clock3 className="h-3.5 w-3.5" />
+                  最近 15 分钟
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </StatusPill>
+                <button
+                  type="button"
+                  className="console-button h-8 px-2.5 text-xs"
+                  aria-label="复制当前页面链接"
+                  title="复制当前页面链接"
+                  onClick={copyCurrentLink}
+                >
+                  {linkCopyStatus === 'copied' ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
+                  <span className="hidden sm:inline">
+                    {linkCopyStatus === 'copied' ? '已复制' : linkCopyStatus === 'failed' ? '复制失败' : '复制链接'}
+                  </span>
+                </button>
+              </div>
+            </header>
+            <div
+              key={location.pathname}
+              className="content-workbench-body route-transition-page"
+            >
+              {children}
+            </div>
+          </div>
         </section>
       </main>
     </div>
@@ -405,10 +456,20 @@ function LoginView({ onSuccess }: { onSuccess: (session: PlatformSession) => voi
 
 function StatusPill({ children }: PropsWithChildren) {
   return (
-    <span className="hidden h-9 items-center gap-2 rounded-md border border-outline bg-surface-lowest px-3 text-xs font-semibold text-on-surface 2xl:inline-flex">
+    <span className="hidden h-8 items-center gap-2 rounded-md border border-outline bg-surface-lowest px-2.5 text-xs font-semibold text-on-surface sm:inline-flex">
       {children}
     </span>
   );
+}
+
+function getWorkspaceLabel(
+  pathname: string,
+  activeItem: NavigationItem | undefined,
+  activeDomain: NavigationDomain,
+) {
+  if (/^\/k8s\/clusters\/[^/]+/.test(pathname)) return '集群工作台';
+  if (pathname.startsWith('/agents/')) return 'Agent 详情';
+  return activeItem?.label ?? activeDomain.label;
 }
 
 function LogoutConfirmDetails({

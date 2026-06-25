@@ -23,6 +23,10 @@ test('全站提供统一的页面、按钮、提示和空态视觉语义', () =>
 
 test('应用壳层使用稳定工作区并移除玻璃态白色表面', () => {
   assert.equal(shell.includes('app-workspace'), true);
+  assert.equal(shell.includes('content-workbench-frame'), true);
+  assert.equal(styles.includes('.content-workbench-frame'), true);
+  assert.equal(styles.includes('.content-workbench-header'), true);
+  assert.equal(styles.includes('.content-workbench-body'), true);
   assert.equal(shell.includes('mega-menu-panel'), true);
   assert.equal(shell.includes('mega-menu-backdrop'), true);
   assert.equal(shell.includes('bg-white/55'), false);

@@ -73,6 +73,19 @@ test('超级菜单作为独立悬浮区域与顶部导航保持间距', () => {
   assert.equal(source.includes('top-full'), true);
 });
 
+test('应用内容使用带当前位置和右侧工具区的工作区外壳', () => {
+  assert.equal(source.includes('content-workbench-frame'), true);
+  assert.equal(source.includes('content-workbench-header'), true);
+  assert.equal(source.includes('content-workbench-location'), true);
+  assert.equal(source.includes('content-workbench-tools'), true);
+  assert.equal(source.includes('content-workbench-body'), true);
+  assert.equal(source.includes('workspaceLabel'), true);
+  assert.equal(source.includes('activeDomain.label'), true);
+  assert.equal(source.includes('复制当前页面链接'), true);
+  assert.equal(source.includes('navigator.clipboard.writeText'), true);
+  assert.equal(source.includes("document.execCommand('copy')"), true);
+});
+
 test('顶层框架不再保留全局侧栏和 K8s 聚焦侧栏', () => {
   assert.equal(source.includes('sidebar-collapse-toggle'), false);
   assert.equal(source.includes('isSidebarCollapsed'), false);
@@ -110,7 +123,9 @@ test('顶层框架使用柔和观测控制面视觉语言', () => {
   assert.equal(source.includes('h-[100dvh] overflow-hidden bg-app-radial'), false);
   assert.equal(source.includes('h-[100dvh] max-h-[100dvh]'), true);
   assert.equal(source.includes('flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden'), true);
-  assert.equal(source.includes('h-full min-h-0 overflow-y-auto'), true);
+  assert.equal(source.includes('content-workbench-body route-transition-page'), true);
+  assert.equal(styleSource.includes('.content-workbench-body'), true);
+  assert.equal(styleSource.includes('overflow-y: auto'), true);
   assert.equal(source.includes('border-r border-outline'), false);
   assert.equal(source.includes('bg-app-radial'), false);
   assert.equal(source.includes('OBS Console'), false);
