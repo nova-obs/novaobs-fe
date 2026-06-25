@@ -20,14 +20,20 @@ const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.ur
 const platformAccessSource = readFileSync(new URL('./PlatformAccessPage.tsx', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 
-test('K8s 运维模块使用轻量上下文导航且不再保留模块侧栏', () => {
+test('K8s 运维模块使用一级工作域和按需纵向菜单', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
   assert.equal(layoutSource.includes('useParams'), true);
   assert.equal(layoutSource.includes('k8sApi.listClusters'), true);
   assert.equal(layoutSource.includes('hasClusterContext'), true);
   assert.equal(layoutSource.includes('ClusterContextNavigation'), true);
   assert.equal(layoutSource.includes('k8s-context-groups'), true);
-  assert.equal(layoutSource.includes('k8s-context-items'), true);
+  assert.equal(layoutSource.includes('k8s-context-items'), false);
+  assert.equal(layoutSource.includes('K8sGroupMenu'), true);
+  assert.equal(layoutSource.includes('openGroupId'), true);
+  assert.equal(layoutSource.includes('K8s 功能选择'), true);
+  assert.equal(layoutSource.includes('<optgroup'), true);
+  assert.equal(layoutSource.includes("event.key === 'Escape'"), true);
+  assert.equal(layoutSource.includes('aria-expanded'), true);
   assert.equal(layoutSource.includes('返回集群列表'), true);
   assert.equal(layoutSource.includes('切换集群'), true);
   assert.equal(layoutSource.includes('.filter((item) => item.requiresCluster)'), true);
