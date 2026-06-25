@@ -53,6 +53,17 @@ test('顶层框架使用顶部业务域和按需展开的超级菜单', () => {
   assert.equal(source.includes('关闭超级菜单'), true);
 });
 
+test('超级菜单明确区分模块身份、主功能菜单和辅助入口', () => {
+  assert.equal(source.includes('mega-menu-domain'), true);
+  assert.equal(source.includes('mega-menu-navigation'), true);
+  assert.equal(source.includes('mega-menu-utility'), true);
+  assert.equal(source.includes('当前模块'), true);
+  assert.equal(source.includes('模块功能'), true);
+  assert.equal(source.includes('border-l-[3px] border-primary'), true);
+  assert.equal(source.includes('border border-outline/80 bg-surface-lowest'), true);
+  assert.equal(source.includes('max-h-[calc(100dvh-3.5rem)] overflow-y-auto'), true);
+});
+
 test('顶层框架不再保留全局侧栏和 K8s 聚焦侧栏', () => {
   assert.equal(source.includes('sidebar-collapse-toggle'), false);
   assert.equal(source.includes('isSidebarCollapsed'), false);

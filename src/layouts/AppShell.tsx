@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  ArrowRight,
   ChevronDown,
   CheckCircle2,
   Clock3,
@@ -238,7 +239,7 @@ function MegaMenu({
         onClick={onClose}
       />
       <section
-        className="mega-menu-panel relative z-10 border-b border-outline bg-surface-lowest shadow-[0_18px_40px_-24px_rgba(18,32,51,0.42)]"
+        className="mega-menu-panel relative z-10 max-h-[calc(100dvh-3.5rem)] overflow-y-auto border-b border-outline bg-surface-lowest shadow-[0_18px_40px_-24px_rgba(18,32,51,0.42)]"
         aria-label="NovaObs 超级菜单"
       >
         <div className="border-b border-outline px-3 py-2 lg:hidden">
@@ -259,23 +260,29 @@ function MegaMenu({
           </div>
         </div>
 
-        <div className="mx-auto grid max-w-[1440px] gap-6 px-4 py-5 lg:grid-cols-[minmax(0,1fr)_240px] lg:px-8 lg:py-6">
-          <div className="min-w-0">
-            <div className="mb-4 flex items-start gap-3">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-primary-soft text-primary">
-                <DomainIcon className="h-4 w-4" />
-              </span>
-              <div>
-                <h2 className="text-base font-semibold text-on-surface">{domain.label}</h2>
-                <p className="mt-0.5 text-xs text-muted">{domain.description}</p>
-              </div>
+        <div className="mx-auto grid max-w-[1440px] lg:grid-cols-[220px_minmax(0,1fr)_200px]">
+          <div className="mega-menu-domain border-b border-outline bg-primary-soft/70 px-5 py-5 lg:min-h-64 lg:border-b-0 lg:border-r lg:px-6 lg:py-6">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.12em] text-primary/70">当前模块</div>
+            <span className="mt-4 flex h-11 w-11 items-center justify-center rounded-md bg-primary text-white shadow-[0_8px_18px_-12px_rgba(13,91,215,0.9)]">
+              <DomainIcon className="h-5 w-5" />
+            </span>
+            <h2 className="mt-4 font-display text-lg font-semibold tracking-tight text-on-surface">{domain.label}</h2>
+            <p className="mt-1 max-w-40 text-xs leading-5 text-muted">{domain.description}</p>
+            <div className="mt-5 hidden h-px bg-primary/15 lg:block" />
+            <p className="mt-3 hidden text-[11px] leading-5 text-muted lg:block">从右侧选择功能，进入对应工作区。</p>
+          </div>
+
+          <div className="mega-menu-navigation min-w-0 px-4 py-5 lg:px-7 lg:py-6">
+            <div className="mb-4 flex items-center gap-3">
+              <div className="text-xs font-semibold text-on-surface">模块功能</div>
+              <div className="h-px flex-1 bg-outline" />
             </div>
 
-            <div className={['grid gap-x-8 gap-y-5', domain.groups.length > 1 ? 'md:grid-cols-2' : 'md:grid-cols-1'].join(' ')}>
+            <div className={['grid gap-x-6 gap-y-5', domain.groups.length > 1 ? 'md:grid-cols-2' : 'md:grid-cols-1'].join(' ')}>
               {domain.groups.map((group) => (
                 <div key={group.id}>
-                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">{group.label}</div>
-                  <div className="grid gap-1 sm:grid-cols-2">
+                  <div className="mb-2.5 text-[11px] font-semibold text-muted">{group.label}</div>
+                  <div className="grid gap-2">
                     {group.items.map((item) => {
                       const Icon = item.icon;
                       const selected = activeItem?.id === item.id;
@@ -283,16 +290,21 @@ function MegaMenu({
                         <Link
                           key={item.id}
                           className={[
-                            'group flex min-h-14 items-start gap-3 rounded-md px-3 py-2.5 transition-colors',
-                            selected ? 'bg-primary-soft' : 'hover:bg-surface',
+                            'group flex min-h-16 items-center gap-3 rounded-md border border-outline/80 bg-surface-lowest px-3 py-2.5 transition-colors',
+                            selected
+                              ? 'border-l-[3px] border-primary bg-primary-soft'
+                              : 'hover:border-primary/30 hover:bg-surface',
                           ].join(' ')}
                           to={item.path}
                         >
-                          <Icon className={['mt-0.5 h-4 w-4 shrink-0', selected ? 'text-primary' : 'text-muted group-hover:text-primary'].join(' ')} />
-                          <span className="min-w-0">
-                            <span className={['block text-[13px] font-semibold', selected ? 'text-primary' : 'text-on-surface'].join(' ')}>{item.label}</span>
+                          <span className={['flex h-8 w-8 shrink-0 items-center justify-center rounded-md', selected ? 'bg-primary text-white' : 'bg-surface text-muted group-hover:bg-primary-soft group-hover:text-primary'].join(' ')}>
+                            <Icon className="h-4 w-4" />
+                          </span>
+                          <span className="min-w-0 flex-1">
+                            <span className={['block text-sm font-semibold', selected ? 'text-primary' : 'text-on-surface'].join(' ')}>{item.label}</span>
                             <span className="mt-0.5 block text-[11px] leading-4 text-muted">{item.description}</span>
                           </span>
+                          <ArrowRight className={['h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5', selected ? 'text-primary' : 'text-muted/60'].join(' ')} />
                         </Link>
                       );
                     })}
@@ -302,18 +314,18 @@ function MegaMenu({
             </div>
           </div>
 
-          <div className="border-t border-outline pt-4 lg:border-l lg:border-t-0 lg:pl-6 lg:pt-0">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.08em] text-muted">快速访问</div>
-            <div className="mt-2 grid gap-1">
+          <div className="mega-menu-utility border-t border-outline bg-surface/60 px-4 py-5 lg:border-l lg:border-t-0 lg:px-5 lg:py-6">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">快速访问</div>
+            <div className="mt-3 grid gap-0.5">
               {quickItems.map((item) => {
                 const Icon = item.icon;
                 return (
                   <Link
                     key={item.id}
-                    className="flex items-center gap-2.5 rounded-md px-2.5 py-2 text-xs font-semibold text-on-surface transition-colors hover:bg-surface hover:text-primary"
+                    className="flex items-center gap-2.5 rounded-md px-2 py-2 text-[11px] font-semibold text-muted transition-colors hover:bg-surface-lowest hover:text-primary"
                     to={item.path}
                   >
-                    <Icon className="h-3.5 w-3.5 text-muted" />
+                    <Icon className="h-3.5 w-3.5" />
                     {item.label}
                   </Link>
                 );
