@@ -58,16 +58,17 @@ test('Agent 与 Logs 运行页面展示连续上下文和按需详情', () => {
   assert.match(css, /\.console-drawer-panel/);
 });
 
-test('K8s 与平台 IAM 从指标卡墙收敛为工具栏、工程表格和上下文侧栏', () => {
+test('K8s 与平台 IAM 从指标卡墙收敛为工具栏、工程表格和轻量上下文导航', () => {
   assert.match(k8sDashboardPage, /console-toolbar/);
   assert.match(k8sDashboardPage, /console-resource-list/);
   assert.match(k8sDashboardPage, /console-audit-meta/);
   assert.doesNotMatch(k8sDashboardPage, /ClusterNode/);
   assert.match(k8sAuditPage, /console-skeleton/);
   assert.match(k8sAuditPage, /console-empty-state/);
-  assert.match(k8sLayout, /K8s 工作台导航/);
-  assert.match(k8sLayout, /xl:hidden/);
-  assert.match(k8sLayout, /hidden overflow-hidden p-3 xl:block/);
+  assert.match(k8sLayout, /K8s 运维导航/);
+  assert.match(k8sLayout, /k8s-context-groups/);
+  assert.match(k8sLayout, /k8s-context-items/);
+  assert.doesNotMatch(k8sLayout, /<aside/);
   assert.match(platformAccessPage, /console-workbench/);
   assert.match(platformAccessPage, /console-detail-rail/);
   assert.match(platformAccessPage, /console-danger-zone/);

@@ -20,25 +20,11 @@ test('顶层框架引入搜索和用户入口', () => {
   assert.equal(source.includes('退出登录'), true);
   assert.equal(source.includes('账户会话'), true);
   assert.equal(source.includes('platform-account-session'), true);
-  assert.equal(source.includes('sidebar-account-dock'), true);
   assert.equal(source.includes('platform-logout-action'), true);
   assert.equal(source.includes('createPortal'), false);
   assert.equal(source.includes('z-[9999]'), false);
   assert.equal(source.includes('平台用户菜单'), false);
-  assert.equal(source.includes('mobile-account-session'), true);
   assert.equal(source.includes('AccountSessionPanel'), false);
-  assert.equal(source.includes('platform-account-session relative flex items-center gap-1.5'), false);
-  assert.equal(source.includes('isK8sClusterFocus'), true);
-  assert.equal(source.includes('k8s-focus-mode'), true);
-  assert.equal(source.includes('w-[72px] p-2'), true);
-  assert.equal(source.includes('K8sFocusRail'), true);
-  assert.equal(source.includes('getK8sFocusClusterName'), true);
-  assert.equal(source.includes('返回 K8s 集群总览'), true);
-  assert.equal(source.includes('[writing-mode:vertical-rl]'), true);
-  assert.equal(source.includes('平台级模块入口暂时收起'), false);
-  assert.equal(source.includes('K8s</div>'), false);
-  assert.equal(source.includes('Focus</div>'), false);
-  assert.equal(source.includes('>N<'), false);
   assert.equal(source.includes('LoginView'), true);
   assert.equal(sessionSource.includes('/api/v1/auth/session'), true);
   assert.equal(sessionSource.includes('/api/v1/auth/login'), true);
@@ -55,16 +41,27 @@ test('登录表单通过提交事件调用平台登录', () => {
   assert.equal(source.includes('grid gap-1.5 text-[13px] font-semibold text-muted'), true);
 });
 
-test('主侧边导航支持桌面端收起和展开', () => {
-  assert.equal(source.includes('sidebar-collapse-toggle'), true);
-  assert.equal(source.includes('isSidebarCollapsed'), true);
-  assert.equal(source.includes('novaobs.sidebar.collapsed'), true);
-  assert.equal(source.includes('w-52 p-2.5'), true);
-  assert.equal(source.includes('w-56 p-3'), false);
-  assert.equal(source.includes('w-64 p-4'), false);
-  assert.equal(source.includes('w-[84px] p-2'), true);
-  assert.equal(source.includes('展开主导航'), true);
-  assert.equal(source.includes('收起主导航'), true);
+test('顶层框架使用顶部业务域和按需展开的超级菜单', () => {
+  assert.equal(source.includes('getNavigationDomains'), true);
+  assert.equal(source.includes('getNavigationDomainByPath'), true);
+  assert.equal(source.includes('openDomainId'), true);
+  assert.equal(source.includes('NovaObs 超级菜单'), true);
+  assert.equal(source.includes('全部模块'), true);
+  assert.equal(source.includes('快速访问'), true);
+  assert.equal(source.includes('aria-expanded'), true);
+  assert.equal(source.includes("event.key === 'Escape'"), true);
+  assert.equal(source.includes('关闭超级菜单'), true);
+});
+
+test('顶层框架不再保留全局侧栏和 K8s 聚焦侧栏', () => {
+  assert.equal(source.includes('sidebar-collapse-toggle'), false);
+  assert.equal(source.includes('isSidebarCollapsed'), false);
+  assert.equal(source.includes('novaobs.sidebar.collapsed'), false);
+  assert.equal(source.includes('K8sFocusRail'), false);
+  assert.equal(source.includes('getK8sFocusClusterName'), false);
+  assert.equal(source.includes('k8s-focus-mode'), false);
+  assert.equal(source.includes('[writing-mode:vertical-rl]'), false);
+  assert.equal(source.includes('<aside'), false);
 });
 
 test('平台退出登录需要二次确认以降低误操作', () => {
@@ -72,7 +69,7 @@ test('平台退出登录需要二次确认以降低误操作', () => {
   assert.equal(source.includes('确认退出'), true);
   assert.equal(source.includes('取消退出'), true);
   assert.equal(source.includes('退出登录需要确认'), true);
-  assert.equal(source.includes('收起状态下展开主导航后可退出登录'), true);
+  assert.equal(source.includes('退出后需要重新登录才能继续访问控制台'), true);
   assert.equal(source.includes('已清理本地会话'), false);
   assert.equal(source.includes('<div className="font-semibold text-on-surface">Platform IAM</div>'), false);
   assert.equal(source.includes('session active'), false);
@@ -92,8 +89,8 @@ test('顶层框架提供轻量路由切换过渡', () => {
 test('顶层框架使用柔和观测控制面视觉语言', () => {
   assert.equal(source.includes('h-[100dvh] overflow-hidden bg-app-radial'), false);
   assert.equal(source.includes('h-[100dvh] max-h-[100dvh]'), true);
-  assert.equal(source.includes('relative flex h-[100dvh] min-w-0 flex-1 flex-col overflow-hidden'), true);
-  assert.equal(source.includes('min-h-0 flex-1 overflow-y-auto'), true);
+  assert.equal(source.includes('flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden'), true);
+  assert.equal(source.includes('h-full min-h-0 overflow-y-auto'), true);
   assert.equal(source.includes('border-r border-outline'), false);
   assert.equal(source.includes('bg-app-radial'), false);
   assert.equal(source.includes('OBS Console'), false);
@@ -102,10 +99,8 @@ test('顶层框架使用柔和观测控制面视觉语言', () => {
   assert.equal(source.includes('Prod / CN-SHANGHAI-A'), false);
   assert.equal(source.includes('生产观测域'), false);
   assert.equal(source.includes('cn-sh-a'), false);
-  assert.equal(source.includes('space-y-1.5 overflow-y-auto pt-1'), true);
-  assert.equal(source.includes('h-9 gap-3 px-3'), true);
   assert.equal(source.includes('NovaObs for UCloud'), false);
   assert.equal(source.includes('UCloud Ops'), false);
-  assert.equal(source.includes('atlas-sidebar-panel'), true);
-  assert.equal(source.includes('atlas-nav-active'), true);
+  assert.equal(source.includes('mega-menu-panel'), true);
+  assert.equal(source.includes('mega-menu-backdrop'), true);
 });

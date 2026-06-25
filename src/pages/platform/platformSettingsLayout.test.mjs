@@ -10,6 +10,9 @@ test('平台管理模块提供访问控制和观测接入配置入口', () => {
   assert.equal(layoutSource.includes('/platform/observability'), true);
   assert.equal(layoutSource.includes('访问控制'), true);
   assert.equal(layoutSource.includes('观测接入配置'), true);
+  assert.equal(layoutSource.includes('平台管理导航'), true);
+  assert.equal(layoutSource.includes('<aside'), false);
+  assert.equal(layoutSource.includes('xl:grid-cols-[248px'), false);
 });
 
 test('观测接入配置先集中维护日志下游端点', () => {
