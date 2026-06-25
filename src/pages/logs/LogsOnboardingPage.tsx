@@ -729,8 +729,6 @@ export function LogsOnboardingPage() {
     return (
       <div className="logs-task-page space-y-3">
         <LogsTaskPageHeader
-          parentLabel="采集路由"
-          parentTo="/logs/agents"
           title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
           description="按运行目标、采集配置、预览发布的顺序完成路由任务。"
           meta={routeUpdateMode ? `route ${shortHash(onboardingRouteId)}` : 'new route'}
@@ -745,8 +743,6 @@ export function LogsOnboardingPage() {
   return (
     <div className="logs-task-page relative pb-24">
       <LogsTaskPageHeader
-        parentLabel="采集路由"
-        parentTo="/logs/agents"
         title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
         description="选择目标、校验配置并发布。"
         meta={routeUpdateMode ? `route ${shortHash(onboardingRouteId)}` : 'new route'}
@@ -988,7 +984,7 @@ export function LogsOnboardingPage() {
                     <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
                     <Link
                       className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
-                      to="/platform/observability"
+                      to="/observability/endpoints"
                     >
                       <Settings2 className="h-3.5 w-3.5" />
                       管理端点

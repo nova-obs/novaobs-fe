@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
+  ArrowLeft,
   ArrowRight,
   Check,
   ChevronDown,
@@ -13,6 +14,7 @@ import {
   Grid2X2,
   LogIn,
   LogOut,
+  RefreshCw,
   Search,
   UserCircle2,
   X,
@@ -42,6 +44,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const activeDomain = getNavigationDomainByPath(location.pathname) ?? navigationDomains[0];
   const activeItem = getNavigationByPath(location.pathname);
   const workspaceLabel = getWorkspaceLabel(location.pathname, activeItem, activeDomain);
+  const backTarget = getBackTarget(location.pathname);
   const [openDomainId, setOpenDomainId] = useState<string | null>(null);
   const [linkCopyStatus, setLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [session, setSession] = useState<PlatformSession | null>(null);
@@ -139,6 +142,10 @@ export function AppShell({ children }: PropsWithChildren) {
     }
   }
 
+  function refreshCurrentPage() {
+    window.location.reload();
+  }
+
   return (
     <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-background text-on-surface">
       <header className="relative z-40 shrink-0 border-b border-outline bg-surface-lowest">
@@ -225,10 +232,18 @@ export function AppShell({ children }: PropsWithChildren) {
         <section className="app-workspace h-full min-h-0 px-3 py-3 md:px-5 md:py-4">
           <div className="content-workbench-frame">
             <header className="content-workbench-header">
-              <div className="content-workbench-location">
-                <span>{activeDomain.label}</span>
-                <ChevronRight className="h-3.5 w-3.5 text-muted/60" />
-                <strong>{workspaceLabel}</strong>
+              <div className="content-workbench-primary">
+                {backTarget ? (
+                  <Link className="content-workbench-back" to={backTarget.to} aria-label={backTarget.ariaLabel}>
+                    <ArrowLeft className="h-3.5 w-3.5" />
+                    <span>{backTarget.label}</span>
+                  </Link>
+                ) : null}
+                <div className="content-workbench-location">
+                  <span>{activeDomain.label}</span>
+                  <ChevronRight className="h-3.5 w-3.5 text-muted/60" />
+                  <strong>{workspaceLabel}</strong>
+                </div>
               </div>
               <div className="content-workbench-tools">
                 <StatusPill>
@@ -236,6 +251,16 @@ export function AppShell({ children }: PropsWithChildren) {
                   最近 15 分钟
                   <ChevronDown className="h-3.5 w-3.5" />
                 </StatusPill>
+                <button
+                  type="button"
+                  className="console-button h-8 px-2.5 text-xs"
+                  aria-label="刷新当前页面"
+                  title="刷新当前页面"
+                  onClick={refreshCurrentPage}
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">刷新</span>
+                </button>
                 <button
                   type="button"
                   className="console-button h-8 px-2.5 text-xs"
@@ -470,6 +495,22 @@ function getWorkspaceLabel(
   if (/^\/k8s\/clusters\/[^/]+/.test(pathname)) return '集群工作台';
   if (pathname.startsWith('/agents/')) return 'Agent 详情';
   return activeItem?.label ?? activeDomain.label;
+}
+
+function getBackTarget(pathname: string) {
+  if (/^\/k8s\/clusters\/[^/]+/.test(pathname)) {
+    return { to: '/k8s', label: '返回集群列表', ariaLabel: '返回 K8s 集群列表' };
+  }
+  if (pathname === '/logs/agents/new' || /^\/logs\/agents\/[^/]+\/edit$/.test(pathname)) {
+    return { to: '/logs/agents', label: '返回采集路由', ariaLabel: '返回采集路由列表' };
+  }
+  if (pathname === '/logs/alerts/new' || /^\/logs\/alerts\/[^/]+$/.test(pathname)) {
+    return { to: '/logs/alerts', label: '返回日志告警', ariaLabel: '返回日志告警列表' };
+  }
+  if (/^\/agents\/[^/]+$/.test(pathname)) {
+    return { to: '/logs/agents', label: '返回采集路由', ariaLabel: '返回采集路由列表' };
+  }
+  return null;
 }
 
 function LogoutConfirmDetails({

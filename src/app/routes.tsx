@@ -88,7 +88,7 @@ const logsChildRoutes: RouteDefinition[] = [
 const platformChildRoutes: RouteDefinition[] = [
   { index: true, title: '平台管理', element: <Navigate to="/platform/access" replace /> },
   { path: 'access', title: '平台管理', element: <PlatformAccessAdminPage /> },
-  { path: 'observability', title: '平台管理', element: <ObservabilitySettingsPage /> },
+  { path: 'observability', title: '观测接入配置', element: <Navigate to="/observability/endpoints" replace /> },
 ];
 
 export const routeDefinitions: RouteDefinition[] = [
@@ -96,6 +96,7 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/logs/agents/new" replace /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
+  { path: '/observability/endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
   { path: '/monitoring', title: '监控', element: <MonitoringPage /> },
   { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },
   { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },

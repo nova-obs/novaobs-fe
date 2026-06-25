@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Check, ChevronDown } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { k8sApi } from './api';
 import {
   getK8sNavigationByPath,
@@ -122,13 +122,9 @@ function ClusterContextNavigation({
   }, [openGroupId]);
 
   return (
-    <section className="k8s-context-navigation rounded-lg border border-outline bg-surface-lowest shadow-[0_1px_2px_rgba(18,32,51,0.035)]" aria-label="K8s 运维导航">
+    <section className="k8s-context-navigation module-navigation-bar" aria-label="K8s 运维导航">
       <div className="flex flex-col gap-2 px-3 py-2 md:flex-row md:items-center">
         <div className="flex min-w-0 items-center gap-2">
-          <Link className="console-button h-8 shrink-0 px-2.5 text-xs" to="/k8s">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            返回集群列表
-          </Link>
           <div className="relative min-w-0 max-w-64">
             <select
               className="console-input h-8 w-full min-w-40 appearance-none pr-8 text-xs font-semibold"

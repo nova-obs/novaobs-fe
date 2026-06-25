@@ -149,6 +149,28 @@ test('创建 Logs 下游端点时传递端点类型和 stream 名称', async () 
   assert.equal(result.streamName, 'novaobs-logs');
 });
 
+test('创建 OTel 下游端点时传递 OTLP HTTP 写入地址', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.createEndpoint({
+      name: 'otel-prod',
+      sinkType: 'otel',
+      writeURL: 'http://otel-gateway:4318/v1/logs',
+      scopeType: 'vm',
+    }),
+    {
+      id: 'sink-otel',
+      name: 'otel-prod',
+      sink_type: 'otel',
+      write_url: 'http://otel-gateway:4318/v1/logs',
+      scope_type: 'vm',
+    },
+  );
+
+  assert.equal(request.body.sink_type, 'otel');
+  assert.equal(request.body.write_url, 'http://otel-gateway:4318/v1/logs');
+  assert.equal(result.sinkType, 'otel');
+});
+
 test('创建 VictoriaLogs 端点时传递租户 AccountID 和 ProjectID', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.createEndpoint({

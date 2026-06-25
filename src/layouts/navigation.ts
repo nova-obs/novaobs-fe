@@ -71,6 +71,7 @@ const navigationDomains: NavigationDomain[] = [
         id: 'signals',
         label: '运行与告警',
         items: [
+          { id: 'observability-endpoints', label: '接入配置', description: '日志下游端点', path: '/observability/endpoints', icon: RadioTower },
           { id: 'monitoring', label: '监控', description: '指标与运行信号', path: '/monitoring', icon: Monitor },
           { id: 'alerts', label: '告警中心', description: '告警实例与处置', path: '/alerts', icon: Bell },
         ],
@@ -104,7 +105,6 @@ const navigationDomains: NavigationDomain[] = [
         label: '平台设置',
         items: [
           { id: 'platform-access', label: '访问控制', description: '用户、组、角色与授权', path: '/platform/access', icon: ShieldCheck },
-          { id: 'platform-observability', label: '观测接入配置', description: '日志下游端点', path: '/platform/observability', icon: RadioTower },
         ],
       },
     ],
@@ -143,6 +143,7 @@ export const getNavigationDomainByPath = (path: string) => {
     normalizedPath.startsWith('/logs')
     || normalizedPath.startsWith('/agents/')
     || normalizedPath === '/onboarding'
+    || normalizedPath.startsWith('/observability')
     || normalizedPath.startsWith('/monitoring')
     || normalizedPath.startsWith('/alerts')
   ) {

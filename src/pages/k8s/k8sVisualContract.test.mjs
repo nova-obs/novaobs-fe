@@ -34,7 +34,8 @@ test('K8s 运维模块使用一级工作域和按需纵向菜单', () => {
   assert.equal(layoutSource.includes('<optgroup'), true);
   assert.equal(layoutSource.includes("event.key === 'Escape'"), true);
   assert.equal(layoutSource.includes('aria-expanded'), true);
-  assert.equal(layoutSource.includes('返回集群列表'), true);
+  assert.equal(layoutSource.includes('module-navigation-bar'), true);
+  assert.equal(layoutSource.includes('返回集群列表'), false);
   assert.equal(layoutSource.includes('切换集群'), true);
   assert.equal(layoutSource.includes('.filter((item) => item.requiresCluster)'), true);
   assert.equal(layoutSource.includes('FleetTabs'), false);

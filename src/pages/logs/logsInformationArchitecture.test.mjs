@@ -20,15 +20,17 @@ test('Logs 仅保留三个主模块并把创建更新归入父模块子路径', 
   assert.match(routes, /path: 'alerts\/:id'/);
 });
 
-test('采集路由和日志告警任务页复用轻量父子页面头部', () => {
+test('采集路由和日志告警任务页复用轻量任务头且返回交给统一横幅', () => {
   assert.match(primitives, /export function LogsTaskPageHeader/);
-  assert.match(primitives, /返回\{parentLabel\}/);
+  assert.doesNotMatch(primitives, /返回\{parentLabel\}/);
+  assert.doesNotMatch(primitives, /parentTo/);
+  assert.doesNotMatch(primitives, /parentLabel/);
   assert.doesNotMatch(primitives, /logs-task-page-header console-panel/);
   assert.match(onboarding, /<LogsTaskPageHeader/);
-  assert.match(onboarding, /parentLabel="采集路由"/);
+  assert.doesNotMatch(onboarding, /parentLabel="采集路由"/);
   assert.doesNotMatch(onboarding, /logs-onboarding-toolbar console-panel/);
   assert.match(alertRule, /<LogsTaskPageHeader/);
-  assert.match(alertRule, /parentLabel="日志告警"/);
+  assert.doesNotMatch(alertRule, /parentLabel="日志告警"/);
   assert.match(alertRule, /context=\{/);
   assert.doesNotMatch(alertRule, /告警作用范围/);
 });

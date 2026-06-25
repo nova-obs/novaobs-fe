@@ -76,11 +76,15 @@ test('超级菜单作为独立悬浮区域与顶部导航保持间距', () => {
 test('应用内容使用带当前位置和右侧工具区的工作区外壳', () => {
   assert.equal(source.includes('content-workbench-frame'), true);
   assert.equal(source.includes('content-workbench-header'), true);
+  assert.equal(source.includes('content-workbench-primary'), true);
   assert.equal(source.includes('content-workbench-location'), true);
+  assert.equal(source.includes('content-workbench-back'), true);
   assert.equal(source.includes('content-workbench-tools'), true);
   assert.equal(source.includes('content-workbench-body'), true);
   assert.equal(source.includes('workspaceLabel'), true);
   assert.equal(source.includes('activeDomain.label'), true);
+  assert.equal(source.includes('getBackTarget'), true);
+  assert.equal(source.includes('刷新当前页面'), true);
   assert.equal(source.includes('复制当前页面链接'), true);
   assert.equal(source.includes('navigator.clipboard.writeText'), true);
   assert.equal(source.includes("document.execCommand('copy')"), true);

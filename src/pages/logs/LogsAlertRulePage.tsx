@@ -124,8 +124,6 @@ export function LogsAlertRulePage() {
   return (
     <div className="logs-task-page min-h-[760px] space-y-3">
       <LogsTaskPageHeader
-        parentLabel="日志告警"
-        parentTo="/logs/alerts"
         title={ruleId ? '更新日志告警' : '创建日志告警'}
         description="定义匹配条件，测试通过后启用告警。"
         meta={ruleId ? `rule ${ruleId.slice(0, 12)}` : 'new rule'}

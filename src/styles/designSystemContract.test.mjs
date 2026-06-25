@@ -26,6 +26,8 @@ test('应用壳层使用稳定工作区并移除玻璃态白色表面', () => {
   assert.equal(shell.includes('content-workbench-frame'), true);
   assert.equal(styles.includes('.content-workbench-frame'), true);
   assert.equal(styles.includes('.content-workbench-header'), true);
+  assert.equal(styles.includes('.content-workbench-primary'), true);
+  assert.equal(styles.includes('.content-workbench-back'), true);
   assert.equal(styles.includes('.content-workbench-body'), true);
   assert.equal(shell.includes('mega-menu-panel'), true);
   assert.equal(shell.includes('mega-menu-backdrop'), true);
@@ -62,5 +64,9 @@ test('模块导航统一标题边界、文字基线和激活位置', () => {
     assert.match(source, /module-navigation-link/);
   }
   assert.match(styles, /\.module-navigation-title\s*\{[\s\S]*border-right/);
-  assert.match(styles, /\.module-navigation-link\s*\{[\s\S]*min-height:\s*46px/);
+  assert.match(styles, /\.module-navigation-link\s*\{[\s\S]*min-height:\s*40px/);
+  assert.match(styles, /\.module-navigation-bar\s*\{[\s\S]*background:\s*linear-gradient/);
+  assert.match(styles, /\.module-navigation-title\s*\{[\s\S]*font-size:\s*16px/);
+  assert.match(styles, /\.module-navigation-link,[\s\S]*\.k8s-context-navigation \.console-input\s*\{[\s\S]*font-size:\s*13px/);
+  assert.match(styles, /\.k8s-context-navigation\s*\{[\s\S]*overflow:\s*visible/);
 });

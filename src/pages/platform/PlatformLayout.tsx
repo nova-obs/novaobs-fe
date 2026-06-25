@@ -1,9 +1,8 @@
 import { NavLink, Outlet } from 'react-router-dom';
-import { RadioTower, ShieldCheck } from 'lucide-react';
+import { ShieldCheck } from 'lucide-react';
 
 const platformNav = [
   { to: '/platform/access', label: '访问控制', icon: ShieldCheck },
-  { to: '/platform/observability', label: '观测接入配置', icon: RadioTower },
 ];
 
 export function PlatformLayout() {

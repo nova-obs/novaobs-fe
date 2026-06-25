@@ -101,14 +101,40 @@ body {
 
   .content-workbench-header {
     display: flex;
-    min-height: 44px;
+    min-height: 46px;
     flex-shrink: 0;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     border-bottom: 1px solid #d8e2ef;
-    background: #ffffff;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
     padding: 6px 12px;
+  }
+
+  .content-workbench-primary {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .content-workbench-back {
+    display: inline-flex;
+    height: 32px;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+    border-right: 1px solid #d8e2ef;
+    padding-right: 10px;
+    color: #637083;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+    transition: color 120ms ease, background-color 120ms ease;
+  }
+
+  .content-workbench-back:hover {
+    color: #0d5bd7;
   }
 
   .content-workbench-location {
@@ -148,18 +174,17 @@ body {
   .module-navigation-bar {
     display: flex;
     min-width: 0;
-    min-height: 48px;
+    min-height: 42px;
     flex-direction: column;
     overflow: hidden;
     border: 1px solid #d8e2ef;
-    border-radius: 8px;
-    background: #ffffff;
-    box-shadow: 0 1px 2px rgba(18, 32, 51, 0.035);
+    border-radius: 6px;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
   }
 
   .module-navigation-title {
     display: flex;
-    min-height: 46px;
+    min-height: 40px;
     flex-shrink: 0;
     align-items: center;
     margin: 0;
@@ -180,7 +205,7 @@ body {
 
   .module-navigation-link {
     display: inline-flex;
-    min-height: 46px;
+    min-height: 40px;
     min-width: max-content;
     flex-shrink: 0;
     align-items: center;
@@ -188,7 +213,7 @@ body {
   }
 
   .page-header {
-    @apply flex flex-col gap-3 border-b border-outline/70 pb-3 md:flex-row md:items-center md:justify-between;
+    @apply flex flex-col gap-3 rounded-md border border-outline bg-surface-lowest px-3 py-2.5 md:flex-row md:items-center md:justify-between;
   }
 
   .page-title {
@@ -466,6 +491,34 @@ body {
 .console-table td {
   font-size: 13px;
   line-height: 20px;
+}
+
+.content-workbench-back,
+.content-workbench-tools .console-button,
+.module-navigation-link,
+.k8s-context-navigation button,
+.k8s-context-navigation a,
+.k8s-context-navigation .console-input {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.content-workbench-location {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.module-navigation-title {
+  font-size: 16px;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+}
+
+.k8s-context-navigation {
+  overflow: visible;
+  position: relative;
+  z-index: 20;
 }
 
 @media (min-width: 1280px) {
