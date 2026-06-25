@@ -1,8 +1,16 @@
+import { useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, CheckCircle2, ChevronDown, RefreshCw } from 'lucide-react';
+import { Check, ChevronDown } from 'lucide-react';
 import { k8sApi } from './api';
-import { getK8sNavigationByPath, getK8sNavigationGroupItems, k8sClusterPath, k8sNavigationGroups } from './navigation';
+import {
+  getK8sNavigationByPath,
+  getK8sNavigationGroupItems,
+  k8sClusterPath,
+  k8sNavigationGroups,
+  type K8sNavigationGroup,
+  type K8sNavigationItem,
+} from './navigation';
 
 export function K8sOpsLayout() {
   const location = useLocation();
@@ -14,181 +22,267 @@ export function K8sOpsLayout() {
     queryFn: () => k8sApi.listClusters(),
     retry: false,
   });
-  const activeClusterId = clusterId;
-  const activeCluster = clusters.find((item) => item.id === activeClusterId);
+  const activeCluster = clusters.find((item) => item.id === clusterId);
   const clusterError = error instanceof Error ? error : error ? new Error('集群列表读取失败') : null;
-  const context = { activeClusterId, activeCluster, clusters, isLoadingClusters, clusterError };
-  const hasClusterContext = Boolean(activeClusterId);
-  const isAccessView = location.pathname === '/k8s/access';
+  const context = {
+    activeClusterId: clusterId,
+    activeCluster,
+    clusters,
+    isLoadingClusters,
+    clusterError,
+  };
+  const hasClusterContext = Boolean(clusterId);
 
   function handleClusterChange(nextClusterId: string) {
-    if (!nextClusterId) {
-      return;
-    }
-    const nextRoute = current?.requiresCluster ? k8sClusterPath(nextClusterId, current) : `/k8s/clusters/${encodeURIComponent(nextClusterId)}`;
+    if (!nextClusterId) return;
+    const nextRoute = current?.requiresCluster
+      ? k8sClusterPath(nextClusterId, current)
+      : `/k8s/clusters/${encodeURIComponent(nextClusterId)}`;
     navigate(nextRoute);
   }
 
+  function handleFunctionChange(item: K8sNavigationItem) {
+    navigate(k8sClusterPath(clusterId, item));
+  }
+
   return (
-    <div className={hasClusterContext ? 'grid gap-4 xl:grid-cols-[248px_minmax(0,1fr)]' : 'space-y-4'}>
+    <div className="min-w-0 space-y-3">
       {hasClusterContext ? (
-      <aside className="console-panel relative overflow-hidden p-3">
-        <div className="relative rounded-lg bg-white/42 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.78)]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="font-display text-lg font-semibold tracking-tight text-on-surface">K8s 运维</div>
-              <div className="mt-1 font-mono text-[11px] text-muted">{activeClusterId ? `cluster/${activeClusterId}` : 'Fleet / registered clusters'}</div>
-            </div>
-            <Link className="quiet-button h-8 px-2 text-xs text-muted hover:bg-white/70 hover:text-primary" aria-label="切换集群" to="/k8s">
-              <ChevronDown className="h-3.5 w-3.5" />
-            </Link>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 text-[11px]">
-            <StatusCell label="API" value={activeCluster ? activeCluster.status || 'unknown' : isLoadingClusters ? 'loading' : 'fleet'} />
-            <StatusCell label="Mode" value={activeCluster ? `${activeCluster.accessMode || 'direct'}${activeCluster.readOnly ? '/ro' : '/rw'}` : `${clusters.length} clusters`} />
-          </div>
-        </div>
-
-        <nav className="relative mt-4 space-y-5">
-          {k8sNavigationGroups.map((group) => (
-            <div key={group.id}>
-              <div className="mb-2 px-2 text-[11px] font-semibold text-muted">{group.label}</div>
-              <div className="space-y-1">
-                {getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster).map((item) => {
-                  const Icon = item.icon;
-                  return (
-                    <NavLink
-                      key={item.id}
-                      to={k8sClusterPath(activeClusterId, item)}
-                      end={item.id === 'dashboard'}
-                      className={({ isActive }) =>
-                        [
-                          'group flex min-h-10 items-center gap-3 rounded-lg px-3 py-2 text-sm transition-all active:translate-y-px',
-                          isActive ? 'atlas-nav-active text-primary' : 'text-muted hover:bg-white/45 hover:text-on-surface',
-                        ].join(' ')
-                      }
-                    >
-                      <Icon className="h-4 w-4 shrink-0" />
-                      <span className="min-w-0 flex-1 truncate">{item.label}</span>
-                    </NavLink>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
-        </nav>
-      </aside>
-      ) : null}
-
-      <div className="min-w-0 space-y-4">
-        <div className="console-panel flex flex-col justify-between gap-3 px-4 py-3 md:flex-row md:items-center">
-          <div className="min-w-0">
-            <h1 className="font-display text-2xl font-semibold tracking-tight text-on-surface">{current?.label ?? 'Dashboard'}</h1>
-          </div>
-          <div className="flex flex-wrap gap-2 text-xs">
-            <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary-soft/70 px-3 font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-              <CheckCircle2 className="h-3.5 w-3.5" />
-              权限接入 NovaObs RBAC
-            </span>
-            <span className="inline-flex h-9 items-center gap-2 rounded-lg bg-white/55 px-3 font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-              <RefreshCw className="h-3.5 w-3.5" />
-              最近 15 分钟
-            </span>
-          </div>
-        </div>
-
-        {hasClusterContext ? (
-          <ClusterWorkspaceBar
-            activeClusterId={activeClusterId}
-            activeClusterName={activeCluster?.name || activeClusterId}
-            clusters={clusters}
-            currentLabel={current?.label ?? 'Dashboard'}
-            onClusterChange={handleClusterChange}
-          />
-        ) : (
-          <FleetTabs activePath={isAccessView ? '/k8s/access' : '/k8s'} />
-        )}
-
-        <Outlet context={context} />
-      </div>
+        <ClusterContextNavigation
+          activeClusterId={clusterId}
+          activeClusterName={activeCluster?.name || clusterId}
+          clusters={clusters}
+          current={current}
+          onClusterChange={handleClusterChange}
+          onFunctionChange={handleFunctionChange}
+        />
+      ) : (
+        <FleetNavigation />
+      )}
+      <Outlet context={context} />
     </div>
   );
 }
 
-function FleetTabs({ activePath }: { activePath: string }) {
-  const tabs = [
-    { path: '/k8s', label: '集群总览' },
-    { path: '/k8s/access', label: '集群接入' },
-  ];
+function FleetNavigation() {
   return (
-    <div className="console-panel flex flex-wrap items-center gap-2 px-3 py-3">
-      {tabs.map((item) => (
-        <Link
-          key={item.path}
-          to={item.path}
-          className={[
-            'inline-flex h-10 min-w-32 items-center justify-center rounded-lg px-4 text-sm font-semibold shadow-[inset_0_0_0_1px_rgba(216,226,239,0.9)] transition-all active:translate-y-px',
-            activePath === item.path ? 'bg-primary text-white shadow-[0_10px_24px_rgba(13,91,215,0.18)]' : 'bg-white/70 text-muted hover:bg-white hover:text-primary',
-          ].join(' ')}
+    <div className="module-navigation-bar">
+      <h1 className="page-title module-navigation-title">K8s 运维</h1>
+      <nav className="module-navigation-tabs" aria-label="K8s 运维导航">
+        <NavLink
+          className={({ isActive }) => fleetTabClass(isActive)}
+          end
+          to="/k8s"
         >
-          {item.label}
-        </Link>
-      ))}
+          集群总览
+        </NavLink>
+        <NavLink
+          className={({ isActive }) => fleetTabClass(isActive)}
+          to="/k8s/access"
+        >
+          集群接入
+        </NavLink>
+      </nav>
     </div>
   );
 }
 
-function ClusterWorkspaceBar({
+function ClusterContextNavigation({
   activeClusterId,
   activeClusterName,
   clusters,
-  currentLabel,
+  current,
   onClusterChange,
+  onFunctionChange,
 }: {
   activeClusterId: string;
   activeClusterName: string;
   clusters: Array<{ id: string; name: string }>;
-  currentLabel: string;
+  current: K8sNavigationItem | undefined;
   onClusterChange: (clusterId: string) => void;
+  onFunctionChange: (item: K8sNavigationItem) => void;
+}) {
+  const location = useLocation();
+  const activeGroupId = current?.group ?? 'overview';
+  const [openGroupId, setOpenGroupId] = useState<string | null>(null);
+
+  useEffect(() => {
+    setOpenGroupId(null);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!openGroupId) return undefined;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setOpenGroupId(null);
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [openGroupId]);
+
+  return (
+    <section className="k8s-context-navigation module-navigation-bar" aria-label="K8s 运维导航">
+      <div className="flex flex-col gap-2 px-3 py-2 md:flex-row md:items-center">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="relative min-w-0 max-w-64">
+            <select
+              className="console-input h-8 w-full min-w-40 appearance-none pr-8 text-xs font-semibold"
+              aria-label="切换集群"
+              value={activeClusterId}
+              onChange={(event) => onClusterChange(event.target.value)}
+            >
+              {clusters.map((cluster) => (
+                <option key={cluster.id} value={cluster.id}>{cluster.name || cluster.id}</option>
+              ))}
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+          </div>
+          <span className="hidden truncate font-mono text-[11px] text-muted sm:block" title={activeClusterName}>
+            cluster/{activeClusterName}
+          </span>
+        </div>
+
+        <nav className="k8s-context-groups relative hidden min-w-0 flex-1 items-stretch justify-end gap-1 md:flex" aria-label="K8s 功能分组">
+          {k8sNavigationGroups.map((group) => {
+            const items = getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster);
+            if (!items.length) return null;
+            if (items.length === 1) {
+              return (
+                <Link
+                  key={group.id}
+                  className={`${groupTriggerClass(group.id === activeGroupId)} relative z-20`}
+                  to={k8sClusterPath(activeClusterId, items[0])}
+                >
+                  {group.label}
+                </Link>
+              );
+            }
+            return (
+              <K8sGroupMenu
+                key={group.id}
+                active={group.id === activeGroupId}
+                current={current}
+                group={group}
+                items={items}
+                open={openGroupId === group.id}
+                onClose={() => setOpenGroupId(null)}
+                onToggle={() => setOpenGroupId((value) => value === group.id ? null : group.id)}
+                activeClusterId={activeClusterId}
+              />
+            );
+          })}
+        </nav>
+
+        <label className="relative block md:hidden">
+          <span className="sr-only">K8s 功能选择</span>
+          <select
+            className="console-input h-9 w-full appearance-none pr-9 text-xs font-semibold"
+            aria-label="K8s 功能选择"
+            value={current?.id ?? ''}
+            onChange={(event) => {
+              const item = k8sNavigationGroups
+                .flatMap((group) => getK8sNavigationGroupItems(group.id))
+                .find((candidate) => candidate.id === event.target.value);
+              if (item) onFunctionChange(item);
+            }}
+          >
+            {k8sNavigationGroups.map((group) => {
+              const items = getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster);
+              if (!items.length) return null;
+              return (
+                <optgroup key={group.id} label={group.label}>
+                  {items.map((item) => (
+                    <option key={item.id} value={item.id}>{item.label}</option>
+                  ))}
+                </optgroup>
+              );
+            })}
+          </select>
+          <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+        </label>
+      </div>
+    </section>
+  );
+}
+
+function K8sGroupMenu({
+  active,
+  activeClusterId,
+  current,
+  group,
+  items,
+  open,
+  onClose,
+  onToggle,
+}: {
+  active: boolean;
+  activeClusterId: string;
+  current: K8sNavigationItem | undefined;
+  group: K8sNavigationGroup;
+  items: K8sNavigationItem[];
+  open: boolean;
+  onClose: () => void;
+  onToggle: () => void;
 }) {
   return (
-    <div className="console-panel flex flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center lg:justify-between">
-      <div className="min-w-0">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
-          <Link className="font-semibold text-primary hover:underline" to="/k8s">K8s 运维</Link>
-          <span>/</span>
-          <span className="font-mono font-semibold text-on-surface">{activeClusterName}</span>
-          <span>/</span>
-          <span>{currentLabel}</span>
-        </div>
-        <div className="mt-2 flex flex-wrap items-center gap-2">
-          <Link className="quiet-button h-9 bg-white/65 px-3 text-xs text-muted hover:text-primary" to="/k8s">
-            <ArrowLeft className="h-3.5 w-3.5" />
-            返回集群列表
-          </Link>
-        </div>
-      </div>
-      <label className="min-w-56 text-xs font-semibold text-muted">
-        切换集群
-        <select
-          className="console-input mt-2 h-9 w-full bg-white/70"
-          value={activeClusterId}
-          onChange={(event) => onClusterChange(event.target.value)}
-        >
-          {clusters.map((cluster) => (
-            <option key={cluster.id} value={cluster.id}>{cluster.name || cluster.id}</option>
-          ))}
-        </select>
-      </label>
+    <div className="relative z-20 shrink-0">
+      <button
+        type="button"
+        className={groupTriggerClass(active || open)}
+        aria-expanded={open}
+        onClick={onToggle}
+      >
+        <span>{group.label}</span>
+        {active && current ? <span className="text-[11px] font-medium text-primary/75">· {current.label}</span> : null}
+        <ChevronDown className={['h-3.5 w-3.5 transition-transform', open ? 'rotate-180' : ''].join(' ')} />
+      </button>
+      {open ? (
+        <>
+          <button
+            type="button"
+            className="fixed inset-0 z-10 cursor-default"
+            aria-label={`关闭${group.label}菜单`}
+            onClick={onClose}
+          />
+          <div className="absolute right-0 top-full z-30 mt-2 w-60 rounded-md border border-outline bg-surface-lowest p-1.5 shadow-[0_16px_36px_-18px_rgba(18,32,51,0.45)]">
+            <div className="px-2.5 pb-1.5 pt-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">{group.label}</div>
+            {items.map((item) => {
+              const Icon = item.icon;
+              const selected = current?.id === item.id;
+              return (
+                <Link
+                  key={item.id}
+                  className={[
+                    'flex min-h-10 items-center gap-2.5 rounded-md px-2.5 py-2 text-xs transition-colors',
+                    selected ? 'border-l-[3px] border-primary bg-primary-soft font-semibold text-primary' : 'text-on-surface hover:bg-surface',
+                  ].join(' ')}
+                  to={k8sClusterPath(activeClusterId, item)}
+                  onClick={onClose}
+                >
+                  <Icon className={['h-4 w-4 shrink-0', selected ? 'text-primary' : 'text-muted'].join(' ')} />
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {selected ? <Check className="h-3.5 w-3.5 shrink-0" /> : null}
+                </Link>
+              );
+            })}
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }
 
-function StatusCell({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-white/48 px-2.5 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-      <div className="text-muted">{label}</div>
-      <div className="mt-1 font-mono font-semibold text-on-surface">{value}</div>
-    </div>
-  );
+function groupTriggerClass(active: boolean) {
+  return [
+    'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border-b-2 px-3 text-xs font-semibold transition-colors',
+    active ? 'border-primary bg-primary-soft text-primary' : 'border-transparent text-muted hover:bg-surface hover:text-on-surface',
+  ].join(' ');
+}
+
+function fleetTabClass(isActive: boolean) {
+  return [
+    'module-navigation-link px-3 text-sm font-semibold transition-colors',
+    isActive ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface',
+  ].join(' ');
 }

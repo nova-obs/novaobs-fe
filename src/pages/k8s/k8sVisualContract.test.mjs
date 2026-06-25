@@ -20,18 +20,28 @@ const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.ur
 const platformAccessSource = readFileSync(new URL('./PlatformAccessPage.tsx', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 
-test('K8s 运维模块使用专业二级导航和运维信号', () => {
+test('K8s 运维模块使用一级工作域和按需纵向菜单', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
-  assert.equal(layoutSource.includes('Fleet / registered clusters'), true);
   assert.equal(layoutSource.includes('useParams'), true);
   assert.equal(layoutSource.includes('k8sApi.listClusters'), true);
   assert.equal(layoutSource.includes('hasClusterContext'), true);
-  assert.equal(layoutSource.includes('FleetTabs'), true);
-  assert.equal(layoutSource.includes('ClusterWorkspaceBar'), true);
-  assert.equal(layoutSource.includes('返回集群列表'), true);
+  assert.equal(layoutSource.includes('ClusterContextNavigation'), true);
+  assert.equal(layoutSource.includes('k8s-context-groups'), true);
+  assert.equal(layoutSource.includes('k8s-context-items'), false);
+  assert.equal(layoutSource.includes('K8sGroupMenu'), true);
+  assert.equal(layoutSource.includes('openGroupId'), true);
+  assert.equal(layoutSource.includes('K8s 功能选择'), true);
+  assert.equal(layoutSource.includes('<optgroup'), true);
+  assert.equal(layoutSource.includes("event.key === 'Escape'"), true);
+  assert.equal(layoutSource.includes('aria-expanded'), true);
+  assert.equal(layoutSource.includes('module-navigation-bar'), true);
+  assert.equal(layoutSource.includes('返回集群列表'), false);
   assert.equal(layoutSource.includes('切换集群'), true);
-  assert.equal(layoutSource.includes("item.id === 'fleet' || item.requiresCluster"), false);
   assert.equal(layoutSource.includes('.filter((item) => item.requiresCluster)'), true);
+  assert.equal(layoutSource.includes('FleetTabs'), false);
+  assert.equal(layoutSource.includes('ClusterWorkspaceBar'), false);
+  assert.equal(layoutSource.includes('<aside'), false);
+  assert.equal(layoutSource.includes('xl:grid-cols-[248px'), false);
   assert.equal(layoutSource.includes('k8s-account-session'), false);
   assert.equal(layoutSource.includes('AccountSessionPanel'), false);
   assert.equal(navigationSource.includes('访问控制'), true);

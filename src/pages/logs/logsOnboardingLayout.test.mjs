@@ -10,8 +10,10 @@ const agentsSource = readFileSync(new URL('./LogsAgentsPage.tsx', import.meta.ur
 const alertsSource = readFileSync(new URL('./LogsAlertsPage.tsx', import.meta.url), 'utf8');
 
 test('Logs 接入配置收敛为接入和发布路径', () => {
-  assert.equal(onboardingSource.includes('logs-onboarding-toolbar'), true);
-  assert.equal(onboardingSource.includes('服务与运行目标'), true);
+  assert.equal(onboardingSource.includes('logs-onboarding-toolbar'), false);
+  assert.equal(onboardingSource.includes('aria-label="采集路由步骤"'), true);
+  assert.equal(onboardingSource.includes('logs-runtime-configuration-panel'), true);
+  assert.equal(onboardingSource.includes('运行目标'), true);
   assert.equal(onboardingSource.includes('日志下游端点'), true);
   assert.equal(onboardingSource.includes('业务采集配置'), true);
   assert.equal(onboardingSource.includes('发布预览'), true);
@@ -80,9 +82,9 @@ test('Logs 接入配置按当前任务步骤渐进展示', () => {
   assert.equal(onboardingSource.includes('activeStep'), false);
 });
 
-test('Logs 接入配置保留 route 更新和只读集群过滤', () => {
-  assert.equal(onboardingSource.includes("routeParams.get('route_id')"), true);
-  assert.equal(onboardingSource.includes("routeParams.get('mode') === 'update'"), true);
+test('采集路由任务页通过父模块子路径更新并保留只读集群过滤', () => {
+  assert.equal(onboardingSource.includes("const { id: onboardingRouteId = '' } = useParams()"), true);
+  assert.equal(onboardingSource.includes('const routeUpdateMode = Boolean(onboardingRouteId)'), true);
   assert.equal(onboardingSource.includes('loadRouteDraft'), true);
   assert.equal(onboardingSource.includes('routeScopedServices'), true);
   assert.equal(onboardingSource.includes('clusters.filter((cluster) => !cluster.readOnly)'), true);
@@ -102,14 +104,17 @@ test('Logs 服务列表只承担选择和更新入口', () => {
 
 test('Logs 采集路由页负责运行态和配置查看', () => {
   assert.equal(agentsSource.includes('logs-routes-workbench'), true);
-  assert.equal(agentsSource.includes('采集域状态'), true);
+  assert.equal(agentsSource.includes('aria-label="采集路由工作区"'), true);
+  assert.equal(agentsSource.includes('路由运行状态'), false);
+  assert.equal(agentsSource.includes('<LogsSection'), false);
+  assert.equal(agentsSource.includes('运行概览'), true);
   assert.equal(agentsSource.includes('Agent 实例'), true);
   assert.equal(agentsSource.includes('暂无 Agent 心跳数据'), true);
   assert.equal(agentsSource.includes('logsApi.getRouteCollectorConfig'), true);
   assert.equal(agentsSource.includes('完整 collector.yaml'), true);
   assert.equal(agentsSource.includes('非 K8s 部署清单'), true);
   assert.equal(agentsSource.includes('部署清单 hash'), true);
-  assert.equal(agentsSource.includes('/logs/onboarding?mode=update&route_id='), true);
+  assert.equal(agentsSource.includes('/logs/agents/${contextRoute.route.id}/edit'), true);
   assert.equal(agentsSource.includes('实例状态'), false);
   assert.equal(agentsSource.includes('<DomainMetric label="Audit"'), false);
   assert.equal(agentsSource.includes('<DomainMetric label="Preview"'), false);
@@ -137,7 +142,7 @@ test('Logs Explore 将路由收敛为顶部一次性选择并突出检索主区�
   assert.equal(exploreSource.includes('<LogsSection title="日志路由"'), false);
   assert.equal(exploreSource.includes('title="日志分析"'), false);
   assert.equal(exploreSource.includes('xl:grid-cols-[minmax(0,1fr)_300px]'), true);
-  assert.equal(exploreSource.includes('{routes.length} routes'), true);
+  assert.equal(exploreSource.includes('{routes.length} routes'), false);
   assert.equal(exploreSource.includes('<RouteSelector'), true);
   assert.equal(exploreSource.includes('route-selector-trigger'), true);
   assert.equal(exploreSource.includes('route-option-context'), true);
@@ -162,7 +167,10 @@ test('Logs Explore 将路由收敛为顶部一次性选择并突出检索主区�
 test('Logs 工作台将可用高度传递给采集路由和日志分析内容区域', () => {
   assert.equal(workspaceSource.includes('logs-workbench route-transition-page flex h-full min-h-0 flex-col gap-3'), true);
   assert.equal(workspaceSource.includes('route-transition-page min-h-0 flex-1'), true);
-  assert.equal(agentsSource.includes('logs-routes-workbench grid min-h-[720px] gap-3 xl:h-full xl:min-h-0'), true);
+  assert.equal(agentsSource.includes('logs-routes-workbench flex min-h-[720px] flex-col xl:h-full xl:min-h-0'), true);
+  assert.equal(agentsSource.includes('logs-routes-content grid min-h-0 flex-1'), true);
+  assert.equal(agentsSource.includes('采集路由工作区'), true);
+  assert.equal((agentsSource.match(/>刷新</g) ?? []).length, 1);
   assert.equal(exploreSource.includes('logs-explore-workbench grid min-h-[760px] gap-3 xl:h-full xl:min-h-0'), true);
   assert.equal(agentsSource.includes('max-h-[720px]'), false);
   assert.equal(exploreSource.includes('max-h-[680px]'), false);
@@ -171,10 +179,12 @@ test('Logs 工作台将可用高度传递给采集路由和日志分析内容区
 
 test('Logs 告警和模块导航只保留已闭环入口', () => {
   assert.equal(workspaceSource.includes('日志分析'), true);
-  assert.equal(workspaceSource.includes('接入配置'), true);
+  assert.equal(workspaceSource.includes('接入配置'), false);
   assert.equal(workspaceSource.includes('采集路由'), true);
   assert.equal(workspaceSource.includes('日志告警'), true);
-  assert.equal(alertsSource.includes('日志告警规则'), true);
+  assert.equal(alertsSource.includes('日志告警规则'), false);
+  assert.equal(alertsSource.includes('`${filteredRules.length}/${logRules.length} rules · ${enabledCount} enabled`'), false);
+  assert.equal(alertsSource.includes('暂无日志告警'), true);
   assert.equal(alertsSource.includes('告警中心'), true);
   assert.equal(alertsSource.includes('规则上下文'), false);
   assert.equal(alertsSource.includes('规则字段'), false);

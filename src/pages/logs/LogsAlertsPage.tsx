@@ -1,37 +1,54 @@
 import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, XCircle } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ExternalLink, Plus, RefreshCw, Search, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
-import { LogsEmptyState, LogsSection } from './LogsPrimitives';
+import { LogsEmptyState } from './LogsPrimitives';
 
 export function LogsAlertsPage() {
-  const { data: rules = [], isLoading, error } = useQuery({
+  const [ruleQuery, setRuleQuery] = useState('');
+  const { data: rules = [], error, refetch } = useQuery({
     queryKey: ['logs-alert-rules'],
     queryFn: api.getAlertRules,
   });
-  const logRules = rules.filter((rule) => rule.source === 'logs');
-  const enabledCount = logRules.filter((rule) => rule.status === 'enabled').length;
-
+  const logRules = rules;
+  const filteredRules = useMemo(() => {
+    const query = ruleQuery.trim().toLowerCase();
+    if (!query) return logRules;
+    return logRules.filter((rule) => [
+      rule.spec.name,
+      rule.id,
+      rule.spec.query.expression,
+      rule.spec.notification.ownerTeam,
+      rule.spec.notification.severity,
+    ].filter(Boolean).join(' ').toLowerCase().includes(query));
+  }, [logRules, ruleQuery]);
   return (
     <div className="logs-alerts-workbench min-h-[680px]">
-      <LogsSection
-        title="日志告警规则"
-        meta={isLoading ? 'loading' : `${logRules.length} rules · ${enabledCount} enabled`}
-        bodyClassName="p-0"
-        action={
-          <Link className="inline-flex h-8 items-center justify-center rounded-md border border-primary bg-primary-soft px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" to="/logs/explore">从查询创建</Link>
-        }
-      >
+      <section className="console-panel overflow-hidden">
         {error ? <ErrorLine message={(error as Error).message} /> : null}
+        <div className="console-list-toolbar">
+          <div className="console-list-toolbar-actions">
+            <Link className="console-button console-button-primary" to="/logs/alerts/new"><Plus className="h-3.5 w-3.5" />创建告警</Link>
+            <button className="console-button" onClick={() => refetch()}><RefreshCw className="h-3.5 w-3.5" />刷新</button>
+          </div>
+          <label className="console-list-toolbar-search">
+            <span className="sr-only">搜索告警规则</span>
+            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+            <input className="console-input h-8 w-full pl-8" value={ruleQuery} onChange={(event) => setRuleQuery(event.target.value)} placeholder="搜索告警规则" />
+          </label>
+        </div>
         {logRules.length === 0 ? (
           <LogsEmptyState
-            title="日志告警规则为空"
-            action={<Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/explore">日志分析</Link>}
+            title="暂无日志告警"
+            action={<Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/alerts/new">创建告警</Link>}
           />
+        ) : filteredRules.length === 0 ? (
+          <LogsEmptyState title="未找到匹配的告警规则" description="请调整搜索关键字。" />
         ) : (
           <div className="overflow-auto">
-            <table className="console-table min-w-[960px] w-full">
-              <thead>
+            <table className="console-table logs-alert-rules-table min-w-[960px] w-full">
+              <thead className="[&>tr>th]:text-[13px] [&>tr>th]:font-semibold">
                 <tr>
                   <th>名称</th>
                   <th>级别</th>
@@ -42,27 +59,27 @@ export function LogsAlertsPage() {
                   <th>动作</th>
                 </tr>
               </thead>
-              <tbody>
-                {logRules.map((rule) => (
+              <tbody className="[&>tr>td]:text-[11px]">
+                {filteredRules.map((rule) => (
                   <tr key={rule.id}>
-                    <td className="font-semibold text-on-surface">{rule.name}</td>
-                    <td>{rule.severity}</td>
-                    <td className="font-mono text-xs">{rule.window || '-'}</td>
-                    <td>{rule.alertRoute || '-'}</td>
+                    <td className="font-semibold text-on-surface">{rule.spec.name}</td>
+                    <td>{rule.spec.notification.severity}</td>
+                    <td className="font-mono text-xs">{rule.spec.trigger.window || '-'}</td>
+                    <td>{rule.spec.notification.policyId || '-'}</td>
                     <td>
-                      <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${rule.status === 'enabled' ? 'border-primary/20 bg-primary-soft text-primary' : 'border-outline bg-white text-muted'}`}>
-                        {rule.status}
+                      <span className={`rounded border px-2 py-0.5 text-xs font-semibold ${rule.state === 'enabled' ? 'border-primary/20 bg-primary-soft text-primary' : 'border-outline bg-white text-muted'}`}>
+                        {rule.state} · {rule.applyStatus}
                       </span>
                     </td>
-                    <td className="max-w-[420px] truncate font-mono text-xs text-muted">{rule.query}</td>
-                    <td><Link className="inline-flex items-center gap-1 text-primary hover:underline" to="/alerts"><ExternalLink className="h-3.5 w-3.5" />告警中心</Link></td>
+                    <td className="max-w-[420px] truncate font-mono text-xs text-muted">{rule.spec.query.expression}</td>
+                    <td><div className="flex items-center gap-3"><Link className="text-primary hover:underline" to={`/logs/alerts/${rule.id}`}>编辑</Link><Link className="inline-flex items-center gap-1 text-primary hover:underline" to="/alerts"><ExternalLink className="h-3.5 w-3.5" />告警中心</Link></div></td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         )}
-      </LogsSection>
+      </section>
     </div>
   );
 }

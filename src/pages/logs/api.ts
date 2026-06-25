@@ -2,7 +2,7 @@ import { apiRequest } from '../../services/api';
 
 export type LogSourceType = 'k8s_stdout' | 'vm_file';
 export type LogAccessSource = 'k8s' | 'vm';
-export type LogSinkType = 'vl' | 'es' | 'kafka';
+export type LogSinkType = 'vl' | 'es' | 'kafka' | 'otel';
 
 export function logSourceLabel(type?: string): string {
   return type === 'vm_file' ? 'VM' : 'K8s';
@@ -11,6 +11,7 @@ export function logSourceLabel(type?: string): string {
 export function logSinkLabel(type?: string): string {
   if (type === 'es') return 'ES';
   if (type === 'kafka') return 'Kafka';
+  if (type === 'otel') return 'OTel';
   return 'VL';
 }
 

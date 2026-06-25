@@ -475,21 +475,103 @@ export interface CollectorConfigSources {
   sourceBreakdown: ConfigSourceBreakdown[];
 }
 
+export type AlertSeverity = 'info' | 'warning' | 'critical';
+
+export interface AlertRuleSpec {
+  name: string;
+  description: string;
+  scope: {
+    serviceId: string;
+    serviceName: string;
+    logRouteId: string;
+    endpointId: string;
+    accountId: string;
+    projectId: string;
+  };
+  query: { mode: 'contains' | 'exact' | 'logsql'; expression: string };
+  trigger: {
+    mode: 'window';
+    aggregation: 'count' | 'rate';
+    operator: 'gt' | 'gte';
+    threshold: number;
+    window: string;
+    evaluationInterval: string;
+    evaluationDelay: string;
+    pendingFor: string;
+    keepFiringFor: string;
+  };
+  grouping: { fields: string[]; maxInstances: number };
+  notification: { policyId: string; severity: AlertSeverity; ownerTeam: string; runbookUrl: string };
+  derivedMetric?: { enabled: boolean; signal?: string; labels?: Record<string, string> };
+}
+
 export interface AlertRule {
   id: string;
+  spec: AlertRuleSpec;
+  state: 'enabled' | 'disabled';
+  applyStatus: 'pending' | 'publishing' | 'applied' | 'failed' | 'rolled_back';
+  currentUpdateId: string;
+  appliedUpdateId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertRuleUpdateRecord {
+  id: string;
+  ruleId: string;
+  action: 'create' | 'update' | 'disable' | 'rollback';
+  changeSummary: string;
+  createdAt: string;
+  actor: { id: string; name: string };
+}
+
+export interface NotificationPolicy {
+  id: string;
   name: string;
-  source: 'logs' | 'metrics' | 'chain';
-  ruleType: 'count' | 'rate' | 'ratio' | 'keyword' | 'absence' | 'chain_health';
-  query: string;
-  window: string;
-  evalInterval: string;
-  lookbackDelay: string;
-  condition: string;
-  groupBy: string[];
-  severity: Severity;
-  ownerTeam: string;
-  alertRoute: string;
-  status: 'enabled' | 'disabled' | 'draft';
+  description: string;
+  serviceId: string;
+  alertmanagerReceiver: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AlertRuleTestResult {
+  inputHash: string;
+  testToken: string;
+  testedAt: string;
+  compiledQuery: string;
+  matchedLogCount: number;
+  estimatedInstanceCount: number;
+  queryDurationMillis: number;
+  partialResponse: boolean;
+  topGroups: Array<{ labels: Record<string, string>; count: number }>;
+  warnings: string[];
+}
+
+export interface AlertInstance {
+  fingerprint: string;
+  ruleId: string;
+  serviceId: string;
+  state: 'pending' | 'firing' | 'resolved';
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  startsAt: string;
+  endsAt: string;
+  lastReceivedAt: string;
+  lastEventId: string;
+}
+
+export interface AlertEvent {
+  id: string;
+  fingerprint: string;
+  ruleId: string;
+  previousState: string;
+  state: 'pending' | 'firing' | 'resolved';
+  labels: Record<string, string>;
+  annotations: Record<string, string>;
+  occurredAt: string;
+  receivedAt: string;
 }
 
 export interface OverviewSummary {

@@ -5,6 +5,7 @@
 :root {
   color-scheme: light;
   font-family: Geist, Satoshi, Aptos, ui-sans-serif, system-ui, sans-serif;
+  font-size: 16px;
   background: #eef3fb;
 }
 
@@ -16,9 +17,17 @@ body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
+  font-size: 13px;
+  line-height: 1.5;
   background: #eef3fb;
   color: #122033;
   font-feature-settings: "cv02", "cv03", "cv04";
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background: #cfe2ff;
+  color: #122033;
 }
 
 ::-webkit-scrollbar {
@@ -31,8 +40,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #aab9cc;
+  background: #a8b8cc;
   border-radius: 999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #879bb5;
 }
 
 @layer base {
@@ -41,6 +54,11 @@ body {
   select,
   textarea {
     font: inherit;
+  }
+
+  button,
+  a {
+    -webkit-tap-highlight-color: transparent;
   }
 
   button:focus-visible,
@@ -55,27 +73,286 @@ body {
 
 @layer components {
   .console-panel {
-    @apply rounded-lg shadow-panel;
+    @apply rounded-lg;
     background: #ffffff;
     border: 1px solid #d8e2ef;
-  }
-
-  .atlas-sidebar-panel {
-    @apply relative rounded-lg shadow-panel;
-    background: #ffffff;
-    border: 1px solid #d8e2ef;
-  }
-
-  .atlas-nav-active {
-    background: #e5f0ff;
-    box-shadow: inset 3px 0 0 rgba(13, 91, 215, 0.82);
+    box-shadow: 0 1px 2px rgba(18, 32, 51, 0.035);
   }
 
   .console-input {
-    @apply h-9 rounded-lg border border-outline/80 bg-surface-lowest/90 px-3 text-sm text-on-surface outline-none transition-all placeholder:text-muted/60 focus:border-primary/70 focus:bg-white focus:ring-2 focus:ring-primary/10;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.92),
-      0 1px 2px rgba(18, 32, 51, 0.03);
+    @apply h-9 rounded-md border border-outline bg-surface-lowest px-3 text-sm text-on-surface outline-none transition-colors placeholder:text-muted/60 focus:border-primary focus:ring-2 focus:ring-primary/10 disabled:cursor-not-allowed disabled:bg-surface disabled:text-muted;
+  }
+
+  .app-workspace {
+    color: #122033;
+  }
+
+  .content-workbench-frame {
+    display: flex;
+    height: 100%;
+    min-height: 0;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #cfdbea;
+    border-radius: 8px;
+    background: #ffffff;
+    box-shadow: 0 8px 24px -22px rgba(18, 32, 51, 0.5);
+  }
+
+  .content-workbench-header {
+    display: flex;
+    min-height: 46px;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border-bottom: 1px solid #d8e2ef;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+    padding: 6px 12px;
+  }
+
+  .content-workbench-primary {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .content-workbench-back {
+    display: inline-flex;
+    height: 32px;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+    border-right: 1px solid #d8e2ef;
+    padding-right: 10px;
+    color: #637083;
+    font-size: 12px;
+    font-weight: 600;
+    line-height: 18px;
+    transition: color 120ms ease, background-color 120ms ease;
+  }
+
+  .content-workbench-back:hover {
+    color: #0d5bd7;
+  }
+
+  .content-workbench-location {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+    overflow: hidden;
+    color: #637083;
+    font-size: 12px;
+    line-height: 18px;
+    white-space: nowrap;
+  }
+
+  .content-workbench-location strong {
+    overflow: hidden;
+    color: #122033;
+    font-weight: 600;
+    text-overflow: ellipsis;
+  }
+
+  .content-workbench-tools {
+    display: flex;
+    flex-shrink: 0;
+    align-items: center;
+    gap: 6px;
+  }
+
+  .content-workbench-body {
+    min-height: 0;
+    flex: 1;
+    overflow-y: auto;
+    background: #f6f8fc;
+    padding: 12px;
+  }
+
+  .module-navigation-bar {
+    display: flex;
+    min-width: 0;
+    min-height: 42px;
+    flex-direction: column;
+    overflow: hidden;
+    border: 1px solid #d8e2ef;
+    border-radius: 6px;
+    background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+  }
+
+  .module-navigation-title {
+    display: flex;
+    min-height: 40px;
+    flex-shrink: 0;
+    align-items: center;
+    margin: 0;
+    padding: 0 16px;
+    border-bottom: 1px solid #d8e2ef;
+    white-space: nowrap;
+  }
+
+  .module-navigation-tabs {
+    display: flex;
+    min-width: 0;
+    flex: 1;
+    align-items: stretch;
+    gap: 4px;
+    overflow-x: auto;
+    padding: 0 4px;
+  }
+
+  .module-navigation-link {
+    display: inline-flex;
+    min-height: 40px;
+    min-width: max-content;
+    flex-shrink: 0;
+    align-items: center;
+    border-bottom-width: 2px;
+  }
+
+  .page-header {
+    @apply flex flex-col gap-3 rounded-md border border-outline bg-surface-lowest px-3 py-2.5 md:flex-row md:items-center md:justify-between;
+  }
+
+  .page-title {
+    @apply font-display text-xl font-semibold tracking-tight text-on-surface;
+  }
+
+  .page-description {
+    @apply mt-1 text-xs leading-5 text-muted;
+  }
+
+  .console-panel-header {
+    @apply flex min-h-11 items-center justify-between gap-3 border-b border-outline/70 bg-surface-lowest px-3 py-2.5;
+  }
+
+  .console-section-title {
+    @apply truncate text-sm font-semibold text-on-surface;
+  }
+
+  .console-section-meta {
+    @apply mt-0.5 truncate font-mono text-[11px] font-medium text-muted;
+  }
+
+  .console-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-2 border-b border-outline/70 bg-surface px-3 py-2.5;
+  }
+
+  .console-toolbar-group {
+    @apply flex min-w-0 flex-wrap items-end gap-2;
+  }
+
+  .console-list-toolbar {
+    @apply flex flex-col gap-2 border-b border-outline bg-surface-lowest px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between;
+  }
+
+  .console-list-toolbar-actions {
+    @apply flex flex-wrap items-center gap-2;
+  }
+
+  .console-list-toolbar-search {
+    @apply relative w-full sm:w-72;
+  }
+
+  .console-workbench {
+    @apply min-h-0 overflow-hidden;
+  }
+
+  .console-resource-list {
+    @apply min-h-0 overflow-auto;
+    scrollbar-gutter: stable;
+  }
+
+  .console-selected-row {
+    box-shadow: inset 3px 0 0 #0d5bd7;
+  }
+
+  .console-selected-row,
+  .console-selected-row td {
+    background: #e5f0ff !important;
+  }
+
+  .console-detail-rail {
+    @apply min-w-0 border-outline;
+  }
+
+  .console-action-bar {
+    @apply sticky bottom-0 z-10 flex flex-wrap items-center justify-between gap-3 border-t border-outline bg-surface-lowest px-3 py-2.5;
+    box-shadow: 0 -10px 28px -24px rgba(18, 32, 51, 0.42);
+  }
+
+  .console-button {
+    @apply inline-flex h-8 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-outline bg-surface-lowest px-3 text-xs font-semibold text-muted transition-colors hover:border-primary/40 hover:bg-primary-soft/40 hover:text-primary active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .console-button-primary {
+    @apply border-primary bg-primary text-white hover:border-primary hover:bg-primary/90 hover:text-white;
+  }
+
+  .console-button-danger {
+    @apply border-danger/25 bg-surface-lowest text-danger hover:border-danger/45 hover:bg-red-50 hover:text-danger;
+  }
+
+  .console-icon-button {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-md border border-transparent text-muted transition-colors hover:border-primary/20 hover:bg-primary-soft/50 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .console-field {
+    @apply block min-w-0 text-sm;
+  }
+
+  .console-field-label {
+    @apply mb-1.5 flex items-center gap-1 text-xs font-semibold text-on-surface;
+  }
+
+  .console-field-help {
+    @apply mt-1 text-[11px] leading-4 text-muted;
+  }
+
+  .console-field-error {
+    @apply mt-1 text-[11px] leading-4 text-danger;
+  }
+
+  .console-empty-state {
+    @apply flex min-h-32 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-outline bg-surface px-4 py-8 text-center;
+  }
+
+  .console-skeleton {
+    @apply animate-pulse rounded-md bg-outline/55;
+  }
+
+  .console-notice {
+    @apply flex items-start gap-2 rounded-md border px-3 py-2 text-xs leading-5;
+  }
+
+  .console-notice-warning {
+    @apply border-warning/25 bg-amber-50 text-warning;
+  }
+
+  .console-notice-danger {
+    @apply border-danger/25 bg-red-50 text-danger;
+  }
+
+  .console-notice-success {
+    @apply border-emerald-600/20 bg-emerald-50 text-emerald-700;
+  }
+
+  .status-badge {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold;
+  }
+
+  .status-dot {
+    @apply h-1.5 w-1.5 shrink-0 rounded-full bg-current;
+  }
+
+  .console-danger-zone {
+    @apply rounded-md border border-danger/20 bg-red-50/60;
+  }
+
+  .console-audit-meta {
+    @apply flex flex-wrap items-center gap-x-3 gap-y-1 font-mono text-[11px] text-muted;
   }
 
   .console-table {
@@ -84,14 +361,12 @@ body {
   }
 
   .console-table th {
-    @apply sticky top-0 bg-surface-low/90 px-3 py-2 text-left text-xs font-semibold text-muted backdrop-blur;
-    box-shadow:
-      inset 0 -1px 0 rgba(216, 226, 239, 0.78),
-      inset 0 1px 0 rgba(255, 255, 255, 0.78);
+    @apply sticky top-0 z-[1] bg-surface-low px-3 py-2 text-left text-[11px] font-semibold text-muted;
+    box-shadow: inset 0 -1px 0 #d8e2ef;
   }
 
   .console-table td {
-    @apply h-10 border-t border-outline/55 px-3 py-2 text-sm text-on-surface;
+    @apply h-10 border-t border-outline/55 bg-surface-lowest px-3 py-2 text-sm text-on-surface;
   }
 
   .console-table tbody tr {
@@ -99,33 +374,163 @@ body {
   }
 
   .console-table tbody tr:hover {
-    background: rgba(237, 244, 255, 0.82);
+    background: #edf4ff;
+  }
+
+  .console-table tbody tr:hover td {
+    background: #edf4ff;
   }
 
   .soft-tile {
-    @apply rounded-lg shadow-panel;
-    background: #ffffff;
+    @apply rounded-md;
+    background: #f6f8fc;
     border: 1px solid #d8e2ef;
   }
 
   .quiet-button {
-    @apply inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-all active:translate-y-px;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-transparent px-3 py-2 text-sm font-semibold transition-colors active:translate-y-px;
   }
 
   .quiet-button:hover {
-    box-shadow: inset 0 0 0 1px rgba(13, 91, 215, 0.12);
+    border-color: rgba(13, 91, 215, 0.18);
   }
 
   .route-transition-page {
-    animation: route-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
+    animation: route-enter 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
     will-change: opacity, transform;
+  }
+
+  .mega-menu-panel {
+    animation: mega-menu-enter 180ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    transform-origin: top center;
+    will-change: opacity, transform;
+  }
+
+  .mega-menu-backdrop {
+    animation: mega-menu-backdrop-enter 140ms ease-out both;
+  }
+
+  .console-drawer-backdrop {
+    background: rgba(15, 23, 42, 0.24);
+    animation: console-drawer-backdrop-enter 160ms ease-out both;
+  }
+
+  .console-drawer-panel {
+    animation: console-drawer-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
+    will-change: opacity, transform;
+  }
+}
+
+@media (min-width: 768px) {
+  .module-navigation-bar {
+    flex-direction: row;
+    align-items: stretch;
+    padding: 0 12px;
+  }
+
+  .module-navigation-title {
+    padding-left: 4px;
+    padding-right: 20px;
+    border-right: 1px solid #d8e2ef;
+    border-bottom: 0;
+  }
+
+  .module-navigation-tabs {
+    padding-left: 8px;
+    padding-right: 0;
+  }
+}
+
+@media (max-width: 639px) {
+  .content-workbench-header {
+    padding-left: 10px;
+    padding-right: 8px;
+  }
+
+  .content-workbench-body {
+    padding: 8px;
+  }
+}
+
+/* 对齐 prototype.html 的控制台排版标尺，并覆盖局部 rem 工具类造成的字号漂移。 */
+.page-title {
+  font-size: 18px;
+  line-height: 26px;
+}
+
+.page-description,
+.console-section-meta {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.console-section-title {
+  font-size: 16px;
+  line-height: 22px;
+}
+
+.console-input,
+.console-button,
+.quiet-button,
+.console-field,
+.console-field-label,
+.console-notice {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.console-field-help,
+.console-field-error,
+.status-badge,
+.console-audit-meta {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.console-table th,
+.console-table td {
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.content-workbench-back,
+.content-workbench-tools .console-button,
+.module-navigation-link,
+.k8s-context-navigation button,
+.k8s-context-navigation a,
+.k8s-context-navigation .console-input {
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 600;
+}
+
+.content-workbench-location {
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.module-navigation-title {
+  font-size: 16px;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+}
+
+.k8s-context-navigation {
+  overflow: visible;
+  position: relative;
+  z-index: 20;
+}
+
+@media (min-width: 1280px) {
+  .console-detail-rail {
+    @apply border-l pl-3;
   }
 }
 
 @keyframes route-enter {
   from {
     opacity: 0;
-    transform: translate3d(0, 8px, 0);
+    transform: translate3d(0, 4px, 0);
   }
 
   to {
@@ -134,8 +539,99 @@ body {
   }
 }
 
+@keyframes mega-menu-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, -6px, 0) scaleY(0.985);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0) scaleY(1);
+  }
+}
+
+@keyframes mega-menu-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes console-drawer-enter {
+  from {
+    opacity: 0;
+    transform: translate3d(100%, 0, 0);
+  }
+
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes console-drawer-backdrop-enter {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+/* 收敛历史页面中用于制造玻璃感的半透明 surface，不改变结构和交互。 */
+.app-workspace [class~="bg-white/35"],
+.app-workspace [class~="bg-white/38"],
+.app-workspace [class~="bg-white/42"],
+.app-workspace [class~="bg-white/45"],
+.app-workspace [class~="bg-white/46"],
+.app-workspace [class~="bg-white/48"],
+.app-workspace [class~="bg-white/50"],
+.app-workspace [class~="bg-white/52"],
+.app-workspace [class~="bg-white/55"],
+.app-workspace [class~="bg-white/58"],
+.app-workspace [class~="bg-white/60"],
+.app-workspace [class~="bg-white/62"],
+.app-workspace [class~="bg-white/65"],
+.app-workspace [class~="bg-white/68"],
+.app-workspace [class~="bg-white/70"],
+.app-workspace [class~="bg-white/72"],
+.app-workspace [class~="bg-white/74"],
+.app-workspace [class~="bg-white/75"],
+.app-workspace [class~="bg-white/76"],
+.app-workspace [class~="bg-white/78"],
+.app-workspace [class~="bg-white/80"],
+.app-workspace [class~="bg-white/82"],
+.app-workspace [class~="bg-white/85"],
+.app-workspace [class~="bg-white/86"],
+.app-workspace [class~="bg-white/95"] {
+  background-color: #ffffff;
+}
+
+.app-workspace [class*="shadow-[inset_0_1px_0"] {
+  box-shadow: none;
+}
+
+.app-workspace h1 {
+  font-size: 18px;
+  line-height: 26px;
+  letter-spacing: -0.01em;
+}
+
+.app-workspace h2 {
+  letter-spacing: -0.005em;
+}
+
 @media (prefers-reduced-motion: reduce) {
-  .route-transition-page {
+  .route-transition-page,
+  .mega-menu-backdrop,
+  .mega-menu-panel,
+  .console-drawer-backdrop,
+  .console-drawer-panel {
     animation: none;
     will-change: auto;
   }

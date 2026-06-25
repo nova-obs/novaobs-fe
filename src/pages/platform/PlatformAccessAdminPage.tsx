@@ -228,7 +228,7 @@ export function PlatformAccessAdminPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="console-panel grid divide-y divide-outline md:grid-cols-4 md:divide-x md:divide-y-0">
         <AdminMetric icon={UserRoundCog} label="当前主体" value={meQuery.data?.subjectId || '-'} meta={meQuery.data?.subjectType || 'request subject'} />
         <AdminMetric icon={UsersRound} label="用户 / 组 / SA" value={`${users.length} / ${groups.length} / ${serviceAccounts.length}`} meta="local identity directory" />
         <AdminMetric icon={ShieldCheck} label="角色" value={String(roles.length)} meta="custom platform role set" />
@@ -237,7 +237,7 @@ export function PlatformAccessAdminPage() {
 
       <DataPanel title="平台用户权限" meta="users / groups / service accounts / roles / bindings" action={<PlatformTabNav activeTab={activeTab} onChange={setActiveTab} />}>
         {permissionError ? (
-          <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+          <div className="console-notice console-notice-warning mb-3">
             <ShieldAlert className="h-4 w-4" />
             权限不足：当前用户缺少 `platform.iam:manage`。
           </div>
@@ -293,11 +293,11 @@ export function PlatformAccessAdminPage() {
 
 function PlatformTabNav({ activeTab, onChange }: { activeTab: PlatformAdminTab; onChange: (tab: PlatformAdminTab) => void }) {
   return (
-    <div className="flex max-w-full flex-wrap gap-1 rounded-lg bg-surface-low px-1 py-1">
+    <div className="flex max-w-full flex-wrap gap-0 border-b border-outline">
       {platformAdminTabs.map((tab) => (
         <button
           key={tab.key}
-          className={`rounded-md px-3 py-1.5 text-left text-xs font-semibold transition ${tab.key === activeTab ? 'bg-white text-primary shadow-sm' : 'text-muted hover:bg-white/55 hover:text-on-surface'}`}
+          className={`border-b-2 px-3 py-2 text-left text-xs font-semibold transition-colors ${tab.key === activeTab ? 'border-primary bg-primary-soft/40 text-primary' : 'border-transparent text-muted hover:bg-surface hover:text-on-surface'}`}
           onClick={() => onChange(tab.key)}
         >
           <span className="block">{tab.label}</span>
@@ -310,9 +310,9 @@ function PlatformTabNav({ activeTab, onChange }: { activeTab: PlatformAdminTab; 
 
 function TabWorkspace({ table, side }: { table: ReactNode; side: ReactNode }) {
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-      <div className="min-w-0">{table}</div>
-      <aside className="grid content-start gap-4">{side}</aside>
+    <div className="console-workbench grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+      <div className="console-resource-list min-w-0">{table}</div>
+      <aside className="console-detail-rail grid content-start gap-4">{side}</aside>
     </div>
   );
 }
@@ -768,12 +768,12 @@ function BindingEditorPanel(props: {
 
 function AdminMetric({ icon: Icon, label, value, meta }: { icon: typeof UsersRound; label: string; value: string; meta: string }) {
   return (
-    <section className="console-panel px-4 py-3">
+    <section className="px-4 py-3">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 truncate font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 truncate text-xs text-muted">{meta}</div>
+          <div className="text-[11px] font-semibold text-muted">{label}</div>
+          <div className="mt-1 truncate font-mono text-xl font-semibold text-on-surface">{value}</div>
+          <div className="mt-0.5 truncate text-[11px] text-muted">{meta}</div>
         </div>
         <Icon className="h-4 w-4 shrink-0 text-primary" />
       </div>
@@ -795,7 +795,7 @@ function PanelTitle({ icon: Icon, title, meta }: { icon: typeof UsersRound; titl
 
 function PrimaryAction({ label, icon: Icon, disabled, onClick }: { label: string; icon: typeof Plus; disabled: boolean; onClick: () => void }) {
   return (
-    <button className="mt-3 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={disabled} onClick={onClick}>
+    <button className="console-button console-button-primary mt-3 w-full" title={disabled ? '请先完成必填项或等待当前操作结束' : undefined} disabled={disabled} onClick={onClick}>
       <Icon className="h-4 w-4" />
       {label}
     </button>
@@ -803,11 +803,11 @@ function PrimaryAction({ label, icon: Icon, disabled, onClick }: { label: string
 }
 
 function SubjectPill({ kind }: { kind: string }) {
-  return <span className="inline-flex rounded-lg bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary">{kind || 'unknown'}</span>;
+  return <span className="status-badge border-primary/20 bg-primary-soft text-primary"><span className="status-dot" aria-hidden />{kind || 'unknown'}</span>;
 }
 
 function ProtectedHint({ label }: { label: string }) {
-  return <span className="inline-flex rounded-lg bg-white/60 px-2 py-1 text-[11px] font-semibold text-muted">{label}</span>;
+  return <span className="status-badge border-outline bg-surface text-muted"><span className="status-dot" aria-hidden />{label}</span>;
 }
 
 function DeleteActionButton({
@@ -830,7 +830,9 @@ function DeleteActionButton({
   const confirming = confirmKey === id;
   return (
     <button
-      className={`inline-flex items-center gap-1 rounded-lg px-2 py-1 text-xs font-semibold transition ${confirming ? 'bg-danger text-white' : 'bg-white/70 text-danger hover:bg-danger/10'}`}
+      className={`console-button h-7 px-2 ${confirming ? 'console-button-danger console-danger-zone' : 'border-transparent text-danger'}`}
+      aria-label={confirming ? confirmingLabel : label}
+      title={confirming ? '再次点击将立即执行危险操作' : `${label}，需要二次确认`}
       disabled={pending}
       onClick={() => {
         if (!confirming) {

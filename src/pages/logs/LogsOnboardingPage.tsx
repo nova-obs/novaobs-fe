@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
@@ -8,6 +8,7 @@ import { logSinkLabel, logsApi, type LogAccessSource, type LogParsePreviewResult
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsPublishPreviewPanel } from './LogsPublishPreviewPanel';
+import { LogsTaskPageHeader } from './LogsPrimitives';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
   { value: 'k8s', label: 'K8s' },
@@ -168,7 +169,7 @@ function resolveServiceWorkloadKey(service: LogsServiceSummary, workloads: LogsW
 
 export function LogsOnboardingPage() {
   const queryClient = useQueryClient();
-  const [routeParams] = useSearchParams();
+  const { id: onboardingRouteId = '' } = useParams();
   const suspendDraftResetRef = useRef(false);
   const routeParamAppliedRef = useRef('');
   const { data: workspace, isLoading, error, refetch } = useQuery({
@@ -206,8 +207,7 @@ export function LogsOnboardingPage() {
   const [preview, setPreview] = useState<LogRoutePreview | null>(null);
   const [createdRoute, setCreatedRoute] = useState<LogRouteView | null>(null);
   const [pendingPublish, setPendingPublish] = useState<LogPublishResult | null>(null);
-  const onboardingRouteId = routeParams.get('route_id') ?? '';
-  const routeUpdateMode = routeParams.get('mode') === 'update';
+  const routeUpdateMode = Boolean(onboardingRouteId);
 
   const services = workspace?.services ?? [];
   const endpoints = workspace?.endpoints ?? [];
@@ -232,9 +232,6 @@ export function LogsOnboardingPage() {
   const accessServices = useMemo(() => (
     routeScopedServices ?? sourceServices.filter((service) => !runningRouteServiceIds.has(service.id))
   ), [routeScopedServices, runningRouteServiceIds, sourceServices]);
-  const serviceListSourceCount = routeScopedServices ? accessServices.length : sourceServices.length;
-  const serviceListTotalCount = routeScopedServices ? accessServices.length : services.length;
-  const serviceListMeta = isLoading ? 'loading' : `${serviceListSourceCount}/${serviceListTotalCount} services · ${routes.length} routes`;
   const routeUpdateMissing = routeUpdateMode && Boolean(onboardingRouteId) && !isLoading && !selectedRoute;
   const restoredSource = selectedRoute?.source ?? createdRoute?.source ?? null;
 
@@ -730,27 +727,33 @@ export function LogsOnboardingPage() {
 
   if (error) {
     return (
-      <DataPanel title="接入配置加载失败" meta="Logs">
-        <ErrorInline message={(error as Error).message} onRetry={() => refetch()} />
-      </DataPanel>
+      <div className="logs-task-page space-y-3">
+        <LogsTaskPageHeader
+          title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
+          description="按运行目标、采集配置、预览发布的顺序完成路由任务。"
+          meta={routeUpdateMode ? `route ${shortHash(onboardingRouteId)}` : 'new route'}
+        />
+        <DataPanel title="采集路由加载失败" meta="Logs">
+          <ErrorInline message={(error as Error).message} onRetry={() => refetch()} />
+        </DataPanel>
+      </div>
     );
   }
 
   return (
-    <div className="relative pb-24">
-      <div className="space-y-4">
-        <section className="logs-onboarding-toolbar console-panel overflow-hidden">
-          <div className="grid gap-3 border-b border-outline/70 bg-white/74 px-3 py-3 xl:grid-cols-[220px_minmax(0,1fr)_auto] xl:items-center">
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-on-surface">接入配置</div>
-              <div className="mt-0.5 font-mono text-[11px] text-muted">{serviceListMeta}</div>
-            </div>
-            <div className="flex min-w-0 flex-wrap gap-1.5">
+    <div className="logs-task-page relative pb-24">
+      <LogsTaskPageHeader
+        title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
+        description="选择目标、校验配置并发布。"
+        meta={routeUpdateMode ? `route ${shortHash(onboardingRouteId)}` : 'new route'}
+        action={(
+          <>
+            <div className="inline-flex border-b border-outline">
               {sourceTabs.map((item) => (
                 <button
                   key={item.value}
-                  className={`inline-flex h-8 items-center rounded-md border px-3 text-xs font-semibold transition-all active:translate-y-px ${
-                    sourceMode === item.value ? 'border-primary bg-primary-soft text-primary' : 'border-outline bg-white/82 text-muted hover:border-primary/40 hover:text-on-surface'
+                  className={`h-8 border-b-2 px-3 text-xs font-semibold transition-colors ${
+                    sourceMode === item.value ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'
                   } disabled:cursor-not-allowed disabled:opacity-60`}
                   disabled={routeUpdateMode}
                   title={routeUpdateMode ? '运行路由更新时来源由当前路由决定' : undefined}
@@ -766,12 +769,9 @@ export function LogsOnboardingPage() {
                   {item.label}
                 </button>
               ))}
-              <span className="inline-flex h-8 items-center rounded-md border border-outline bg-white/68 px-2.5 font-mono text-[11px] text-muted">
-                {sourceType === 'vm_file' ? 'host group / path' : 'kubeconfig / namespace / workload'}
-              </span>
             </div>
             <button
-              className="inline-flex h-8 items-center justify-center gap-2 rounded-md bg-primary px-3 text-xs font-semibold text-white transition-all active:translate-y-px disabled:opacity-60"
+              className="console-button"
               disabled={routeUpdateMode || sourceType === 'vm_file' || !clusterId || !namespace || syncK8sServicesMutation.isPending}
               title={routeUpdateMode ? '运行路由更新时不触发服务同步' : undefined}
               onClick={() => syncK8sServicesMutation.mutate()}
@@ -779,22 +779,22 @@ export function LogsOnboardingPage() {
               {syncK8sServicesMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               同步服务
             </button>
-          </div>
-          <div className="grid divide-y divide-outline/70 md:grid-cols-3 md:divide-x md:divide-y-0">
-            <StepCard index={1} title="目标与端点" active={currentStep === 1} done={targetStepReady} enabled onSelect={() => setCurrentStep(1)} />
-            <StepCard index={2} title="采集配置" active={currentStep === 2} done={Boolean(preview)} enabled={targetStepReady} onSelect={() => setCurrentStep(2)} />
-            <StepCard index={3} title="预览发布" active={currentStep === 3} done={Boolean(createdRoute)} enabled={Boolean(preview)} onSelect={() => setCurrentStep(3)} />
-          </div>
-        </section>
+          </>
+        )}
+      />
+      <div className="mt-3 space-y-4">
+        <nav className="grid border-y border-outline bg-surface-lowest md:grid-cols-3 md:divide-x md:divide-outline" aria-label="采集路由步骤">
+          <StepCard index={1} title="目标与端点" active={currentStep === 1} done={targetStepReady} enabled onSelect={() => setCurrentStep(1)} />
+          <StepCard index={2} title="采集配置" active={currentStep === 2} done={Boolean(preview)} enabled={targetStepReady} onSelect={() => setCurrentStep(2)} />
+          <StepCard index={3} title="预览发布" active={currentStep === 3} done={Boolean(createdRoute)} enabled={Boolean(preview)} onSelect={() => setCurrentStep(3)} />
+        </nav>
 
         {currentStep === 1 ? (
-        <DataPanel title="服务与运行目标" meta="service / runtime target">
+        <section className="overflow-hidden border-y border-outline bg-surface-lowest">
           {routeUpdateMissing ? <WarnLine message="未找到待更新的采集路由，请从采集路由页重新进入。" /> : null}
-          <div className="logs-runtime-configuration-panel grid gap-3 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <div className="logs-runtime-configuration-panel grid xl:grid-cols-[380px_minmax(0,1fr)]">
             <ServicePickerPanel
               services={filteredServices}
-              sourceServiceCount={serviceListSourceCount}
-              totalServiceCount={serviceListTotalCount}
               selectedServiceId={serviceId}
               serviceQuery={serviceQuery}
               routeEditMode={routeEditMode}
@@ -805,8 +805,8 @@ export function LogsOnboardingPage() {
               onEditRoute={beginRouteEdit}
             />
 
-            <section className="relative overflow-hidden rounded-lg border border-outline bg-surface-lowest">
-              <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
+            <section className="relative overflow-hidden border-t border-outline bg-surface-lowest xl:border-l xl:border-t-0">
+              <div className="flex flex-col gap-2 border-b border-outline px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
                 <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
                   <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]" />
                   运行目标
@@ -984,7 +984,7 @@ export function LogsOnboardingPage() {
                     <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
                     <Link
                       className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
-                      to="/platform/observability"
+                      to="/observability/endpoints"
                     >
                       <Settings2 className="h-3.5 w-3.5" />
                       管理端点
@@ -1047,7 +1047,7 @@ export function LogsOnboardingPage() {
             </section>
           </div>
           {!serviceId ? <WarnLine message="请选择服务后再预览配置" /> : null}
-        </DataPanel>
+        </section>
         ) : null}
 
         {currentStep === 2 ? (

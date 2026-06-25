@@ -40,7 +40,6 @@ export function LogsExplorePage() {
             <div className="logs-explore-context-panel min-w-0 overflow-hidden rounded-md border border-primary/25 bg-white shadow-[0_8px_18px_rgba(24,52,96,0.12)]">
               <div className="logs-explore-context-header flex h-7 items-center justify-between gap-2 border-b border-primary/15 bg-primary-soft/75 px-3 text-[11px] font-semibold text-primary">
                 <span>日志路由</span>
-                <span className="font-mono font-medium">{routes.length} routes</span>
               </div>
               <div className="p-2">
                 <RouteSelector routes={routes} services={services} activeRoute={activeRoute} onSelect={setRouteId} />
@@ -91,7 +90,7 @@ export function LogsExplorePage() {
         ) : (
           <LogsEmptyState
             title={routes.length === 0 ? '日志路由为空' : '当前下游未提供内嵌查询入口'}
-            action={routes.length === 0 ? <Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/onboarding">接入配置</Link> : undefined}
+            action={routes.length === 0 ? <Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to="/logs/agents/new">创建采集路由</Link> : undefined}
           />
         )}
       </section>
@@ -107,7 +106,7 @@ export function LogsExplorePage() {
         <div className="border-t border-outline/70 p-3">
           <div className="mb-2 text-xs font-semibold text-on-surface">动作</div>
           <div className="grid gap-2">
-            <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to="/logs/alerts">
+            <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/alerts/new?route_id=${encodeURIComponent(activeRoute?.route.id || '')}`}>
               <Bell className="h-3.5 w-3.5" />创建告警
             </Link>
             <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/agents?agent_group_id=${activeRoute?.route.agentGroupId || ''}&route_id=${activeRoute?.route.id || ''}`}>

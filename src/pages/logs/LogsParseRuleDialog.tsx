@@ -49,11 +49,11 @@ export function LogsParseRuleDialog({
   if (!open || typeof document === 'undefined') return null;
 
   return createPortal((
-    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/28 px-4 py-6 backdrop-blur-sm">
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/32 px-4 py-6">
       <div className="flex max-h-[88vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-lg border border-outline bg-white shadow-[0_24px_80px_rgba(24,52,96,0.28)]">
         <div className="flex shrink-0 items-center justify-between border-b border-outline bg-surface-lowest px-4 py-3">
           <div className="flex min-w-0 items-center gap-3">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary-soft text-primary">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary-soft text-primary">
               <Settings2 className="h-4 w-4" />
             </div>
             <div className="min-w-0">
@@ -99,7 +99,7 @@ export function LogsParseRuleDialog({
           <section className="flex min-h-[320px] flex-col">
             <div className="flex items-center justify-between border-b border-outline px-4 py-3">
               <div className="text-sm font-semibold text-on-surface">预览</div>
-              <button className="inline-flex h-8 items-center gap-2 rounded border border-primary bg-white px-3 text-xs font-semibold text-primary disabled:opacity-60" disabled={parsePreviewMutation.isPending || !parseDraftValid} onClick={() => parsePreviewMutation.mutate()}>
+              <button className="console-button" disabled={parsePreviewMutation.isPending || !parseDraftValid} onClick={() => parsePreviewMutation.mutate()}>
                 {parsePreviewMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}
                 预览
               </button>
@@ -115,8 +115,8 @@ export function LogsParseRuleDialog({
           </section>
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-outline bg-surface-lowest px-4 py-3">
-          <button className="rounded-lg border border-outline bg-white px-4 py-2 text-sm font-semibold text-on-surface" onClick={onClose}>取消</button>
-          <button className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white disabled:opacity-60" disabled={!parseDraftValid || parsePreviewMutation.data?.status === 'error'} onClick={onApply}>应用</button>
+          <button className="console-button h-9" onClick={onClose}>取消</button>
+          <button className="console-button console-button-primary h-9" disabled={!parseDraftValid || parsePreviewMutation.data?.status === 'error'} onClick={onApply}>应用</button>
         </div>
       </div>
     </div>
@@ -125,7 +125,7 @@ export function LogsParseRuleDialog({
 
 function ErrorLine({ message }: { message: string }) {
   return (
-    <div className="mt-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
+    <div className="console-notice console-notice-danger mt-3">
       <XCircle className="h-4 w-4" />{message}
     </div>
   );
@@ -133,7 +133,7 @@ function ErrorLine({ message }: { message: string }) {
 
 function WarnLine({ message }: { message: string }) {
   return (
-    <div className="mt-3 flex items-center gap-2 rounded border border-amber-500/30 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+    <div className="console-notice console-notice-warning mt-3">
       <AlertTriangle className="h-4 w-4" />{message}
     </div>
   );
