@@ -24,6 +24,7 @@ export interface LogEndpoint {
   writeURL: string;
   queryURL: string;
   vmuiURL: string;
+  alertmanagerURL: string;
   accountId: string;
   projectId: string;
   secretRef: string;
@@ -262,6 +263,36 @@ export interface LogPublishResult {
   };
 }
 
+export interface LogRuntimePublishInput {
+  clusterId?: string;
+  namespace?: string;
+  alertmanagerURL?: string;
+  previewId?: string;
+  confirmationToken?: string;
+}
+
+export interface LogRuntimePublishResult {
+  runtimeId: string;
+  endpointId: string;
+  clusterId: string;
+  namespace: string;
+  datasourceURL: string;
+  alertmanagerURL: string;
+  artifactHash: string;
+  manifestHash: string;
+  manifestYAML: string;
+  status: string;
+  message: string;
+  requiresConfirmation: boolean;
+  previewId: string;
+  confirmationToken: string;
+  auditId: string;
+  appliedRules: number;
+  resources: K8sPublishResource[];
+  diffs: K8sPublishDiff[];
+  warnings: string[];
+}
+
 export interface K8sPublishResource {
   clusterId: string;
   namespace: string;
@@ -307,6 +338,7 @@ function mapEndpoint(raw: any): LogEndpoint {
     writeURL: raw.write_url ?? raw.writeURL ?? '',
     queryURL: raw.query_url ?? raw.queryURL ?? '',
     vmuiURL: raw.vmui_url ?? raw.vmuiURL ?? '',
+    alertmanagerURL: raw.alertmanager_url ?? raw.alertmanagerURL ?? '',
     accountId: String(raw.account_id ?? raw.accountId ?? ''),
     projectId: String(raw.project_id ?? raw.projectId ?? ''),
     secretRef: raw.secret_ref ?? raw.secretRef ?? '',
@@ -533,6 +565,30 @@ function mapPublish(raw: any): LogPublishResult {
   };
 }
 
+function mapRuntimePublish(raw: any): LogRuntimePublishResult {
+  return {
+    runtimeId: raw.runtime_id ?? raw.runtimeId ?? '',
+    endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    datasourceURL: raw.datasource_url ?? raw.datasourceURL ?? '',
+    alertmanagerURL: raw.alertmanager_url ?? raw.alertmanagerURL ?? '',
+    artifactHash: raw.artifact_hash ?? raw.artifactHash ?? '',
+    manifestHash: raw.manifest_hash ?? raw.manifestHash ?? '',
+    manifestYAML: raw.manifest_yaml ?? raw.manifestYAML ?? '',
+    status: raw.status ?? '',
+    message: raw.message ?? '',
+    requiresConfirmation: Boolean(raw.requires_confirmation ?? raw.requiresConfirmation),
+    previewId: raw.preview_id ?? raw.previewId ?? '',
+    confirmationToken: raw.confirmation_token ?? raw.confirmationToken ?? '',
+    auditId: raw.audit_id ?? raw.auditId ?? '',
+    appliedRules: raw.applied_rules ?? raw.appliedRules ?? 0,
+    resources: Array.isArray(raw.resources) ? raw.resources.map(mapPublishResource) : [],
+    diffs: Array.isArray(raw.diffs) ? raw.diffs.map(mapPublishDiff) : [],
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+  };
+}
+
 function toRoutePayload(input: LogRouteInput) {
   const isVM = input.sourceType === 'vm_file';
   return {
@@ -622,6 +678,7 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
+        alertmanager_url: input.alertmanagerURL,
         account_id: input.accountId,
         project_id: input.projectId,
         secret_ref: input.secretRef,
@@ -642,6 +699,7 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
+        alertmanager_url: input.alertmanagerURL,
         account_id: input.accountId,
         project_id: input.projectId,
         secret_ref: input.secretRef,
@@ -655,6 +713,18 @@ export const logsApi = {
   async listEndpoints(): Promise<LogEndpoint[]> {
     const raw = await apiRequest<any[]>('/logs/endpoints');
     return raw.map(mapEndpoint);
+  },
+  async publishEndpointVmalertRuntime(endpointId: string, input: LogRuntimePublishInput): Promise<LogRuntimePublishResult> {
+    return mapRuntimePublish(await apiRequest<any>(`/logs/endpoints/${endpointId}/vmalert-runtime/publish`, {
+      method: 'POST',
+      body: JSON.stringify({
+        cluster_id: input.clusterId,
+        namespace: input.namespace,
+        alertmanager_url: input.alertmanagerURL,
+        preview_id: input.previewId,
+        confirmation_token: input.confirmationToken,
+      }),
+    }));
   },
   async previewRoute(input: LogRouteInput): Promise<LogRoutePreview> {
     return mapPreview(await apiRequest<any>('/logs/routes/preview', {
