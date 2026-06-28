@@ -4,8 +4,19 @@ import { readFileSync } from 'node:fs';
 
 const layoutSource = readFileSync(new URL('./PlatformLayout.tsx', import.meta.url), 'utf8');
 const observabilitySource = readFileSync(new URL('./ObservabilitySettingsPage.tsx', import.meta.url), 'utf8');
+const platformSettingsSource = readFileSync(new URL('./PlatformSettingsPage.tsx', import.meta.url), 'utf8');
 
-test('平台管理模块只保留平台域访问控制入口', () => {
+test('平台管理模块保留平台设置和访问控制入口', () => {
+  assert.equal(layoutSource.includes('/platform/settings'), true);
+  assert.equal(layoutSource.includes('平台设置'), true);
+  assert.equal(layoutSource.includes('platformSettingsItems'), true);
+  assert.equal(layoutSource.includes('镜像模板'), true);
+  assert.equal(layoutSource.includes('aria-expanded'), true);
+  assert.equal(layoutSource.includes('关闭平台设置菜单'), true);
+  assert.equal(layoutSource.includes('· 镜像模板'), false);
+  assert.equal(layoutSource.includes('module-navigation-tabs overflow-visible'), true);
+  assert.equal(layoutSource.includes('Check'), true);
+  assert.equal(layoutSource.includes('ChevronDown'), true);
   assert.equal(layoutSource.includes('/platform/access'), true);
   assert.equal(layoutSource.includes('访问控制'), true);
   assert.equal(layoutSource.includes('/platform/observability'), false);
@@ -13,6 +24,50 @@ test('平台管理模块只保留平台域访问控制入口', () => {
   assert.equal(layoutSource.includes('平台管理导航'), true);
   assert.equal(layoutSource.includes('<aside'), false);
   assert.equal(layoutSource.includes('xl:grid-cols-[248px'), false);
+});
+
+test('平台设置页面承载平台级镜像模板而非业务或项目配置', () => {
+  assert.equal(platformSettingsSource.includes("queryKey: ['platform-images']"), true);
+  assert.equal(platformSettingsSource.includes('platformApi.listImages'), true);
+  assert.equal(platformSettingsSource.includes('platformApi.updateImage'), true);
+  assert.equal(platformSettingsSource.includes('module-navigation-bar'), false);
+  assert.equal(platformSettingsSource.includes('module-navigation-link'), false);
+  assert.equal(platformSettingsSource.includes('PlatformSettingsTabButton'), false);
+  assert.equal(platformSettingsSource.includes('aria-current={active ? \'page\' : undefined}'), false);
+  assert.equal(platformSettingsSource.includes('title="平台设置"'), false);
+  assert.equal(platformSettingsSource.includes('镜像模板'), true);
+  assert.equal(platformSettingsSource.includes('title="镜像模板"'), true);
+  assert.equal(platformSettingsSource.includes('平台级运行配置，部署清单渲染时使用'), true);
+  assert.equal(platformSettingsSource.includes('__NOVAOBS_IMAGE_OTEL_COLLECTOR__'), true);
+  assert.equal(platformSettingsSource.includes('__NOVAOBS_IMAGE_VMALERT__'), true);
+  assert.equal(platformSettingsSource.includes('日志采集 DaemonSet'), true);
+  assert.equal(platformSettingsSource.includes('日志告警 vmalert Runtime'), true);
+  assert.equal(platformSettingsSource.includes('<aside'), false);
+  assert.equal(platformSettingsSource.includes('platformSettingGroups'), false);
+  assert.equal(platformSettingsSource.includes('console-selected-row'), true);
+  assert.equal(platformSettingsSource.includes('table-fixed'), true);
+  assert.equal(platformSettingsSource.includes('console-detail-rail'), false);
+  assert.equal(platformSettingsSource.includes('xl:grid-cols-[minmax(0,1fr)_360px]'), false);
+  assert.equal(platformSettingsSource.includes('editingKey'), true);
+  assert.equal(platformSettingsSource.includes('beginEdit'), true);
+  assert.equal(platformSettingsSource.includes('updateMutation.reset()'), true);
+  assert.equal(platformSettingsSource.includes('event.stopPropagation()'), true);
+  assert.equal(platformSettingsSource.includes('搜索模板、占位符、镜像'), true);
+  assert.equal(platformSettingsSource.includes('filteredRows'), true);
+  assert.equal(platformSettingsSource.includes('pagedRows'), true);
+  assert.equal(platformSettingsSource.includes('pageSize'), true);
+  assert.equal(platformSettingsSource.includes('上一页'), true);
+  assert.equal(platformSettingsSource.includes('下一页'), true);
+  assert.equal(platformSettingsSource.includes('未找到匹配的镜像模板'), true);
+  assert.equal(platformSettingsSource.includes('生效范围'), true);
+  assert.equal(platformSettingsSource.includes('修改'), true);
+  assert.equal(platformSettingsSource.includes('保存'), true);
+  assert.equal(platformSettingsSource.includes('取消'), true);
+  assert.equal(platformSettingsSource.includes('min-h-[560px]'), false);
+  assert.equal(platformSettingsSource.includes('min-h-[520px]'), false);
+  assert.equal(platformSettingsSource.includes('min-h-[360px]'), false);
+  assert.equal(platformSettingsSource.includes('业务'), false);
+  assert.equal(platformSettingsSource.includes('项目'), false);
 });
 
 test('观测接入配置先集中维护日志下游端点', () => {
@@ -44,6 +99,22 @@ test('观测接入配置先集中维护日志下游端点', () => {
   assert.equal(observabilitySource.includes('AccountID'), true);
   assert.equal(observabilitySource.includes('ProjectID'), true);
   assert.equal(observabilitySource.includes('生成租户 ID'), true);
+  assert.equal(observabilitySource.includes('K8s 集群'), true);
+  assert.equal(observabilitySource.includes('请选择已登记集群'), true);
+  assert.equal(observabilitySource.includes('日志端点只能绑定已登记的 K8s 集群'), true);
+  assert.equal(observabilitySource.includes('placeholder="test03"'), false);
+  assert.equal(observabilitySource.includes('默认 Alertmanager URL'), false);
+  assert.equal(observabilitySource.includes('Alertmanager notify URL'), true);
+  assert.equal(observabilitySource.includes('k8sApi.listClusters'), true);
+  assert.equal(observabilitySource.includes('k8sApi.listNamespaces'), false);
+  assert.equal(observabilitySource.includes('Runtime 固定部署到平台 namespace'), true);
+  assert.equal(observabilitySource.includes('readOnly'), true);
+  assert.equal(observabilitySource.includes('部署 Runtime'), true);
+  assert.equal(observabilitySource.includes('生成 YAML'), true);
+  assert.equal(observabilitySource.includes('确认部署'), true);
+  assert.equal(observabilitySource.includes('预览 Runtime'), false);
+  assert.equal(observabilitySource.includes('部署 vmalert Runtime 需要填写 Alertmanager notify URL'), true);
+  assert.equal(observabilitySource.includes('请先填写并保存 Alertmanager URL'), false);
   assert.equal(observabilitySource.includes('ClusterCollectorConfigPanel'), false);
   assert.equal(observabilitySource.includes('集群 Collector 基础配置'), false);
   assert.equal(observabilitySource.includes('logsApi.getClusterConfig'), false);

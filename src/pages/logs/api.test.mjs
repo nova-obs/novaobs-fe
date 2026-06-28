@@ -179,16 +179,63 @@ test('创建 VictoriaLogs 端点时传递租户 AccountID 和 ProjectID', async 
       writeURL: 'http://vl:9428/insert/opentelemetry/v1/logs',
       queryURL: 'http://vl:9428/select/logsql/query',
       vmuiURL: 'http://vl:9428/select/vmui/',
+      alertmanagerURL: 'http://alertmanager:9093',
       accountId: '9527',
       projectId: '9527',
     }),
-    { id: 'vl-9527', name: 'vl-tenant-9527', sink_type: 'vl', account_id: '9527', project_id: '9527' },
+    { id: 'vl-9527', name: 'vl-tenant-9527', sink_type: 'vl', account_id: '9527', project_id: '9527', alertmanager_url: 'http://alertmanager:9093' },
   );
 
   assert.equal(request.body.account_id, '9527');
   assert.equal(request.body.project_id, '9527');
+  assert.equal(request.body.alertmanager_url, 'http://alertmanager:9093');
   assert.equal(result.accountId, '9527');
   assert.equal(result.projectId, '9527');
+  assert.equal(result.alertmanagerURL, 'http://alertmanager:9093');
+});
+
+test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.publishEndpointVmalertRuntime('vl-9527', {
+      clusterId: 'test03',
+      namespace: 'novaobs-system',
+      alertmanagerURL: 'http://alertmanager:9093',
+      previewId: 'preview-1',
+      confirmationToken: 'confirm-1',
+    }),
+    {
+      runtime_id: 'vmalert-logs:vl-9527',
+      endpoint_id: 'vl-9527',
+      cluster_id: 'test03',
+      namespace: 'novaobs-system',
+      datasource_url: 'http://victorialogs:9428',
+      alertmanager_url: 'http://alertmanager:9093',
+      artifact_hash: 'artifact-hash',
+      manifest_hash: 'manifest-hash',
+      manifest_yaml: 'apiVersion: apps/v1\nkind: Deployment\n',
+      status: 'applied',
+      message: 'applied',
+      requires_confirmation: false,
+      preview_id: 'preview-1',
+      audit_id: 'audit-1',
+      applied_rules: 2,
+      resources: [{ cluster_id: 'test03', namespace: 'novaobs-system', api_version: 'apps/v1', kind: 'Deployment', name: 'novaobs-vmalert-vl' }],
+      diffs: [],
+      warnings: [],
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/logs/endpoints/vl-9527/vmalert-runtime/publish');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.body.cluster_id, 'test03');
+  assert.equal(request.body.namespace, 'novaobs-system');
+  assert.equal(request.body.alertmanager_url, 'http://alertmanager:9093');
+  assert.equal(request.body.preview_id, 'preview-1');
+  assert.equal(request.body.confirmation_token, 'confirm-1');
+  assert.equal(result.runtimeId, 'vmalert-logs:vl-9527');
+  assert.equal(result.status, 'applied');
+  assert.equal(result.appliedRules, 2);
+  assert.equal(result.resources[0].kind, 'Deployment');
 });
 
 test('更新 Logs 下游端点时使用 PATCH 并保留端点 ID', async () => {

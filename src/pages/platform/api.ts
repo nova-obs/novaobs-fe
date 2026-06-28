@@ -105,6 +105,12 @@ export interface PlatformEffectivePermission {
   createdAt: string;
 }
 
+export interface PlatformImage {
+  key: string;
+  value: string;
+  updatedAt: string;
+}
+
 export interface PlatformWriteResult<T> {
   item?: T;
   status: string;
@@ -232,6 +238,14 @@ function mapEffectivePermission(raw: any): PlatformEffectivePermission {
     permissions: Array.isArray(raw.permissions) ? raw.permissions.map(mapPermission) : [],
     scope: mapScope(raw.scope ?? {}),
     createdAt: raw.created_at ?? raw.createdAt ?? '',
+  };
+}
+
+function mapImage(raw: any): PlatformImage {
+  return {
+    key: String(raw.key ?? ''),
+    value: raw.value ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
 }
 
@@ -365,5 +379,16 @@ export const platformApi = {
     const params = new URLSearchParams({ subject_id: input.subjectId, subject_type: input.subjectType });
     const raw = await apiRequest<any[]>(`/platform/effective-permissions?${params.toString()}`);
     return raw.map(mapEffectivePermission);
+  },
+  async listImages(): Promise<PlatformImage[]> {
+    const raw = await apiRequest<any[]>('/platform/images');
+    return raw.map(mapImage);
+  },
+  async updateImage(input: { key: string; value: string }): Promise<PlatformImage> {
+    const raw = await apiRequest<any>('/platform/images', {
+      method: 'PUT',
+      body: JSON.stringify({ key: input.key, value: input.value }),
+    });
+    return mapImage(raw);
   },
 };

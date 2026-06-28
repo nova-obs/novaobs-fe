@@ -169,3 +169,29 @@ test('平台 IAM 删除接口覆盖用户、组、服务账号、角色和授权
     globalThis.fetch = originalFetch;
   }
 });
+
+test('平台镜像模板读取和更新使用平台设置 API', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    if (init.method === 'PUT') {
+      return jsonResponse({ key: '__NOVAOBS_IMAGE_OTEL_COLLECTOR__', value: 'harbor.example.com/novaobs/otel:0.153.0', updated_at: '2026-06-26T09:00:00Z' });
+    }
+    return jsonResponse([{ key: '__NOVAOBS_IMAGE_OTEL_COLLECTOR__', value: 'hub-test.service.ucloud.cn/logsplatfrom/opentelemetry-collector-contrib:0.153.0' }]);
+  };
+
+  try {
+    const images = await platformApi.listImages();
+    const updated = await platformApi.updateImage({ key: '__NOVAOBS_IMAGE_OTEL_COLLECTOR__', value: 'harbor.example.com/novaobs/otel:0.153.0' });
+
+    assert.equal(requests[0].path, '/api/v1/platform/images');
+    assert.equal(requests[1].path, '/api/v1/platform/images');
+    assert.equal(requests[1].init.method, 'PUT');
+    assert.deepEqual(JSON.parse(requests[1].init.body), { key: '__NOVAOBS_IMAGE_OTEL_COLLECTOR__', value: 'harbor.example.com/novaobs/otel:0.153.0' });
+    assert.equal(images[0].key, '__NOVAOBS_IMAGE_OTEL_COLLECTOR__');
+    assert.equal(updated.value, 'harbor.example.com/novaobs/otel:0.153.0');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
