@@ -29,6 +29,7 @@ import { OverviewPage } from '../pages/overview/OverviewPage';
 import { ObservabilitySettingsPage } from '../pages/platform/ObservabilitySettingsPage';
 import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPage';
 import { PlatformLayout } from '../pages/platform/PlatformLayout';
+import { PlatformSettingsPage } from '../pages/platform/PlatformSettingsPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
 
 export interface RouteDefinition {
@@ -86,7 +87,8 @@ const logsChildRoutes: RouteDefinition[] = [
 ];
 
 const platformChildRoutes: RouteDefinition[] = [
-  { index: true, title: '平台管理', element: <Navigate to="/platform/access" replace /> },
+  { index: true, title: '平台管理', element: <Navigate to="/platform/settings" replace /> },
+  { path: 'settings', title: '平台设置', element: <PlatformSettingsPage /> },
   { path: 'access', title: '平台管理', element: <PlatformAccessAdminPage /> },
   { path: 'observability', title: '观测接入配置', element: <Navigate to="/observability/endpoints" replace /> },
 ];

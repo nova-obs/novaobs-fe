@@ -9,6 +9,7 @@ import {
   RadioTower,
   Search,
   ServerCog,
+  Settings,
   ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -104,6 +105,7 @@ const navigationDomains: NavigationDomain[] = [
         id: 'platform-settings',
         label: '平台设置',
         items: [
+          { id: 'platform-settings', label: '平台设置', description: '平台级模板与运行配置', path: '/platform/settings', icon: Settings },
           { id: 'platform-access', label: '访问控制', description: '用户、组、角色与授权', path: '/platform/access', icon: ShieldCheck },
         ],
       },
