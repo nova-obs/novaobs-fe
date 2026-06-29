@@ -1,6 +1,7 @@
 import type { FormEvent, PropsWithChildren } from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import {
   Activity,
   ArrowLeft,
@@ -9,9 +10,9 @@ import {
   ChevronDown,
   ChevronRight,
   CheckCircle2,
-  Clock3,
   Copy,
   Grid2X2,
+  LockKeyhole,
   LogIn,
   LogOut,
   RefreshCw,
@@ -26,6 +27,8 @@ import {
   type NavigationDomain,
   type NavigationItem,
 } from './navigation';
+import { k8sApi, type K8sCluster } from '../pages/k8s/api';
+import { getK8sNavigationGroupItems, k8sClusterPath, k8sNavigationGroups, type K8sNavigationItem } from '../pages/k8s/navigation';
 import {
   fetchPlatformSession,
   isSignedOutLocation,
@@ -246,11 +249,6 @@ export function AppShell({ children }: PropsWithChildren) {
                 </div>
               </div>
               <div className="content-workbench-tools">
-                <StatusPill>
-                  <Clock3 className="h-3.5 w-3.5" />
-                  最近 15 分钟
-                  <ChevronDown className="h-3.5 w-3.5" />
-                </StatusPill>
                 <button
                   type="button"
                   className="console-button h-8 px-2.5 text-xs"
@@ -366,6 +364,8 @@ function MegaMenu({
                 </div>
               ))}
             </div>
+
+            {domain.id === 'k8s' ? <K8sMegaMenuClusterWork /> : null}
           </div>
 
           <div className="mega-menu-utility border-t border-outline bg-surface/60 px-4 py-5 lg:border-l lg:border-t-0 lg:px-5 lg:py-6">
@@ -390,6 +390,140 @@ function MegaMenu({
       </section>
     </div>
   );
+}
+
+function K8sMegaMenuClusterWork() {
+  const [selectedClusterId, setSelectedClusterId] = useState('');
+  const { data: clusters = [], error, isLoading } = useQuery({
+    queryKey: ['k8s-clusters'],
+    queryFn: () => k8sApi.listClusters(),
+    retry: false,
+  });
+  const selectedCluster = clusters.find((cluster) => cluster.id === selectedClusterId);
+  const groupedItems = useMemo(() => (
+    k8sNavigationGroups
+      .map((group) => ({
+        ...group,
+        items: getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster),
+      }))
+      .filter((group) => group.items.length)
+  ), []);
+
+  useEffect(() => {
+    if (!clusters.length) {
+      if (selectedClusterId) setSelectedClusterId('');
+      return;
+    }
+    const exists = clusters.some((cluster) => cluster.id === selectedClusterId);
+    if (!exists) {
+      setSelectedClusterId(clusters.length === 1 ? clusters[0].id : '');
+    }
+  }, [clusters, selectedClusterId]);
+
+  return (
+    <section className="mt-5 rounded-md border border-outline/80 bg-surface-lowest px-3 py-3" aria-label="K8s 工作台入口">
+      <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-on-surface">工作台</div>
+          <p className="mt-1 text-[11px] leading-5 text-muted">先选择集群，再进入 Dashboard、资源、访问控制、交付运维和安全模块。</p>
+        </div>
+        <label className="block w-full max-w-sm shrink-0">
+          <span className="text-[11px] font-semibold text-muted">K8s 工作台上下文</span>
+          <select
+            className="console-input mt-1.5 h-8 w-full text-xs font-semibold"
+            disabled={isLoading || Boolean(error) || !clusters.length}
+            value={selectedClusterId}
+            onChange={(event) => setSelectedClusterId(event.target.value)}
+          >
+            <option value="">请选择集群</option>
+            {clusters.map((cluster) => (
+              <option key={cluster.id} value={cluster.id}>{cluster.name || cluster.id}</option>
+            ))}
+          </select>
+        </label>
+      </div>
+
+      {error ? (
+        <div className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-xs font-semibold text-danger">
+          集群列表读取失败，请检查 NovaObs 后端连接。
+        </div>
+      ) : null}
+
+      {!isLoading && !error && !clusters.length ? (
+        <div className="mt-3 flex flex-col gap-2 rounded-md border border-outline/70 bg-surface px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
+          <span>当前还没有可选择的集群。</span>
+          <Link className="font-semibold text-primary hover:underline" to="/k8s/access">去集群接入</Link>
+        </div>
+      ) : null}
+
+      {selectedCluster ? (
+        <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px]">
+          <span className={['status-badge', k8sClusterStatusClass(selectedCluster)].join(' ')}>
+            <span className="status-dot" aria-hidden />
+            {k8sClusterStatusText(selectedCluster)}
+          </span>
+          <span className="rounded bg-surface px-2 py-1 font-mono text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{selectedCluster.version || '-'}</span>
+          <span className="rounded bg-surface px-2 py-1 font-mono text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{selectedCluster.region || '-'}</span>
+        </div>
+      ) : null}
+
+      <div className="mt-3 grid gap-3 lg:grid-cols-2">
+        {groupedItems.map((group) => (
+          <div key={group.id} className="min-w-0">
+            <div className="mb-1.5 text-[11px] font-semibold text-muted">{group.label}</div>
+            <div className="grid gap-1.5">
+              {group.items.map((item) => (
+                <K8sMegaMenuClusterWorkItem key={item.id} clusterId={selectedClusterId} item={item} />
+              ))}
+            </div>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function K8sMegaMenuClusterWorkItem({ clusterId, item }: { clusterId: string; item: K8sNavigationItem }) {
+  const Icon = item.icon;
+  const className = [
+    'group flex min-h-8 items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors',
+    clusterId ? 'text-on-surface hover:bg-surface-lowest hover:text-primary' : 'cursor-not-allowed text-muted/70',
+  ].join(' ');
+  const content = (
+    <>
+      {clusterId ? <Icon className="h-3.5 w-3.5 shrink-0 text-muted group-hover:text-primary" /> : <LockKeyhole className="h-3.5 w-3.5 shrink-0 text-muted/70" />}
+      <span className="min-w-0 flex-1 truncate">{item.label}</span>
+      {clusterId ? <ArrowRight className="h-3 w-3 shrink-0 text-muted/60 transition-transform group-hover:translate-x-0.5 group-hover:text-primary" /> : <span className="shrink-0 text-[10px] font-medium text-muted/70">先选集群</span>}
+    </>
+  );
+
+  if (!clusterId) {
+    return (
+      <div className={className} title="请先选择集群">
+        {content}
+      </div>
+    );
+  }
+
+  return (
+    <Link className={className} to={k8sClusterPath(clusterId, item)}>
+      {content}
+    </Link>
+  );
+}
+
+function k8sClusterStatusText(cluster: K8sCluster) {
+  if (['active', 'healthy', 'ready'].includes(cluster.status)) return '正常';
+  if (['failed', 'error'].includes(cluster.status)) return '异常';
+  if (['degraded', 'warning'].includes(cluster.status)) return '退化';
+  return cluster.status || (cluster.readOnly ? '只读接入' : '已登记');
+}
+
+function k8sClusterStatusClass(cluster: K8sCluster) {
+  if (['active', 'healthy', 'ready'].includes(cluster.status)) return 'border-emerald-600/20 bg-emerald-50 text-emerald-700';
+  if (['failed', 'error'].includes(cluster.status)) return 'border-danger/20 bg-rose-50 text-danger';
+  if (['degraded', 'warning'].includes(cluster.status) || cluster.readOnly) return 'border-warning/20 bg-amber-50 text-warning';
+  return 'border-outline bg-surface-lowest text-muted';
 }
 
 function MegaMenuNavigationItem({
@@ -523,14 +657,6 @@ function LoginView({ onSuccess }: { onSuccess: (session: PlatformSession) => voi
         </button>
       </form>
     </main>
-  );
-}
-
-function StatusPill({ children }: PropsWithChildren) {
-  return (
-    <span className="hidden h-8 items-center gap-2 rounded-md border border-outline bg-surface-lowest px-2.5 text-xs font-semibold text-on-surface sm:inline-flex">
-      {children}
-    </span>
   );
 }
 

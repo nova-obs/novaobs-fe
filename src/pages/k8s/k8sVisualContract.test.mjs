@@ -20,7 +20,7 @@ const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.ur
 const platformAccessSource = readFileSync(new URL('./PlatformAccessPage.tsx', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 
-test('K8s 运维模块使用一级工作域和按需纵向菜单', () => {
+test('K8s 运维模块使用顶部入口和页面内横向分组导航承接集群工作台', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
   assert.equal(layoutSource.includes('useParams'), true);
   assert.equal(layoutSource.includes('k8sApi.listClusters'), true);
@@ -49,9 +49,9 @@ test('K8s 运维模块使用一级工作域和按需纵向菜单', () => {
   assert.equal(navigationSource.includes('受控终端'), true);
 });
 
-test('K8s Dashboard 展示来源、时间窗口、同步和审计上下文', () => {
+test('K8s Dashboard 展示来源、同步和审计上下文', () => {
   assert.equal(dashboardSource.includes('startorch'), false);
-  assert.equal(dashboardSource.includes('最近 15 分钟'), true);
+  assert.equal(dashboardSource.includes('最近 15 分钟'), false);
   assert.equal(dashboardSource.includes('配置状态'), true);
   assert.equal(dashboardSource.includes('操作审计'), true);
   assert.equal(dashboardSource.includes('集群策略'), true);

@@ -109,7 +109,7 @@ export function K8sCertificatePage() {
         ) : null}
       </section>
 
-      <DataPanel title="证书中心" meta={isLoading ? '加载中' : `${data.length} 张证书 · 最近 15 分钟`}>
+      <DataPanel title="证书中心" meta={isLoading ? '加载中' : `${data.length} 张证书`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             证书中心读取失败：{errorMessage(error)}

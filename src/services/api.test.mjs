@@ -209,7 +209,7 @@ test('获取 K8s Dashboard 时调用统一 K8sOps API', async () => {
     {
       stats: { cluster_id: 'prod', health: 'unknown', namespaces: 12, workloads: 47, pods: { total: 128, ready: 109, warning: 7 } },
       signals: [{ key: 'api-server', label: 'API Server', status: 'unknown', source: 'startorch', checked_at: '2026-05-19T10:30:00Z' }],
-      sync: { status: 'unknown', source: 'startorch', time_window: '最近 15 分钟', last_synced_at: '2026-05-19T10:30:00Z' },
+      sync: { status: 'unknown', source: 'startorch', time_window: 'backend-window', last_synced_at: '2026-05-19T10:30:00Z' },
     },
   );
 
@@ -538,11 +538,11 @@ test('通知策略使用受管资源而不是规则中的自由文本配置', as
   assert.equal(list.path, '/api/v1/alerts/notification-policies?service_id=svc-a');
 
   const created = await captureRequest(
-    () => api.createNotificationPolicy({ name: '支付值班', alertmanagerReceiver: 'pay-oncall' }),
-    { id: 'policy-a', name: '支付值班', alertmanager_receiver: 'pay-oncall', enabled: true },
+    () => api.createNotificationPolicy({ name: '支付值班', receiver: 'pay-oncall' }),
+    { id: 'policy-a', name: '支付值班', receiver: 'pay-oncall', enabled: true },
   );
   assert.equal(created.path, '/api/v1/alerts/notification-policies');
-  assert.equal(created.body.alertmanager_receiver, 'pay-oncall');
+  assert.equal(created.body.receiver, 'pay-oncall');
   assert.equal('url' in created.body, false);
   assert.equal('secret' in created.body, false);
 });

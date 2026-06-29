@@ -43,7 +43,6 @@ export function DashboardPage() {
           <div className="console-audit-meta">
             <span>source {sync?.source ?? 'Kubernetes API'}</span>
             <span>配置状态 {sync?.status ?? 'unknown'}</span>
-            {sync?.timeWindow ?? '最近 15 分钟'}
           </div>
         </div>
         <div className="grid divide-y divide-outline md:grid-cols-4 md:divide-x md:divide-y-0">
@@ -93,7 +92,7 @@ export function DashboardPage() {
       </div>
 
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_380px]">
-        <DataPanel title="实时信号" meta={`${sync?.source ?? 'Kubernetes API'} · ${sync?.timeWindow ?? '最近 15 分钟'}`}>
+        <DataPanel title="实时信号" meta={sync?.source ?? 'Kubernetes API'}>
           <div className="console-resource-list">
             <table className="console-table min-w-[680px] w-full">
               <thead>

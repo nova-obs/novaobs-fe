@@ -29,7 +29,7 @@ export function OverviewPage() {
       label: '日志吞吐',
       value: `${formatNumber(logThroughput)}/min`,
       source: '日志下游',
-      detail: '最近 15 分钟',
+      detail: '实时写入速率',
       icon: Database,
     },
     {
@@ -42,7 +42,7 @@ export function OverviewPage() {
     {
       label: '启用告警规则',
       value: formatNumber(activeAlertCount),
-      source: 'Alertmanager',
+      source: 'Alert Ingest',
       detail: `${alertRules.length} rules`,
       icon: AlertTriangle,
       warning: activeAlertCount > 0,
@@ -52,7 +52,7 @@ export function OverviewPage() {
   const componentStates = [
     { name: '日志下游', source: 'logs', status: logThroughput > 0 ? 'active' : 'unknown' },
     { name: 'OTel Collector', source: 'agent', status: healthyLogRouteCount > 0 ? 'active' : 'unknown' },
-    { name: 'Alertmanager', source: 'alerts', status: activeAlertCount > 0 ? 'active' : 'unknown' },
+    { name: 'Alert Ingest', source: 'alerts', status: activeAlertCount > 0 ? 'active' : 'unknown' },
     { name: 'OpAMP', source: 'remote config', status: healthyLogRouteCount > 0 ? 'active' : 'unknown' },
   ];
 
@@ -62,7 +62,6 @@ export function OverviewPage() {
         <div>
           <h1 className="page-title">平台总览</h1>
           <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-muted">
-            <span className="status-badge border-outline bg-surface-lowest">最近 15 分钟</span>
             <span className="status-badge border-outline bg-surface-lowest">日志下游</span>
             <span className="status-badge border-outline bg-surface-lowest">OTel Collector</span>
           </div>

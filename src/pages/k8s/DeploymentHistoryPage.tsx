@@ -59,7 +59,7 @@ export function K8sDeploymentHistoryPage() {
         ) : null}
       </section>
 
-      <DataPanel title="部署历史" meta={isLoading ? '加载中' : `${data.length} 条记录 · 最近 15 分钟`}>
+      <DataPanel title="部署历史" meta={isLoading ? '加载中' : `${data.length} 条记录`}>
         {error ? <Warning text={`部署历史读取失败：${errorMessage(error)}`} /> : null}
         {isLoading ? <Loading text="正在读取部署历史。" /> : null}
         {!isLoading && !error && data.length ? (

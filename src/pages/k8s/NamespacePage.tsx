@@ -72,7 +72,7 @@ export function K8sNamespacePage() {
         {writeError ? <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">{writeError}</div> : null}
       </section>
 
-      <DataPanel title="命名空间列表" meta={activeClusterId ? `${namespaces.length} 个命名空间 · 最近 15 分钟` : '等待集群上下文'}>
+      <DataPanel title="命名空间列表" meta={activeClusterId ? `${namespaces.length} 个命名空间` : '等待集群上下文'}>
         {isLoading ? (
           <div className="mb-3 rounded-lg bg-white/45 px-3 py-2 text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
             正在从 `/api/v1/k8s/namespaces` 读取命名空间。

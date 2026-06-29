@@ -10,7 +10,7 @@ test('顶层框架展示专业指挥中心状态条', () => {
   assert.equal(source.includes('搜索服务、指标、日志、告警'), true);
   assert.equal(source.includes('平台运行正常'), false);
   assert.equal(source.includes('配置已同步'), false);
-  assert.equal(source.includes('最近 15 分钟'), true);
+  assert.equal(source.includes('最近 15 分钟'), false);
   assert.equal(source.includes('采集状态'), false);
 });
 
@@ -63,6 +63,18 @@ test('超级菜单明确区分模块身份、主功能菜单和辅助入口', ()
   assert.equal(source.includes('border border-outline/80 bg-surface-lowest'), true);
   assert.equal(source.includes('max-h-[calc(100dvh-4rem)]'), true);
   assert.equal(source.includes('overflow-y-auto'), true);
+});
+
+test('K8s 超级菜单提供集群上下文后再进入工作台', () => {
+  assert.equal(source.includes('K8sMegaMenuClusterWork'), true);
+  assert.equal(source.includes('K8s 工作台上下文'), true);
+  assert.equal(source.includes('工作台'), true);
+  assert.equal(source.includes('K8s 工作台入口'), true);
+  assert.equal(source.includes('请选择集群'), true);
+  assert.equal(source.includes('先选集群'), true);
+  assert.equal(source.includes('k8sApi.listClusters'), true);
+  assert.equal(source.includes('k8sClusterPath(clusterId, item)'), true);
+  assert.equal(source.includes('getK8sNavigationGroupItems'), true);
 });
 
 test('超级菜单作为独立悬浮区域与顶部导航保持间距', () => {

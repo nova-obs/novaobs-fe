@@ -24,7 +24,6 @@ export interface LogEndpoint {
   writeURL: string;
   queryURL: string;
   vmuiURL: string;
-  alertmanagerURL: string;
   accountId: string;
   projectId: string;
   secretRef: string;
@@ -266,7 +265,7 @@ export interface LogPublishResult {
 export interface LogRuntimePublishInput {
   clusterId?: string;
   namespace?: string;
-  alertmanagerURL?: string;
+  alertIngestURL?: string;
   previewId?: string;
   confirmationToken?: string;
 }
@@ -277,7 +276,7 @@ export interface LogRuntimePublishResult {
   clusterId: string;
   namespace: string;
   datasourceURL: string;
-  alertmanagerURL: string;
+  alertIngestURL: string;
   artifactHash: string;
   manifestHash: string;
   manifestYAML: string;
@@ -338,7 +337,6 @@ function mapEndpoint(raw: any): LogEndpoint {
     writeURL: raw.write_url ?? raw.writeURL ?? '',
     queryURL: raw.query_url ?? raw.queryURL ?? '',
     vmuiURL: raw.vmui_url ?? raw.vmuiURL ?? '',
-    alertmanagerURL: raw.alertmanager_url ?? raw.alertmanagerURL ?? '',
     accountId: String(raw.account_id ?? raw.accountId ?? ''),
     projectId: String(raw.project_id ?? raw.projectId ?? ''),
     secretRef: raw.secret_ref ?? raw.secretRef ?? '',
@@ -572,7 +570,7 @@ function mapRuntimePublish(raw: any): LogRuntimePublishResult {
     clusterId: raw.cluster_id ?? raw.clusterId ?? '',
     namespace: raw.namespace ?? '',
     datasourceURL: raw.datasource_url ?? raw.datasourceURL ?? '',
-    alertmanagerURL: raw.alertmanager_url ?? raw.alertmanagerURL ?? '',
+    alertIngestURL: raw.alert_ingest_url ?? raw.alertIngestURL ?? '',
     artifactHash: raw.artifact_hash ?? raw.artifactHash ?? '',
     manifestHash: raw.manifest_hash ?? raw.manifestHash ?? '',
     manifestYAML: raw.manifest_yaml ?? raw.manifestYAML ?? '',
@@ -678,7 +676,6 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
-        alertmanager_url: input.alertmanagerURL,
         account_id: input.accountId,
         project_id: input.projectId,
         secret_ref: input.secretRef,
@@ -699,7 +696,6 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
-        alertmanager_url: input.alertmanagerURL,
         account_id: input.accountId,
         project_id: input.projectId,
         secret_ref: input.secretRef,
@@ -720,7 +716,7 @@ export const logsApi = {
       body: JSON.stringify({
         cluster_id: input.clusterId,
         namespace: input.namespace,
-        alertmanager_url: input.alertmanagerURL,
+        alert_ingest_url: input.alertIngestURL,
         preview_id: input.previewId,
         confirmation_token: input.confirmationToken,
       }),

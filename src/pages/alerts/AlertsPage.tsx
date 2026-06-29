@@ -25,7 +25,7 @@ export function AlertsPage() {
   const ruleNames = useMemo(() => new Map(rules.map((rule) => [rule.id, rule.spec.name])), [rules]);
   const activeCount = instances.filter((item) => item.state === 'firing' || item.state === 'pending').length;
   const createPolicyMutation = useMutation({
-    mutationFn: () => api.createNotificationPolicy({ name: policyName.trim(), alertmanagerReceiver: receiverName.trim(), serviceId: policyServiceId || undefined }),
+    mutationFn: () => api.createNotificationPolicy({ name: policyName.trim(), receiver: receiverName.trim(), serviceId: policyServiceId || undefined }),
     onSuccess: async () => {
       setPolicyName(''); setReceiverName(''); setPolicyServiceId('');
       await queryClient.invalidateQueries({ queryKey: ['alerts', 'notification-policies'] });
@@ -84,7 +84,7 @@ export function AlertsPage() {
           <div className="grid content-start gap-2">
             {(policiesQuery.data ?? []).map((policy) => (
               <div key={policy.id} className="flex items-center justify-between gap-3 rounded-md border border-outline bg-white px-3 py-2">
-                <div><div className="text-sm font-semibold text-on-surface">{policy.name}</div><div className="mt-0.5 font-mono text-[11px] text-muted">Alertmanager receiver · {policy.alertmanagerReceiver}</div></div>
+                <div><div className="text-sm font-semibold text-on-surface">{policy.name}</div><div className="mt-0.5 font-mono text-[11px] text-muted">告警路由标识 · {policy.receiver}</div></div>
                 <button className={`rounded border px-2 py-0.5 text-[11px] font-semibold ${policy.enabled ? 'border-primary/20 bg-primary-soft text-primary' : 'border-outline text-muted'}`} disabled={togglePolicyMutation.isPending} onClick={() => togglePolicyMutation.mutate({ policy, enabled: !policy.enabled })}>{policy.enabled ? '停用' : '启用'}</button>
               </div>
             ))}
@@ -92,7 +92,7 @@ export function AlertsPage() {
           </div>
           <div className="rounded-md border border-outline bg-surface p-4">
             <div className="text-sm font-semibold text-on-surface">新增通知策略</div>
-            <p className="mt-1 text-xs leading-5 text-muted">策略关联 Alertmanager 中已配置的 receiver 标识，可设为全局或绑定到单个服务。</p>
+            <p className="mt-1 text-xs leading-5 text-muted">策略关联统一告警平台中的稳定 receiver 标识，可设为全局或绑定到单个服务。</p>
             <label className="mt-3 block text-xs font-semibold text-on-surface">策略名称<input className="console-input mt-1.5 w-full" value={policyName} onChange={(event) => setPolicyName(event.target.value)} placeholder="例如：支付团队值班" /></label>
             <label className="mt-3 block text-xs font-semibold text-on-surface">适用范围<select className="console-input mt-1.5 w-full" value={policyServiceId} onChange={(event) => setPolicyServiceId(event.target.value)}><option value="">全局策略</option>{(servicesQuery.data ?? []).map((service) => <option key={service.id} value={service.id}>{service.displayName || service.name}</option>)}</select></label>
             <label className="mt-3 block text-xs font-semibold text-on-surface">Receiver 标识<input className="console-input mt-1.5 w-full font-mono" value={receiverName} onChange={(event) => setReceiverName(event.target.value)} placeholder="pay-oncall" /></label>

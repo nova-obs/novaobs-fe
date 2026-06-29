@@ -104,7 +104,8 @@ test('观测接入配置先集中维护日志下游端点', () => {
   assert.equal(observabilitySource.includes('日志端点只能绑定已登记的 K8s 集群'), true);
   assert.equal(observabilitySource.includes('placeholder="test03"'), false);
   assert.equal(observabilitySource.includes('默认 Alertmanager URL'), false);
-  assert.equal(observabilitySource.includes('Alertmanager notify URL'), true);
+  assert.equal(observabilitySource.includes('Alertmanager notify URL'), false);
+  assert.equal(observabilitySource.includes('NovaObs Alert Ingest URL'), true);
   assert.equal(observabilitySource.includes('k8sApi.listClusters'), true);
   assert.equal(observabilitySource.includes('k8sApi.listNamespaces'), false);
   assert.equal(observabilitySource.includes('Runtime 固定部署到平台 namespace'), true);
@@ -113,7 +114,7 @@ test('观测接入配置先集中维护日志下游端点', () => {
   assert.equal(observabilitySource.includes('生成 YAML'), true);
   assert.equal(observabilitySource.includes('确认部署'), true);
   assert.equal(observabilitySource.includes('预览 Runtime'), false);
-  assert.equal(observabilitySource.includes('部署 vmalert Runtime 需要填写 Alertmanager notify URL'), true);
+  assert.equal(observabilitySource.includes('部署 vmalert Runtime 需要填写 NovaObs Alert Ingest URL'), true);
   assert.equal(observabilitySource.includes('请先填写并保存 Alertmanager URL'), false);
   assert.equal(observabilitySource.includes('ClusterCollectorConfigPanel'), false);
   assert.equal(observabilitySource.includes('集群 Collector 基础配置'), false);

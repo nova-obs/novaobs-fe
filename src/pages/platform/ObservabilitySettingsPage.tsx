@@ -36,7 +36,7 @@ export function ObservabilitySettingsPage() {
   const [runtimeDialogOpen, setRuntimeDialogOpen] = useState(false);
   const [runtimeClusterId, setRuntimeClusterId] = useState('');
   const [runtimeNamespace, setRuntimeNamespace] = useState('novaobs-system');
-  const [runtimeAlertmanagerURL, setRuntimeAlertmanagerURL] = useState('');
+  const [runtimeAlertIngestURL, setRuntimeAlertIngestURL] = useState('');
   const [runtimePreview, setRuntimePreview] = useState<Awaited<ReturnType<typeof logsApi.publishEndpointVmalertRuntime>> | null>(null);
   const [runtimePreparedKey, setRuntimePreparedKey] = useState('');
   const endpointsQuery = useQuery({ queryKey: ['logs-endpoints'], queryFn: () => logsApi.listEndpoints(), retry: false });
@@ -84,12 +84,12 @@ export function ObservabilitySettingsPage() {
         ? '日志端点绑定的 K8s 集群尚未登记'
         : selectedEndpoint && runtimeClusterId !== selectedEndpoint.clusterId
           ? 'vmalert Runtime 必须部署到日志端点绑定的 K8s 集群'
-          : !runtimeAlertmanagerURL.trim()
-            ? '部署 vmalert Runtime 需要填写 Alertmanager notify URL'
-            : !isHTTPURL(runtimeAlertmanagerURL)
-              ? 'Alertmanager notify URL 必须是 http(s) 地址'
+          : !runtimeAlertIngestURL.trim()
+            ? '部署 vmalert Runtime 需要填写 NovaObs Alert Ingest URL'
+            : !isHTTPURL(runtimeAlertIngestURL)
+              ? 'NovaObs Alert Ingest URL 必须是 http(s) 地址'
               : '');
-  const runtimeInputKey = `${runtimeClusterId}\x00${runtimeNamespace}\x00${runtimeAlertmanagerURL}`;
+  const runtimeInputKey = `${runtimeClusterId}\x00${runtimeNamespace}\x00${runtimeAlertIngestURL}`;
 
   useEffect(() => {
     if (selectedEndpointId || endpoints.length === 0) return;
@@ -97,7 +97,7 @@ export function ObservabilitySettingsPage() {
     setForm(endpointToForm(endpoints[0]));
     setRuntimeClusterId(endpoints[0].clusterId ?? '');
     setRuntimeNamespace('novaobs-system');
-    setRuntimeAlertmanagerURL('');
+    setRuntimeAlertIngestURL('');
   }, [endpoints, selectedEndpointId]);
 
   const saveMutation = useMutation({
@@ -111,7 +111,7 @@ export function ObservabilitySettingsPage() {
       setForm(endpointToForm(endpoint));
       setRuntimeClusterId(endpoint.clusterId ?? '');
       setRuntimeNamespace('novaobs-system');
-      setRuntimeAlertmanagerURL('');
+      setRuntimeAlertIngestURL('');
       setRuntimePreview(null);
     },
   });
@@ -125,7 +125,7 @@ export function ObservabilitySettingsPage() {
     mutationFn: () => logsApi.publishEndpointVmalertRuntime(selectedEndpoint!.id, {
       clusterId: runtimeClusterId,
       namespace: runtimeNamespace,
-      alertmanagerURL: runtimeAlertmanagerURL,
+      alertIngestURL: runtimeAlertIngestURL,
       previewId: runtimePreview?.previewId,
       confirmationToken: runtimePreview?.confirmationToken,
     }),
@@ -143,23 +143,23 @@ export function ObservabilitySettingsPage() {
       runtimePreview?.requiresConfirmation
       && runtimePreview.clusterId === runtimeClusterId
       && runtimePreview.namespace === runtimeNamespace
-      && runtimePreview.alertmanagerURL === runtimeAlertmanagerURL
+      && runtimePreview.alertIngestURL === runtimeAlertIngestURL
     ) {
       return;
     }
     setRuntimePreparedKey(runtimeInputKey);
-    prepareRuntimeMutation.mutate({ clusterId: runtimeClusterId, namespace: runtimeNamespace, alertmanagerURL: runtimeAlertmanagerURL });
+    prepareRuntimeMutation.mutate({ clusterId: runtimeClusterId, namespace: runtimeNamespace, alertIngestURL: runtimeAlertIngestURL });
   }, [
     runtimeDialogOpen,
     runtimeConfirmBlockedReason,
     runtimeClusterId,
     runtimeNamespace,
-    runtimeAlertmanagerURL,
+    runtimeAlertIngestURL,
     runtimePreview?.auditId,
     runtimePreview?.requiresConfirmation,
     runtimePreview?.clusterId,
     runtimePreview?.namespace,
-    runtimePreview?.alertmanagerURL,
+    runtimePreview?.alertIngestURL,
     runtimePreparedKey,
     runtimeInputKey,
     prepareRuntimeMutation.isPending,
@@ -172,7 +172,7 @@ export function ObservabilitySettingsPage() {
     setRuntimeDialogOpen(false);
     setRuntimeClusterId('');
     setRuntimeNamespace('novaobs-system');
-    setRuntimeAlertmanagerURL('');
+    setRuntimeAlertIngestURL('');
     setRuntimePreview(null);
     setRuntimePreparedKey('');
   }
@@ -183,7 +183,7 @@ export function ObservabilitySettingsPage() {
     setRuntimeDialogOpen(false);
     setRuntimeClusterId(endpoint.clusterId ?? '');
     setRuntimeNamespace('novaobs-system');
-    setRuntimeAlertmanagerURL('');
+    setRuntimeAlertIngestURL('');
     setRuntimePreview(null);
     setRuntimePreparedKey('');
   }
@@ -192,10 +192,10 @@ export function ObservabilitySettingsPage() {
     if (!selectedEndpoint || runtimeBaseBlockedReason) return;
     const nextClusterID = selectedEndpoint.clusterId ?? '';
     const nextNamespace = runtimeNamespace || 'novaobs-system';
-    const nextAlertmanagerURL = runtimeAlertmanagerURL;
+    const nextAlertIngestURL = runtimeAlertIngestURL;
     setRuntimeClusterId(nextClusterID);
     setRuntimeNamespace(nextNamespace);
-    setRuntimeAlertmanagerURL(nextAlertmanagerURL);
+    setRuntimeAlertIngestURL(nextAlertIngestURL);
     setRuntimePreview(null);
     setRuntimePreparedKey('');
     setRuntimeDialogOpen(true);
@@ -378,7 +378,7 @@ export function ObservabilitySettingsPage() {
                 </Field>
               </EndpointFormSection>
 
-              <EndpointFormSection title="vmalert Runtime" meta="按日志端点部署唯一 vmalert，并把数据源和通知地址写入部署清单">
+              <EndpointFormSection title="vmalert Runtime" meta="按日志端点部署唯一 vmalert，并把数据源和 NovaObs Alert Ingest 地址写入部署清单">
                 <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_auto] xl:items-start">
                   <div className="grid gap-2 text-xs text-muted">
                     <div className="font-mono">Runtime ID：{selectedEndpoint ? `vmalert-logs:${selectedEndpoint.id}` : '-'}</div>
@@ -440,16 +440,16 @@ export function ObservabilitySettingsPage() {
                     <Field label="Namespace">
                       <input className="console-input w-full font-mono" value={runtimeNamespace} readOnly />
                     </Field>
-                    <Field label="Alertmanager notify URL">
+                    <Field label="NovaObs Alert Ingest URL">
                       <input
                         className="console-input w-full font-mono"
-                        value={runtimeAlertmanagerURL}
+                        value={runtimeAlertIngestURL}
                         onChange={(event) => {
-                          setRuntimeAlertmanagerURL(event.target.value);
+                          setRuntimeAlertIngestURL(event.target.value);
                           setRuntimePreview(null);
                           setRuntimePreparedKey('');
                         }}
-                        placeholder="http://alertmanager:9093"
+                        placeholder="http://novaobs-api:8080"
                       />
                     </Field>
                   </div>
@@ -477,7 +477,7 @@ export function ObservabilitySettingsPage() {
               </div>
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3 border-t border-outline bg-surface px-4 py-3">
-              <div className="text-xs text-muted">{prepareRuntimeMutation.isPending ? '正在生成 YAML，请稍候。' : runtimePreview?.requiresConfirmation ? '部署前请核对 YAML、cluster、namespace 和 notify URL。' : runtimePreview?.auditId ? `已部署 · audit ${runtimePreview.auditId}` : '填写部署目标后会自动生成 YAML。'}</div>
+              <div className="text-xs text-muted">{prepareRuntimeMutation.isPending ? '正在生成 YAML，请稍候。' : runtimePreview?.requiresConfirmation ? '部署前请核对 YAML、cluster、namespace 和 Alert Ingest URL。' : runtimePreview?.auditId ? `已部署 · audit ${runtimePreview.auditId}` : '填写部署目标后会自动生成 YAML。'}</div>
               <div className="flex gap-2">
                 <button className="console-button console-button-primary" disabled={Boolean(runtimeConfirmBlockedReason) || !runtimePreview?.requiresConfirmation || deployRuntimeMutation.isPending} onClick={() => deployRuntimeMutation.mutate()}>
                   {deployRuntimeMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <Play className="h-3.5 w-3.5" />}

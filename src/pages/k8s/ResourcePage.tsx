@@ -208,7 +208,7 @@ export function K8sResourcePage() {
         ) : null}
       </section>
 
-      <DataPanel title="资源视图" meta={isLoading ? '加载中' : `${data.length} 个资源 · 最近 15 分钟`}>
+      <DataPanel title="资源视图" meta={isLoading ? '加载中' : `${data.length} 个资源`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             资源读取失败：{errorMessage(error)}
