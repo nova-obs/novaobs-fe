@@ -12,12 +12,16 @@ const alerts = readFileSync(new URL('./LogsAlertsPage.tsx', import.meta.url), 'u
 const explore = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 'utf8');
 const servicePicker = readFileSync(new URL('./ServicePickerPanel.tsx', import.meta.url), 'utf8');
 
-test('Logs 仅保留三个主模块并把创建更新归入父模块子路径', () => {
+test('Logs 保留四个子入口并把创建更新归入父模块子路径', () => {
   assert.match(routes, /path: 'agents\/new'/);
   assert.match(routes, /path: 'agents\/:id\/edit'/);
   assert.match(routes, /path: 'onboarding'.*Navigate to="\/logs\/agents\/new"/);
   assert.match(routes, /path: 'alerts\/new'/);
   assert.match(routes, /path: 'alerts\/:id'/);
+  assert.match(routes, /path: 'endpoints'/);
+  assert.match(routes, /path: '\/observability\/endpoints'.*Navigate to="\/logs\/endpoints"/);
+  assert.match(workspace, /to: '\/logs\/endpoints'/);
+  assert.match(workspace, /label: '接入配置'/);
 });
 
 test('采集路由和日志告警任务页复用轻量任务头且返回交给统一横幅', () => {

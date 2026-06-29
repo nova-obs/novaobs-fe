@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Bell, Search, ServerCog } from 'lucide-react';
+import { Bell, RadioTower, Search, ServerCog } from 'lucide-react';
 
 const logsNav = [
   { to: '/logs/explore', label: '日志分析', meta: '下游查询', icon: Search },
   { to: '/logs/agents', label: '采集路由', icon: ServerCog },
   { to: '/logs/alerts', label: '日志告警', icon: Bell },
+  { to: '/logs/endpoints', label: '接入配置', icon: RadioTower },
 ];
 
 function LogsWorkspace() {

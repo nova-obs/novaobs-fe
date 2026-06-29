@@ -31,6 +31,7 @@ import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPa
 import { PlatformLayout } from '../pages/platform/PlatformLayout';
 import { PlatformSettingsPage } from '../pages/platform/PlatformSettingsPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
+import { TracesPage } from '../pages/traces/TracesPage';
 
 export interface RouteDefinition {
   path?: string;
@@ -84,13 +85,14 @@ const logsChildRoutes: RouteDefinition[] = [
   { path: 'alerts/new', title: '创建日志告警', element: <LogsAlertRulePage /> },
   { path: 'alerts/:id', title: '更新日志告警', element: <LogsAlertRulePage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
+  { path: 'endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
 ];
 
 const platformChildRoutes: RouteDefinition[] = [
   { index: true, title: '平台管理', element: <Navigate to="/platform/settings" replace /> },
   { path: 'settings', title: '平台设置', element: <PlatformSettingsPage /> },
   { path: 'access', title: '平台管理', element: <PlatformAccessAdminPage /> },
-  { path: 'observability', title: '观测接入配置', element: <Navigate to="/observability/endpoints" replace /> },
+  { path: 'observability', title: '观测接入配置', element: <Navigate to="/logs/endpoints" replace /> },
 ];
 
 export const routeDefinitions: RouteDefinition[] = [
@@ -98,8 +100,9 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/logs/agents/new" replace /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
-  { path: '/observability/endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
+  { path: '/observability/endpoints', title: '观测接入配置', element: <Navigate to="/logs/endpoints" replace /> },
   { path: '/monitoring', title: '监控', element: <MonitoringPage /> },
+  { path: '/traces', title: 'Trace', element: <TracesPage /> },
   { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },
   { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },
   { path: '/agents/:uid', title: 'Agent Detail', element: <AgentDetailPage /> },

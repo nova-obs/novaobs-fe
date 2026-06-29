@@ -303,7 +303,7 @@ function MegaMenu({
 }) {
   const DomainIcon = domain.icon;
   const quickItems = domains
-    .flatMap((item) => item.groups.flatMap((group) => group.items))
+    .flatMap((item) => item.groups.flatMap((group) => flattenNavigationItems(group.items)))
     .filter((item) => ['logs-explore', 'k8s-fleet', 'platform-access'].includes(item.id));
 
   return (
@@ -358,32 +358,10 @@ function MegaMenu({
               {domain.groups.map((group) => (
                 <div key={group.id}>
                   <div className="mb-2.5 text-[11px] font-semibold text-muted">{group.label}</div>
-                  <div className="grid gap-2">
-                    {group.items.map((item) => {
-                      const Icon = item.icon;
-                      const selected = activeItem?.id === item.id;
-                      return (
-                        <Link
-                          key={item.id}
-                          className={[
-                            'group flex min-h-16 items-center gap-3 rounded-md border border-outline/80 bg-surface-lowest px-3 py-2.5 transition-colors',
-                            selected
-                              ? 'border-l-[3px] border-primary bg-primary-soft'
-                              : 'hover:border-primary/30 hover:bg-surface',
-                          ].join(' ')}
-                          to={item.path}
-                        >
-                          <span className={['flex h-8 w-8 shrink-0 items-center justify-center rounded-md', selected ? 'bg-primary text-white' : 'bg-surface text-muted group-hover:bg-primary-soft group-hover:text-primary'].join(' ')}>
-                            <Icon className="h-4 w-4" />
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className={['block text-sm font-semibold', selected ? 'text-primary' : 'text-on-surface'].join(' ')}>{item.label}</span>
-                            <span className="mt-0.5 block text-[11px] leading-4 text-muted">{item.description}</span>
-                          </span>
-                          <ArrowRight className={['h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5', selected ? 'text-primary' : 'text-muted/60'].join(' ')} />
-                        </Link>
-                      );
-                    })}
+                  <div className="grid gap-2 md:grid-cols-2 xl:grid-cols-4">
+                    {group.items.map((item) => (
+                      <MegaMenuNavigationItem key={item.id} activeItem={activeItem} item={item} />
+                    ))}
                   </div>
                 </div>
               ))}
@@ -412,6 +390,75 @@ function MegaMenu({
       </section>
     </div>
   );
+}
+
+function MegaMenuNavigationItem({
+  activeItem,
+  item,
+}: {
+  activeItem: NavigationItem | undefined;
+  item: NavigationItem;
+}) {
+  const Icon = item.icon;
+  const selected = navigationItemContains(item, activeItem?.id);
+  const hasChildren = Boolean(item.children?.length);
+
+  return (
+    <div
+      className={[
+        'mega-menu-primary-item rounded-md border border-outline/80 bg-surface-lowest px-3 py-2.5 transition-colors',
+        selected
+          ? 'border-l-[3px] border-primary bg-primary-soft'
+          : 'hover:border-primary/30 hover:bg-surface',
+      ].join(' ')}
+    >
+      <Link
+        className={['group flex items-center gap-3', hasChildren ? 'min-h-12' : 'min-h-16'].join(' ')}
+        to={item.path}
+      >
+        <span className={['flex h-8 w-8 shrink-0 items-center justify-center rounded-md', selected ? 'bg-primary text-white' : 'bg-surface text-muted group-hover:bg-primary-soft group-hover:text-primary'].join(' ')}>
+          <Icon className="h-4 w-4" />
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className={['block text-sm font-semibold', selected ? 'text-primary' : 'text-on-surface'].join(' ')}>{item.label}</span>
+          <span className="mt-0.5 block text-[11px] leading-4 text-muted">{item.description}</span>
+        </span>
+        <ArrowRight className={['h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5', selected ? 'text-primary' : 'text-muted/60'].join(' ')} />
+      </Link>
+
+      {hasChildren ? (
+        <div className="mega-menu-child-list mt-2 border-t border-outline/70 pt-2" aria-label={`${item.label} 子功能`}>
+          {item.children?.map((child) => {
+            const ChildIcon = child.icon;
+            const childSelected = activeItem?.id === child.id;
+            return (
+              <Link
+                key={child.id}
+                className={[
+                  'group flex items-center gap-2 rounded-md px-2 py-1.5 text-xs font-semibold transition-colors',
+                  childSelected ? 'bg-surface-lowest text-primary' : 'text-muted hover:bg-surface-lowest hover:text-primary',
+                ].join(' ')}
+                to={child.path}
+              >
+                <ChildIcon className="h-3.5 w-3.5 shrink-0" />
+                <span className="min-w-0 flex-1 truncate">{child.label}</span>
+                <ArrowRight className={['h-3 w-3 shrink-0 transition-transform group-hover:translate-x-0.5', childSelected ? 'text-primary' : 'text-muted/50'].join(' ')} />
+              </Link>
+            );
+          })}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function flattenNavigationItems(items: NavigationItem[]): NavigationItem[] {
+  return items.flatMap((item) => [item, ...flattenNavigationItems(item.children ?? [])]);
+}
+
+function navigationItemContains(item: NavigationItem, itemId: string | undefined): boolean {
+  if (!itemId) return false;
+  return item.id === itemId || Boolean(item.children?.some((child) => navigationItemContains(child, itemId)));
 }
 
 function SessionLoadingView() {

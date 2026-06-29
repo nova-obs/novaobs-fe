@@ -177,9 +177,9 @@ test('Logs 工作台将可用高度传递给采集路由和日志分析内容区
   assert.equal(exploreSource.includes('h-[650px]'), false);
 });
 
-test('Logs 告警和模块导航只保留已闭环入口', () => {
+test('Logs 告警和模块导航保留已闭环入口', () => {
   assert.equal(workspaceSource.includes('日志分析'), true);
-  assert.equal(workspaceSource.includes('接入配置'), false);
+  assert.equal(workspaceSource.includes('接入配置'), true);
   assert.equal(workspaceSource.includes('采集路由'), true);
   assert.equal(workspaceSource.includes('日志告警'), true);
   assert.equal(alertsSource.includes('日志告警规则'), false);

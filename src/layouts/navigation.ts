@@ -2,7 +2,9 @@ import {
   Bell,
   BookOpenCheck,
   Boxes,
+  FileText,
   Gauge,
+  GitBranch,
   LayoutDashboard,
   Monitor,
   Network,
@@ -20,6 +22,7 @@ export interface NavigationItem {
   description: string;
   path: string;
   icon: LucideIcon;
+  children?: NavigationItem[];
 }
 
 export interface NavigationGroup {
@@ -56,25 +59,29 @@ const navigationDomains: NavigationDomain[] = [
   {
     id: 'observability',
     label: '可观测性',
-    description: '日志、指标与告警',
+    description: 'Logs、监控、Trace 与告警',
     icon: BookOpenCheck,
     groups: [
       {
-        id: 'logs',
-        label: '日志',
+        id: 'observability-core',
+        label: '观测域',
         items: [
-          { id: 'logs-explore', label: '日志分析', description: '检索与分析日志', path: '/logs/explore', icon: Search },
-          { id: 'logs-agents', label: '采集路由', description: '采集、发布与运行状态', path: '/logs/agents', icon: ServerCog },
-          { id: 'logs-alerts', label: '日志告警', description: '日志匹配与告警规则', path: '/logs/alerts', icon: Bell },
-        ],
-      },
-      {
-        id: 'signals',
-        label: '运行与告警',
-        items: [
-          { id: 'observability-endpoints', label: '接入配置', description: '日志下游端点', path: '/observability/endpoints', icon: RadioTower },
+          {
+            id: 'logs',
+            label: 'Logs',
+            description: '日志检索、采集路由与服务级告警',
+            path: '/logs',
+            icon: FileText,
+            children: [
+              { id: 'logs-explore', label: '日志分析', description: '检索与分析日志', path: '/logs/explore', icon: Search },
+              { id: 'logs-agents', label: '采集路由', description: '采集、发布与运行状态', path: '/logs/agents', icon: ServerCog },
+              { id: 'logs-alerts', label: '日志告警', description: '日志匹配与告警规则', path: '/logs/alerts', icon: Bell },
+              { id: 'logs-endpoints', label: '接入配置', description: '日志下游端点', path: '/logs/endpoints', icon: RadioTower },
+            ],
+          },
           { id: 'monitoring', label: '监控', description: '指标与运行信号', path: '/monitoring', icon: Monitor },
-          { id: 'alerts', label: '告警中心', description: '告警实例与处置', path: '/alerts', icon: Bell },
+          { id: 'traces', label: 'Trace', description: '链路查询、Span 详情与日志反跳', path: '/traces', icon: GitBranch },
+          { id: 'alerts', label: '告警', description: '告警实例、通知策略与处置记录', path: '/alerts', icon: Bell },
         ],
       },
     ],
@@ -89,8 +96,17 @@ const navigationDomains: NavigationDomain[] = [
         id: 'k8s-fleet',
         label: '集群',
         items: [
-          { id: 'k8s-fleet', label: '集群总览', description: '集群登记与连接状态', path: '/k8s', icon: Boxes },
-          { id: 'k8s-access', label: '集群接入', description: '登记集群与维护凭据', path: '/k8s/access', icon: Network },
+          {
+            id: 'k8s-cluster',
+            label: '集群',
+            description: '集群总览、登记接入与连接状态',
+            path: '/k8s',
+            icon: Boxes,
+            children: [
+              { id: 'k8s-fleet', label: '集群总览', description: '集群登记与连接状态', path: '/k8s', icon: Boxes },
+              { id: 'k8s-access', label: '集群接入', description: '登记集群与维护凭据', path: '/k8s/access', icon: Network },
+            ],
+          },
         ],
       },
     ],
@@ -113,25 +129,44 @@ const navigationDomains: NavigationDomain[] = [
   },
 ];
 
+const flattenNavigationItems = (items: NavigationItem[]): NavigationItem[] => items.flatMap((item) => [
+  item,
+  ...flattenNavigationItems(item.children ?? []),
+]);
+
 const allNavigationItems = navigationDomains.flatMap((domain) => (
-  domain.groups.flatMap((group) => group.items)
+  domain.groups.flatMap((group) => flattenNavigationItems(group.items))
 ));
 
 export const getNavigationDomains = () => navigationDomains.map((domain) => ({
   ...domain,
   groups: domain.groups.map((group) => ({
     ...group,
-    items: [...group.items],
+    items: group.items.map(cloneNavigationItem),
   })),
 }));
+
+function cloneNavigationItem(item: NavigationItem): NavigationItem {
+  return {
+    ...item,
+    children: item.children?.map(cloneNavigationItem),
+  };
+}
 
 export const getNavigationByPath = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
   if (normalizedPath.startsWith('/agents/') || normalizedPath === '/onboarding') {
     return allNavigationItems.find((item) => item.id === 'logs-agents');
   }
+  if (normalizedPath === '/observability/endpoints') {
+    return allNavigationItems.find((item) => item.id === 'logs-endpoints');
+  }
   return [...allNavigationItems]
-    .sort((left, right) => right.path.length - left.path.length)
+    .sort((left, right) => {
+      const pathDelta = right.path.length - left.path.length;
+      if (pathDelta !== 0) return pathDelta;
+      return Number(Boolean(left.children?.length)) - Number(Boolean(right.children?.length));
+    })
     .find((item) => (
       item.path === '/'
         ? normalizedPath === '/'
@@ -147,6 +182,7 @@ export const getNavigationDomainByPath = (path: string) => {
     || normalizedPath === '/onboarding'
     || normalizedPath.startsWith('/observability')
     || normalizedPath.startsWith('/monitoring')
+    || normalizedPath.startsWith('/traces')
     || normalizedPath.startsWith('/alerts')
   ) {
     return navigationDomains.find((domain) => domain.id === 'observability');
