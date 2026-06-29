@@ -16,7 +16,7 @@ export function DataPanel({ title, meta, action, children }: DataPanelProps) {
         </div>
         {action}
       </div>
-      <div className="p-3">{children}</div>
+      <div className="console-panel-body">{children}</div>
     </section>
   );
 }

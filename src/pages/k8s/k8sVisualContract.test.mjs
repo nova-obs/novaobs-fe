@@ -152,6 +152,11 @@ test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => 
 test('K8s 命名空间页面展示集群、来源和权限上下文', () => {
   assert.equal(namespaceSource.includes('命名空间列表'), true);
   assert.equal(namespaceSource.includes('当前集群'), true);
+  assert.equal(namespaceSource.includes('console-summary-strip'), true);
+  assert.equal(namespaceSource.includes('console-detail-rail console-inspector'), true);
+  assert.equal(namespaceSource.includes('console-selected-row'), true);
+  assert.equal(namespaceSource.includes('console-table-action-danger'), true);
+  assert.equal(namespaceSource.includes('命名空间详情'), true);
   assert.equal(namespaceSource.includes('k8sApi.listClusters'), false);
   assert.equal(namespaceSource.includes('请先从集群总览进入工作台'), true);
   assert.equal(namespaceSource.includes('cluster/prod'), false);
@@ -170,6 +175,23 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('UID'), true);
   assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), true);
   assert.equal(resourceSource.includes('资源详情'), true);
+  assert.equal(resourceSource.includes('资源详情抽屉'), true);
+  assert.equal(resourceSource.includes('createPortal'), true);
+  assert.equal(resourceSource.includes('console-drawer-panel'), true);
+  assert.equal(resourceSource.includes('console-drawer-backdrop'), true);
+  assert.equal(resourceSource.includes('console-pod-log-workspace'), true);
+  assert.equal(resourceSource.includes('console-pod-log-reader'), true);
+  assert.equal(resourceSource.includes('console-pod-log-control-panel'), true);
+  assert.equal(resourceSource.includes("selected.identity.kind === 'Pod' && activeTab === 'logs'"), true);
+  assert.equal(resourceSource.includes('lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)]'), true);
+  assert.equal(resourceSource.includes('resource-drawer-tab-content'), true);
+  assert.equal(resourceSource.includes('resource-detail-stack'), true);
+  assert.equal(resourceSource.includes('resource-detail-spec-block'), true);
+  assert.equal(resourceSource.includes('lg:grid-cols-[320px_1fr]'), false);
+  assert.equal(resourceSource.includes('<CodePreview fill'), true);
+  assert.equal(resourceSource.includes("fill ? 'h-full min-h-[320px]'"), true);
+  assert.equal(resourceSource.includes('<DataPanel title="资源详情"'), false);
+  assert.equal(resourceSource.includes("event.key === 'Escape'"), true);
   assert.equal(resourceSource.includes('YAML 预览'), true);
   assert.equal(resourceSource.includes('Pod 日志'), true);
   assert.equal(resourceSource.includes('容器选择'), true);
