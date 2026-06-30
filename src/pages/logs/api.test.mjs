@@ -129,6 +129,7 @@ test('创建 Logs 下游端点时传递端点类型和 stream 名称', async () 
       streamName: 'novaobs-logs',
       writeURL: 'kafka-0:9092,kafka-1:9092',
       scopeType: 'vm',
+      status: 'disabled',
     }),
     {
       id: 'sink-001',
@@ -145,6 +146,7 @@ test('创建 Logs 下游端点时传递端点类型和 stream 名称', async () 
   assert.equal(request.body.sink_type, 'kafka');
   assert.equal(request.body.stream_name, 'novaobs-logs');
   assert.equal(request.body.write_url, 'kafka-0:9092,kafka-1:9092');
+  assert.equal(request.body.status, 'disabled');
   assert.equal(result.sinkType, 'kafka');
   assert.equal(result.streamName, 'novaobs-logs');
 });

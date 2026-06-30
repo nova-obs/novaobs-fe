@@ -681,6 +681,7 @@ export const logsApi = {
         secret_ref: input.secretRef,
         scope_type: input.scopeType,
         cluster_id: input.clusterId,
+        status: input.status,
       }),
     });
     return mapEndpoint(raw);
