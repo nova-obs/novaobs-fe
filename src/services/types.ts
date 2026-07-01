@@ -530,7 +530,7 @@ export interface NotificationPolicy {
   name: string;
   description: string;
   serviceId: string;
-  alertmanagerReceiver: string;
+  receiver: string;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;

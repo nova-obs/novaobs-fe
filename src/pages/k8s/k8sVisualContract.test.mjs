@@ -20,8 +20,10 @@ const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.ur
 const platformAccessSource = readFileSync(new URL('./PlatformAccessPage.tsx', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 
-test('K8s 运维模块使用一级工作域和按需纵向菜单', () => {
+test('K8s 运维模块使用顶部入口和页面内横向分组导航承接集群工作台', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
+  assert.equal(layoutSource.includes('sr-only module-navigation-title'), true);
+  assert.equal(layoutSource.includes('page-title module-navigation-title'), false);
   assert.equal(layoutSource.includes('useParams'), true);
   assert.equal(layoutSource.includes('k8sApi.listClusters'), true);
   assert.equal(layoutSource.includes('hasClusterContext'), true);
@@ -49,9 +51,9 @@ test('K8s 运维模块使用一级工作域和按需纵向菜单', () => {
   assert.equal(navigationSource.includes('受控终端'), true);
 });
 
-test('K8s Dashboard 展示来源、时间窗口、同步和审计上下文', () => {
+test('K8s Dashboard 展示来源、同步和审计上下文', () => {
   assert.equal(dashboardSource.includes('startorch'), false);
-  assert.equal(dashboardSource.includes('最近 15 分钟'), true);
+  assert.equal(dashboardSource.includes('最近 15 分钟'), false);
   assert.equal(dashboardSource.includes('配置状态'), true);
   assert.equal(dashboardSource.includes('操作审计'), true);
   assert.equal(dashboardSource.includes('集群策略'), true);
@@ -152,6 +154,11 @@ test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => 
 test('K8s 命名空间页面展示集群、来源和权限上下文', () => {
   assert.equal(namespaceSource.includes('命名空间列表'), true);
   assert.equal(namespaceSource.includes('当前集群'), true);
+  assert.equal(namespaceSource.includes('console-summary-strip'), true);
+  assert.equal(namespaceSource.includes('console-detail-rail console-inspector'), true);
+  assert.equal(namespaceSource.includes('console-selected-row'), true);
+  assert.equal(namespaceSource.includes('console-table-action-danger'), true);
+  assert.equal(namespaceSource.includes('命名空间详情'), true);
   assert.equal(namespaceSource.includes('k8sApi.listClusters'), false);
   assert.equal(namespaceSource.includes('请先从集群总览进入工作台'), true);
   assert.equal(namespaceSource.includes('cluster/prod'), false);
@@ -170,6 +177,23 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('UID'), true);
   assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), true);
   assert.equal(resourceSource.includes('资源详情'), true);
+  assert.equal(resourceSource.includes('资源详情抽屉'), true);
+  assert.equal(resourceSource.includes('createPortal'), true);
+  assert.equal(resourceSource.includes('console-drawer-panel'), true);
+  assert.equal(resourceSource.includes('console-drawer-backdrop'), true);
+  assert.equal(resourceSource.includes('console-pod-log-workspace'), true);
+  assert.equal(resourceSource.includes('console-pod-log-reader'), true);
+  assert.equal(resourceSource.includes('console-pod-log-control-panel'), true);
+  assert.equal(resourceSource.includes("selected.identity.kind === 'Pod' && activeTab === 'logs'"), true);
+  assert.equal(resourceSource.includes('lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)]'), true);
+  assert.equal(resourceSource.includes('resource-drawer-tab-content'), true);
+  assert.equal(resourceSource.includes('resource-detail-stack'), true);
+  assert.equal(resourceSource.includes('resource-detail-spec-block'), true);
+  assert.equal(resourceSource.includes('lg:grid-cols-[320px_1fr]'), false);
+  assert.equal(resourceSource.includes('<CodePreview fill'), true);
+  assert.equal(resourceSource.includes("fill ? 'h-full min-h-[320px]'"), true);
+  assert.equal(resourceSource.includes('<DataPanel title="资源详情"'), false);
+  assert.equal(resourceSource.includes("event.key === 'Escape'"), true);
   assert.equal(resourceSource.includes('YAML 预览'), true);
   assert.equal(resourceSource.includes('Pod 日志'), true);
   assert.equal(resourceSource.includes('容器选择'), true);
@@ -218,6 +242,10 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('证书写操作'), true);
   assert.equal(certificateSource.includes('操作已落审计'), true);
   assert.equal(certificateSource.includes('删除确认摘要'), true);
+  assert.equal(certificateSource.includes('activeAction'), true);
+  assert.equal(certificateSource.includes('CertificateActionDrawer'), true);
+  assert.equal(certificateSource.includes('role="dialog"'), true);
+  assert.equal(certificateSource.includes('xl:grid-cols-[1fr_360px]'), false);
   assert.equal(certificateSource.includes('privateKey'), false);
   assert.equal(certificateSource.includes('private_key'), false);
 });
@@ -234,6 +262,10 @@ test('K8s ServiceAccount 页面展示 RBAC 权限不足态和审计结果', () =
   assert.equal(serviceAccountSource.includes('权限不足'), true);
   assert.equal(serviceAccountSource.includes('操作已落审计'), true);
   assert.equal(serviceAccountSource.includes('删除确认摘要'), true);
+  assert.equal(serviceAccountSource.includes('activeAction'), true);
+  assert.equal(serviceAccountSource.includes('ServiceAccountActionDrawer'), true);
+  assert.equal(serviceAccountSource.includes('role="dialog"'), true);
+  assert.equal(serviceAccountSource.includes('lg:grid-cols-[1fr_340px]'), false);
   assert.equal(serviceAccountSource.includes('不会在页面、日志或响应中展示 token'), true);
 });
 
@@ -250,6 +282,10 @@ test('K8s RBAC 页面展示确认摘要、权限不足态和审计结果', () =>
   assert.equal(rbacPageSource.includes('权限不足'), true);
   assert.equal(rbacPageSource.includes('操作已落审计'), true);
   assert.equal(rbacPageSource.includes('删除确认摘要'), true);
+  assert.equal(rbacPageSource.includes('activeAction'), true);
+  assert.equal(rbacPageSource.includes('RbacActionDrawer'), true);
+  assert.equal(rbacPageSource.includes('role="dialog"'), true);
+  assert.equal(rbacPageSource.includes('xl:grid-cols-[1fr_360px]'), false);
 });
 
 test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导出', () => {

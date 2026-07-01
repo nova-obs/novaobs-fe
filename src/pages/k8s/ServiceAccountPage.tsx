@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCheck } from 'lucide-react';
+import { KeyRound, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCheck, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sServiceAccount } from './api';
 import { useK8sOpsContext } from './context';
@@ -9,6 +9,7 @@ export function K8sServiceAccountPage() {
   const queryClient = useQueryClient();
   const [namespace, setNamespace] = useState('');
   const [name, setName] = useState('');
+  const [activeAction, setActiveAction] = useState<'create' | 'delete' | null>(null);
   const [selected, setSelected] = useState<K8sServiceAccount | null>(null);
   const [lastAuditId, setLastAuditId] = useState('');
 
@@ -45,6 +46,8 @@ export function K8sServiceAccountPage() {
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelected(result.item ?? null);
+      setActiveAction(null);
+      setName('');
       queryClient.invalidateQueries({ queryKey: ['k8s-service-accounts'] });
     },
   });
@@ -58,6 +61,7 @@ export function K8sServiceAccountPage() {
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelected(null);
+      setActiveAction(null);
       queryClient.invalidateQueries({ queryKey: ['k8s-service-accounts'] });
     },
   });
@@ -102,7 +106,16 @@ export function K8sServiceAccountPage() {
         ) : null}
       </section>
 
-      <DataPanel title="ServiceAccount" meta={isLoading ? '加载中' : `${data.length} 个账号 · 写操作受 RBAC 控制`}>
+      <DataPanel
+        title="ServiceAccount"
+        meta={isLoading ? '加载中' : `${data.length} 个账号 · 写操作受 RBAC 控制`}
+        action={(
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="console-button" disabled={!currentTarget} onClick={() => setActiveAction('delete')}><Trash2 className="h-4 w-4" />删除账号</button>
+            <button className="console-button console-button-primary" disabled={!activeClusterId || !namespace} onClick={() => setActiveAction('create')}><Plus className="h-4 w-4" />创建账号</button>
+          </div>
+        )}
+      >
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             ServiceAccount 读取失败：{errorMessage(error)}
@@ -120,106 +133,115 @@ export function K8sServiceAccountPage() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 lg:grid-cols-[1fr_340px]">
-          <div className="overflow-auto">
-            {isLoading ? (
-              <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                正在读取 ServiceAccount。
-              </div>
-            ) : null}
-            {!canList ? (
-              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
-                <p className="mt-2 text-sm text-muted">ServiceAccount 按 namespace 级 RBAC 读取，不做默认全命名空间扫描。</p>
-              </div>
-            ) : null}
-            {canList && !isLoading && !error && data.length ? (
-              <table className="console-table min-w-[820px] w-full">
-                <thead>
-                  <tr>
-                    <th>账号</th>
-                    <th>集群</th>
-                    <th>命名空间</th>
-                    <th>UID</th>
-                    <th>状态</th>
-                    <th>来源</th>
+        <div className="overflow-auto">
+          {isLoading ? (
+            <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              正在读取 ServiceAccount。
+            </div>
+          ) : null}
+          {!canList ? (
+            <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
+              <p className="mt-2 text-sm text-muted">ServiceAccount 按 namespace 级 RBAC 读取，不做默认全命名空间扫描。</p>
+            </div>
+          ) : null}
+          {canList && !isLoading && !error && data.length ? (
+            <table className="console-table min-w-[820px] w-full">
+              <thead>
+                <tr>
+                  <th>账号</th>
+                  <th>集群</th>
+                  <th>命名空间</th>
+                  <th>UID</th>
+                  <th>状态</th>
+                  <th>来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((item) => (
+                  <tr
+                    key={item.uid || item.id}
+                    className={`cursor-pointer bg-white/35 hover:bg-white/60 ${currentTarget?.uid === item.uid ? 'ring-1 ring-primary/25' : ''}`}
+                    onClick={() => setSelected(item)}
+                  >
+                    <td>
+                      <div className="font-semibold text-primary">{item.name}</div>
+                      <div className="text-[11px] text-muted">{item.id}</div>
+                    </td>
+                    <td className="font-mono text-xs">{item.clusterId}</td>
+                    <td className="font-mono text-xs">{item.namespace}</td>
+                    <td className="font-mono text-[11px] text-muted">{item.uid}</td>
+                    <td><StatusPill status={item.status} /></td>
+                    <td className="text-xs text-muted">{item.source || 'startorch'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.map((item) => (
-                    <tr
-                      key={item.uid || item.id}
-                      className={`cursor-pointer bg-white/35 hover:bg-white/60 ${currentTarget?.uid === item.uid ? 'ring-1 ring-primary/25' : ''}`}
-                      onClick={() => setSelected(item)}
-                    >
-                      <td>
-                        <div className="font-semibold text-primary">{item.name}</div>
-                        <div className="text-[11px] text-muted">{item.id}</div>
-                      </td>
-                      <td className="font-mono text-xs">{item.clusterId}</td>
-                      <td className="font-mono text-xs">{item.namespace}</td>
-                      <td className="font-mono text-[11px] text-muted">{item.uid}</td>
-                      <td><StatusPill status={item.status} /></td>
-                      <td className="text-xs text-muted">{item.source || 'startorch'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-            {canList && !isLoading && !error && !data.length ? (
-              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                <div className="font-semibold text-on-surface">暂无 ServiceAccount</div>
-                <p className="mt-2 text-sm text-muted">当前命名空间没有返回服务账号。</p>
-              </div>
-            ) : null}
-          </div>
-
-          <aside className="console-panel px-4 py-3">
-            <div className="text-sm font-semibold text-on-surface">写操作确认</div>
-            <p className="mt-1 text-xs text-muted">提交前确认 cluster/namespace/name，成功后返回审计 ID。</p>
-            <label className="mt-4 block text-xs font-semibold text-muted" htmlFor="service-account-name">Name</label>
-            <input
-              id="service-account-name"
-              className="console-input mt-2 w-full"
-              value={name}
-              onChange={(event) => setName(event.target.value)}
-            />
-            <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-mono">cluster={activeClusterId || '-'}</div>
-              <div className="font-mono">namespace={namespace || '-'}</div>
-              <div className="font-mono">name={name || '-'}</div>
-              <div className="mt-2">不会在页面、日志或响应中展示 token。</div>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+          {canList && !isLoading && !error && !data.length ? (
+            <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <div className="font-semibold text-on-surface">暂无 ServiceAccount</div>
+              <p className="mt-2 text-sm text-muted">当前命名空间没有返回服务账号。</p>
             </div>
-            <div className="mt-3 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-semibold text-on-surface">删除确认摘要</div>
-              <div className="mt-2 font-mono">cluster={currentTarget?.clusterId ?? '-'}</div>
-              <div className="font-mono">namespace={currentTarget?.namespace ?? '-'}</div>
-              <div className="font-mono">name={currentTarget?.name ?? '-'}</div>
-              <div className="font-mono">uid={currentTarget?.uid ?? '-'}</div>
-            </div>
-            <div className="mt-4 flex gap-2">
-              <button
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!activeClusterId || !namespace || !name.trim() || createMutation.isPending}
-                onClick={() => createMutation.mutate()}
-              >
-                <Plus className="h-4 w-4" />
-                创建
-              </button>
-              <button
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!currentTarget || deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate()}
-              >
-                <Trash2 className="h-4 w-4" />
-                删除
-              </button>
-            </div>
-          </aside>
+          ) : null}
         </div>
       </DataPanel>
+
+      {activeAction === 'create' ? (
+        <ServiceAccountActionDrawer title="创建 ServiceAccount" onClose={() => setActiveAction(null)}>
+          <div className="text-sm font-semibold text-on-surface">写操作确认</div>
+          <p className="text-xs text-muted">提交前确认 cluster/namespace/name，成功后返回审计 ID。</p>
+          <label className="block text-xs font-semibold text-muted" htmlFor="service-account-name">Name</label>
+          <input id="service-account-name" className="console-input w-full" value={name} onChange={(event) => setName(event.target.value)} />
+          <div className="rounded-lg bg-surface px-3 py-3 text-xs text-muted">
+            <div className="font-mono">cluster={activeClusterId || '-'}</div>
+            <div className="font-mono">namespace={namespace || '-'}</div>
+            <div className="font-mono">name={name || '-'}</div>
+            <div className="mt-2">不会在页面、日志或响应中展示 token。</div>
+          </div>
+          <DrawerFooter>
+            <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
+            <button className="console-button console-button-primary" disabled={!activeClusterId || !namespace || !name.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>创建</button>
+          </DrawerFooter>
+        </ServiceAccountActionDrawer>
+      ) : null}
+
+      {activeAction === 'delete' ? (
+        <ServiceAccountActionDrawer title="删除 ServiceAccount" onClose={() => setActiveAction(null)}>
+          <div className="text-sm font-semibold text-on-surface">删除确认摘要</div>
+          <div className="rounded-lg bg-surface px-3 py-3 text-xs text-muted">
+            <div className="font-mono">cluster={currentTarget?.clusterId ?? '-'}</div>
+            <div className="font-mono">namespace={currentTarget?.namespace ?? '-'}</div>
+            <div className="font-mono">name={currentTarget?.name ?? '-'}</div>
+            <div className="font-mono">uid={currentTarget?.uid ?? '-'}</div>
+          </div>
+          <DrawerFooter>
+            <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
+            <button className="console-button console-button-danger" disabled={!currentTarget || deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>删除</button>
+          </DrawerFooter>
+        </ServiceAccountActionDrawer>
+      ) : null}
     </div>
   );
+}
+
+function ServiceAccountActionDrawer({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
+      <button className="absolute inset-0 cursor-default" aria-label={`关闭${title}`} onClick={onClose} />
+      <aside className="console-drawer-panel relative flex h-full w-full max-w-[680px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="service-account-action-title">
+        <header className="flex items-start justify-between gap-4 border-b border-outline px-5 py-4">
+          <h2 id="service-account-action-title" className="text-base font-semibold text-on-surface">{title}</h2>
+          <button className="console-button h-8 w-8 p-0" aria-label={`关闭${title}`} onClick={onClose}><X className="h-4 w-4" /></button>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+function DrawerFooter({ children }: { children: ReactNode }) {
+  return <div className="mt-auto flex items-center justify-end gap-2 border-t border-outline pt-4">{children}</div>;
 }
 
 function ServiceAccountMetric({ icon: Icon, label, value, meta }: { icon: typeof UserRoundCheck; label: string; value: string; meta: string }) {

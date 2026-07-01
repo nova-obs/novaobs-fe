@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, XCircle } from 'lucide-react';
@@ -20,6 +21,7 @@ const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
 
 type OnboardingStep = 1 | 2 | 3;
+type SetupTask = 'service' | 'target' | 'endpoint';
 
 function serviceMatchesAccessSource(service: LogsServiceSummary, source: LogAccessSource) {
   if (source === 'vm') {
@@ -178,9 +180,13 @@ export function LogsOnboardingPage() {
   });
 
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
+  const [setupTask, setSetupTask] = useState<SetupTask>('service');
   const [sourceMode, setSourceMode] = useState<LogAccessSource>('k8s');
   const [serviceQuery, setServiceQuery] = useState('');
   const [serviceId, setServiceId] = useState('');
+  const [syncDialogOpen, setSyncDialogOpen] = useState(false);
+  const [syncClusterId, setSyncClusterId] = useState('');
+  const [syncNamespace, setSyncNamespace] = useState('');
   const [endpointQuery, setEndpointQuery] = useState('');
   const [endpointId, setEndpointId] = useState('');
   const [clusterId, setClusterId] = useState('');
@@ -236,12 +242,15 @@ export function LogsOnboardingPage() {
   const restoredSource = selectedRoute?.source ?? createdRoute?.source ?? null;
 
   useEffect(() => {
-    if (!serviceId || !accessServices.some((service) => service.id === serviceId)) {
+    if (routeUpdateMode && (!serviceId || !accessServices.some((service) => service.id === serviceId))) {
       if (accessServices[0]) {
         applyServiceRuntimeScope(accessServices[0]);
       } else {
         setServiceId('');
       }
+    } else if (!routeUpdateMode && serviceId && !accessServices.some((service) => service.id === serviceId)) {
+      setServiceId('');
+      setSetupTask('service');
     }
     if (!routeUpdateMode && sourceMode === 'k8s' && (!clusterId || !writableClusterIds.has(clusterId))) {
       const nextClusterId = writableClusters[0]?.id ?? '';
@@ -282,6 +291,12 @@ export function LogsOnboardingPage() {
     enabled: sourceType !== 'vm_file' && Boolean(clusterId),
   });
   const namespaces = namespacesQuery.data ?? [];
+  const syncNamespacesQuery = useQuery({
+    queryKey: ['logs-k8s-sync-namespaces', syncClusterId],
+    queryFn: () => k8sApi.listNamespaces(syncClusterId),
+    enabled: sourceMode === 'k8s' && Boolean(syncClusterId),
+  });
+  const syncNamespaceOptions = syncNamespacesQuery.data ?? [];
   const namespaceOptions = useMemo(() => {
     const items = [...namespaces];
     if (routeUpdateMode && namespace && !items.some((item) => item.name === namespace)) {
@@ -427,17 +442,21 @@ export function LogsOnboardingPage() {
 
   const syncK8sServicesMutation = useMutation({
     mutationFn: () => logsApi.syncK8sServices({
-      clusterId,
-      namespace,
+      clusterId: syncClusterId,
+      namespace: syncNamespace,
       environment: syncEnvironment,
       ownerTeam: '',
       workloadKind: 'Deployment',
     }),
-    onSuccess: async (result) => {
-      const matched = selectedWorkload ? result.services.find((item) => item.service.name === selectedWorkload.name) : result.services[0];
-      if (matched?.service.id) {
-        setServiceId(matched.service.id);
-      }
+    onSuccess: async () => {
+      setClusterId(syncClusterId);
+      setNamespace(syncNamespace);
+      setWorkloadKey('');
+      setWorkloadQuery('');
+      setServiceId('');
+      setSetupTask('service');
+      setServiceQuery('');
+      setSyncDialogOpen(false);
       await queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
     },
   });
@@ -570,6 +589,7 @@ export function LogsOnboardingPage() {
     }
     setRouteEditMode(false);
     setCurrentStep(1);
+    setSetupTask('target');
     setSelectedRouteId('');
     setCreatedRoute(null);
     setCollectorConfigYaml('');
@@ -629,6 +649,7 @@ export function LogsOnboardingPage() {
     setSelectedRouteId(route.route.id);
     setCurrentStep(1);
     setRouteEditMode(Boolean(options.edit));
+    setSetupTask('target');
     setSourceMode(source.sourceType === 'vm_file' ? 'vm' : 'k8s');
     setServiceId(route.route.serviceId);
     setEndpointId(route.route.endpointId);
@@ -701,6 +722,15 @@ export function LogsOnboardingPage() {
   const runtimeTargetReady = sourceType === 'vm_file'
     ? Boolean(serviceId && (hostGroup || hostSelectorText.trim()) && vmPath)
     : Boolean(serviceId && selectedWorkload);
+  useEffect(() => {
+    if (!serviceId) {
+      setSetupTask('service');
+      return;
+    }
+    if (currentStep === 1 && setupTask === 'target' && runtimeTargetReady) {
+      setSetupTask('endpoint');
+    }
+  }, [currentStep, runtimeTargetReady, serviceId, setupTask]);
   const endpointBlocked = !runtimeTargetReady;
   const endpointDisabledReason = endpointBlocked ? '运行目标未绑定时禁用日志下游端点' : '';
   const targetStepReady = runtimeTargetReady && hasEndpointForSource;
@@ -713,6 +743,13 @@ export function LogsOnboardingPage() {
       ? preview.publishBlockedReason || '当前配置被后端策略阻断'
       : '';
   const lockedDisabledReason = collectingConfigLocked ? '当前采集配置处于查看态，请点击更新配置进入编辑。' : '';
+  const serviceSyncDisabledReason = sourceMode !== 'k8s'
+    ? 'VM 来源不需要同步 K8s 服务'
+    : !syncClusterId
+      ? '请选择同步集群'
+      : !syncNamespace
+        ? '请选择同步 Namespace'
+        : '';
   const actionHint = currentStep === 1
     ? targetDisabledReason
     : currentStep === 2
@@ -746,76 +783,103 @@ export function LogsOnboardingPage() {
         title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
         description="选择目标、校验配置并发布。"
         meta={routeUpdateMode ? `route ${shortHash(onboardingRouteId)}` : 'new route'}
-        action={(
-          <>
-            <div className="inline-flex border-b border-outline">
-              {sourceTabs.map((item) => (
-                <button
-                  key={item.value}
-                  className={`h-8 border-b-2 px-3 text-xs font-semibold transition-colors ${
-                    sourceMode === item.value ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'
-                  } disabled:cursor-not-allowed disabled:opacity-60`}
-                  disabled={routeUpdateMode}
-                  title={routeUpdateMode ? '运行路由更新时来源由当前路由决定' : undefined}
-                  onClick={() => {
-                    if (routeUpdateMode) return;
-                    setSourceMode(item.value);
-                    setCurrentStep(1);
-                    setCollectorConfigYaml('');
-                    setCollectorFragmentTouched(false);
-                    setServiceQuery('');
-                  }}
-                >
-                  {item.label}
-                </button>
-              ))}
-            </div>
-            <button
-              className="console-button"
-              disabled={routeUpdateMode || sourceType === 'vm_file' || !clusterId || !namespace || syncK8sServicesMutation.isPending}
-              title={routeUpdateMode ? '运行路由更新时不触发服务同步' : undefined}
-              onClick={() => syncK8sServicesMutation.mutate()}
-            >
-              {syncK8sServicesMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              同步服务
-            </button>
-          </>
+        context={(
+          <div className="logs-source-mode-switch inline-flex border-b border-outline" aria-label="采集来源">
+            {sourceTabs.map((item) => (
+              <button
+                key={item.value}
+                className={`h-8 border-b-2 px-3 text-xs font-semibold transition-colors ${
+                  sourceMode === item.value ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'
+                } disabled:cursor-not-allowed disabled:opacity-60`}
+                disabled={routeUpdateMode}
+                title={routeUpdateMode ? '运行路由更新时来源由当前路由决定' : undefined}
+                onClick={() => {
+                  if (routeUpdateMode) return;
+                  setSourceMode(item.value);
+                  setCurrentStep(1);
+                  setSetupTask('service');
+                  setSyncDialogOpen(false);
+                  setCollectorConfigYaml('');
+                  setCollectorFragmentTouched(false);
+                  setServiceQuery('');
+                }}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
         )}
       />
-      <div className="mt-3 space-y-4">
-        <nav className="grid border-y border-outline bg-surface-lowest md:grid-cols-3 md:divide-x md:divide-outline" aria-label="采集路由步骤">
-          <StepCard index={1} title="目标与端点" active={currentStep === 1} done={targetStepReady} enabled onSelect={() => setCurrentStep(1)} />
-          <StepCard index={2} title="采集配置" active={currentStep === 2} done={Boolean(preview)} enabled={targetStepReady} onSelect={() => setCurrentStep(2)} />
-          <StepCard index={3} title="预览发布" active={currentStep === 3} done={Boolean(createdRoute)} enabled={Boolean(preview)} onSelect={() => setCurrentStep(3)} />
-        </nav>
-
-        {currentStep === 1 ? (
-        <section className="overflow-hidden border-y border-outline bg-surface-lowest">
+      <div className="mt-3 grid items-start gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="logs-route-task-stack space-y-3" aria-label="采集路由步骤">
           {routeUpdateMissing ? <WarnLine message="未找到待更新的采集路由，请从采集路由页重新进入。" /> : null}
-          <div className="logs-runtime-configuration-panel grid xl:grid-cols-[380px_minmax(0,1fr)]">
-            <ServicePickerPanel
-              services={filteredServices}
-              selectedServiceId={serviceId}
-              serviceQuery={serviceQuery}
-              routeEditMode={routeEditMode}
-              locked={routeUpdateMode}
-              serviceRoutesByService={serviceRoutesByService}
-              onServiceQueryChange={setServiceQuery}
-              onSelectService={applyServiceRuntimeScope}
-              onEditRoute={beginRouteEdit}
-            />
-
-            <section className="relative overflow-hidden border-t border-outline bg-surface-lowest xl:border-l xl:border-t-0">
-              <div className="flex flex-col gap-2 border-b border-outline px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
-                  <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]" />
-                  运行目标
+          <RouteTaskCard
+            className="logs-route-service-card"
+            index={1}
+            title="选择服务"
+            summary={selectedService ? selectedServiceLabel : '选择服务后绑定运行目标'}
+            active={currentStep === 1 && setupTask === 'service'}
+            done={Boolean(serviceId)}
+            onSelect={() => {
+              setCurrentStep(1);
+              setSetupTask('service');
+            }}
+          >
+            <div className="logs-runtime-configuration-panel overflow-hidden rounded-lg border border-outline bg-surface-lowest">
+              {sourceMode === 'k8s' ? (
+                <div className="logs-service-sync-action border-b border-outline bg-surface-lowest px-3 py-2.5">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                      <div className="text-xs font-semibold text-muted">服务列表</div>
+                      {syncK8sServicesMutation.data ? (
+                        <div className="mt-0.5 truncate text-[11px] font-semibold text-primary">
+                          已同步 {syncK8sServicesMutation.data.total} 个服务，请在下方列表选择接入对象。
+                        </div>
+                      ) : null}
+                    </div>
+                    <button
+                      className="logs-service-sync-trigger inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-outline bg-white px-3 text-xs font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px disabled:cursor-not-allowed disabled:text-muted disabled:opacity-70"
+                      disabled={routeUpdateMode || writableClusters.length === 0}
+                      title={routeUpdateMode ? '运行路由更新时不触发服务同步' : writableClusters.length === 0 ? '暂无可同步集群' : '选择集群和 Namespace 后同步服务'}
+                      onClick={() => setSyncDialogOpen(true)}
+                    >
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      同步服务
+                    </button>
+                  </div>
+                  <MutationErrors errors={[syncK8sServicesMutation.error]} />
                 </div>
-                <span className={`w-fit rounded-lg px-2 py-0.5 font-mono text-[11px] font-semibold ${runtimeTargetReady ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
-                  {runtimeTargetReady ? selectedScopeLabel : '等待绑定'}
-                </span>
-              </div>
-              <div className="p-3">
+              ) : null}
+              <ServicePickerPanel
+                services={filteredServices}
+                selectedServiceId={serviceId}
+                serviceQuery={serviceQuery}
+                routeEditMode={routeEditMode}
+                locked={routeUpdateMode}
+                serviceRoutesByService={serviceRoutesByService}
+                onServiceQueryChange={setServiceQuery}
+                onSelectService={applyServiceRuntimeScope}
+                onEditRoute={beginRouteEdit}
+              />
+            </div>
+            {!serviceId ? <WarnLine message="请选择服务后再预览配置" /> : null}
+          </RouteTaskCard>
+
+          <RouteTaskCard
+            className="logs-route-target-card"
+            index={2}
+            title="绑定运行目标"
+            summary={runtimeTargetReady ? selectedScopeLabel : serviceId ? '等待绑定运行范围' : '先选择服务'}
+            active={currentStep === 1 && setupTask === 'target'}
+            done={runtimeTargetReady}
+            disabled={!serviceId}
+            disabledReason="先选择服务"
+            onSelect={() => {
+              setCurrentStep(1);
+              setSetupTask('target');
+            }}
+          >
+            <div className="relative p-3">
                 {sourceType === 'vm_file' ? (
                   <div className="grid gap-3 lg:grid-cols-3">
                     <label className="text-sm font-semibold">主机组<input className="console-input mt-2 w-full" value={hostGroup} onChange={(event) => setHostGroup(event.target.value)} placeholder="prod-app-vms" /></label>
@@ -934,7 +998,10 @@ export function LogsOnboardingPage() {
                                     <tr
                                       key={identity}
                                       className={`cursor-pointer transition-colors ${checked ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : 'hover:bg-surface-low/70'}`}
-                                      onClick={() => setWorkloadKey(identity)}
+                                      onClick={() => {
+                                        setWorkloadKey(identity);
+                                        setSetupTask('endpoint');
+                                      }}
                                     >
                                       <td className="font-semibold">{item.name}</td>
                                       <td>{item.kind}</td>
@@ -969,89 +1036,107 @@ export function LogsOnboardingPage() {
                     </div>
                   </div>
                 )}
+                {collectingConfigLocked ? (
+                  <RunningConfigVeil />
+                ) : null}
               </div>
-              <section className={`logs-endpoint-picker border-t border-outline ${endpointBlocked ? 'bg-surface/60' : 'bg-surface-lowest'}`}>
-                <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
-                  <div>
-                    <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
-                      <span className={`h-2 w-2 rounded-full ${hasEndpointForSource ? 'bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]' : 'bg-outline'}`} />
-                      日志下游端点
-                    </div>
-                    <div className="mt-0.5 text-[11px] font-semibold text-muted">运行目标确定后选择当前作用域可用的写入端点</div>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`rounded-lg px-2 py-0.5 font-mono text-[11px] font-semibold ${hasEndpointForSource ? 'bg-primary-soft text-primary' : 'bg-white text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>{selectedEndpointLabel}</span>
-                    <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
-                    <Link
-                      className="inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
-                      to="/observability/endpoints"
-                    >
-                      <Settings2 className="h-3.5 w-3.5" />
-                      管理端点
-                    </Link>
-                  </div>
+          </RouteTaskCard>
+
+          <RouteTaskCard
+            className="logs-route-endpoint-card logs-endpoint-picker"
+            index={3}
+            title="选择下游端点"
+            summary={selectedEndpointLabel}
+            active={currentStep === 1 && setupTask === 'endpoint'}
+            done={runtimeTargetReady && hasEndpointForSource}
+            disabled={endpointBlocked}
+            disabledReason={endpointDisabledReason || '先绑定运行目标'}
+            onSelect={() => {
+              setCurrentStep(1);
+              setSetupTask('endpoint');
+            }}
+          >
+            <div className="relative space-y-3 p-3">
+              {endpointDisabledReason ? <WarnLine message={endpointDisabledReason} /> : null}
+              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span className={`rounded-lg px-2 py-0.5 font-mono text-[11px] font-semibold ${hasEndpointForSource ? 'bg-primary-soft text-primary' : 'bg-white text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>{selectedEndpointLabel}</span>
+                  <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
                 </div>
-                <div className={`space-y-3 p-3 ${endpointBlocked ? 'opacity-60' : ''}`}>
-                  {endpointDisabledReason ? <WarnLine message={endpointDisabledReason} /> : null}
-                  <div className="relative">
-                    <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-                    <input className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed" value={endpointQuery} onChange={(event) => setEndpointQuery(event.target.value)} placeholder="搜索端点 / URL / 集群" disabled={endpointBlocked} />
-                  </div>
-                  <div className="overflow-hidden rounded-lg border border-outline bg-white">
-                    {filteredEndpoints.length === 0 ? <div className="px-3"><Empty label="暂无匹配端点" /></div> : (
-                      <div className="overflow-auto">
-                        <table className="console-table min-w-[700px] w-full">
-                          <thead>
-                            <tr>
-                              <th>端点</th>
-                              <th>类型</th>
-                              <th>作用域</th>
-                              <th>写入地址</th>
-                              <th>状态</th>
+                <Link
+                  className="inline-flex h-7 w-fit items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
+                  to="/logs/endpoints"
+                >
+                  <Settings2 className="h-3.5 w-3.5" />
+                  管理端点
+                </Link>
+              </div>
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
+                <input className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed" value={endpointQuery} onChange={(event) => setEndpointQuery(event.target.value)} placeholder="搜索端点 / URL / 集群" disabled={endpointBlocked} />
+              </div>
+              <div className="overflow-hidden rounded-lg border border-outline bg-white">
+                {filteredEndpoints.length === 0 ? <div className="px-3"><Empty label="暂无匹配端点" /></div> : (
+                  <div className="overflow-auto">
+                    <table className="console-table min-w-[700px] w-full">
+                      <thead>
+                        <tr>
+                          <th>端点</th>
+                          <th>类型</th>
+                          <th>作用域</th>
+                          <th>写入地址</th>
+                          <th>状态</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredEndpoints.map((endpoint) => {
+                          const selected = endpoint.id === effectiveEndpoint?.id;
+                          return (
+                            <tr
+                              key={endpoint.id}
+                              className={`transition-colors ${endpointBlocked ? 'cursor-not-allowed' : 'cursor-pointer'} ${selected ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : endpointBlocked ? '' : 'hover:bg-surface-low/70'}`}
+                              onClick={() => {
+                                if (endpointBlocked) return;
+                                setEndpointId(endpoint.id);
+                              }}
+                            >
+                              <td className="font-semibold">{endpoint.name}</td>
+                              <td>{logSinkLabel(endpoint.sinkType)}</td>
+                              <td className="font-mono text-xs text-muted">{endpoint.scopeType}{endpoint.clusterId ? ` · ${endpoint.clusterId}` : ''}</td>
+                              <td className="max-w-[280px] truncate font-mono text-xs text-muted">{endpoint.writeURL || '-'}</td>
+                              <td>
+                                <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${selected ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
+                                  {selected ? '已选择' : '可选择'}
+                                </span>
+                              </td>
                             </tr>
-                          </thead>
-                          <tbody>
-                            {filteredEndpoints.map((endpoint) => {
-                              const selected = endpoint.id === effectiveEndpoint?.id;
-                              return (
-                                <tr
-                                  key={endpoint.id}
-                                  className={`transition-colors ${endpointBlocked ? 'cursor-not-allowed' : 'cursor-pointer'} ${selected ? 'bg-primary-soft/70 text-primary shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : endpointBlocked ? '' : 'hover:bg-surface-low/70'}`}
-                                  onClick={() => {
-                                    if (endpointBlocked) return;
-                                    setEndpointId(endpoint.id);
-                                  }}
-                                >
-                                  <td className="font-semibold">{endpoint.name}</td>
-                                  <td>{logSinkLabel(endpoint.sinkType)}</td>
-                                  <td className="font-mono text-xs text-muted">{endpoint.scopeType}{endpoint.clusterId ? ` · ${endpoint.clusterId}` : ''}</td>
-                                  <td className="max-w-[280px] truncate font-mono text-xs text-muted">{endpoint.writeURL || '-'}</td>
-                                  <td>
-                                    <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${selected ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
-                                      {selected ? '已选择' : '可选择'}
-                                    </span>
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
+                          );
+                        })}
+                      </tbody>
+                    </table>
                   </div>
-                </div>
-              </section>
+                )}
+              </div>
               {collectingConfigLocked ? (
                 <RunningConfigVeil />
               ) : null}
-            </section>
-          </div>
-          {!serviceId ? <WarnLine message="请选择服务后再预览配置" /> : null}
-        </section>
-        ) : null}
+            </div>
+          </RouteTaskCard>
 
-        {currentStep === 2 ? (
-        <DataPanel title="业务采集配置" meta={sourceType === 'vm_file' ? 'collector.yaml' : 'route collector fragment'}>
+          <RouteTaskCard
+            className="logs-route-config-card"
+            index={4}
+            title="业务采集配置"
+            summary={`${collectorConfigState} · ${sourceType === 'vm_file' ? 'collector.yaml' : 'route collector fragment'}`}
+            active={currentStep === 2}
+            done={Boolean(preview)}
+            disabled={!targetStepReady}
+            disabledReason={targetDisabledReason || '先完成目标与端点'}
+            onSelect={() => {
+              if (!targetStepReady) return;
+              setCurrentStep(2);
+            }}
+          >
           <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
             <div className="overflow-hidden rounded-lg border border-outline bg-surface-lowest">
               <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
@@ -1110,11 +1195,22 @@ export function LogsOnboardingPage() {
               </button>
             </aside>
           </div>
-        </DataPanel>
-        ) : null}
+          </RouteTaskCard>
 
-        {currentStep === 3 ? (
-        <DataPanel title="发布预览" meta={preview ? `config ${shortHash(preview.collectorConfigHash)}` : '等待预览'}>
+          <RouteTaskCard
+            className="logs-route-preview-card"
+            index={5}
+            title="发布预览"
+            summary={preview ? `config ${shortHash(preview.collectorConfigHash)}` : '等待预览'}
+            active={currentStep === 3}
+            done={Boolean(createdRoute)}
+            disabled={!preview}
+            disabledReason="先生成部署清单预览"
+            onSelect={() => {
+              if (!preview) return;
+              setCurrentStep(3);
+            }}
+          >
           <div className="relative min-h-[260px]">
           <div className="mb-3 flex flex-col gap-3 rounded-lg border border-outline bg-surface-lowest px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
@@ -1166,10 +1262,89 @@ export function LogsOnboardingPage() {
             <RunningConfigVeil />
           ) : null}
           </div>
-        </DataPanel>
-        ) : null}
+          </RouteTaskCard>
 
+        </div>
+        <RouteTaskSummaryCard
+          taskLabel={currentStep === 1 ? setupTask === 'service' ? '选择服务' : setupTask === 'target' ? '绑定运行目标' : '选择下游端点' : currentStep === 2 ? '业务采集配置' : '发布预览'}
+          serviceLabel={selectedServiceLabel}
+          scopeLabel={selectedScopeLabel}
+          endpointLabel={selectedEndpointLabel}
+          configLabel={collectorConfigState}
+          actionHint={actionHint}
+          warning={Boolean(actionHint && (targetDisabledReason || previewMissing.length || publishDisabledReason || lockedDisabledReason))}
+          actions={(
+            <>
+              {currentStep > 1 ? (
+                <button
+                  className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-outline bg-white px-3 text-sm font-semibold text-muted transition-all hover:border-primary/40 hover:text-on-surface active:translate-y-px"
+                  onClick={() => {
+                    if (currentStep === 3) {
+                      setCurrentStep(2);
+                      return;
+                    }
+                    setCurrentStep(1);
+                    setSetupTask(runtimeTargetReady ? 'endpoint' : serviceId ? 'target' : 'service');
+                  }}
+                >
+                  上一步
+                </button>
+              ) : null}
+              {currentStep === 1 ? (
+                <button className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={!targetStepReady} onClick={() => setCurrentStep(2)} title={targetStepReady ? '进入采集配置' : targetDisabledReason}>
+                  下一步：采集配置
+                </button>
+              ) : currentStep === 2 ? (
+                <button className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成部署清单预览'}>
+                  {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                  生成预览
+                </button>
+              ) : (
+                <>
+                  <button className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-outline bg-white px-3 text-sm font-semibold text-muted transition-all hover:border-primary/40 hover:text-on-surface active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '重新生成部署清单预览'}>
+                    {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                    重新预览
+                  </button>
+                  <button className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-sm font-semibold text-primary transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !preview || createRouteMutation.isPending} onClick={() => createRouteMutation.mutate()} title={lockedDisabledReason || saveDisabledReason || (selectedRouteId ? '更新日志路由' : '保存日志路由')}>
+                    {createRouteMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                    {selectedRouteId ? '更新路由' : '保存草稿'}
+                  </button>
+                  <button className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
+                    {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                    发布预览
+                  </button>
+                  {pendingPublish ? (
+                    <button className="inline-flex h-9 w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={publishMutation.isPending} onClick={() => publishMutation.mutate({ previewId: pendingPublish.previewId, confirmationToken: pendingPublish.confirmationToken })}>
+                      确认发布
+                    </button>
+                  ) : null}
+                </>
+              )}
+            </>
+          )}
+        />
       </div>
+
+      <SyncK8sServicesDialog
+        open={syncDialogOpen}
+        clusters={writableClusters}
+        namespaceOptions={syncNamespaceOptions}
+        namespacesLoading={syncNamespacesQuery.isLoading}
+        clusterId={syncClusterId}
+        namespace={syncNamespace}
+        disabledReason={serviceSyncDisabledReason}
+        pending={syncK8sServicesMutation.isPending}
+        error={syncK8sServicesMutation.error}
+        onClusterChange={(value) => {
+          setSyncClusterId(value);
+          setSyncNamespace('');
+        }}
+        onNamespaceChange={setSyncNamespace}
+        onClose={() => {
+          if (!syncK8sServicesMutation.isPending) setSyncDialogOpen(false);
+        }}
+        onConfirm={() => syncK8sServicesMutation.mutate()}
+      />
 
       <LogsParseRuleDialog
         open={parseDialogOpen}
@@ -1188,59 +1363,6 @@ export function LogsOnboardingPage() {
         onClose={() => setParseDialogOpen(false)}
         onApply={applyParseDraft}
       />
-
-      <div className="logs-onboarding-action-bar z-[4] mt-4 rounded-lg border border-primary/20 bg-white/95 p-3 shadow-[0_12px_36px_rgba(24,52,96,0.18)] backdrop-blur lg:sticky lg:bottom-3">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-          <div className="min-w-0">
-            <div className="text-xs font-semibold text-muted">当前选择</div>
-            <div className="mt-1 truncate text-sm font-semibold text-on-surface">
-              {selectedScopeLabel} · {selectedServiceLabel} · {selectedEndpointLabel}
-            </div>
-            {actionHint ? (
-              <div className={`mt-1 text-xs font-semibold ${previewMissing.length || publishDisabledReason ? 'text-warning' : 'text-primary'}`}>
-                {actionHint}
-              </div>
-            ) : null}
-          </div>
-          <div className="flex flex-wrap gap-2">
-            {currentStep > 1 ? (
-              <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-outline bg-white px-4 text-sm font-semibold text-muted transition-all hover:border-primary/40 hover:text-on-surface active:translate-y-px" onClick={() => setCurrentStep(currentStep === 3 ? 2 : 1)}>
-                上一步
-              </button>
-            ) : null}
-            {currentStep === 1 ? (
-              <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={!targetStepReady} onClick={() => setCurrentStep(2)} title={targetStepReady ? '进入采集配置' : targetDisabledReason}>
-                下一步：采集配置
-              </button>
-            ) : currentStep === 2 ? (
-              <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成部署清单预览'}>
-                {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                生成预览
-              </button>
-            ) : (
-              <>
-                <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-outline bg-white px-4 text-sm font-semibold text-muted transition-all hover:border-primary/40 hover:text-on-surface active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '重新生成部署清单预览'}>
-                  {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  重新预览
-                </button>
-                <button className="inline-flex h-9 items-center gap-2 rounded-lg border border-primary bg-white px-4 text-sm font-semibold text-primary transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !preview || createRouteMutation.isPending} onClick={() => createRouteMutation.mutate()} title={lockedDisabledReason || saveDisabledReason || (selectedRouteId ? '更新日志路由' : '保存日志路由')}>
-                  {createRouteMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                  {selectedRouteId ? '更新路由' : '保存草稿'}
-                </button>
-                <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
-                  {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  发布预览
-                </button>
-                {pendingPublish ? (
-                  <button className="inline-flex h-9 items-center gap-2 rounded-lg bg-primary px-4 text-sm font-semibold text-white transition-all active:translate-y-px disabled:opacity-60" disabled={publishMutation.isPending} onClick={() => publishMutation.mutate({ previewId: pendingPublish.previewId, confirmationToken: pendingPublish.confirmationToken })}>
-                    确认发布
-                  </button>
-                ) : null}
-              </>
-            )}
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -1281,20 +1403,224 @@ function RunningConfigVeil() {
   );
 }
 
-function StepCard({ index, title, active, done, enabled, onSelect }: { index: number; title: string; active: boolean; done: boolean; enabled: boolean; onSelect: () => void }) {
-  return (
-    <button type="button" className={`px-3 py-2.5 text-left transition-colors ${
-      active ? 'bg-primary-soft/70' : done ? 'bg-white/68' : 'bg-white/36'
-    } disabled:cursor-not-allowed disabled:opacity-55`} disabled={!enabled} aria-current={active ? 'step' : undefined} onClick={onSelect}>
-      <div className="flex items-center gap-2">
-        <span className={`inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] font-semibold ${
-          done ? 'border-primary bg-primary text-white' : active ? 'border-primary bg-white text-primary' : 'border-outline bg-white text-muted'
-        }`}>
-          {done ? <CheckCircle className="h-3 w-3" /> : index}
-        </span>
-        <span className={`text-xs font-semibold ${active || done ? 'text-on-surface' : 'text-muted'}`}>{title}</span>
+function SyncK8sServicesDialog({
+  open,
+  clusters,
+  namespaceOptions,
+  namespacesLoading,
+  clusterId,
+  namespace,
+  disabledReason,
+  pending,
+  error,
+  onClusterChange,
+  onNamespaceChange,
+  onClose,
+  onConfirm,
+}: {
+  open: boolean;
+  clusters: Array<{ id: string; name: string }>;
+  namespaceOptions: Array<{ id: string; name: string }>;
+  namespacesLoading: boolean;
+  clusterId: string;
+  namespace: string;
+  disabledReason: string;
+  pending: boolean;
+  error: unknown;
+  onClusterChange: (value: string) => void;
+  onNamespaceChange: (value: string) => void;
+  onClose: () => void;
+  onConfirm: () => void;
+}) {
+  if (!open || typeof document === 'undefined') return null;
+
+  return createPortal((
+    <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/32 px-4 py-6">
+      <div className="logs-service-sync-dialog flex max-h-[86vh] w-full max-w-[560px] flex-col overflow-hidden rounded-lg border border-outline bg-white shadow-[0_24px_80px_rgba(24,52,96,0.28)]" role="dialog" aria-modal="true" aria-labelledby="logs-service-sync-title">
+        <div className="flex shrink-0 items-center justify-between border-b border-outline bg-surface-lowest px-4 py-3">
+          <div className="flex min-w-0 items-center gap-3">
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-primary/20 bg-primary-soft text-primary">
+              <RefreshCw className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <div id="logs-service-sync-title" className="text-base font-semibold leading-5 text-on-surface">同步服务</div>
+              <div className="mt-1 truncate text-[11px] font-semibold text-muted">从指定 K8s 范围发现服务，完成后回到服务列表选择接入对象</div>
+            </div>
+          </div>
+          <button className="rounded p-1.5 text-muted hover:bg-surface-low hover:text-on-surface disabled:opacity-60" disabled={pending} onClick={onClose} title="关闭">
+            <XCircle className="h-4 w-4" />
+          </button>
+        </div>
+        <div className="grid gap-3 overflow-auto p-4">
+          <label className="text-xs font-semibold text-muted">
+            同步集群
+            <select
+              className="console-input mt-1.5 h-9 w-full text-sm"
+              value={clusterId}
+              disabled={pending || clusters.length === 0}
+              onChange={(event) => onClusterChange(event.target.value)}
+            >
+              <option value="">选择集群</option>
+              {clusters.map((cluster) => (
+                <option key={cluster.id} value={cluster.id}>{cluster.name || cluster.id}</option>
+              ))}
+            </select>
+          </label>
+          <label className="text-xs font-semibold text-muted">
+            Namespace
+            <select
+              className="console-input mt-1.5 h-9 w-full text-sm"
+              value={namespace}
+              disabled={pending || !clusterId || namespacesLoading}
+              onChange={(event) => onNamespaceChange(event.target.value)}
+            >
+              <option value="">{namespacesLoading ? '加载 Namespace' : '选择 Namespace'}</option>
+              {namespaceOptions.map((item) => (
+                <option key={item.id || item.name} value={item.name}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          {disabledReason ? <WarnLine message={disabledReason} /> : null}
+          {error ? <ErrorLine message={(error as Error).message} /> : null}
+        </div>
+        <div className="flex shrink-0 items-center justify-end gap-2 border-t border-outline bg-surface-lowest px-4 py-3">
+          <button className="console-button h-9" disabled={pending} onClick={onClose}>取消</button>
+          <button className="console-button console-button-primary h-9" disabled={pending || Boolean(disabledReason)} title={disabledReason || '确认同步服务'} onClick={onConfirm}>
+            {pending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}
+            确认同步
+          </button>
+        </div>
       </div>
-    </button>
+    </div>
+  ), document.body);
+}
+
+function RouteTaskCard({
+  className = '',
+  index,
+  title,
+  summary,
+  active,
+  done,
+  disabled = false,
+  disabledReason = '',
+  children,
+  onSelect,
+}: {
+  className?: string;
+  index: number;
+  title: string;
+  summary: string;
+  active: boolean;
+  done: boolean;
+  disabled?: boolean;
+  disabledReason?: string;
+  children: ReactNode;
+  onSelect: () => void;
+}) {
+  const open = active && !disabled;
+  const statusLabel = disabled ? '待前置' : done ? '已完成' : active ? '进行中' : '待处理';
+  const statusClass = disabled
+    ? 'border-outline bg-surface text-muted'
+    : done
+      ? 'border-primary/20 bg-primary-soft text-primary'
+      : active
+        ? 'border-primary/25 bg-white text-primary'
+        : 'border-outline bg-white text-muted';
+  return (
+    <section className={`logs-route-task-card overflow-hidden rounded-lg border bg-surface-lowest transition-colors ${
+      open ? 'border-primary/35 shadow-[inset_3px_0_0_rgba(13,91,215,0.72)]' : 'border-outline'
+    } ${className}`}>
+      <button
+        type="button"
+        className="flex w-full flex-col gap-2 px-3 py-3 text-left transition-colors hover:bg-surface-low/45 disabled:cursor-not-allowed disabled:hover:bg-transparent md:flex-row md:items-center md:justify-between"
+        disabled={disabled}
+        aria-expanded={open}
+        aria-current={open ? 'step' : undefined}
+        title={disabled ? disabledReason : summary}
+        onClick={onSelect}
+      >
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${
+            done ? 'border-primary bg-primary text-white' : active ? 'border-primary bg-white text-primary' : 'border-outline bg-white text-muted'
+          }`}>
+            {done ? <CheckCircle className="h-3.5 w-3.5" /> : index}
+          </span>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-on-surface">{title}</div>
+            <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{summary}</div>
+          </div>
+        </div>
+        <span className={`w-fit shrink-0 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusClass}`}>
+          {statusLabel}
+        </span>
+      </button>
+      {open ? (
+        <div className="border-t border-outline bg-surface/35">
+          {children}
+        </div>
+      ) : (
+        <div className="border-t border-outline bg-white/60 px-3 py-2">
+          <div className={`text-xs font-semibold ${disabled ? 'text-warning' : 'text-muted'}`}>
+            {disabled && disabledReason ? disabledReason : summary}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+function RouteTaskSummaryCard({
+  taskLabel,
+  serviceLabel,
+  scopeLabel,
+  endpointLabel,
+  configLabel,
+  actionHint,
+  warning,
+  actions,
+}: {
+  taskLabel: string;
+  serviceLabel: string;
+  scopeLabel: string;
+  endpointLabel: string;
+  configLabel: string;
+  actionHint: string;
+  warning: boolean;
+  actions: ReactNode;
+}) {
+  return (
+    <aside className="logs-route-summary-card rounded-lg border border-outline bg-surface-lowest p-3 lg:sticky lg:top-3">
+      <div className="border-b border-outline pb-3">
+        <div className="text-xs font-semibold text-muted">当前任务</div>
+        <div className="mt-1 text-sm font-semibold text-on-surface">{taskLabel}</div>
+      </div>
+      <div className="space-y-3 border-b border-outline py-3">
+        <SummaryValue label="服务" value={serviceLabel} />
+        <SummaryValue label="范围" value={scopeLabel} />
+        <SummaryValue label="下游" value={endpointLabel} />
+        <SummaryValue label="配置" value={configLabel} />
+      </div>
+      {actionHint ? (
+        <div className={`mt-3 rounded-md border px-2.5 py-2 text-xs font-semibold leading-5 ${
+          warning ? 'border-warning/30 bg-amber-50 text-warning' : 'border-primary/20 bg-primary-soft text-primary'
+        }`}>
+          {actionHint}
+        </div>
+      ) : null}
+      <div className="mt-3 space-y-2">
+        {actions}
+      </div>
+    </aside>
+  );
+}
+
+function SummaryValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <div className="text-[11px] font-semibold text-muted">{label}</div>
+      <div className="mt-0.5 break-all font-mono text-[12px] font-semibold text-on-surface">{value || '-'}</div>
+    </div>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, KeyRound, Link2, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCog, UsersRound } from 'lucide-react';
+import { Bot, KeyRound, Link2, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCog, UsersRound, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { EmptyState } from '../../components/EmptyState';
 import {
@@ -16,6 +16,7 @@ import {
 } from './api';
 
 type PlatformAdminTab = 'users' | 'groups' | 'service-accounts' | 'roles' | 'bindings' | 'effective';
+type PlatformEditor = 'user' | 'group' | 'membership' | 'service-account' | 'role' | 'binding';
 
 const platformAdminTabs: { key: PlatformAdminTab; label: string; meta: string }[] = [
   { key: 'users', label: '用户', meta: '登录账号' },
@@ -35,6 +36,7 @@ interface SubjectDeleteTarget {
 export function PlatformAccessAdminPage() {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<PlatformAdminTab>('users');
+  const [activeEditor, setActiveEditor] = useState<PlatformEditor | null>(null);
   const [username, setUsername] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [email, setEmail] = useState('');
@@ -123,6 +125,7 @@ export function PlatformAccessAdminPage() {
       setDisplayName('');
       setEmail('');
       setInitialPassword('');
+      setActiveEditor(null);
       invalidatePlatformIAM();
     },
   });
@@ -131,6 +134,7 @@ export function PlatformAccessAdminPage() {
     onSuccess: () => {
       setGroupName('');
       setGroupDisplayName('');
+      setActiveEditor(null);
       invalidatePlatformIAM();
     },
   });
@@ -146,6 +150,7 @@ export function PlatformAccessAdminPage() {
       setServiceAccountDisplayName('');
       setServiceAccountOwner('');
       setServiceAccountDescription('');
+      setActiveEditor(null);
       invalidatePlatformIAM();
     },
   });
@@ -154,7 +159,10 @@ export function PlatformAccessAdminPage() {
       const [subjectType, subjectId] = splitSubjectValue(activeMemberSubjectValue);
       return platformApi.createMembership({ groupId: memberGroupId || groups[0]?.id || '', subjectId, subjectType });
     },
-    onSuccess: invalidatePlatformIAM,
+    onSuccess: () => {
+      setActiveEditor(null);
+      invalidatePlatformIAM();
+    },
   });
   const deleteMembershipMutation = useMutation({
     mutationFn: (id: string) => platformApi.deleteMembership(id),
@@ -176,6 +184,7 @@ export function PlatformAccessAdminPage() {
       setRoleId('');
       setRoleName('');
       setRoleDescription('');
+      setActiveEditor(null);
       invalidatePlatformIAM();
     },
   });
@@ -202,6 +211,7 @@ export function PlatformAccessAdminPage() {
     },
     onSuccess: (result) => {
       setLastBinding(result.item ?? null);
+      setActiveEditor(null);
       invalidatePlatformIAM();
     },
   });
@@ -246,7 +256,7 @@ export function PlatformAccessAdminPage() {
         {activeTab === 'users' ? (
           <TabWorkspace
             table={<UsersTable users={users} current={meQuery.data} confirmDeleteKey={confirmDeleteKey} pending={deleteSubjectMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(item) => deleteSubjectMutation.mutate(item)} />}
-            side={<CreateUserPanel username={username} displayName={displayName} email={email} initialPassword={initialPassword} pending={createUserMutation.isPending} canSubmit={canCreateUser} setUsername={setUsername} setDisplayName={setDisplayName} setEmail={setEmail} setInitialPassword={setInitialPassword} onSubmit={() => createUserMutation.mutate()} />}
+            action={<PrimaryToolbarButton label="创建用户" onClick={() => setActiveEditor('user')} />}
           />
         ) : null}
 
@@ -258,28 +268,33 @@ export function PlatformAccessAdminPage() {
                 <MembershipsTable memberships={memberships} confirmDeleteKey={confirmDeleteKey} pending={deleteMembershipMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(id) => deleteMembershipMutation.mutate(id)} />
               </div>
             )}
-            side={<GroupEditorPanel groupName={groupName} groupDisplayName={groupDisplayName} groups={groups} assignableMemberSubjects={assignableMemberSubjects} activeMemberSubjectValue={activeMemberSubjectValue} memberGroupId={memberGroupId} createGroupPending={createGroupMutation.isPending} createMembershipPending={createMembershipMutation.isPending} canCreateGroup={canCreateGroup} canCreateMembership={canCreateMembership} setGroupName={setGroupName} setGroupDisplayName={setGroupDisplayName} setMemberGroupId={setMemberGroupId} setMemberSubject={setMemberSubject} onCreateGroup={() => createGroupMutation.mutate()} onCreateMembership={() => createMembershipMutation.mutate()} />}
+            action={(
+              <div className="flex flex-wrap items-center gap-2">
+                <button className="console-button" onClick={() => setActiveEditor('membership')}><Link2 className="h-4 w-4" />加入成员</button>
+                <PrimaryToolbarButton label="创建用户组" onClick={() => setActiveEditor('group')} />
+              </div>
+            )}
           />
         ) : null}
 
         {activeTab === 'service-accounts' ? (
           <TabWorkspace
             table={<ServiceAccountsTable serviceAccounts={serviceAccounts} confirmDeleteKey={confirmDeleteKey} pending={deleteSubjectMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(item) => deleteSubjectMutation.mutate(item)} />}
-            side={<CreateServiceAccountPanel name={serviceAccountName} displayName={serviceAccountDisplayName} owner={serviceAccountOwner} description={serviceAccountDescription} pending={createServiceAccountMutation.isPending} canSubmit={canCreateServiceAccount} setName={setServiceAccountName} setDisplayName={setServiceAccountDisplayName} setOwner={setServiceAccountOwner} setDescription={setServiceAccountDescription} onSubmit={() => createServiceAccountMutation.mutate()} />}
+            action={<PrimaryToolbarButton label="创建服务账号" onClick={() => setActiveEditor('service-account')} />}
           />
         ) : null}
 
         {activeTab === 'roles' ? (
           <TabWorkspace
             table={<RolesTable roles={roles} confirmDeleteKey={confirmDeleteKey} pending={deleteRoleMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(id) => deleteRoleMutation.mutate(id)} />}
-            side={<CreateRolePanel roleId={roleId} roleName={roleName} roleDescription={roleDescription} rolePermissions={rolePermissions} pending={createRoleMutation.isPending} canSubmit={canCreateRole} setRoleId={setRoleId} setRoleName={setRoleName} setRoleDescription={setRoleDescription} setRolePermissions={setRolePermissions} onSubmit={() => createRoleMutation.mutate()} />}
+            action={<PrimaryToolbarButton label="创建角色" onClick={() => setActiveEditor('role')} />}
           />
         ) : null}
 
         {activeTab === 'bindings' ? (
           <TabWorkspace
             table={<BindingsTable bindings={bindings} confirmDeleteKey={confirmDeleteKey} pending={deleteBindingMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(id) => deleteBindingMutation.mutate(id)} />}
-            side={<BindingEditorPanel subjects={subjects} roles={roles} activeSubjectValue={activeSubjectValue} activeRole={activeRole} scopeMode={scopeMode} clusterId={clusterId} namespace={namespace} pending={createBindingMutation.isPending} canSubmit={canBind} setSelectedSubject={setSelectedSubject} setSelectedRole={setSelectedRole} setScopeMode={setScopeMode} setClusterId={setClusterId} setNamespace={setNamespace} onSubmit={() => createBindingMutation.mutate()} />}
+            action={<PrimaryToolbarButton label="创建授权绑定" onClick={() => setActiveEditor('binding')} />}
           />
         ) : null}
 
@@ -287,6 +302,29 @@ export function PlatformAccessAdminPage() {
           <EffectivePermissionsWorkspace subjects={subjects} activePreviewSubject={activePreviewSubject} effectivePermissions={effectivePermissions} isLoading={effectiveQuery.isLoading} setPreviewSubject={setPreviewSubject} />
         ) : null}
       </DataPanel>
+
+      {activeEditor ? (
+        <PlatformEditorDrawer title={platformEditorTitle(activeEditor)} onClose={() => setActiveEditor(null)}>
+          {activeEditor === 'user' ? (
+            <CreateUserPanel username={username} displayName={displayName} email={email} initialPassword={initialPassword} pending={createUserMutation.isPending} canSubmit={canCreateUser} setUsername={setUsername} setDisplayName={setDisplayName} setEmail={setEmail} setInitialPassword={setInitialPassword} onSubmit={() => createUserMutation.mutate()} />
+          ) : null}
+          {activeEditor === 'group' ? (
+            <CreateGroupPanel groupName={groupName} groupDisplayName={groupDisplayName} pending={createGroupMutation.isPending} canSubmit={canCreateGroup} setGroupName={setGroupName} setGroupDisplayName={setGroupDisplayName} onSubmit={() => createGroupMutation.mutate()} />
+          ) : null}
+          {activeEditor === 'membership' ? (
+            <MembershipEditorPanel groups={groups} assignableMemberSubjects={assignableMemberSubjects} activeMemberSubjectValue={activeMemberSubjectValue} memberGroupId={memberGroupId} pending={createMembershipMutation.isPending} canSubmit={canCreateMembership} setMemberGroupId={setMemberGroupId} setMemberSubject={setMemberSubject} onSubmit={() => createMembershipMutation.mutate()} />
+          ) : null}
+          {activeEditor === 'service-account' ? (
+            <CreateServiceAccountPanel name={serviceAccountName} displayName={serviceAccountDisplayName} owner={serviceAccountOwner} description={serviceAccountDescription} pending={createServiceAccountMutation.isPending} canSubmit={canCreateServiceAccount} setName={setServiceAccountName} setDisplayName={setServiceAccountDisplayName} setOwner={setServiceAccountOwner} setDescription={setServiceAccountDescription} onSubmit={() => createServiceAccountMutation.mutate()} />
+          ) : null}
+          {activeEditor === 'role' ? (
+            <CreateRolePanel roleId={roleId} roleName={roleName} roleDescription={roleDescription} rolePermissions={rolePermissions} pending={createRoleMutation.isPending} canSubmit={canCreateRole} setRoleId={setRoleId} setRoleName={setRoleName} setRoleDescription={setRoleDescription} setRolePermissions={setRolePermissions} onSubmit={() => createRoleMutation.mutate()} />
+          ) : null}
+          {activeEditor === 'binding' ? (
+            <BindingEditorPanel subjects={subjects} roles={roles} activeSubjectValue={activeSubjectValue} activeRole={activeRole} scopeMode={scopeMode} clusterId={clusterId} namespace={namespace} pending={createBindingMutation.isPending} canSubmit={canBind} setSelectedSubject={setSelectedSubject} setSelectedRole={setSelectedRole} setScopeMode={setScopeMode} setClusterId={setClusterId} setNamespace={setNamespace} onSubmit={() => createBindingMutation.mutate()} />
+          ) : null}
+        </PlatformEditorDrawer>
+      ) : null}
     </div>
   );
 }
@@ -308,11 +346,45 @@ function PlatformTabNav({ activeTab, onChange }: { activeTab: PlatformAdminTab; 
   );
 }
 
-function TabWorkspace({ table, side }: { table: ReactNode; side: ReactNode }) {
+function PrimaryToolbarButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <div className="console-workbench grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
+    <button className="console-button console-button-primary" onClick={onClick}>
+      <Plus className="h-4 w-4" />
+      {label}
+    </button>
+  );
+}
+
+function TabWorkspace({ table, action }: { table: ReactNode; action?: ReactNode }) {
+  return (
+    <div className="console-workbench grid gap-3">
+      {action ? (
+        <div className="console-list-toolbar">
+          <div className="text-xs text-muted">当前视图只展示生产真值；创建和授权进入独立任务抽屉。</div>
+          {action}
+        </div>
+      ) : null}
       <div className="console-resource-list min-w-0">{table}</div>
-      <aside className="console-detail-rail grid content-start gap-4">{side}</aside>
+    </div>
+  );
+}
+
+function PlatformEditorDrawer({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
+      <button className="absolute inset-0 cursor-default" aria-label={`关闭${title}`} onClick={onClose} />
+      <aside className="console-drawer-panel console-detail-rail relative flex h-full w-full max-w-[720px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="platform-editor-title">
+        <header className="flex items-start justify-between gap-4 border-b border-outline px-5 py-4">
+          <div className="min-w-0">
+            <h2 id="platform-editor-title" className="text-base font-semibold text-on-surface">{title}</h2>
+            <p className="mt-1 text-xs text-muted">完成必要字段后提交，成功后回到当前列表。</p>
+          </div>
+          <button className="console-button h-8 w-8 p-0" aria-label={`关闭${title}`} onClick={onClose}>
+            <X className="h-4 w-4" />
+          </button>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">{children}</div>
+      </aside>
     </div>
   );
 }
@@ -602,9 +674,9 @@ function CreateUserPanel(props: {
   onSubmit: () => void;
 }) {
   return (
-    <section className="console-panel px-4 py-3">
+    <section className="grid gap-3">
       <PanelTitle icon={UserRoundCog} title="录入用户" meta="创建后可登录 NovaObs" />
-      <div className="mt-3 grid gap-3">
+      <div className="grid gap-3">
         <input className="console-input w-full" placeholder="username" value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
         <input className="console-input w-full" placeholder="显示名" value={props.displayName} onChange={(event) => props.setDisplayName(event.target.value)} />
         <input className="console-input w-full" placeholder="邮箱" value={props.email} onChange={(event) => props.setEmail(event.target.value)} />
@@ -615,49 +687,53 @@ function CreateUserPanel(props: {
   );
 }
 
-function GroupEditorPanel(props: {
+function CreateGroupPanel(props: {
   groupName: string;
   groupDisplayName: string;
+  canSubmit: boolean;
+  pending: boolean;
+  setGroupName: (value: string) => void;
+  setGroupDisplayName: (value: string) => void;
+  onSubmit: () => void;
+}) {
+  return (
+    <section className="grid gap-3">
+      <PanelTitle icon={UsersRound} title="录入用户组" meta="承载平台与模块授权" />
+      <div className="grid gap-3">
+        <input className="console-input w-full" placeholder="group name" value={props.groupName} onChange={(event) => props.setGroupName(event.target.value)} />
+        <input className="console-input w-full" placeholder="显示名" value={props.groupDisplayName} onChange={(event) => props.setGroupDisplayName(event.target.value)} />
+      </div>
+      <PrimaryAction label="创建用户组" disabled={!props.canSubmit || props.pending} icon={Plus} onClick={props.onSubmit} />
+    </section>
+  );
+}
+
+function MembershipEditorPanel(props: {
   groups: PlatformGroup[];
   assignableMemberSubjects: PlatformSubject[];
   activeMemberSubjectValue: string;
   memberGroupId: string;
-  createGroupPending: boolean;
-  createMembershipPending: boolean;
-  canCreateGroup: boolean;
-  canCreateMembership: boolean;
-  setGroupName: (value: string) => void;
-  setGroupDisplayName: (value: string) => void;
+  pending: boolean;
+  canSubmit: boolean;
   setMemberGroupId: (value: string) => void;
   setMemberSubject: (value: string) => void;
-  onCreateGroup: () => void;
-  onCreateMembership: () => void;
+  onSubmit: () => void;
 }) {
   return (
-    <>
-      <section className="console-panel px-4 py-3">
-        <PanelTitle icon={UsersRound} title="录入用户组" meta="承载平台与模块授权" />
-        <div className="mt-3 grid gap-3">
-          <input className="console-input w-full" placeholder="group name" value={props.groupName} onChange={(event) => props.setGroupName(event.target.value)} />
-          <input className="console-input w-full" placeholder="显示名" value={props.groupDisplayName} onChange={(event) => props.setGroupDisplayName(event.target.value)} />
-        </div>
-        <PrimaryAction label="创建用户组" disabled={!props.canCreateGroup || props.createGroupPending} icon={Plus} onClick={props.onCreateGroup} />
-      </section>
-      <section className="console-panel px-4 py-3">
-        <PanelTitle icon={Link2} title="维护组成员" meta="把用户或服务账号加入组" />
-        <div className="mt-3 grid gap-3">
-          <select className="console-input w-full" value={props.memberGroupId || props.groups[0]?.id || ''} onChange={(event) => props.setMemberGroupId(event.target.value)} disabled={!props.groups.length}>
-            {!props.groups.length ? <option value="">暂无用户组</option> : null}
-            {props.groups.map((item) => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}
-          </select>
-          <select className="console-input w-full" value={props.activeMemberSubjectValue} onChange={(event) => props.setMemberSubject(event.target.value)} disabled={!props.assignableMemberSubjects.length}>
-            {!props.assignableMemberSubjects.length ? <option value="">暂无可加入主体</option> : null}
-            {props.assignableMemberSubjects.map((item) => <option key={item.id} value={subjectValue(item)}>{item.displayName || item.subjectId} / {item.subjectType}</option>)}
-          </select>
-        </div>
-        <PrimaryAction label="加入用户组" disabled={!props.canCreateMembership || props.createMembershipPending} icon={Plus} onClick={props.onCreateMembership} />
-      </section>
-    </>
+    <section className="grid gap-3">
+      <PanelTitle icon={Link2} title="维护组成员" meta="把用户或服务账号加入组" />
+      <div className="grid gap-3">
+        <select className="console-input w-full" value={props.memberGroupId || props.groups[0]?.id || ''} onChange={(event) => props.setMemberGroupId(event.target.value)} disabled={!props.groups.length}>
+          {!props.groups.length ? <option value="">暂无用户组</option> : null}
+          {props.groups.map((item) => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}
+        </select>
+        <select className="console-input w-full" value={props.activeMemberSubjectValue} onChange={(event) => props.setMemberSubject(event.target.value)} disabled={!props.assignableMemberSubjects.length}>
+          {!props.assignableMemberSubjects.length ? <option value="">暂无可加入主体</option> : null}
+          {props.assignableMemberSubjects.map((item) => <option key={item.id} value={subjectValue(item)}>{item.displayName || item.subjectId} / {item.subjectType}</option>)}
+        </select>
+      </div>
+      <PrimaryAction label="加入用户组" disabled={!props.canSubmit || props.pending} icon={Plus} onClick={props.onSubmit} />
+    </section>
   );
 }
 
@@ -675,9 +751,9 @@ function CreateServiceAccountPanel(props: {
   onSubmit: () => void;
 }) {
   return (
-    <section className="console-panel px-4 py-3">
+    <section className="grid gap-3">
       <PanelTitle icon={Bot} title="录入服务账号" meta="用于自动化或外部系统" />
-      <div className="mt-3 grid gap-3">
+      <div className="grid gap-3">
         <input className="console-input w-full" placeholder="service account name" value={props.name} onChange={(event) => props.setName(event.target.value)} />
         <input className="console-input w-full" placeholder="显示名" value={props.displayName} onChange={(event) => props.setDisplayName(event.target.value)} />
         <input className="console-input w-full" placeholder="owner" value={props.owner} onChange={(event) => props.setOwner(event.target.value)} />
@@ -702,9 +778,9 @@ function CreateRolePanel(props: {
   onSubmit: () => void;
 }) {
   return (
-    <section className="console-panel px-4 py-3">
+    <section className="grid gap-3">
       <PanelTitle icon={ShieldCheck} title="创建角色" meta="resource:action:scopeMode" />
-      <div className="mt-3 grid gap-3">
+      <div className="grid gap-3">
         <input className="console-input w-full" placeholder="role id（可选）" value={props.roleId} onChange={(event) => props.setRoleId(event.target.value)} />
         <input className="console-input w-full" placeholder="角色名称" value={props.roleName} onChange={(event) => props.setRoleName(event.target.value)} />
         <input className="console-input w-full" placeholder="描述" value={props.roleDescription} onChange={(event) => props.setRoleDescription(event.target.value)} />
@@ -736,9 +812,9 @@ function BindingEditorPanel(props: {
   const [subjectType, subjectId] = splitSubjectValue(props.activeSubjectValue);
   const activeRole = props.roles.find((item) => item.id === props.activeRole);
   return (
-    <section className="console-panel px-4 py-3">
+    <section className="grid gap-3">
       <PanelTitle icon={KeyRound} title="创建授权绑定" meta="主体 + 角色 + 作用域" />
-      <div className="mt-3 grid gap-3">
+      <div className="grid gap-3">
         <select className="console-input w-full" value={props.activeSubjectValue} onChange={(event) => props.setSelectedSubject(event.target.value)} disabled={!props.subjects.length}>
           {!props.subjects.length ? <option value="">暂无主体</option> : null}
           {props.subjects.map((item) => <option key={item.id} value={subjectValue(item)}>{item.displayName || item.subjectId} / {item.subjectType}</option>)}
@@ -848,6 +924,25 @@ function DeleteActionButton({
   );
 }
 
+
+function platformEditorTitle(editor: PlatformEditor) {
+  switch (editor) {
+    case 'user':
+      return '创建用户';
+    case 'group':
+      return '创建用户组';
+    case 'membership':
+      return '加入用户组';
+    case 'service-account':
+      return '创建服务账号';
+    case 'role':
+      return '创建角色';
+    case 'binding':
+      return '创建授权绑定';
+    default:
+      return '平台用户权限';
+  }
+}
 
 
 function subjectValue(item?: PlatformSubject) {

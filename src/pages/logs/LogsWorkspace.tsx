@@ -1,10 +1,11 @@
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
-import { Bell, Search, ServerCog } from 'lucide-react';
+import { Bell, RadioTower, Search, ServerCog } from 'lucide-react';
 
 const logsNav = [
   { to: '/logs/explore', label: '日志分析', meta: '下游查询', icon: Search },
   { to: '/logs/agents', label: '采集路由', icon: ServerCog },
   { to: '/logs/alerts', label: '日志告警', icon: Bell },
+  { to: '/logs/endpoints', label: '接入配置', icon: RadioTower },
 ];
 
 function LogsWorkspace() {
@@ -13,7 +14,7 @@ function LogsWorkspace() {
   return (
     <div className="logs-workbench route-transition-page flex h-full min-h-0 flex-col gap-3">
       <div className="module-navigation-bar shrink-0">
-        <h1 className="page-title module-navigation-title truncate">Logs</h1>
+        <h1 className="sr-only module-navigation-title">Logs</h1>
         <nav className="module-navigation-tabs" aria-label="Logs 模块导航">
           {logsNav.map((item) => {
             const Icon = item.icon;

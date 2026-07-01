@@ -76,7 +76,7 @@ body {
     @apply rounded-lg;
     background: #ffffff;
     border: 1px solid #d8e2ef;
-    box-shadow: 0 1px 2px rgba(18, 32, 51, 0.035);
+    box-shadow: 0 1px 2px rgba(18, 32, 51, 0.035), inset 0 1px 0 rgba(255, 255, 255, 0.86);
   }
 
   .console-input {
@@ -167,7 +167,7 @@ body {
     min-height: 0;
     flex: 1;
     overflow-y: auto;
-    background: #f6f8fc;
+    background: linear-gradient(180deg, #f7faff 0%, #f1f5fb 100%);
     padding: 12px;
   }
 
@@ -225,7 +225,12 @@ body {
   }
 
   .console-panel-header {
-    @apply flex min-h-11 items-center justify-between gap-3 border-b border-outline/70 bg-surface-lowest px-3 py-2.5;
+    @apply flex min-h-12 items-center justify-between gap-3 border-b border-outline/70 px-3 py-2.5;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  }
+
+  .console-panel-body {
+    @apply p-3;
   }
 
   .console-section-title {
@@ -237,7 +242,8 @@ body {
   }
 
   .console-toolbar {
-    @apply flex flex-wrap items-center justify-between gap-2 border-b border-outline/70 bg-surface px-3 py-2.5;
+    @apply flex flex-wrap items-center justify-between gap-2 border-b border-outline/70 px-3 py-2.5;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   }
 
   .console-toolbar-group {
@@ -245,7 +251,8 @@ body {
   }
 
   .console-list-toolbar {
-    @apply flex flex-col gap-2 border-b border-outline bg-surface-lowest px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between;
+    @apply flex flex-col gap-2 border-b border-outline px-3 py-2.5 sm:flex-row sm:items-center sm:justify-between;
+    background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
   }
 
   .console-list-toolbar-actions {
@@ -265,6 +272,31 @@ body {
     scrollbar-gutter: stable;
   }
 
+  .console-split-workbench {
+    @apply min-h-0 overflow-hidden;
+  }
+
+  .console-summary-strip {
+    @apply overflow-hidden rounded-lg border border-outline bg-surface-lowest;
+    box-shadow: 0 1px 2px rgba(18, 32, 51, 0.03), inset 0 1px 0 rgba(255, 255, 255, 0.88);
+  }
+
+  .console-summary-item {
+    @apply min-w-0 px-3 py-3;
+  }
+
+  .console-summary-label {
+    @apply text-[11px] font-semibold text-muted;
+  }
+
+  .console-summary-value {
+    @apply mt-1 text-lg font-semibold text-on-surface;
+  }
+
+  .console-summary-meta {
+    @apply mt-0.5 truncate text-[11px] text-muted;
+  }
+
   .console-selected-row {
     box-shadow: inset 3px 0 0 #0d5bd7;
   }
@@ -276,6 +308,10 @@ body {
 
   .console-detail-rail {
     @apply min-w-0 border-outline;
+  }
+
+  .console-inspector {
+    @apply min-w-0 bg-surface-lowest px-3 py-3;
   }
 
   .console-action-bar {
@@ -316,7 +352,8 @@ body {
   }
 
   .console-empty-state {
-    @apply flex min-h-32 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-outline bg-surface px-4 py-8 text-center;
+    @apply flex min-h-40 flex-col items-center justify-center gap-2 rounded-md border border-dashed border-outline px-4 py-8 text-center;
+    background: #f8fbff;
   }
 
   .console-skeleton {
@@ -361,12 +398,13 @@ body {
   }
 
   .console-table th {
-    @apply sticky top-0 z-[1] bg-surface-low px-3 py-2 text-left text-[11px] font-semibold text-muted;
+    @apply sticky top-0 z-[1] px-3 py-2 text-left text-[11px] font-semibold text-muted;
+    background: #edf4ff;
     box-shadow: inset 0 -1px 0 #d8e2ef;
   }
 
   .console-table td {
-    @apply h-10 border-t border-outline/55 bg-surface-lowest px-3 py-2 text-sm text-on-surface;
+    @apply h-11 border-t border-outline/55 bg-surface-lowest px-3 py-2 text-sm text-on-surface;
   }
 
   .console-table tbody tr {
@@ -379,6 +417,22 @@ body {
 
   .console-table tbody tr:hover td {
     background: #edf4ff;
+  }
+
+  .console-table-action {
+    @apply inline-flex h-7 items-center justify-center gap-1.5 rounded-md border border-outline bg-surface-lowest px-2.5 text-xs font-semibold text-muted transition-colors hover:border-primary/30 hover:bg-primary-soft/45 hover:text-primary disabled:cursor-not-allowed disabled:opacity-50;
+  }
+
+  .console-table-action-danger {
+    @apply border-danger/20 text-danger hover:border-danger/35 hover:bg-red-50 hover:text-danger;
+  }
+
+  .platform-settings-table th {
+    @apply px-2.5 py-1.5;
+  }
+
+  .platform-settings-table td {
+    @apply h-10 px-2.5 py-1.5;
   }
 
   .soft-tile {

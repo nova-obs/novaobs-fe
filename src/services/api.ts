@@ -165,7 +165,7 @@ function mapK8sDashboardSnapshot(raw: any): K8sDashboardSnapshot {
     sync: {
       status: raw.sync?.status ?? 'unknown',
       source: raw.sync?.source ?? 'startorch',
-      timeWindow: raw.sync?.time_window ?? raw.sync?.timeWindow ?? '最近 15 分钟',
+      timeWindow: raw.sync?.time_window ?? raw.sync?.timeWindow ?? '',
       lastSyncedAt: raw.sync?.last_synced_at ?? raw.sync?.lastSyncedAt ?? '',
     },
   };
@@ -730,7 +730,7 @@ function alertRuleSpecBody(spec: AlertRuleSpec) {
 function mapNotificationPolicy(raw: any): NotificationPolicy {
   return {
     id: String(raw.id ?? ''), name: raw.name ?? '', description: raw.description ?? '', serviceId: raw.service_id ?? '',
-    alertmanagerReceiver: raw.alertmanager_receiver ?? '',
+    receiver: raw.receiver ?? '',
     enabled: Boolean(raw.enabled), createdAt: raw.created_at ?? '', updatedAt: raw.updated_at ?? '',
   };
 }
@@ -1068,12 +1068,12 @@ export const api = {
     return Array.isArray(raw) ? raw.map(mapNotificationPolicy) : [];
   },
   async createNotificationPolicy(input: {
-    name: string; alertmanagerReceiver: string; serviceId?: string; description?: string;
+    name: string; receiver: string; serviceId?: string; description?: string;
   }): Promise<NotificationPolicy> {
     const raw = await request<any>('/alerts/notification-policies', {
       method: 'POST', body: JSON.stringify({
         name: input.name, description: input.description ?? '', service_id: input.serviceId ?? '',
-        alertmanager_receiver: input.alertmanagerReceiver, enabled: true,
+        receiver: input.receiver, enabled: true,
       }),
     });
     return mapNotificationPolicy(raw);
@@ -1082,7 +1082,7 @@ export const api = {
     const raw = await request<any>(`/alerts/notification-policies/${policy.id}`, {
       method: 'PUT', body: JSON.stringify({
         name: policy.name, description: policy.description, service_id: policy.serviceId,
-        alertmanager_receiver: policy.alertmanagerReceiver, enabled,
+        receiver: policy.receiver, enabled,
       }),
     });
     return mapNotificationPolicy(raw);

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { AlertTriangle, Boxes, CheckCircle2, FileCode2, Layers3, Play, ScrollText, ShieldAlert, TerminalSquare, Trash2 } from 'lucide-react';
+import { AlertTriangle, Boxes, CheckCircle2, FileCode2, Layers3, Play, ScrollText, ShieldAlert, TerminalSquare, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import type { K8sDeploymentIdentity, K8sDeploymentOperationResult, K8sResourceIdentity, K8sResourceSummary } from './api';
 import { k8sApi } from './api';
@@ -71,6 +72,17 @@ export function K8sResourcePage() {
     setDeletePreviewPlan(null);
     setLastOperation(null);
   }, [selectedIdentity?.clusterId, selectedIdentity?.namespace, selectedIdentity?.name, selectedIdentity?.uid]);
+
+  useEffect(() => {
+    if (!selected) return undefined;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === 'Escape') {
+        setSelected(null);
+      }
+    }
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [selected]);
 
   const detailQuery = useQuery({
     queryKey: ['k8s-resource-detail', selectedIdentity],
@@ -159,6 +171,109 @@ export function K8sResourcePage() {
   const canConfirmApply = Boolean(applyPreviewPlan?.previewId && applyPreviewPlan.confirmationToken && selectedIdentity?.clusterId && !applyMutation.isPending);
   const canConfirmDelete = Boolean(deletePreviewPlan?.previewId && deletePreviewPlan.confirmationToken && hasCompleteDeleteIdentity && !deleteMutation.isPending);
   const displayedOperationPlan = deletePreviewPlan ?? applyPreviewPlan ?? lastOperation;
+  const isPodLogWorkspace = Boolean(selected && selected.identity.kind === 'Pod' && activeTab === 'logs');
+  const drawerHeader = selected ? (
+    <div className="console-panel-header shrink-0">
+      <div className="min-w-0">
+        <div className="text-[11px] font-semibold text-muted">资源详情</div>
+        <h2 className="mt-1 truncate text-base font-semibold text-on-surface">{selected.identity.name}</h2>
+        <div className="mt-1 break-all font-mono text-[11px] text-muted">
+          {selected.identity.clusterId}/{resourceNamespaceLabel(selected.identity.namespace)}/{selected.identity.apiVersion}/{selected.identity.kind}/{selected.identity.uid || '-'}
+        </div>
+      </div>
+      <button type="button" className="console-icon-button" aria-label="关闭资源详情" onClick={() => setSelected(null)}>
+        <X className="h-4 w-4" />
+      </button>
+    </div>
+  ) : null;
+  const drawerTabs = selected ? (
+    <div className="mb-3 flex shrink-0 flex-wrap gap-2">
+      <TabButton active={activeTab === 'detail'} icon={ScrollText} label="详情" onClick={() => setActiveTab('detail')} />
+      <TabButton active={activeTab === 'yaml'} icon={FileCode2} label="YAML 预览" onClick={() => setActiveTab('yaml')} />
+      <TabButton active={activeTab === 'logs'} icon={TerminalSquare} label="Pod 日志" onClick={() => setActiveTab('logs')} disabled={selected.identity.kind !== 'Pod'} />
+    </div>
+  ) : null;
+  const operationSection = (
+    <section className="shrink-0 rounded-md border border-outline bg-surface px-3 py-3">
+      <div className="text-sm font-semibold text-on-surface">受控操作闭环</div>
+      <div className="mt-1 break-all font-mono text-xs text-muted">
+        apply-preview → confirmation-token → apply · delete-preview → confirmation-token → delete · audit={lastOperation?.auditId || '-'}
+      </div>
+      <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+        <span className="rounded-md bg-primary-soft px-2 py-1 text-primary">预览差异</span>
+        <span className="rounded-md bg-amber-100 px-2 py-1 text-warning">高风险确认</span>
+        <span className="rounded-md bg-surface-lowest px-2 py-1 text-muted">操作已落审计</span>
+      </div>
+      {operationPermissionError ? (
+        <div className="mt-2 flex items-center gap-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
+          <ShieldAlert className="h-4 w-4" />
+          权限不足：当前用户缺少 `k8s.deploy:apply` 或 `k8s.deploy:delete`。
+        </div>
+      ) : null}
+      {operationError && !operationPermissionError ? (
+        <div className="mt-2 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">操作失败：{operationError}</div>
+      ) : null}
+      <div className="mt-3 flex flex-wrap gap-2">
+        <button
+          className="console-button"
+          disabled={!selectedIdentity || applyPreviewMutation.isPending || applyMutation.isPending}
+          onClick={() => applyPreviewMutation.mutate()}
+        >
+          <Play className="h-3.5 w-3.5" />
+          Apply 预览
+        </button>
+        <button
+          className="console-button console-button-primary"
+          disabled={!canConfirmApply}
+          onClick={() => applyMutation.mutate()}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          确认 Apply
+        </button>
+        <button
+          className="console-button console-button-danger"
+          disabled={!hasCompleteDeleteIdentity || deletePreviewMutation.isPending}
+          onClick={() => deletePreviewMutation.mutate()}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+          删除预览
+        </button>
+        <button
+          className="console-button console-button-danger"
+          disabled={!canConfirmDelete}
+          onClick={() => deleteMutation.mutate()}
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          确认删除
+        </button>
+      </div>
+      {displayedOperationPlan ? (
+        <OperationPlanSummary plan={displayedOperationPlan} activeMode={deletePreviewPlan ? 'delete' : applyPreviewPlan ? 'apply' : 'last'} />
+      ) : null}
+    </section>
+  );
+  const podLogContainerSelector = (
+    <section className="shrink-0 rounded-md border border-outline bg-surface px-3 py-3">
+      <div className="text-sm font-semibold text-on-surface">日志读取</div>
+      <div className="mt-3 grid gap-3 md:grid-cols-[minmax(180px,1fr)_auto] md:items-end">
+        <label className="block">
+          <span className="text-xs font-semibold text-muted">容器选择</span>
+          <select
+            className="console-input mt-2 w-full"
+            value={selectedContainer}
+            onChange={(event) => setSelectedContainer(event.target.value)}
+            disabled={!containerOptions.length}
+          >
+            <option value="">默认容器</option>
+            {containerOptions.map((container) => (
+              <option key={container} value={container}>{container}</option>
+            ))}
+          </select>
+        </label>
+        <div className="pb-2 font-mono text-[11px] font-semibold text-muted">tailLines=200 · limitBytes=1MiB</div>
+      </div>
+    </section>
+  );
 
   return (
     <div className="space-y-4">
@@ -208,7 +323,7 @@ export function K8sResourcePage() {
         ) : null}
       </section>
 
-      <DataPanel title="资源视图" meta={isLoading ? '加载中' : `${data.length} 个资源 · 最近 15 分钟`}>
+      <DataPanel title="资源视图" meta={isLoading ? '加载中' : `${data.length} 个资源`}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             资源读取失败：{errorMessage(error)}
@@ -243,8 +358,15 @@ export function K8sResourcePage() {
                 {data.map((item) => (
                   <tr
                     key={identityKey(item.identity)}
-                    className={`bg-white/35 hover:bg-white/60 ${selected && identityKey(selected.identity) === identityKey(item.identity) ? 'shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : ''}`}
+                    className={`cursor-pointer ${selected && identityKey(selected.identity) === identityKey(item.identity) ? 'console-selected-row' : ''}`}
+                    tabIndex={0}
                     onClick={() => {
+                      setSelected(item);
+                      setActiveTab('detail');
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== 'Enter' && event.key !== ' ') return;
+                      event.preventDefault();
                       setSelected(item);
                       setActiveTab('detail');
                     }}
@@ -272,121 +394,69 @@ export function K8sResourcePage() {
         ) : null}
       </DataPanel>
 
-      <DataPanel title="资源详情" meta={selected ? `${selected.identity.kind} · ${resourceNamespaceLabel(selected.identity.namespace)}/${selected.identity.name}` : '等待选择资源'}>
-        {!selected ? (
-          <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-            <div className="font-semibold text-on-surface">未选择资源</div>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="grid gap-3 md:grid-cols-[1fr_auto] md:items-start">
-              <div className="min-w-0">
-                <div className="font-semibold text-on-surface">{selected.identity.name}</div>
-                <div className="mt-1 break-all font-mono text-xs text-muted">
-                  {selected.identity.clusterId}/{resourceNamespaceLabel(selected.identity.namespace)}/{selected.identity.apiVersion}/{selected.identity.kind}/{selected.identity.uid || '-'}
-                </div>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <TabButton active={activeTab === 'detail'} icon={ScrollText} label="详情" onClick={() => setActiveTab('detail')} />
-                <TabButton active={activeTab === 'yaml'} icon={FileCode2} label="YAML 预览" onClick={() => setActiveTab('yaml')} />
-                <TabButton active={activeTab === 'logs'} icon={TerminalSquare} label="Pod 日志" onClick={() => setActiveTab('logs')} disabled={selected.identity.kind !== 'Pod'} />
-              </div>
-            </div>
-
-            <section className="rounded-lg bg-white/45 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-start">
-                <div className="min-w-0">
-                  <div className="text-sm font-semibold text-on-surface">受控操作闭环</div>
-                  <div className="mt-1 break-all font-mono text-xs text-muted">
-                    apply-preview → confirmation-token → apply · delete-preview → confirmation-token → delete · audit={lastOperation?.auditId || '-'}
-                  </div>
-                  <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
-                    <span className="rounded-md bg-primary-soft px-2 py-1 text-primary">预览差异</span>
-                    <span className="rounded-md bg-amber-100 px-2 py-1 text-warning">高风险确认</span>
-                    <span className="rounded-md bg-white/65 px-2 py-1 text-muted">操作已落审计</span>
-                  </div>
-                  {operationPermissionError ? (
-                    <div className="mt-2 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-                      <ShieldAlert className="h-4 w-4" />
-                      权限不足：当前用户缺少 `k8s.deploy:apply` 或 `k8s.deploy:delete`。
+      {selected ? createPortal((
+        <>
+          <button
+            type="button"
+            className="console-drawer-backdrop fixed inset-0 z-50 cursor-default"
+            aria-label="关闭资源详情"
+            onClick={() => setSelected(null)}
+          />
+          {isPodLogWorkspace ? (
+            <div className="console-drawer-panel console-pod-log-workspace fixed bottom-4 left-4 right-4 top-20 z-[60] grid min-w-0 grid-rows-[minmax(420px,60vh)_auto] gap-3 overflow-y-auto lg:grid-cols-[minmax(0,1fr)_minmax(420px,560px)] lg:grid-rows-none lg:overflow-hidden">
+              <section
+                className="console-pod-log-reader flex min-w-0 flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest shadow-[0_24px_60px_-24px_rgba(18,32,51,0.5)]"
+                aria-label="Pod 日志阅读区"
+              >
+                <div className="console-panel-header shrink-0">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-muted">Pod 日志</div>
+                    <h2 className="mt-1 truncate text-base font-semibold text-on-surface">{selected.identity.name}</h2>
+                    <div className="mt-1 break-all font-mono text-[11px] text-muted">
+                      {selected.identity.namespace || 'cluster-scoped'} · {selectedContainer || '默认容器'} · tailLines=200 · limitBytes=1MiB
                     </div>
-                  ) : null}
-                  {operationError && !operationPermissionError ? (
-                    <div className="mt-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">操作失败：{operationError}</div>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(13,91,215,0.18)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!selectedIdentity || applyPreviewMutation.isPending || applyMutation.isPending}
-                    onClick={() => applyPreviewMutation.mutate()}
-                  >
-                    <Play className="h-3.5 w-3.5" />
-                    Apply 预览
-                  </button>
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-xs font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canConfirmApply}
-                    onClick={() => applyMutation.mutate()}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    确认 Apply
-                  </button>
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-xs font-semibold text-danger shadow-[inset_0_0_0_1px_rgba(185,28,28,0.18)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!hasCompleteDeleteIdentity || deletePreviewMutation.isPending}
-                    onClick={() => deletePreviewMutation.mutate()}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    删除预览
-                  </button>
-                  <button
-                    className="inline-flex items-center justify-center gap-2 rounded-lg bg-danger px-3 py-2 text-xs font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
-                    disabled={!canConfirmDelete}
-                    onClick={() => deleteMutation.mutate()}
-                  >
-                    <CheckCircle2 className="h-3.5 w-3.5" />
-                    确认删除
-                  </button>
-                </div>
-              </div>
-              {displayedOperationPlan ? (
-                <OperationPlanSummary plan={displayedOperationPlan} activeMode={deletePreviewPlan ? 'delete' : applyPreviewPlan ? 'apply' : 'last'} />
-              ) : null}
-            </section>
-
-            {activeTab === 'detail' ? <ResourceDetailView isLoading={detailQuery.isLoading} error={detailQuery.error} spec={detailQuery.data?.spec} labels={detailQuery.data?.labels ?? selected.labels} /> : null}
-            {activeTab === 'yaml' ? <CodePreview isLoading={yamlQuery.isLoading} error={yamlQuery.error} emptyText="暂无 YAML" content={yamlQuery.data?.yaml ?? ''} /> : null}
-            {activeTab === 'logs' && selected.identity.kind !== 'Pod' ? (
-              <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">仅 Pod 支持日志读取</div>
-            ) : null}
-            {activeTab === 'logs' && selected.identity.kind === 'Pod' ? (
-              <div className="space-y-3">
-                <div className="grid gap-3 rounded-lg bg-white/45 p-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] md:grid-cols-[minmax(180px,260px)_1fr] md:items-end">
-                  <label className="block">
-                    <span className="text-xs font-semibold text-muted">容器选择</span>
-                    <select
-                      className="console-input mt-2 w-full"
-                      value={selectedContainer}
-                      onChange={(event) => setSelectedContainer(event.target.value)}
-                      disabled={!containerOptions.length}
-                    >
-                      <option value="">默认容器</option>
-                      {containerOptions.map((container) => (
-                        <option key={container} value={container}>{container}</option>
-                      ))}
-                    </select>
-                  </label>
-                  <div className="text-xs text-muted">
-                    tailLines=200 · limitBytes=1MiB
                   </div>
                 </div>
-                <CodePreview isLoading={logsQuery.isLoading} error={logsQuery.error} emptyText="暂无 Pod 日志" content={(logsQuery.data?.lines ?? []).join('\n')} />
+                <div className="min-h-0 flex-1 p-3">
+                  <CodePreview fill isLoading={logsQuery.isLoading} error={logsQuery.error} emptyText="暂无 Pod 日志" content={(logsQuery.data?.lines ?? []).join('\n')} />
+                </div>
+              </section>
+              <aside
+                className="console-pod-log-control-panel flex min-w-0 flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest shadow-[0_24px_60px_-24px_rgba(18,32,51,0.5)]"
+                aria-label="资源详情抽屉"
+              >
+                {drawerHeader}
+                <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-3">
+                  {drawerTabs}
+                  <div className="space-y-3">
+                    {operationSection}
+                    {podLogContainerSelector}
+                  </div>
+                </div>
+              </aside>
+            </div>
+          ) : (
+            <aside
+              className="console-drawer-panel fixed bottom-4 right-4 top-20 z-[60] flex w-[min(760px,calc(100vw-2rem))] flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest shadow-[0_24px_60px_-24px_rgba(18,32,51,0.5)]"
+              aria-label="资源详情抽屉"
+            >
+              {drawerHeader}
+              <div className="flex min-h-0 flex-1 flex-col overflow-hidden p-3">
+                {drawerTabs}
+                {operationSection}
+
+                <div className="resource-drawer-tab-content mt-3 min-h-0 flex-1">
+                  {activeTab === 'detail' ? <ResourceDetailView isLoading={detailQuery.isLoading} error={detailQuery.error} spec={detailQuery.data?.spec} labels={detailQuery.data?.labels ?? selected.labels} /> : null}
+                  {activeTab === 'yaml' ? <CodePreview fill isLoading={yamlQuery.isLoading} error={yamlQuery.error} emptyText="暂无 YAML" content={yamlQuery.data?.yaml ?? ''} /> : null}
+                  {activeTab === 'logs' && selected.identity.kind !== 'Pod' ? (
+                    <div className="console-empty-state text-sm font-semibold text-muted">仅 Pod 支持日志读取</div>
+                  ) : null}
+                </div>
               </div>
-            ) : null}
-          </div>
-        )}
-      </DataPanel>
+            </aside>
+          )}
+        </>
+      ), document.body) : null}
     </div>
   );
 }
@@ -534,38 +604,40 @@ function TabButton({ active, disabled = false, icon: Icon, label, onClick }: { a
 
 function ResourceDetailView({ isLoading, error, spec, labels }: { isLoading: boolean; error: unknown; spec?: Record<string, any>; labels: Record<string, string> }) {
   if (isLoading) {
-    return <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">正在读取资源详情。</div>;
+    return <div className="flex h-full min-h-[320px] items-center justify-center rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">正在读取资源详情。</div>;
   }
   if (error) {
     return <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">资源详情读取失败：{errorMessage(error)}</div>;
   }
   return (
-    <div className="grid gap-4 lg:grid-cols-[320px_1fr]">
-      <section className="rounded-lg bg-white/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+    <div className="resource-detail-stack flex h-full min-h-0 flex-col gap-3">
+      <section className="shrink-0 rounded-md border border-outline bg-surface px-3 py-3">
         <div className="text-xs font-semibold text-muted">Labels</div>
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-2 flex flex-wrap gap-2">
           {Object.entries(labels).length ? Object.entries(labels).map(([key, value]) => (
-            <span key={key} className="rounded-lg bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{key}={value}</span>
+            <span key={key} className="rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{key}={value}</span>
           )) : <span className="text-sm text-muted">无标签</span>}
         </div>
       </section>
-      <section className="rounded-lg bg-white/45 p-4 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+      <section className="resource-detail-spec-block flex min-h-0 flex-1 flex-col">
         <div className="text-xs font-semibold text-muted">Spec</div>
-        <pre className="mt-3 max-h-[360px] overflow-auto rounded-lg bg-[#10201f] p-4 text-xs leading-6 text-[#d7ebe8]">{JSON.stringify(spec ?? {}, null, 2)}</pre>
+        <pre className="mt-2 h-full min-h-[320px] w-full overflow-auto rounded-lg bg-[#10201f] p-4 text-xs leading-6 text-[#d7ebe8]">{JSON.stringify(spec ?? {}, null, 2)}</pre>
       </section>
     </div>
   );
 }
 
-function CodePreview({ isLoading, error, emptyText, content }: { isLoading: boolean; error: unknown; emptyText: string; content: string }) {
+function CodePreview({ isLoading, error, emptyText, content, fill = false }: { isLoading: boolean; error: unknown; emptyText: string; content: string; fill?: boolean }) {
+  const stateClassName = `rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)] ${fill ? 'flex h-full min-h-[320px] items-center justify-center' : ''}`;
+  const codeClassName = `${fill ? 'h-full min-h-[320px]' : 'max-h-[460px]'} w-full overflow-auto rounded-lg bg-[#10201f] p-4 text-xs leading-6 text-[#d7ebe8]`;
   if (isLoading) {
-    return <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">正在读取内容。</div>;
+    return <div className={stateClassName}>正在读取内容。</div>;
   }
   if (error) {
     return <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">内容读取失败：{errorMessage(error)}</div>;
   }
   if (!content.trim()) {
-    return <div className="rounded-lg bg-white/45 px-4 py-8 text-center text-sm font-semibold text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">{emptyText}</div>;
+    return <div className={stateClassName}>{emptyText}</div>;
   }
-  return <pre className="max-h-[460px] overflow-auto rounded-lg bg-[#10201f] p-4 text-xs leading-6 text-[#d7ebe8]">{content}</pre>;
+  return <pre className={codeClassName}>{content}</pre>;
 }

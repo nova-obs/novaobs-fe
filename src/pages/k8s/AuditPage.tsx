@@ -60,7 +60,7 @@ export function K8sAuditPage() {
         ) : null}
       </section>
 
-      <DataPanel title="操作审计" meta={isLoading ? '加载中' : `${data.length} 条事件 · 最近 15 分钟`}>
+      <DataPanel title="操作审计" meta={isLoading ? '加载中' : `${data.length} 条事件`}>
         {error ? (
           <div className="console-notice console-notice-warning mb-3">
             操作审计读取失败：{errorMessage(error)}

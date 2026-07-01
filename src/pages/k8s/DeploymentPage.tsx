@@ -15,6 +15,7 @@ export function K8sDeploymentPage() {
   const [lastResult, setLastResult] = useState<K8sDeploymentOperationResult | null>(null);
   const [previewPlan, setPreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
   const [deletePreviewPlan, setDeletePreviewPlan] = useState<K8sDeploymentOperationResult | null>(null);
+  const [operationMode, setOperationMode] = useState<'apply' | 'delete' | 'rollback'>('apply');
 
   const { activeClusterId, activeCluster, clusterError } = useK8sOpsContext();
 
@@ -144,7 +145,6 @@ export function K8sDeploymentPage() {
   }, [previewMutation.error, applyMutation.error, previewDeleteMutation.error, deleteMutation.error, rollbackMutation.error]);
 
   const operationError = previewMutation.error?.message || applyMutation.error?.message || previewDeleteMutation.error?.message || deleteMutation.error?.message || rollbackMutation.error?.message || '';
-  const resourceCount = lastResult?.resources.length ?? extractResourceCount(yamlContent);
   const canPreview = Boolean(activeClusterId && yamlContent.trim());
   const canApplyConfirmedPreview = Boolean(canPreview && previewPlan?.previewId && previewPlan?.confirmationToken && !applyMutation.isPending);
   const hasCompleteIdentity = completeIdentity(identity);
@@ -161,12 +161,6 @@ export function K8sDeploymentPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.8fr]">
-        <DeployMetric label="资源" value={String(resourceCount)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <DeployMetric label="动作" value={lastResult?.status || 'preview'} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
-        <DeployMetric label="审计" value={lastResult?.auditId ? 'recorded' : 'pending'} meta={lastResult?.auditId || 'namespace scope'} />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(180px,260px)_minmax(180px,240px)_minmax(220px,280px)_1fr] xl:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -222,7 +216,17 @@ export function K8sDeploymentPage() {
         ) : null}
       </section>
 
-      <DataPanel title="发布部署">
+      <DataPanel
+        title="发布部署"
+        meta={lastResult?.auditId ? `audit/${lastResult.auditId}` : namespace ? `namespace/${namespace}` : '等待命名空间'}
+        action={(
+          <div className="flex rounded-md border border-outline bg-white p-0.5">
+            <DeploymentModeButton active={operationMode === 'apply'} label="发布" onClick={() => setOperationMode('apply')} />
+            <DeploymentModeButton active={operationMode === 'delete'} label="删除" onClick={() => setOperationMode('delete')} />
+            <DeploymentModeButton active={operationMode === 'rollback'} label="回滚" onClick={() => setOperationMode('rollback')} />
+          </div>
+        )}
+      >
         {permissionError ? (
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             <ShieldAlert className="h-4 w-4" />
@@ -246,7 +250,7 @@ export function K8sDeploymentPage() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+        {operationMode === 'apply' ? (
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="console-panel px-4 py-3">
               <div className="text-sm font-semibold text-on-surface">部署 YAML</div>
@@ -261,102 +265,73 @@ export function K8sDeploymentPage() {
                 }}
               />
             </section>
-            <section className="console-panel px-4 py-3">
-              <div className="text-sm font-semibold text-on-surface">执行结果</div>
-              <div className="mt-3 rounded-lg bg-white/50 px-3 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-                <div className="font-semibold text-on-surface">{lastResult?.message || '等待预览或发布动作'}</div>
-                <div className="mt-2 font-mono text-xs text-muted">status={lastResult?.status || '-'}</div>
-                <div className="font-mono text-xs text-muted">audit={lastResult?.auditId || '-'}</div>
-              </div>
-              <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
-                    <GitCompareArrows className="h-4 w-4 text-primary" />
-                    预览差异
-                  </div>
-                  <span className="rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{previewDiffs.length} diff</span>
-                </div>
-                {previewDiffs.length ? (
-                  <div className="mt-3 space-y-2">
-                    {previewDiffs.map((diff) => (
-                      <PreviewDiffRow key={`${diff.clusterId}-${diff.namespace}-${diff.kind}-${diff.name}-${diff.operation}`} diff={diff} />
-                    ))}
-                  </div>
-                ) : (
-                  <div className="mt-3 rounded-lg bg-surface-lowest/60 px-3 py-3 text-xs font-medium text-muted">
-                    暂无预览
-                  </div>
-                )}
-                {previewWarnings.length ? (
-                  <div className="mt-3 space-y-1 rounded-lg bg-amber-50/80 px-3 py-2 text-xs font-semibold text-warning">
-                    {previewWarnings.map((warning) => <div key={warning}>{warning}</div>)}
-                  </div>
-                ) : null}
-              </div>
-              <div className="mt-4 space-y-3">
-                {(lastResult?.resources ?? [identity]).map((item) => (
-                  <div key={`${item.kind}-${item.name}-${item.uid || 'preview'}`} className="rounded-lg bg-white/50 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <div className="truncate font-semibold text-primary">{item.name || '-'}</div>
-                        <div className="mt-1 text-[11px] text-muted">{item.kind || '-'}</div>
-                      </div>
-                      <div className="shrink-0 rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{item.namespace || '-'}</div>
-                    </div>
-                    <div className="mt-3 grid gap-2 text-[11px] text-muted">
-                      <div className="break-all font-mono">api={item.apiVersion || '-'}</div>
-                      <div className="break-all font-mono">uid={item.uid || '-'}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </section>
+            <DeploymentResultPanel lastResult={lastResult} identity={identity} previewDiffs={previewDiffs} previewWarnings={previewWarnings} />
           </div>
+        ) : null}
 
-          <aside className="console-panel px-4 py-3">
-            <div className="text-sm font-semibold text-on-surface">高风险确认</div>
-            <p className="mt-1 text-xs text-muted">删除和回滚必须带完整资源身份：cluster / namespace / api_version / kind / name / uid。</p>
-            <IdentityInput label="namespace" value={identity.namespace} onChange={(value) => updateIdentity({ ...identity, namespace: value })} />
-            <IdentityInput label="api_version" value={identity.apiVersion} onChange={(value) => updateIdentity({ ...identity, apiVersion: value })} />
-            <IdentityInput label="kind" value={identity.kind} onChange={(value) => updateIdentity({ ...identity, kind: value })} />
-            <IdentityInput label="name" value={identity.name} onChange={(value) => updateIdentity({ ...identity, name: value })} />
-            <IdentityInput label="uid" value={identity.uid || ''} onChange={(value) => updateIdentity({ ...identity, uid: value })} />
-            <label className="mt-3 block text-xs font-semibold text-muted">
-              history_id
-              <select className="console-input mt-2 w-full" value={historyId} onChange={(event) => setHistoryId(event.target.value)} disabled={!histories.length}>
-                {!histories.length ? <option value="">暂无部署历史</option> : null}
-                {histories.map((item) => (
-                  <option key={item.id} value={item.id}>{item.workload || item.id} · {item.revision || item.action || item.id}</option>
-                ))}
-              </select>
-            </label>
+        {operationMode === 'delete' ? (
+          <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+            <DeploymentIdentityPanel
+              title="高风险确认"
+              description="删除必须带完整资源身份：cluster / namespace / api_version / kind / name / uid。"
+              activeClusterId={activeClusterId}
+              identity={identity}
+              previewPlan={previewPlan}
+              deletePreviewPlan={deletePreviewPlan}
+              updateIdentity={updateIdentity}
+            />
+            <DeploymentResultPanel lastResult={lastResult} identity={identity} previewDiffs={previewDiffs} previewWarnings={previewWarnings} />
+          </div>
+        ) : null}
 
-            <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="flex items-center justify-between gap-3">
-                <div className="font-semibold text-on-surface">确认摘要</div>
-                {previewPlan?.confirmationToken || deletePreviewPlan?.confirmationToken ? <CheckCircle2 className="h-4 w-4 text-primary" /> : null}
-              </div>
-              <div className="mt-2 font-mono">cluster={activeClusterId || '-'}</div>
-              <div className="font-mono">namespace={identity.namespace || '-'}</div>
-              <div className="font-mono">resource={identity.kind || '-'}/{identity.name || '-'}</div>
-              <div className="font-mono">uid={identity.uid || '-'}</div>
-              <div className="mt-2 border-t border-white/70 pt-2 font-mono">apply_preview_id={previewPlan?.previewId || '-'}</div>
-              <div className="break-all font-mono">apply_confirmation={maskToken(previewPlan?.confirmationToken)}</div>
-              <div className="mt-2 font-mono">delete_preview_id={deletePreviewPlan?.previewId || '-'}</div>
-              <div className="break-all font-mono">delete_confirmation={maskToken(deletePreviewPlan?.confirmationToken)}</div>
-            </div>
+        {operationMode === 'rollback' ? (
+          <div className="grid gap-4 lg:grid-cols-[380px_minmax(0,1fr)]">
+            <section className="console-panel px-4 py-3">
+              <div className="text-sm font-semibold text-on-surface">高风险确认</div>
+              <p className="mt-1 text-xs text-muted">回滚必须选择历史版本，并带完整资源身份。</p>
+              <IdentityInput label="namespace" value={identity.namespace} onChange={(value) => updateIdentity({ ...identity, namespace: value })} />
+              <IdentityInput label="api_version" value={identity.apiVersion} onChange={(value) => updateIdentity({ ...identity, apiVersion: value })} />
+              <IdentityInput label="kind" value={identity.kind} onChange={(value) => updateIdentity({ ...identity, kind: value })} />
+              <IdentityInput label="name" value={identity.name} onChange={(value) => updateIdentity({ ...identity, name: value })} />
+              <IdentityInput label="uid" value={identity.uid || ''} onChange={(value) => updateIdentity({ ...identity, uid: value })} />
+              <label className="mt-3 block text-xs font-semibold text-muted">
+                history_id
+                <select className="console-input mt-2 w-full" value={historyId} onChange={(event) => setHistoryId(event.target.value)} disabled={!histories.length}>
+                  {!histories.length ? <option value="">暂无部署历史</option> : null}
+                  {histories.map((item) => (
+                    <option key={item.id} value={item.id}>{item.workload || item.id} · {item.revision || item.action || item.id}</option>
+                  ))}
+                </select>
+              </label>
+            </section>
+            <DeploymentResultPanel lastResult={lastResult} identity={identity} previewDiffs={previewDiffs} previewWarnings={previewWarnings} />
+          </div>
+        ) : null}
 
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()}>
-                <CloudUpload className="h-4 w-4" />
-                预览
-              </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!canApplyConfirmedPreview} onClick={() => applyMutation.mutate()}>
-                <CloudUpload className="h-4 w-4" />
-                发布
-              </button>
+        <div className="console-action-bar -mx-3 -mb-3 mt-4">
+          <div className="min-w-0 text-xs text-muted">
+            {operationMode === 'apply'
+              ? (previewPlan?.confirmationToken ? `预览已生成：${previewPlan.previewId}` : '先生成预览，再发布确认后的清单。')
+              : operationMode === 'delete'
+                ? (deletePreviewPlan?.confirmationToken ? `删除预览已生成：${deletePreviewPlan.previewId}` : '删除前必须先生成影响预览。')
+                : '确认资源身份和历史版本后执行回滚。'}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {operationMode === 'apply' ? (
+              <>
+                <button className="console-button" disabled={!canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()}>
+                  <CloudUpload className="h-3.5 w-3.5" />
+                  生成预览
+                </button>
+                <button className="console-button console-button-primary" disabled={!canApplyConfirmedPreview} onClick={() => applyMutation.mutate()}>
+                  <CloudUpload className="h-3.5 w-3.5" />
+                  发布
+                </button>
+              </>
+            ) : null}
+            {operationMode === 'delete' ? (
               <button
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
+                className={`console-button ${canDeleteConfirmedPreview ? 'text-danger hover:border-danger/30 hover:bg-red-50' : ''}`}
                 disabled={!hasCompleteIdentity || previewDeleteMutation.isPending || deleteMutation.isPending}
                 onClick={() => {
                   if (canDeleteConfirmedPreview) {
@@ -366,27 +341,140 @@ export function K8sDeploymentPage() {
                   previewDeleteMutation.mutate();
                 }}
               >
-                <Trash2 className="h-4 w-4" />
+                <Trash2 className="h-3.5 w-3.5" />
                 {canDeleteConfirmedPreview ? '确认删除' : '预览删除'}
               </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-primary shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!hasCompleteIdentity || !historyId.trim() || rollbackMutation.isPending} onClick={() => rollbackMutation.mutate()}>
-                <RotateCcw className="h-4 w-4" />
+            ) : null}
+            {operationMode === 'rollback' ? (
+              <button className="console-button console-button-primary" disabled={!hasCompleteIdentity || !historyId.trim() || rollbackMutation.isPending} onClick={() => rollbackMutation.mutate()}>
+                <RotateCcw className="h-3.5 w-3.5" />
                 回滚
               </button>
-            </div>
-          </aside>
+            ) : null}
+          </div>
         </div>
       </DataPanel>
     </div>
   );
 }
 
-function DeployMetric({ label, value, meta }: { label: string; value: string; meta: string }) {
+function DeploymentModeButton({ active, label, onClick }: { active: boolean; label: string; onClick: () => void }) {
+  return (
+    <button
+      className={`h-7 rounded px-3 text-xs font-semibold transition-colors ${active ? 'bg-primary-soft text-primary' : 'text-muted hover:bg-surface hover:text-on-surface'}`}
+      onClick={onClick}
+      type="button"
+    >
+      {label}
+    </button>
+  );
+}
+
+function DeploymentIdentityPanel({
+  title,
+  description,
+  activeClusterId,
+  identity,
+  previewPlan,
+  deletePreviewPlan,
+  updateIdentity,
+}: {
+  title: string;
+  description: string;
+  activeClusterId: string;
+  identity: K8sDeploymentIdentity;
+  previewPlan: K8sDeploymentOperationResult | null;
+  deletePreviewPlan: K8sDeploymentOperationResult | null;
+  updateIdentity: (value: K8sDeploymentIdentity) => void;
+}) {
   return (
     <section className="console-panel px-4 py-3">
-      <div className="text-sm font-semibold text-on-surface">{label}</div>
-      <div className="mt-3 break-all font-mono text-2xl font-semibold text-on-surface">{value}</div>
-      <div className="mt-2 truncate text-xs text-muted">{meta}</div>
+      <div className="text-sm font-semibold text-on-surface">{title}</div>
+      <p className="mt-1 text-xs text-muted">{description}</p>
+      <IdentityInput label="namespace" value={identity.namespace} onChange={(value) => updateIdentity({ ...identity, namespace: value })} />
+      <IdentityInput label="api_version" value={identity.apiVersion} onChange={(value) => updateIdentity({ ...identity, apiVersion: value })} />
+      <IdentityInput label="kind" value={identity.kind} onChange={(value) => updateIdentity({ ...identity, kind: value })} />
+      <IdentityInput label="name" value={identity.name} onChange={(value) => updateIdentity({ ...identity, name: value })} />
+      <IdentityInput label="uid" value={identity.uid || ''} onChange={(value) => updateIdentity({ ...identity, uid: value })} />
+      <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="font-semibold text-on-surface">确认摘要</div>
+          {previewPlan?.confirmationToken || deletePreviewPlan?.confirmationToken ? <CheckCircle2 className="h-4 w-4 text-primary" /> : null}
+        </div>
+        <div className="mt-2 font-mono">cluster={activeClusterId || '-'}</div>
+        <div className="font-mono">namespace={identity.namespace || '-'}</div>
+        <div className="font-mono">resource={identity.kind || '-'}/{identity.name || '-'}</div>
+        <div className="font-mono">uid={identity.uid || '-'}</div>
+        <div className="mt-2 border-t border-white/70 pt-2 font-mono">apply_preview_id={previewPlan?.previewId || '-'}</div>
+        <div className="break-all font-mono">apply_confirmation={maskToken(previewPlan?.confirmationToken)}</div>
+        <div className="mt-2 font-mono">delete_preview_id={deletePreviewPlan?.previewId || '-'}</div>
+        <div className="break-all font-mono">delete_confirmation={maskToken(deletePreviewPlan?.confirmationToken)}</div>
+      </div>
+    </section>
+  );
+}
+
+function DeploymentResultPanel({
+  lastResult,
+  identity,
+  previewDiffs,
+  previewWarnings,
+}: {
+  lastResult: K8sDeploymentOperationResult | null;
+  identity: K8sDeploymentIdentity;
+  previewDiffs: K8sDeploymentDiff[];
+  previewWarnings: string[];
+}) {
+  return (
+    <section className="console-panel px-4 py-3">
+      <div className="text-sm font-semibold text-on-surface">执行结果</div>
+      <div className="mt-3 rounded-lg bg-white/50 px-3 py-3 text-sm shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+        <div className="font-semibold text-on-surface">{lastResult?.message || '等待预览或执行动作'}</div>
+        <div className="mt-2 font-mono text-xs text-muted">status={lastResult?.status || '-'}</div>
+        <div className="font-mono text-xs text-muted">audit={lastResult?.auditId || '-'}</div>
+      </div>
+      <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
+            <GitCompareArrows className="h-4 w-4 text-primary" />
+            预览差异
+          </div>
+          <span className="rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{previewDiffs.length} diff</span>
+        </div>
+        {previewDiffs.length ? (
+          <div className="mt-3 space-y-2">
+            {previewDiffs.map((diff) => (
+              <PreviewDiffRow key={`${diff.clusterId}-${diff.namespace}-${diff.kind}-${diff.name}-${diff.operation}`} diff={diff} />
+            ))}
+          </div>
+        ) : (
+          <div className="mt-3 rounded-lg bg-surface-lowest/60 px-3 py-3 text-xs font-medium text-muted">
+            暂无预览
+          </div>
+        )}
+        {previewWarnings.length ? (
+          <div className="mt-3 space-y-1 rounded-lg bg-amber-50/80 px-3 py-2 text-xs font-semibold text-warning">
+            {previewWarnings.map((warning) => <div key={warning}>{warning}</div>)}
+          </div>
+        ) : null}
+      </div>
+      <div className="mt-4 space-y-3">
+        {(lastResult?.resources ?? [identity]).map((item) => (
+          <div key={`${item.kind}-${item.name}-${item.uid || 'preview'}`} className="rounded-lg bg-white/50 px-3 py-3 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="truncate font-semibold text-primary">{item.name || '-'}</div>
+                <div className="mt-1 text-[11px] text-muted">{item.kind || '-'}</div>
+              </div>
+              <div className="shrink-0 rounded-md bg-primary-soft px-2 py-1 font-mono text-[11px] font-semibold text-primary">{item.namespace || '-'}</div>
+            </div>
+            <div className="mt-3 grid gap-2 text-[11px] text-muted">
+              <div className="break-all font-mono">api={item.apiVersion || '-'}</div>
+              <div className="break-all font-mono">uid={item.uid || '-'}</div>
+            </div>
+          </div>
+        ))}
+      </div>
     </section>
   );
 }
@@ -458,10 +546,6 @@ function completeIdentity(value: K8sDeploymentIdentity) {
 
 function resourceOptionKey(resource: K8sResourceSummary) {
   return resource.identity.uid || `${resource.identity.kind}/${resource.identity.namespace}/${resource.identity.name}`;
-}
-
-function extractResourceCount(value: string) {
-  return Math.max(1, value.split('---').filter((item) => item.trim()).length);
 }
 
 function shortHash(value = '') {

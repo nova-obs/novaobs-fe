@@ -129,6 +129,7 @@ test('创建 Logs 下游端点时传递端点类型和 stream 名称', async () 
       streamName: 'novaobs-logs',
       writeURL: 'kafka-0:9092,kafka-1:9092',
       scopeType: 'vm',
+      status: 'disabled',
     }),
     {
       id: 'sink-001',
@@ -145,6 +146,7 @@ test('创建 Logs 下游端点时传递端点类型和 stream 名称', async () 
   assert.equal(request.body.sink_type, 'kafka');
   assert.equal(request.body.stream_name, 'novaobs-logs');
   assert.equal(request.body.write_url, 'kafka-0:9092,kafka-1:9092');
+  assert.equal(request.body.status, 'disabled');
   assert.equal(result.sinkType, 'kafka');
   assert.equal(result.streamName, 'novaobs-logs');
 });
@@ -179,19 +181,17 @@ test('创建 VictoriaLogs 端点时传递租户 AccountID 和 ProjectID', async 
       writeURL: 'http://vl:9428/insert/opentelemetry/v1/logs',
       queryURL: 'http://vl:9428/select/logsql/query',
       vmuiURL: 'http://vl:9428/select/vmui/',
-      alertmanagerURL: 'http://alertmanager:9093',
       accountId: '9527',
       projectId: '9527',
     }),
-    { id: 'vl-9527', name: 'vl-tenant-9527', sink_type: 'vl', account_id: '9527', project_id: '9527', alertmanager_url: 'http://alertmanager:9093' },
+    { id: 'vl-9527', name: 'vl-tenant-9527', sink_type: 'vl', account_id: '9527', project_id: '9527' },
   );
 
   assert.equal(request.body.account_id, '9527');
   assert.equal(request.body.project_id, '9527');
-  assert.equal(request.body.alertmanager_url, 'http://alertmanager:9093');
+  assert.equal('alertmanager_url' in request.body, false);
   assert.equal(result.accountId, '9527');
   assert.equal(result.projectId, '9527');
-  assert.equal(result.alertmanagerURL, 'http://alertmanager:9093');
 });
 
 test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', async () => {
@@ -199,7 +199,7 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
     () => logsApi.publishEndpointVmalertRuntime('vl-9527', {
       clusterId: 'test03',
       namespace: 'novaobs-system',
-      alertmanagerURL: 'http://alertmanager:9093',
+      alertIngestURL: 'http://novaobs-api:8080',
       previewId: 'preview-1',
       confirmationToken: 'confirm-1',
     }),
@@ -209,7 +209,7 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
       cluster_id: 'test03',
       namespace: 'novaobs-system',
       datasource_url: 'http://victorialogs:9428',
-      alertmanager_url: 'http://alertmanager:9093',
+      alert_ingest_url: 'http://novaobs-api:8080',
       artifact_hash: 'artifact-hash',
       manifest_hash: 'manifest-hash',
       manifest_yaml: 'apiVersion: apps/v1\nkind: Deployment\n',
@@ -229,10 +229,11 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.cluster_id, 'test03');
   assert.equal(request.body.namespace, 'novaobs-system');
-  assert.equal(request.body.alertmanager_url, 'http://alertmanager:9093');
+  assert.equal(request.body.alert_ingest_url, 'http://novaobs-api:8080');
   assert.equal(request.body.preview_id, 'preview-1');
   assert.equal(request.body.confirmation_token, 'confirm-1');
   assert.equal(result.runtimeId, 'vmalert-logs:vl-9527');
+  assert.equal(result.alertIngestURL, 'http://novaobs-api:8080');
   assert.equal(result.status, 'applied');
   assert.equal(result.appliedRules, 2);
   assert.equal(result.resources[0].kind, 'Deployment');

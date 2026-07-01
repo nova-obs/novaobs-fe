@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link2, Plus, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { Link2, Plus, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sRBACBinding } from './api';
 import { useK8sOpsContext } from './context';
@@ -11,6 +11,7 @@ export function K8sRbacPage() {
   const [roleName, setRoleName] = useState('');
   const [bindingName, setBindingName] = useState('');
   const [serviceAccountName, setServiceAccountName] = useState('');
+  const [activeAction, setActiveAction] = useState<'role' | 'binding' | 'delete' | null>(null);
   const [selectedBinding, setSelectedBinding] = useState<K8sRBACBinding | null>(null);
   const [lastAuditId, setLastAuditId] = useState('');
 
@@ -52,6 +53,8 @@ export function K8sRbacPage() {
     mutationFn: () => k8sApi.createRBACRole({ clusterId: activeClusterId, namespace, name: roleName }),
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
+      setActiveAction(null);
+      setRoleName('');
       queryClient.invalidateQueries({ queryKey: ['k8s-rbac-roles'] });
     },
   });
@@ -60,6 +63,9 @@ export function K8sRbacPage() {
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelectedBinding(result.item ?? null);
+      setActiveAction(null);
+      setBindingName('');
+      setServiceAccountName('');
       queryClient.invalidateQueries({ queryKey: ['k8s-rbac-bindings'] });
     },
   });
@@ -72,6 +78,7 @@ export function K8sRbacPage() {
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelectedBinding(null);
+      setActiveAction(null);
       queryClient.invalidateQueries({ queryKey: ['k8s-rbac-bindings'] });
     },
   });
@@ -120,7 +127,17 @@ export function K8sRbacPage() {
         ) : null}
       </section>
 
-      <DataPanel title="RBAC" meta={isLoading ? '加载中' : `${roles.length} 个 Role · ${bindings.length} 个 Binding`}>
+      <DataPanel
+        title="RBAC"
+        meta={isLoading ? '加载中' : `${roles.length} 个 Role · ${bindings.length} 个 Binding`}
+        action={(
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="console-button" disabled={!currentBinding} onClick={() => setActiveAction('delete')}><Trash2 className="h-4 w-4" />删除 Binding</button>
+            <button className="console-button" disabled={!activeClusterId || !namespace} onClick={() => setActiveAction('binding')}><Link2 className="h-4 w-4" />创建 Binding</button>
+            <button className="console-button console-button-primary" disabled={!activeClusterId || !namespace} onClick={() => setActiveAction('role')}><Plus className="h-4 w-4" />创建 Role</button>
+          </div>
+        )}
+      >
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             RBAC 读取失败：{errorMessage(error)}
@@ -138,124 +155,154 @@ export function K8sRbacPage() {
           </div>
         ) : null}
 
-        <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-          <div className="space-y-4 overflow-hidden">
-            {!canList ? (
-              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
-                <p className="mt-2 text-sm text-muted">RBAC 资源按 namespace 读取，不做默认跨命名空间扫描。</p>
-              </div>
+        <div className="space-y-4 overflow-hidden">
+          {!canList ? (
+            <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
+              <p className="mt-2 text-sm text-muted">RBAC 资源按 namespace 读取，不做默认跨命名空间扫描。</p>
+            </div>
+          ) : null}
+          <section className="overflow-auto">
+            <table className="console-table min-w-[820px] w-full">
+              <thead>
+                <tr>
+                  <th>Role</th>
+                  <th>集群</th>
+                  <th>命名空间</th>
+                  <th>规则</th>
+                  <th>UID</th>
+                  <th>来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                {roles.map((item) => (
+                  <tr key={item.uid || item.id} className="bg-white/35 hover:bg-white/60">
+                    <td>
+                      <div className="font-semibold text-primary">{item.name}</div>
+                      <div className="text-[11px] text-muted">{item.kind}</div>
+                    </td>
+                    <td className="font-mono text-xs">{item.clusterId}</td>
+                    <td className="font-mono text-xs">{item.namespace || '-'}</td>
+                    <td className="text-xs text-muted">{item.rules.map((rule) => `${rule.resources.join(',')}:${rule.verbs.join(',')}`).join(' · ') || '-'}</td>
+                    <td className="font-mono text-[11px] text-muted">{item.uid}</td>
+                    <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {canList && !isLoading && !error && !roles.length ? (
+              <div className="mt-3 rounded-lg bg-white/45 px-4 py-6 text-center text-sm text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">当前命名空间没有返回 Role。</div>
             ) : null}
-            <section className="overflow-auto">
-              <table className="console-table min-w-[820px] w-full">
-                <thead>
-                  <tr>
-                    <th>Role</th>
-                    <th>集群</th>
-                    <th>命名空间</th>
-                    <th>规则</th>
-                    <th>UID</th>
-                    <th>来源</th>
+          </section>
+
+          <section className="overflow-auto">
+            <table className="console-table min-w-[820px] w-full">
+              <thead>
+                <tr>
+                  <th>Binding</th>
+                  <th>RoleRef</th>
+                  <th>Subject</th>
+                  <th>UID</th>
+                  <th>来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bindings.map((item) => (
+                  <tr
+                    key={item.uid || item.id}
+                    className={`cursor-pointer bg-white/35 hover:bg-white/60 ${currentBinding?.uid === item.uid ? 'ring-1 ring-primary/25' : ''}`}
+                    onClick={() => setSelectedBinding(item)}
+                  >
+                    <td>
+                      <div className="font-semibold text-primary">{item.name}</div>
+                      <div className="text-[11px] text-muted">{item.kind}</div>
+                    </td>
+                    <td className="font-mono text-xs">{item.roleRef.kind}/{item.roleRef.name}</td>
+                    <td className="text-xs text-muted">{item.subjects.map(formatSubject).join(' · ') || '-'}</td>
+                    <td className="font-mono text-[11px] text-muted">{item.uid}</td>
+                    <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {roles.map((item) => (
-                    <tr key={item.uid || item.id} className="bg-white/35 hover:bg-white/60">
-                      <td>
-                        <div className="font-semibold text-primary">{item.name}</div>
-                        <div className="text-[11px] text-muted">{item.kind}</div>
-                      </td>
-                      <td className="font-mono text-xs">{item.clusterId}</td>
-                      <td className="font-mono text-xs">{item.namespace || '-'}</td>
-                      <td className="text-xs text-muted">{item.rules.map((rule) => `${rule.resources.join(',')}:${rule.verbs.join(',')}`).join(' · ') || '-'}</td>
-                      <td className="font-mono text-[11px] text-muted">{item.uid}</td>
-                      <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {canList && !isLoading && !error && !roles.length ? (
-                <div className="mt-3 rounded-lg bg-white/45 px-4 py-6 text-center text-sm text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">当前命名空间没有返回 Role。</div>
-              ) : null}
-            </section>
-
-            <section className="overflow-auto">
-              <table className="console-table min-w-[820px] w-full">
-                <thead>
-                  <tr>
-                    <th>Binding</th>
-                    <th>RoleRef</th>
-                    <th>Subject</th>
-                    <th>UID</th>
-                    <th>来源</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {bindings.map((item) => (
-                    <tr
-                      key={item.uid || item.id}
-                      className={`cursor-pointer bg-white/35 hover:bg-white/60 ${currentBinding?.uid === item.uid ? 'ring-1 ring-primary/25' : ''}`}
-                      onClick={() => setSelectedBinding(item)}
-                    >
-                      <td>
-                        <div className="font-semibold text-primary">{item.name}</div>
-                        <div className="text-[11px] text-muted">{item.kind}</div>
-                      </td>
-                      <td className="font-mono text-xs">{item.roleRef.kind}/{item.roleRef.name}</td>
-                      <td className="text-xs text-muted">{item.subjects.map(formatSubject).join(' · ') || '-'}</td>
-                      <td className="font-mono text-[11px] text-muted">{item.uid}</td>
-                      <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              {canList && !isLoading && !error && !bindings.length ? (
-                <div className="mt-3 rounded-lg bg-white/45 px-4 py-6 text-center text-sm text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">当前命名空间没有返回 RoleBinding。</div>
-              ) : null}
-            </section>
-          </div>
-
-          <aside className="console-panel px-4 py-3">
-            <div className="text-sm font-semibold text-on-surface">写操作确认</div>
-            <p className="mt-1 text-xs text-muted">提交前确认 Role/Binding 摘要，成功后返回审计 ID。</p>
-            <label className="mt-4 block text-xs font-semibold text-muted" htmlFor="rbac-role-name">Role Name</label>
-            <input id="rbac-role-name" className="console-input mt-2 w-full" value={roleName} onChange={(event) => setRoleName(event.target.value)} />
-            <label className="mt-3 block text-xs font-semibold text-muted" htmlFor="rbac-binding-name">Binding Name</label>
-            <input id="rbac-binding-name" className="console-input mt-2 w-full" value={bindingName} onChange={(event) => setBindingName(event.target.value)} />
-            <label className="mt-3 block text-xs font-semibold text-muted" htmlFor="rbac-sa-name">ServiceAccount</label>
-            <input id="rbac-sa-name" className="console-input mt-2 w-full" value={serviceAccountName} onChange={(event) => setServiceAccountName(event.target.value)} />
-
-            <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-mono">cluster={activeClusterId || '-'}</div>
-              <div className="font-mono">namespace={namespace || '-'}</div>
-              <div className="font-mono">role={roleName || '-'}</div>
-              <div className="font-mono">binding={bindingName || '-'}</div>
-            </div>
-            <div className="mt-3 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-semibold text-on-surface">删除确认摘要</div>
-              <div className="mt-2 font-mono">kind={currentBinding?.kind ?? '-'}</div>
-              <div className="font-mono">name={currentBinding?.name ?? '-'}</div>
-              <div className="font-mono">uid={currentBinding?.uid ?? '-'}</div>
-            </div>
-            <div className="mt-4 grid grid-cols-2 gap-2">
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!activeClusterId || !namespace || !roleName.trim() || createRoleMutation.isPending} onClick={() => createRoleMutation.mutate()}>
-                <Plus className="h-4 w-4" />
-                Role
-              </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!activeClusterId || !namespace || !bindingName.trim() || !serviceAccountName.trim() || createBindingMutation.isPending} onClick={() => createBindingMutation.mutate()}>
-                <Plus className="h-4 w-4" />
-                Binding
-              </button>
-              <button className="col-span-2 inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!currentBinding || deleteBindingMutation.isPending} onClick={() => deleteBindingMutation.mutate()}>
-                <Trash2 className="h-4 w-4" />
-                删除 Binding
-              </button>
-            </div>
-          </aside>
+                ))}
+              </tbody>
+            </table>
+            {canList && !isLoading && !error && !bindings.length ? (
+              <div className="mt-3 rounded-lg bg-white/45 px-4 py-6 text-center text-sm text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">当前命名空间没有返回 RoleBinding。</div>
+            ) : null}
+          </section>
         </div>
       </DataPanel>
+
+      {activeAction === 'role' ? (
+        <RbacActionDrawer title="创建 Role" onClose={() => setActiveAction(null)}>
+          <div className="text-sm font-semibold text-on-surface">写操作确认</div>
+          <p className="text-xs text-muted">提交前确认 Role 摘要，成功后返回审计 ID。</p>
+          <label className="block text-xs font-semibold text-muted" htmlFor="rbac-role-name">Role Name</label>
+          <input id="rbac-role-name" className="console-input w-full" value={roleName} onChange={(event) => setRoleName(event.target.value)} />
+          <SummaryBox rows={[`cluster=${activeClusterId || '-'}`, `namespace=${namespace || '-'}`, `role=${roleName || '-'}`]} />
+          <DrawerFooter>
+            <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
+            <button className="console-button console-button-primary" disabled={!activeClusterId || !namespace || !roleName.trim() || createRoleMutation.isPending} onClick={() => createRoleMutation.mutate()}>创建 Role</button>
+          </DrawerFooter>
+        </RbacActionDrawer>
+      ) : null}
+
+      {activeAction === 'binding' ? (
+        <RbacActionDrawer title="创建 Binding" onClose={() => setActiveAction(null)}>
+          <div className="text-sm font-semibold text-on-surface">写操作确认</div>
+          <p className="text-xs text-muted">提交前确认 Role/Binding 摘要，成功后返回审计 ID。</p>
+          <label className="block text-xs font-semibold text-muted" htmlFor="rbac-binding-name">Binding Name</label>
+          <input id="rbac-binding-name" className="console-input w-full" value={bindingName} onChange={(event) => setBindingName(event.target.value)} />
+          <label className="block text-xs font-semibold text-muted" htmlFor="rbac-sa-name">ServiceAccount</label>
+          <input id="rbac-sa-name" className="console-input w-full" value={serviceAccountName} onChange={(event) => setServiceAccountName(event.target.value)} />
+          <label className="block text-xs font-semibold text-muted" htmlFor="rbac-binding-role-name">Role Name</label>
+          <input id="rbac-binding-role-name" className="console-input w-full" value={roleName} onChange={(event) => setRoleName(event.target.value)} />
+          <SummaryBox rows={[`cluster=${activeClusterId || '-'}`, `namespace=${namespace || '-'}`, `role=${roleName || '-'}`, `binding=${bindingName || '-'}`]} />
+          <DrawerFooter>
+            <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
+            <button className="console-button console-button-primary" disabled={!activeClusterId || !namespace || !bindingName.trim() || !serviceAccountName.trim() || createBindingMutation.isPending} onClick={() => createBindingMutation.mutate()}>创建 Binding</button>
+          </DrawerFooter>
+        </RbacActionDrawer>
+      ) : null}
+
+      {activeAction === 'delete' ? (
+        <RbacActionDrawer title="删除 Binding" onClose={() => setActiveAction(null)}>
+          <div className="text-sm font-semibold text-on-surface">删除确认摘要</div>
+          <SummaryBox rows={[`kind=${currentBinding?.kind ?? '-'}`, `name=${currentBinding?.name ?? '-'}`, `uid=${currentBinding?.uid ?? '-'}`]} />
+          <DrawerFooter>
+            <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
+            <button className="console-button console-button-danger" disabled={!currentBinding || deleteBindingMutation.isPending} onClick={() => deleteBindingMutation.mutate()}>删除 Binding</button>
+          </DrawerFooter>
+        </RbacActionDrawer>
+      ) : null}
     </div>
   );
+}
+
+function RbacActionDrawer({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
+      <button className="absolute inset-0 cursor-default" aria-label={`关闭${title}`} onClick={onClose} />
+      <aside className="console-drawer-panel relative flex h-full w-full max-w-[680px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="rbac-action-title">
+        <header className="flex items-start justify-between gap-4 border-b border-outline px-5 py-4">
+          <h2 id="rbac-action-title" className="text-base font-semibold text-on-surface">{title}</h2>
+          <button className="console-button h-8 w-8 p-0" aria-label={`关闭${title}`} onClick={onClose}><X className="h-4 w-4" /></button>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+function SummaryBox({ rows }: { rows: string[] }) {
+  return (
+    <div className="rounded-lg bg-surface px-3 py-3 text-xs text-muted">
+      {rows.map((row) => <div key={row} className="font-mono">{row}</div>)}
+    </div>
+  );
+}
+
+function DrawerFooter({ children }: { children: ReactNode }) {
+  return <div className="mt-auto flex items-center justify-end gap-2 border-t border-outline pt-4">{children}</div>;
 }
 
 function RbacMetric({ icon: Icon, label, value, meta }: { icon: typeof ShieldCheck; label: string; value: string; meta: string }) {

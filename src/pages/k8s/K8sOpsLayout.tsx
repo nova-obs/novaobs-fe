@@ -67,7 +67,7 @@ export function K8sOpsLayout() {
 function FleetNavigation() {
   return (
     <div className="module-navigation-bar">
-      <h1 className="page-title module-navigation-title">K8s 运维</h1>
+      <h1 className="sr-only module-navigation-title">K8s 运维</h1>
       <nav className="module-navigation-tabs" aria-label="K8s 运维导航">
         <NavLink
           className={({ isActive }) => fleetTabClass(isActive)}
