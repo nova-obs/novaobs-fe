@@ -47,6 +47,7 @@ export function AppShell({ children }: PropsWithChildren) {
   const activeDomain = getNavigationDomainByPath(location.pathname) ?? navigationDomains[0];
   const activeItem = getNavigationByPath(location.pathname);
   const workspaceLabel = getWorkspaceLabel(location.pathname, activeItem, activeDomain);
+  const breadcrumbSegments = getWorkspaceBreadcrumbSegments(location.pathname, activeItem, activeDomain, workspaceLabel);
   const backTarget = getBackTarget(location.pathname);
   const [openDomainId, setOpenDomainId] = useState<string | null>(null);
   const [linkCopyStatus, setLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
@@ -243,33 +244,37 @@ export function AppShell({ children }: PropsWithChildren) {
                   </Link>
                 ) : null}
                 <div className="content-workbench-location">
-                  <span>{activeDomain.label}</span>
-                  <ChevronRight className="h-3.5 w-3.5 text-muted/60" />
-                  <strong>{workspaceLabel}</strong>
+                  {breadcrumbSegments.map((segment, index) => {
+                    const isLast = index === breadcrumbSegments.length - 1;
+                    return (
+                      <span key={`${segment}-${index}`} className="contents">
+                        {index > 0 ? <ChevronRight className="h-3.5 w-3.5 text-muted/60" /> : null}
+                        {isLast ? <strong>{segment}</strong> : <span>{segment}</span>}
+                      </span>
+                    );
+                  })}
                 </div>
               </div>
               <div className="content-workbench-tools">
                 <button
                   type="button"
-                  className="console-button h-8 px-2.5 text-xs"
+                  className="console-icon-button"
                   aria-label="刷新当前页面"
                   title="刷新当前页面"
                   onClick={refreshCurrentPage}
                 >
                   <RefreshCw className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">刷新</span>
+                  <span className="sr-only">刷新当前页面</span>
                 </button>
                 <button
                   type="button"
-                  className="console-button h-8 px-2.5 text-xs"
+                  className="console-icon-button"
                   aria-label="复制当前页面链接"
                   title="复制当前页面链接"
                   onClick={copyCurrentLink}
                 >
                   {linkCopyStatus === 'copied' ? <Check className="h-3.5 w-3.5 text-success" /> : <Copy className="h-3.5 w-3.5" />}
-                  <span className="hidden sm:inline">
-                    {linkCopyStatus === 'copied' ? '已复制' : linkCopyStatus === 'failed' ? '复制失败' : '复制链接'}
-                  </span>
+                  <span className="sr-only">{linkCopyStatus === 'copied' ? '已复制' : linkCopyStatus === 'failed' ? '复制失败' : '复制链接'}</span>
                 </button>
               </div>
             </header>
@@ -670,15 +675,39 @@ function getWorkspaceLabel(
   return activeItem?.label ?? activeDomain.label;
 }
 
+function getWorkspaceBreadcrumbSegments(
+  pathname: string,
+  activeItem: NavigationItem | undefined,
+  activeDomain: NavigationDomain,
+  workspaceLabel: string,
+) {
+  const moduleLabel = getWorkspaceModuleLabel(pathname, activeItem);
+  return [activeDomain.label, moduleLabel, workspaceLabel].filter((segment, index, segments) => (
+    Boolean(segment) && segment !== segments[index - 1]
+  ));
+}
+
+function getWorkspaceModuleLabel(pathname: string, activeItem: NavigationItem | undefined) {
+  if (isLogsWorkspacePath(pathname, activeItem)) return 'Logs';
+  return '';
+}
+
+function isLogsWorkspacePath(pathname: string, activeItem: NavigationItem | undefined) {
+  const normalizedPath = pathname.split('?')[0] || '/';
+  return normalizedPath.startsWith('/logs')
+    || normalizedPath.startsWith('/agents/')
+    || normalizedPath === '/onboarding'
+    || normalizedPath === '/observability/endpoints'
+    || activeItem?.id === 'logs'
+    || Boolean(activeItem?.id.startsWith('logs-'));
+}
+
 function getBackTarget(pathname: string) {
   if (/^\/k8s\/clusters\/[^/]+/.test(pathname)) {
     return { to: '/k8s', label: '返回集群列表', ariaLabel: '返回 K8s 集群列表' };
   }
   if (pathname === '/logs/agents/new' || /^\/logs\/agents\/[^/]+\/edit$/.test(pathname)) {
     return { to: '/logs/agents', label: '返回采集路由', ariaLabel: '返回采集路由列表' };
-  }
-  if (pathname === '/logs/alerts/new' || /^\/logs\/alerts\/[^/]+$/.test(pathname)) {
-    return { to: '/logs/alerts', label: '返回日志告警', ariaLabel: '返回日志告警列表' };
   }
   if (/^\/agents\/[^/]+$/.test(pathname)) {
     return { to: '/logs/agents', label: '返回采集路由', ariaLabel: '返回采集路由列表' };

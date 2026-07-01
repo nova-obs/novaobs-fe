@@ -58,26 +58,58 @@ test('Logs 接入配置以 route collector fragment 作为主要编辑对象', (
   assert.equal(onboardingSource.includes('runtimeLogPaths'), false);
 });
 
-test('Logs 接入配置将端点选择合并到运行目标表单并保持主区域等宽', () => {
+test('Logs 接入配置以渐进任务卡承载服务、目标、端点和发布动作', () => {
+  assert.equal(onboardingSource.includes('logs-route-task-stack'), true);
+  assert.equal(onboardingSource.includes('logs-route-task-card'), true);
+  assert.equal(onboardingSource.includes('logs-route-service-card'), true);
+  assert.equal(onboardingSource.includes('logs-route-target-card'), true);
+  assert.equal(onboardingSource.includes('logs-route-endpoint-card'), true);
+  assert.equal(onboardingSource.includes('logs-route-config-card'), true);
+  assert.equal(onboardingSource.includes('logs-route-preview-card'), true);
+  assert.equal(onboardingSource.includes('logs-route-summary-card'), true);
+  assert.equal(onboardingSource.includes('lg:grid-cols-[minmax(0,1fr)_320px]'), true);
   assert.equal(onboardingSource.includes('logs-runtime-configuration-panel'), true);
   assert.equal(onboardingSource.includes('logs-runtime-configuration-panel grid items-start'), false);
   assert.equal(onboardingSource.includes('logs-endpoint-picker'), true);
   assert.equal(onboardingSource.includes('<DataPanel title="日志下游端点"'), false);
-  assert.equal(onboardingSource.indexOf('logs-endpoint-picker') < onboardingSource.indexOf('<DataPanel title="业务采集配置"'), true);
+  assert.equal(onboardingSource.includes('<DataPanel title="业务采集配置"'), false);
   assert.equal(onboardingSource.includes('xl:grid-cols-[minmax(0,1fr)_360px]'), false);
   assert.equal(onboardingSource.includes('<SummaryCard'), false);
-  assert.equal(onboardingSource.includes('logs-onboarding-action-bar'), true);
-  assert.equal(onboardingSource.includes('lg:sticky lg:bottom-3'), true);
+  assert.equal(onboardingSource.includes('logs-onboarding-action-bar'), false);
+  assert.equal(onboardingSource.includes('lg:sticky lg:bottom-3'), false);
   assert.equal(servicePickerSource.includes('logs-service-picker-panel relative flex min-h-[560px] flex-col'), true);
   assert.equal(servicePickerSource.includes('xl:h-full'), true);
 });
 
+test('Logs K8s 服务同步必须先显式选择集群和 Namespace', () => {
+  assert.equal(onboardingSource.includes("const [syncClusterId, setSyncClusterId] = useState('')"), true);
+  assert.equal(onboardingSource.includes("const [syncNamespace, setSyncNamespace] = useState('')"), true);
+  assert.equal(onboardingSource.includes('logs-service-sync-action'), true);
+  assert.equal(onboardingSource.includes('logs-service-sync-trigger'), true);
+  assert.equal(onboardingSource.includes('logs-service-sync-dialog'), true);
+  assert.equal(onboardingSource.includes('logs-service-sync-scope'), false);
+  assert.equal(onboardingSource.includes('确认同步'), true);
+  assert.equal(onboardingSource.includes("clusterId: syncClusterId"), true);
+  assert.equal(onboardingSource.includes("namespace: syncNamespace"), true);
+  assert.equal(onboardingSource.includes('请选择同步集群'), true);
+  assert.equal(onboardingSource.includes('请选择同步 Namespace'), true);
+  assert.equal(onboardingSource.includes('result.services[0]'), false);
+});
+
+test('Logs 创建采集路由来源选择位于左侧任务上下文', () => {
+  assert.equal(onboardingSource.includes('logs-source-mode-switch'), true);
+  assert.equal(onboardingSource.includes('aria-label="采集来源"'), true);
+  assert.equal(onboardingSource.includes('context={('), true);
+  assert.equal(onboardingSource.includes('action={('), false);
+});
+
 test('Logs 接入配置按当前任务步骤渐进展示', () => {
   assert.equal(onboardingSource.includes('const [currentStep, setCurrentStep] = useState<OnboardingStep>(1)'), true);
-  assert.equal(onboardingSource.includes('currentStep === 1 ? ('), true);
-  assert.equal(onboardingSource.includes('currentStep === 2 ? ('), true);
-  assert.equal(onboardingSource.includes('currentStep === 3 ? ('), true);
-  assert.equal(onboardingSource.includes('md:grid-cols-3'), true);
+  assert.equal(onboardingSource.includes("const [setupTask, setSetupTask] = useState<SetupTask>('service')"), true);
+  assert.equal(onboardingSource.includes("active={currentStep === 1 && setupTask === 'service'}"), true);
+  assert.equal(onboardingSource.includes('active={currentStep === 2}'), true);
+  assert.equal(onboardingSource.includes('active={currentStep === 3}'), true);
+  assert.equal(onboardingSource.includes('md:grid-cols-3'), false);
   assert.equal(onboardingSource.includes('下一步：采集配置'), true);
   assert.equal(onboardingSource.includes('activeStep'), false);
 });

@@ -232,8 +232,6 @@ export function ObservabilitySettingsPage() {
   return (
     <div className="space-y-4">
       <DataPanel
-        title="接入端点"
-        meta={endpointsQuery.isLoading ? '加载日志下游端点' : '日志写入地址、作用域和查询能力'}
         action={(
           <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
             <div className="relative w-full md:w-80">

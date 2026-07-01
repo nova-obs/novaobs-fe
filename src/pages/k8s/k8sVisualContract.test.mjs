@@ -22,6 +22,8 @@ const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url
 
 test('K8s 运维模块使用顶部入口和页面内横向分组导航承接集群工作台', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
+  assert.equal(layoutSource.includes('sr-only module-navigation-title'), true);
+  assert.equal(layoutSource.includes('page-title module-navigation-title'), false);
   assert.equal(layoutSource.includes('useParams'), true);
   assert.equal(layoutSource.includes('k8sApi.listClusters'), true);
   assert.equal(layoutSource.includes('hasClusterContext'), true);
@@ -240,6 +242,10 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('证书写操作'), true);
   assert.equal(certificateSource.includes('操作已落审计'), true);
   assert.equal(certificateSource.includes('删除确认摘要'), true);
+  assert.equal(certificateSource.includes('activeAction'), true);
+  assert.equal(certificateSource.includes('CertificateActionDrawer'), true);
+  assert.equal(certificateSource.includes('role="dialog"'), true);
+  assert.equal(certificateSource.includes('xl:grid-cols-[1fr_360px]'), false);
   assert.equal(certificateSource.includes('privateKey'), false);
   assert.equal(certificateSource.includes('private_key'), false);
 });
@@ -256,6 +262,10 @@ test('K8s ServiceAccount 页面展示 RBAC 权限不足态和审计结果', () =
   assert.equal(serviceAccountSource.includes('权限不足'), true);
   assert.equal(serviceAccountSource.includes('操作已落审计'), true);
   assert.equal(serviceAccountSource.includes('删除确认摘要'), true);
+  assert.equal(serviceAccountSource.includes('activeAction'), true);
+  assert.equal(serviceAccountSource.includes('ServiceAccountActionDrawer'), true);
+  assert.equal(serviceAccountSource.includes('role="dialog"'), true);
+  assert.equal(serviceAccountSource.includes('lg:grid-cols-[1fr_340px]'), false);
   assert.equal(serviceAccountSource.includes('不会在页面、日志或响应中展示 token'), true);
 });
 
@@ -272,6 +282,10 @@ test('K8s RBAC 页面展示确认摘要、权限不足态和审计结果', () =>
   assert.equal(rbacPageSource.includes('权限不足'), true);
   assert.equal(rbacPageSource.includes('操作已落审计'), true);
   assert.equal(rbacPageSource.includes('删除确认摘要'), true);
+  assert.equal(rbacPageSource.includes('activeAction'), true);
+  assert.equal(rbacPageSource.includes('RbacActionDrawer'), true);
+  assert.equal(rbacPageSource.includes('role="dialog"'), true);
+  assert.equal(rbacPageSource.includes('xl:grid-cols-[1fr_360px]'), false);
 });
 
 test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导出', () => {

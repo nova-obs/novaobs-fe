@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, FileKey2, Fingerprint, Plus, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { CalendarClock, FileKey2, Fingerprint, Plus, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sCertificate } from './api';
 import { useK8sOpsContext } from './context';
@@ -9,6 +9,7 @@ export function K8sCertificatePage() {
   const queryClient = useQueryClient();
   const [namespace, setNamespace] = useState('');
   const [selected, setSelected] = useState<K8sCertificate | null>(null);
+  const [activeAction, setActiveAction] = useState<'create' | 'delete' | null>(null);
   const [name, setName] = useState('');
   const [commonName, setCommonName] = useState('');
   const [notAfter, setNotAfter] = useState('');
@@ -53,6 +54,12 @@ export function K8sCertificatePage() {
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelected(result.item ?? null);
+      setActiveAction(null);
+      setName('');
+      setCommonName('');
+      setNotAfter('');
+      setCertificatePEM('');
+      setKeyMaterialPEM('');
       queryClient.invalidateQueries({ queryKey: ['k8s-certificates'] });
     },
   });
@@ -66,6 +73,7 @@ export function K8sCertificatePage() {
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
       setSelected(null);
+      setActiveAction(null);
       queryClient.invalidateQueries({ queryKey: ['k8s-certificates'] });
     },
   });
@@ -109,7 +117,16 @@ export function K8sCertificatePage() {
         ) : null}
       </section>
 
-      <DataPanel title="证书中心" meta={isLoading ? '加载中' : `${data.length} 张证书`}>
+      <DataPanel
+        title="证书中心"
+        meta={isLoading ? '加载中' : `${data.length} 张证书`}
+        action={(
+          <div className="flex flex-wrap items-center gap-2">
+            <button className="console-button" disabled={!current} onClick={() => setActiveAction('delete')}><Trash2 className="h-4 w-4" />删除证书</button>
+            <button className="console-button console-button-primary" disabled={!activeClusterId || !namespace} onClick={() => setActiveAction('create')}><Plus className="h-4 w-4" />创建证书</button>
+          </div>
+        )}
+      >
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             证书中心读取失败：{errorMessage(error)}
@@ -131,99 +148,102 @@ export function K8sCertificatePage() {
             正在读取证书元数据。
           </div>
         ) : null}
-        <div className="grid gap-4 xl:grid-cols-[1fr_360px]">
-          <div className="overflow-auto">
-            {!canList ? (
-              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
-                <p className="mt-2 text-sm text-muted">TLS Secret 按 namespace 读取，不做默认跨命名空间扫描。</p>
-              </div>
-            ) : null}
-            {canList && !isLoading && !error && data.length ? (
-              <table className="console-table min-w-[940px] w-full">
-                <thead>
-                  <tr>
-                    <th>证书</th>
-                    <th>集群</th>
-                    <th>命名空间</th>
-                    <th>Common Name</th>
-                    <th>Fingerprint</th>
-                    <th>Secret</th>
-                    <th>Not After</th>
-                    <th>状态</th>
-                    <th>来源</th>
+        <div className="overflow-auto">
+          {!canList ? (
+            <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <div className="font-semibold text-on-surface">请先选择集群和命名空间</div>
+              <p className="mt-2 text-sm text-muted">TLS Secret 按 namespace 读取，不做默认跨命名空间扫描。</p>
+            </div>
+          ) : null}
+          {canList && !isLoading && !error && data.length ? (
+            <table className="console-table min-w-[940px] w-full">
+              <thead>
+                <tr>
+                  <th>证书</th>
+                  <th>集群</th>
+                  <th>命名空间</th>
+                  <th>Common Name</th>
+                  <th>Fingerprint</th>
+                  <th>Secret</th>
+                  <th>Not After</th>
+                  <th>状态</th>
+                  <th>来源</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.map((item) => (
+                  <tr
+                    key={item.id}
+                    className={`cursor-pointer bg-white/35 hover:bg-white/60 ${current?.id === item.id ? 'ring-1 ring-primary/25' : ''}`}
+                    onClick={() => setSelected(item)}
+                  >
+                    <td>
+                      <div className="font-semibold text-primary">{item.name}</div>
+                      <div className="text-[11px] text-muted">{item.id}</div>
+                    </td>
+                    <td className="font-mono text-xs">{item.clusterId}</td>
+                    <td className="font-mono text-xs">{item.namespace || '-'}</td>
+                    <td className="font-mono text-xs">{item.commonName || '-'}</td>
+                    <td className="font-mono text-[11px] text-muted">{item.fingerprint || '-'}</td>
+                    <td className="font-mono text-[11px] text-muted">{item.secretId || '-'}</td>
+                    <td className="font-mono text-xs">{formatDate(item.notAfter)}</td>
+                    <td><StatusPill status={item.status} /></td>
+                    <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {data.map((item) => (
-                    <tr
-                      key={item.id}
-                      className={`cursor-pointer bg-white/35 hover:bg-white/60 ${current?.id === item.id ? 'ring-1 ring-primary/25' : ''}`}
-                      onClick={() => setSelected(item)}
-                    >
-                      <td>
-                        <div className="font-semibold text-primary">{item.name}</div>
-                        <div className="text-[11px] text-muted">{item.id}</div>
-                      </td>
-                      <td className="font-mono text-xs">{item.clusterId}</td>
-                      <td className="font-mono text-xs">{item.namespace || '-'}</td>
-                      <td className="font-mono text-xs">{item.commonName || '-'}</td>
-                      <td className="font-mono text-[11px] text-muted">{item.fingerprint || '-'}</td>
-                      <td className="font-mono text-[11px] text-muted">{item.secretId || '-'}</td>
-                      <td className="font-mono text-xs">{formatDate(item.notAfter)}</td>
-                      <td><StatusPill status={item.status} /></td>
-                      <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : null}
-            {canList && !isLoading && !error && !data.length ? (
-              <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-                <div className="font-semibold text-on-surface">暂无证书资产</div>
-                <p className="mt-2 text-sm text-muted">当前命名空间没有返回 TLS Secret。</p>
-              </div>
-            ) : null}
-          </div>
-
-          <aside className="console-panel px-4 py-3">
-            <div className="text-sm font-semibold text-on-surface">证书写操作</div>
-            <p className="mt-1 text-xs text-muted">真实集群写操作尚未启用；私钥仅作为未来提交输入，不做页面回显。</p>
-            <CertInput label="name" value={name} onChange={setName} />
-            <CertInput label="common_name" value={commonName} onChange={setCommonName} />
-            <CertInput label="not_after" value={notAfter} onChange={setNotAfter} />
-            <label className="mt-3 block text-xs font-semibold text-muted">
-              certificate_pem
-              <textarea className="console-input mt-2 min-h-20 w-full font-mono text-xs" value={certificatePEM} onChange={(event) => setCertificatePEM(event.target.value)} />
-            </label>
-            <label className="mt-3 block text-xs font-semibold text-muted">
-              private material
-              <textarea
-                className="console-input mt-2 min-h-20 w-full font-mono text-xs"
-                placeholder="仅在提交时发送，不做页面回显"
-                value={keyMaterialPEM}
-                onChange={(event) => setKeyMaterialPEM(event.target.value)}
-              />
-            </label>
-            <div className="mt-3 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-              <div className="font-semibold text-on-surface">删除确认摘要</div>
-              <div className="mt-2 font-mono">id={current?.id ?? '-'}</div>
-              <div className="font-mono">name={current?.name ?? '-'}</div>
-              <div className="font-mono">fingerprint={current?.fingerprint ?? '-'}</div>
+                ))}
+              </tbody>
+            </table>
+          ) : null}
+          {canList && !isLoading && !error && !data.length ? (
+            <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
+              <div className="font-semibold text-on-surface">暂无证书资产</div>
+              <p className="mt-2 text-sm text-muted">当前命名空间没有返回 TLS Secret。</p>
             </div>
-            <div className="mt-4 flex gap-2">
-              <button className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!activeClusterId || !namespace || !name.trim() || !certificatePEM.trim() || !keyMaterialPEM.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>
-                <Plus className="h-4 w-4" />
-                创建
-              </button>
-              <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60" disabled={!current || deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>
-                <Trash2 className="h-4 w-4" />
-                删除
-              </button>
-            </div>
-          </aside>
+          ) : null}
         </div>
       </DataPanel>
+
+      {activeAction === 'create' ? (
+        <CertificateActionDrawer title="创建证书" onClose={() => setActiveAction(null)}>
+          <div className="text-sm font-semibold text-on-surface">证书写操作</div>
+          <p className="text-xs text-muted">真实集群写操作尚未启用；私钥仅作为未来提交输入，不做页面回显。</p>
+          <CertInput label="name" value={name} onChange={setName} />
+          <CertInput label="common_name" value={commonName} onChange={setCommonName} />
+          <CertInput label="not_after" value={notAfter} onChange={setNotAfter} />
+          <label className="block text-xs font-semibold text-muted">
+            certificate_pem
+            <textarea className="console-input mt-2 min-h-20 w-full font-mono text-xs" value={certificatePEM} onChange={(event) => setCertificatePEM(event.target.value)} />
+          </label>
+          <label className="block text-xs font-semibold text-muted">
+            private material
+            <textarea
+              className="console-input mt-2 min-h-20 w-full font-mono text-xs"
+              placeholder="仅在提交时发送，不做页面回显"
+              value={keyMaterialPEM}
+              onChange={(event) => setKeyMaterialPEM(event.target.value)}
+            />
+          </label>
+          <DrawerFooter>
+            <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
+            <button className="console-button console-button-primary" disabled={!activeClusterId || !namespace || !name.trim() || !certificatePEM.trim() || !keyMaterialPEM.trim() || createMutation.isPending} onClick={() => createMutation.mutate()}>创建</button>
+          </DrawerFooter>
+        </CertificateActionDrawer>
+      ) : null}
+
+      {activeAction === 'delete' ? (
+        <CertificateActionDrawer title="删除证书" onClose={() => setActiveAction(null)}>
+          <div className="text-sm font-semibold text-on-surface">删除确认摘要</div>
+          <div className="rounded-lg bg-surface px-3 py-3 text-xs text-muted">
+            <div className="font-mono">id={current?.id ?? '-'}</div>
+            <div className="font-mono">name={current?.name ?? '-'}</div>
+            <div className="font-mono">fingerprint={current?.fingerprint ?? '-'}</div>
+          </div>
+          <DrawerFooter>
+            <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
+            <button className="console-button console-button-danger" disabled={!current || deleteMutation.isPending} onClick={() => deleteMutation.mutate()}>删除</button>
+          </DrawerFooter>
+        </CertificateActionDrawer>
+      ) : null}
 
       <section className="console-panel px-4 py-3">
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -241,9 +261,28 @@ export function K8sCertificatePage() {
   );
 }
 
+function CertificateActionDrawer({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
+      <button className="absolute inset-0 cursor-default" aria-label={`关闭${title}`} onClick={onClose} />
+      <aside className="console-drawer-panel relative flex h-full w-full max-w-[720px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="certificate-action-title">
+        <header className="flex items-start justify-between gap-4 border-b border-outline px-5 py-4">
+          <h2 id="certificate-action-title" className="text-base font-semibold text-on-surface">{title}</h2>
+          <button className="console-button h-8 w-8 p-0" aria-label={`关闭${title}`} onClick={onClose}><X className="h-4 w-4" /></button>
+        </header>
+        <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-5 py-4">{children}</div>
+      </aside>
+    </div>
+  );
+}
+
+function DrawerFooter({ children }: { children: ReactNode }) {
+  return <div className="mt-auto flex items-center justify-end gap-2 border-t border-outline pt-4">{children}</div>;
+}
+
 function CertInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
-    <label className="mt-3 block text-xs font-semibold text-muted">
+    <label className="block text-xs font-semibold text-muted">
       {label}
       <input className="console-input mt-2 w-full" value={value} onChange={(event) => onChange(event.target.value)} />
     </label>

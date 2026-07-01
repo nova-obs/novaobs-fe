@@ -427,6 +427,14 @@ body {
     @apply border-danger/20 text-danger hover:border-danger/35 hover:bg-red-50 hover:text-danger;
   }
 
+  .platform-settings-table th {
+    @apply px-2.5 py-1.5;
+  }
+
+  .platform-settings-table td {
+    @apply h-10 px-2.5 py-1.5;
+  }
+
   .soft-tile {
     @apply rounded-md;
     background: #f6f8fc;

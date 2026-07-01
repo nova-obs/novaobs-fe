@@ -103,21 +103,7 @@ export function PlatformSettingsPage() {
   return (
     <div className="console-workbench platform-settings-page overflow-hidden">
       <section className="min-w-0">
-          <DataPanel
-            title="镜像模板"
-            meta="平台级运行配置，部署清单渲染时使用"
-            action={(
-              <button
-                type="button"
-                className="console-button"
-                onClick={() => imagesQuery.refetch()}
-                disabled={imagesQuery.isFetching}
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${imagesQuery.isFetching ? 'animate-spin' : ''}`} />
-                刷新
-              </button>
-            )}
-          >
+          <DataPanel title="镜像模板" meta="平台级运行配置，部署清单渲染时使用">
             {imagesQuery.isLoading ? (
               <div className="space-y-2">
                 <div className="h-10 rounded-md bg-surface" />
@@ -146,6 +132,16 @@ export function PlatformSettingsPage() {
                     <span className="min-w-[72px] text-right font-mono text-[11px] text-muted">{rangeStart}-{rangeEnd} / {filteredRows.length}</span>
                     <button
                       type="button"
+                      className="console-icon-button"
+                      onClick={() => imagesQuery.refetch()}
+                      disabled={imagesQuery.isFetching}
+                      aria-label="刷新镜像模板"
+                      title="刷新镜像模板"
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${imagesQuery.isFetching ? 'animate-spin' : ''}`} />
+                    </button>
+                    <button
+                      type="button"
                       className="console-button h-8 px-2"
                       disabled={currentPage <= 1}
                       onClick={() => setPage((value) => Math.max(1, value - 1))}
@@ -172,14 +168,21 @@ export function PlatformSettingsPage() {
                   </div>
                 ) : (
                   <div className="overflow-auto">
-                    <table className="console-table w-full min-w-[980px] table-fixed">
+                    <table className="console-table platform-settings-table w-full max-w-[1480px] min-w-[1040px] table-fixed">
+                      <colgroup>
+                        <col className="w-[18%]" />
+                        <col className="w-[24%]" />
+                        <col className="w-[40%]" />
+                        <col className="w-[12%]" />
+                        <col className="w-[96px]" />
+                      </colgroup>
                       <thead>
                         <tr>
-                          <th className="w-[150px]">模板</th>
-                          <th className="w-[280px]">占位符</th>
+                          <th>模板</th>
+                          <th>占位符</th>
                           <th>当前镜像</th>
-                          <th className="w-[150px]">生效范围</th>
-                          <th className="w-[150px] text-right">操作</th>
+                          <th>生效范围</th>
+                          <th className="text-right">操作</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -193,8 +196,8 @@ export function PlatformSettingsPage() {
                               className={`cursor-pointer ${active || rowEditing ? 'console-selected-row' : ''}`}
                               onClick={() => selectImage(item)}
                             >
-                              <td className="font-semibold text-on-surface"><div className="truncate">{item.label}</div></td>
-                              <td className="font-mono text-[11px] text-muted"><div className="truncate">{item.key}</div></td>
+                              <td className="font-semibold text-on-surface"><div className="truncate" title={item.label}>{item.label}</div></td>
+                              <td className="font-mono text-[11px] text-muted"><div className="truncate" title={item.key}>{item.key}</div></td>
                               <td className="font-mono text-[11px] text-muted">
                                 {rowEditing ? (
                                   <div className="space-y-1">
@@ -209,10 +212,10 @@ export function PlatformSettingsPage() {
                                     {updateMutation.error ? <div className="text-[11px] font-semibold text-danger">{errorMessage(updateMutation.error)}</div> : null}
                                   </div>
                                 ) : (
-                                  <div className="truncate">{item.value}</div>
+                                  <div className="truncate" title={item.value}>{item.value}</div>
                                 )}
                               </td>
-                              <td className="text-xs text-muted"><div className="truncate">{imageScopeText(item.key)}</div></td>
+                              <td className="text-xs text-muted"><ImageScopeTag scope={imageScopeText(item.key)} /></td>
                               <td className="text-right">
                                 {rowEditing ? (
                                   <div className="flex justify-end gap-2">
@@ -279,6 +282,19 @@ function imageScopeText(key: string) {
   if (key === '__NOVAOBS_IMAGE_OTEL_COLLECTOR__') return '日志采集 DaemonSet';
   if (key === '__NOVAOBS_IMAGE_VMALERT__') return '日志告警 vmalert Runtime';
   return '平台部署清单';
+}
+
+function ImageScopeTag({ scope }: { scope: string }) {
+  const tone = scope.includes('DaemonSet')
+    ? 'border-emerald-600/20 bg-emerald-50 text-emerald-700'
+    : scope.includes('vmalert')
+      ? 'border-primary/20 bg-primary-soft text-primary'
+      : 'border-outline bg-surface text-muted';
+  return (
+    <span className={`inline-flex max-w-full items-center rounded border px-1.5 py-0.5 text-[11px] font-semibold ${tone}`} title={scope}>
+      <span className="truncate">{scope}</span>
+    </span>
+  );
 }
 
 function errorMessage(error: unknown) {

@@ -5,6 +5,7 @@ import { readFileSync } from 'node:fs';
 const layoutSource = readFileSync(new URL('./PlatformLayout.tsx', import.meta.url), 'utf8');
 const observabilitySource = readFileSync(new URL('./ObservabilitySettingsPage.tsx', import.meta.url), 'utf8');
 const platformSettingsSource = readFileSync(new URL('./PlatformSettingsPage.tsx', import.meta.url), 'utf8');
+const styleSource = readFileSync(new URL('../../styles/index.css', import.meta.url), 'utf8');
 
 test('平台管理模块保留平台设置和访问控制入口', () => {
   assert.equal(layoutSource.includes('/platform/settings'), true);
@@ -22,6 +23,8 @@ test('平台管理模块保留平台设置和访问控制入口', () => {
   assert.equal(layoutSource.includes('/platform/observability'), false);
   assert.equal(layoutSource.includes('观测接入配置'), false);
   assert.equal(layoutSource.includes('平台管理导航'), true);
+  assert.equal(layoutSource.includes('sr-only module-navigation-title'), true);
+  assert.equal(layoutSource.includes('bg-primary-soft text-primary'), true);
   assert.equal(layoutSource.includes('<aside'), false);
   assert.equal(layoutSource.includes('xl:grid-cols-[248px'), false);
 });
@@ -46,6 +49,11 @@ test('平台设置页面承载平台级镜像模板而非业务或项目配置',
   assert.equal(platformSettingsSource.includes('platformSettingGroups'), false);
   assert.equal(platformSettingsSource.includes('console-selected-row'), true);
   assert.equal(platformSettingsSource.includes('table-fixed'), true);
+  assert.equal(platformSettingsSource.includes('platform-settings-table'), true);
+  assert.equal(styleSource.includes('.platform-settings-table th'), true);
+  assert.equal(styleSource.includes('.platform-settings-table td'), true);
+  assert.equal(platformSettingsSource.includes('max-w-[1480px]'), true);
+  assert.equal(platformSettingsSource.includes('<colgroup>'), true);
   assert.equal(platformSettingsSource.includes('console-detail-rail'), false);
   assert.equal(platformSettingsSource.includes('xl:grid-cols-[minmax(0,1fr)_360px]'), false);
   assert.equal(platformSettingsSource.includes('editingKey'), true);
@@ -60,6 +68,12 @@ test('平台设置页面承载平台级镜像模板而非业务或项目配置',
   assert.equal(platformSettingsSource.includes('下一页'), true);
   assert.equal(platformSettingsSource.includes('未找到匹配的镜像模板'), true);
   assert.equal(platformSettingsSource.includes('生效范围'), true);
+  assert.equal(platformSettingsSource.includes('ImageScopeTag'), true);
+  assert.equal(platformSettingsSource.includes('title={scope}'), true);
+  assert.equal(platformSettingsSource.includes('title={item.value}'), true);
+  assert.equal(platformSettingsSource.includes('title={item.key}'), true);
+  assert.equal(platformSettingsSource.includes('刷新镜像模板'), true);
+  assert.equal(platformSettingsSource.includes('console-icon-button'), true);
   assert.equal(platformSettingsSource.includes('修改'), true);
   assert.equal(platformSettingsSource.includes('保存'), true);
   assert.equal(platformSettingsSource.includes('取消'), true);

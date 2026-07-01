@@ -27,7 +27,7 @@ export function PlatformLayout() {
   return (
     <div className="min-w-0 space-y-3">
       <div className="module-navigation-bar overflow-visible">
-        <h1 className="page-title module-navigation-title">平台管理</h1>
+        <h1 className="sr-only module-navigation-title">平台管理</h1>
         <nav className="module-navigation-tabs overflow-visible" aria-label="平台管理导航">
           <div className="relative z-20 shrink-0">
             <button
@@ -76,8 +76,8 @@ export function PlatformLayout() {
           <NavLink
             to="/platform/access"
             className={({ isActive }) => [
-              'module-navigation-link gap-2 px-3 text-sm font-semibold transition-colors',
-              isActive ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface',
+              'module-navigation-link my-1 gap-2 rounded-md px-3 text-sm font-semibold transition-colors',
+              isActive ? 'border-transparent bg-primary-soft text-primary' : 'border-transparent text-muted hover:bg-surface hover:text-on-surface',
             ].join(' ')}
           >
             <ShieldCheck className="h-4 w-4" />
@@ -92,7 +92,7 @@ export function PlatformLayout() {
 
 function platformGroupTriggerClass(active: boolean) {
   return [
-    'inline-flex min-h-10 shrink-0 items-center gap-1.5 border-b-2 px-3 text-sm font-semibold transition-colors',
-    active ? 'border-primary bg-primary-soft text-primary' : 'border-transparent text-muted hover:bg-surface hover:text-on-surface',
+    'my-1 inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-md border-b-2 px-3 text-sm font-semibold transition-colors',
+    active ? 'border-transparent bg-primary-soft text-primary' : 'border-transparent text-muted hover:bg-surface hover:text-on-surface',
   ].join(' ');
 }

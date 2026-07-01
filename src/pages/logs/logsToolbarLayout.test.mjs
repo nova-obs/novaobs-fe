@@ -27,16 +27,18 @@ test('采集路由将创建与刷新放左侧并将检索放右侧', () => {
   assert.match(routesSource, /filteredRoutes/);
 });
 
-test('日志告警将创建与刷新放左侧并将检索放右侧', () => {
-  const toolbarIndex = alertsSource.indexOf('console-list-toolbar');
-  const createIndex = alertsSource.indexOf('创建告警', toolbarIndex);
-  const refreshIndex = alertsSource.indexOf('刷新', toolbarIndex);
+test('日志告警工具栏与接入配置一致，右侧依次放搜索、刷新、新增', () => {
+  const toolbarIndex = alertsSource.indexOf('console-panel-header shrink-0 justify-end');
   const searchIndex = alertsSource.indexOf('搜索告警规则', toolbarIndex);
+  const refreshIndex = alertsSource.indexOf('刷新', toolbarIndex);
+  const createIndex = alertsSource.indexOf('创建告警', toolbarIndex);
 
   assert.ok(toolbarIndex >= 0);
-  assert.ok(createIndex > toolbarIndex);
-  assert.ok(refreshIndex > toolbarIndex);
-  assert.ok(searchIndex > createIndex);
+  assert.ok(searchIndex > toolbarIndex);
+  assert.ok(refreshIndex > searchIndex);
+  assert.ok(createIndex > refreshIndex);
+  assert.match(alertsSource, /className="relative w-full md:w-80"/);
+  assert.doesNotMatch(alertsSource, /console-list-toolbar-actions/);
   assert.match(alertsSource, /const \[ruleQuery, setRuleQuery\] = useState\(''\)/);
   assert.match(alertsSource, /filteredRules/);
 });
