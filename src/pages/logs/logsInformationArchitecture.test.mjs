@@ -47,7 +47,7 @@ test('采集路由保留任务页，日志告警新增编辑进入列表表单�
 });
 
 test('日志告警以服务为维度选择并展示当前服务规则', () => {
-  assert.match(alerts, /AlertServiceSelector/);
+  assert.match(alerts, /LogsEntitySelector<AlertServiceRow>/);
   assert.match(alerts, /logs-alert-service-selector/);
   assert.match(alerts, /useSearchParams/);
   assert.match(alerts, /selectedServiceRules/);

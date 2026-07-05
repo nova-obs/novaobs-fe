@@ -210,8 +210,8 @@ test('Logs Explore 将服务日志链路收敛为顶部服务选择并突出检�
   assert.equal(exploreSource.includes('title="日志分析"'), false);
   assert.equal(exploreSource.includes('xl:grid-cols-[minmax(0,1fr)_300px]'), true);
   assert.equal(exploreSource.includes('{routes.length} routes'), false);
-  assert.equal(exploreSource.includes('<ServiceSelector'), true);
-  assert.equal(exploreSource.includes('service-selector-trigger'), true);
+  assert.equal(exploreSource.includes('<LogsEntitySelector<ServiceLogLink>'), true);
+  assert.equal(exploreSource.includes('service-selector'), true);
   assert.equal(exploreSource.includes('service-option-context'), true);
   assert.equal(exploreSource.includes('service_id'), true);
   assert.equal(exploreSource.includes('query-context-summary'), true);
@@ -220,8 +220,6 @@ test('Logs Explore 将服务日志链路收敛为顶部服务选择并突出检�
   assert.equal(exploreSource.includes('logs-explore-query-actions'), true);
   assert.equal(exploreSource.includes('aria-label="在新窗口打开查询"'), true);
   assert.equal(exploreSource.includes('aria-label="刷新日志上下文"'), true);
-  assert.equal(exploreSource.includes('service-selector-popover'), true);
-  assert.equal(exploreSource.includes('createPortal'), true);
   assert.equal(exploreSource.includes('<details'), false);
   assert.equal(exploreSource.includes('routeQuery'), false);
   assert.equal(exploreSource.includes('过滤 service / endpoint'), false);
@@ -232,8 +230,8 @@ test('Logs Explore 将服务日志链路收敛为顶部服务选择并突出检�
 });
 
 test('Logs 工作台将可用高度传递给采集路由和日志分析内容区域', () => {
-  assert.equal(workspaceSource.includes('logs-workbench route-transition-page relative flex h-full min-h-0'), true);
-  assert.equal(workspaceSource.includes('route-transition-page min-h-0 flex-1'), true);
+  assert.equal(workspaceSource.includes('ModuleWorkbench'), true);
+  assert.equal(workspaceSource.includes('module="logs"'), true);
   assert.equal(agentsSource.includes('logs-routes-workbench flex min-h-[720px] flex-col xl:h-full xl:min-h-0'), true);
   assert.equal(agentsSource.includes('logs-routes-content flex min-h-0 flex-1 flex-col'), true);
   assert.equal(agentsSource.includes('采集路由工作区'), true);

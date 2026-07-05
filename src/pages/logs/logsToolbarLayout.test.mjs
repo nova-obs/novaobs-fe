@@ -23,7 +23,7 @@ test('采集路由工具栏先选择路由，再放刷新、新增', () => {
   assert.ok(selectorIndex > toolbarIndex);
   assert.ok(refreshIndex > selectorIndex);
   assert.ok(createIndex > refreshIndex);
-  assert.match(routesSource, /function RouteSelector\(/);
+  assert.match(routesSource, /LogsEntitySelector<LogRouteView>/);
   assert.match(routesSource, /function selectRoute\(routeId: string\)/);
   assert.doesNotMatch(routesSource, /const \[routeQuery, setRouteQuery\]/);
   assert.doesNotMatch(routesSource, /搜索采集路由/);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Link, NavLink, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronDown } from 'lucide-react';
+import { Boxes, Check, ChevronDown, Network } from 'lucide-react';
 import { k8sApi } from './api';
 import {
   getK8sNavigationByPath,
@@ -11,6 +11,13 @@ import {
   type K8sNavigationGroup,
   type K8sNavigationItem,
 } from './navigation';
+import { ModuleWorkbench } from '../../components/navigation/ModuleWorkbench';
+import type { ModuleRailItem } from '../../components/navigation/ModuleRail';
+
+const k8sRailItems: ModuleRailItem[] = [
+  { to: '/k8s', label: '集群总览', description: '集群清单、连接状态与巡检', icon: Boxes, end: true },
+  { to: '/k8s/access', label: '集群接入', description: '登记集群、维护凭据与只读接入', icon: Network },
+];
 
 export function K8sOpsLayout() {
   const location = useLocation();
@@ -46,8 +53,13 @@ export function K8sOpsLayout() {
   }
 
   return (
-    <div className="min-w-0 space-y-3">
-      {hasClusterContext ? (
+    <ModuleWorkbench
+      module="k8s"
+      title="K8s 运维"
+      ariaLabel="K8s 运维导航"
+      items={k8sRailItems}
+      showRail={!hasClusterContext}
+      toolbar={hasClusterContext ? (
         <ClusterContextNavigation
           activeClusterId={clusterId}
           activeClusterName={activeCluster?.name || clusterId}
@@ -56,34 +68,10 @@ export function K8sOpsLayout() {
           onClusterChange={handleClusterChange}
           onFunctionChange={handleFunctionChange}
         />
-      ) : (
-        <FleetNavigation />
-      )}
+      ) : null}
+    >
       <Outlet context={context} />
-    </div>
-  );
-}
-
-function FleetNavigation() {
-  return (
-    <div className="module-navigation-bar">
-      <h1 className="sr-only module-navigation-title">K8s 运维</h1>
-      <nav className="module-navigation-tabs" aria-label="K8s 运维导航">
-        <NavLink
-          className={({ isActive }) => fleetTabClass(isActive)}
-          end
-          to="/k8s"
-        >
-          集群总览
-        </NavLink>
-        <NavLink
-          className={({ isActive }) => fleetTabClass(isActive)}
-          to="/k8s/access"
-        >
-          集群接入
-        </NavLink>
-      </nav>
-    </div>
+    </ModuleWorkbench>
   );
 }
 
@@ -277,12 +265,5 @@ function groupTriggerClass(active: boolean) {
   return [
     'inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md border-b-2 px-3 text-xs font-semibold transition-colors',
     active ? 'border-primary bg-primary-soft text-primary' : 'border-transparent text-muted hover:bg-surface hover:text-on-surface',
-  ].join(' ');
-}
-
-function fleetTabClass(isActive: boolean) {
-  return [
-    'module-navigation-link px-3 text-sm font-semibold transition-colors',
-    isActive ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface',
   ].join(' ');
 }

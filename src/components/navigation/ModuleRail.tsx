@@ -3,11 +3,18 @@ import { NavLink } from 'react-router-dom';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+export type ModuleRailModuleId = 'logs' | 'k8s' | 'platform';
+
+export function moduleRailStorageKey(module: ModuleRailModuleId): string {
+  return `novaobs.module-rail.${module}`;
+}
+
 export interface ModuleRailItem {
   to: string;
   label: string;
   description?: string;
   icon: LucideIcon;
+  end?: boolean;
 }
 
 interface ModuleRailProps {
@@ -47,7 +54,14 @@ export function ModuleRail({ items, ariaLabel, storageKey }: ModuleRailProps) {
   useEffect(() => {
     if (!expanded) return undefined;
     function onEscape(event: KeyboardEvent) {
-      if (event.key === 'Escape') setExpanded(false);
+      if (event.key !== 'Escape') return;
+      // Skip when another interactive overlay (modal, alertdialog, popover listbox, menu)
+      // is claiming the Escape — that overlay should close first, not the rail.
+      const target = event.target as HTMLElement | null;
+      if (target?.closest('[role="dialog"], [role="alertdialog"], [role="listbox"], [role="menu"]')) return;
+      // Also honor propagation stopped by a nested handler (e.g. LogsEntitySelector).
+      if (event.defaultPrevented) return;
+      setExpanded(false);
     }
     window.addEventListener('keydown', onEscape);
     return () => window.removeEventListener('keydown', onEscape);
@@ -70,7 +84,7 @@ export function ModuleRail({ items, ariaLabel, storageKey }: ModuleRailProps) {
               key={item.to}
               to={item.to}
               className={({ isActive }) => `module-rail-link ${isActive ? 'is-active' : ''}`}
-              end={false}
+              end={item.end ?? false}
             >
               <Icon className="module-rail-link-icon" aria-hidden />
               <span className="module-rail-link-label">{item.label}</span>

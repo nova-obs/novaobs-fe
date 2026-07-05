@@ -9,7 +9,7 @@ import { logSinkLabel, logsApi, type LogAccessSource, type LogParsePreviewResult
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsPublishPreviewPanel } from './LogsPublishPreviewPanel';
-import { LogsTaskPageHeader } from './LogsPrimitives';
+import { LogsErrorLine, LogsTaskPageHeader, shortHash } from './LogsPrimitives';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
   { value: 'k8s', label: 'K8s' },
@@ -28,11 +28,6 @@ function serviceMatchesAccessSource(service: LogsServiceSummary, source: LogAcce
     return service.identityType === 'host_process';
   }
   return service.identityType === 'k8s_workload' || service.source === 'k8s';
-}
-
-function shortHash(value?: string) {
-  if (!value) return '-';
-  return value.length > 12 ? value.slice(0, 12) : value;
 }
 
 function formatMissing(items: string[]) {
@@ -1518,7 +1513,7 @@ function SyncK8sServicesDialog({
             </select>
           </label>
           {disabledReason ? <WarnLine message={disabledReason} /> : null}
-          {error ? <ErrorLine message={(error as Error).message} /> : null}
+          {error ? <LogsErrorLine message={(error as Error).message} /> : null}
         </div>
         <div className="flex shrink-0 items-center justify-end gap-2 border-t border-outline bg-surface-lowest px-4 py-3">
           <button className="console-button h-9" disabled={pending} onClick={onClose}>取消</button>
@@ -1783,7 +1778,7 @@ function SummaryValue({ label, value }: { label: string; value: string }) {
 function MutationErrors({ errors }: { errors: Array<unknown> }) {
   return (
     <>
-      {errors.filter(Boolean).map((error, index) => <ErrorLine key={index} message={(error as Error).message} />)}
+      {errors.filter(Boolean).map((error, index) => <LogsErrorLine key={index} message={(error as Error).message} />)}
     </>
   );
 }
@@ -1798,13 +1793,6 @@ function ErrorInline({ message, onRetry }: { message: string; onRetry: () => voi
   );
 }
 
-function ErrorLine({ message }: { message: string }) {
-  return (
-    <div className="mt-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
-      <XCircle className="h-4 w-4" />{message}
-    </div>
-  );
-}
 
 function WarnLine({ message }: { message: string }) {
   return (

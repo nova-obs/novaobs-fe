@@ -10,21 +10,18 @@ const styleSource = readFileSync(new URL('../../styles/index.css', import.meta.u
 test('平台管理模块保留平台设置和访问控制入口', () => {
   assert.equal(layoutSource.includes('/platform/settings'), true);
   assert.equal(layoutSource.includes('平台设置'), true);
-  assert.equal(layoutSource.includes('platformSettingsItems'), true);
-  assert.equal(layoutSource.includes('镜像模板'), true);
-  assert.equal(layoutSource.includes('aria-expanded'), true);
-  assert.equal(layoutSource.includes('关闭平台设置菜单'), true);
-  assert.equal(layoutSource.includes('· 镜像模板'), false);
-  assert.equal(layoutSource.includes('module-navigation-tabs overflow-visible'), true);
-  assert.equal(layoutSource.includes('Check'), true);
-  assert.equal(layoutSource.includes('ChevronDown'), true);
   assert.equal(layoutSource.includes('/platform/access'), true);
   assert.equal(layoutSource.includes('访问控制'), true);
   assert.equal(layoutSource.includes('/platform/observability'), false);
   assert.equal(layoutSource.includes('观测接入配置'), false);
   assert.equal(layoutSource.includes('平台管理导航'), true);
-  assert.equal(layoutSource.includes('sr-only module-navigation-title'), true);
-  assert.equal(layoutSource.includes('bg-primary-soft text-primary'), true);
+  assert.equal(layoutSource.includes('ModuleWorkbench'), true);
+  assert.equal(layoutSource.includes('module="platform"'), true);
+  assert.equal(layoutSource.includes('module-navigation-bar'), false);
+  assert.equal(layoutSource.includes('module-navigation-tabs'), false);
+  assert.equal(layoutSource.includes('module-navigation-title'), false);
+  assert.equal(layoutSource.includes('platformSettingsItems'), false);
+  assert.equal(layoutSource.includes('关闭平台设置菜单'), false);
   assert.equal(layoutSource.includes('<aside'), false);
   assert.equal(layoutSource.includes('xl:grid-cols-[248px'), false);
 });

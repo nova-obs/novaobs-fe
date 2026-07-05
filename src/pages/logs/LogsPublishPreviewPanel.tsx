@@ -1,10 +1,6 @@
 import { AlertTriangle } from 'lucide-react';
 import type { LogPublishResult } from './api';
-
-function shortHash(value?: string) {
-  if (!value) return '-';
-  return value.length > 12 ? value.slice(0, 12) : value;
-}
+import { shortHash } from './LogsPrimitives';
 
 function publishOperationLabel(value: string) {
   switch (value) {

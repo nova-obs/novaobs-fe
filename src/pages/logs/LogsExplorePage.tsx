@@ -1,10 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Check, ChevronDown, Database, ExternalLink, ListFilter, RefreshCw, Route, Save, Server, X } from 'lucide-react';
+import { Bell, Database, ExternalLink, ListFilter, RefreshCw, Route, Save, Server, X } from 'lucide-react';
 import { buildVictoriaLogsVMUIURL, logSinkLabel, logsApi, type LogEndpoint, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
-import { LogsEmptyState, LogsInfoCell, LogsSection } from './LogsPrimitives';
+import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsSection } from './LogsPrimitives';
+import { LogsEntitySelector } from './LogsEntitySelector';
 import { routeAccessPriority } from './ServicePickerPanel';
 
 type ServiceLogMode = 'external' | 'platform' | 'none';
@@ -155,15 +155,36 @@ export function LogsExplorePage() {
   return (
     <div className="logs-explore-workbench grid min-h-[760px] gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_300px] xl:overflow-hidden">
       <section className="console-panel min-h-0 flex flex-col overflow-hidden">
-        {error ? <ErrorLine message={(error as Error).message} /> : null}
+        {error ? <LogsErrorLine message={(error as Error).message} /> : null}
         <div className="shrink-0 border-b border-outline bg-surface-low/70 p-3 shadow-[0_10px_24px_rgba(24,52,96,0.10)]">
           <div className="grid items-start gap-2 lg:grid-cols-[minmax(320px,400px)_minmax(0,1fr)]">
             <div className="logs-explore-context-panel min-w-0 overflow-hidden rounded-md border border-primary/25 bg-white shadow-[0_8px_18px_rgba(24,52,96,0.12)]">
               <div className="logs-explore-context-header flex h-7 items-center justify-between gap-2 border-b border-primary/15 bg-primary-soft/75 px-3 text-[11px] font-semibold text-primary">
                 <span>服务</span>
               </div>
-              <div className="p-2">
-                <ServiceSelector links={serviceLinks} activeLink={activeLink} onSelect={selectService} />
+              <div className="service-selector p-2">
+                <LogsEntitySelector<ServiceLogLink>
+                  items={serviceLinks}
+                  activeItem={activeLink}
+                  onSelect={(link) => selectService(link.serviceId)}
+                  getId={(link) => link.serviceId}
+                  triggerIcon={activeLink?.mode === 'platform' ? Route : Server}
+                  triggerTitle={activeLink?.serviceName ?? ''}
+                  triggerMeta={activeLink ? `${activeLink.sourceLabel} · ${activeLink.endpoint?.name || '未绑定端点'}` : '服务 · 日志链路 · 端点'}
+                  placeholder="选择服务"
+                  ariaLabel="服务"
+                  triggerHeight="h-14"
+                  minWidth={0}
+                  rowHeight={68}
+                  emptyMessage="暂无服务"
+                  renderOption={(link, selected) => (
+                    <>
+                      <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{link.serviceName}</span>
+                      <div className="service-option-context mt-1 truncate text-[11px] font-medium text-muted">{link.sourceLabel} · {link.endpoint?.name || '未绑定端点'}</div>
+                      <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{link.scopeLabel}</div>
+                    </>
+                  )}
+                />
               </div>
             </div>
             <div className="logs-explore-context-panel min-w-0 overflow-hidden rounded-md border border-primary/25 bg-white shadow-[0_8px_18px_rgba(24,52,96,0.12)]">
@@ -263,93 +284,6 @@ export function LogsExplorePage() {
   );
 }
 
-function ErrorLine({ message }: { message: string }) {
-  return <div className="m-3 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">{message}</div>;
-}
-
-function ServiceSelector({ links, activeLink, onSelect }: {
-  links: ServiceLogLink[];
-  activeLink: ServiceLogLink | null;
-  onSelect: (serviceId: string) => void;
-}) {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState({ top: 0, left: 0, width: 0 });
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const updatePosition = () => {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const viewportPadding = 12;
-      const width = Math.min(rect.width, window.innerWidth - viewportPadding * 2);
-      const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - width - viewportPadding);
-      const estimatedHeight = Math.min(Math.max(links.length, 1) * 68 + 8, 288);
-      const below = rect.bottom + 6;
-      const top = below + estimatedHeight <= window.innerHeight - viewportPadding
-        ? below
-        : Math.max(viewportPadding, rect.top - estimatedHeight - 6);
-      setPopoverStyle({ top, left, width });
-    };
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [links.length, open]);
-
-  return (
-    <div className="service-selector rounded-md">
-      <button
-        ref={triggerRef}
-        type="button"
-        className="service-selector-trigger flex h-14 w-full items-center gap-3 rounded-md border border-outline/80 bg-white px-3 text-left shadow-[0_2px_6px_rgba(24,52,96,0.06)] transition-colors hover:border-primary/40"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        onClick={() => setOpen((value) => !value)}
-      >
-        {activeLink?.mode === 'platform' ? <Route className="h-4 w-4 shrink-0 text-primary" /> : <Server className="h-4 w-4 shrink-0 text-primary" />}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-on-surface">{activeLink?.serviceName || '选择服务'}</div>
-          <div className="mt-1 truncate font-mono text-[11px] text-muted">{activeLink ? `${activeLink.sourceLabel} · ${activeLink.endpoint?.name || '未绑定端点'}` : '服务 · 日志链路 · 端点'}</div>
-        </div>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && typeof document !== 'undefined' ? createPortal((
-        <>
-          <button type="button" className="fixed inset-0 z-40 cursor-default border-0 bg-transparent" aria-label="关闭服务选择" onClick={() => setOpen(false)} />
-          <div className="service-selector-popover fixed z-50 max-h-72 overflow-y-auto rounded-md border border-outline bg-white p-1 shadow-[0_14px_36px_rgba(24,52,96,0.2)]" style={popoverStyle} role="listbox" aria-label="服务">
-            {links.length === 0 ? <div className="px-3 py-5 text-center text-xs text-muted">暂无服务</div> : links.map((link) => {
-              const selected = link.serviceId === activeLink?.serviceId;
-              return (
-                <button
-                  key={link.serviceId}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  className={`w-full rounded px-3 py-2.5 text-left transition-colors ${selected ? 'bg-primary-soft/70' : 'hover:bg-surface-low'}`}
-                  onClick={() => {
-                    onSelect(link.serviceId);
-                    setOpen(false);
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{link.serviceName}</span>
-                    {selected ? <Check className="h-4 w-4 shrink-0 text-primary" /> : null}
-                  </div>
-                  <div className="service-option-context mt-1 truncate text-[11px] font-medium text-muted">{link.sourceLabel} · {link.endpoint?.name || '未绑定端点'}</div>
-                  <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{link.scopeLabel}</div>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ), document.body) : null}
-    </div>
-  );
-}
 
 function ExternalLogLinkDrawer({ link, endpoints, onClose, onSaved }: {
   link: ServiceLogLink;
@@ -415,7 +349,7 @@ function ExternalLogLinkDrawer({ link, endpoints, onClose, onSaved }: {
             <textarea className="mt-1.5 min-h-28 w-full resize-none rounded-md border border-outline bg-white p-3 font-mono text-sm text-on-surface outline-none focus:border-primary" value={form.baseFilter} onChange={(event) => setForm({ ...form, baseFilter: event.target.value })} placeholder={'"service.name":="orders-api" AND "deployment.environment":="prod"'} />
             <span className="mt-1 block text-[11px] text-muted">只填写过滤表达式；时间范围、统计和告警阈值由 Explore 或告警流程生成。</span>
           </Field>
-          {mutation.error ? <ErrorLine message={(mutation.error as Error).message} /> : null}
+          {mutation.error ? <LogsErrorLine message={(mutation.error as Error).message} /> : null}
         </div>
         <div className="console-action-bar shrink-0">
           <div className="min-w-0 text-xs text-muted">{missing.length ? `还需：${missing.join('、')}` : '保存后该服务会按纳管日志链路进入 Explore 和告警。'}</div>

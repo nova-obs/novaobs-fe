@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { createPortal } from 'react-dom';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Check, ChevronDown, ExternalLink, Plus, RefreshCw, Route, Search, Server, XCircle } from 'lucide-react';
+import { ExternalLink, Plus, RefreshCw, Route, Search, Server } from 'lucide-react';
 import { StatusBadge } from '../../components/StatusBadge';
 import type { AlertRule } from '../../services/types';
 import { api } from '../../services/api';
 import { LogsAlertRuleEditorDrawer } from './LogsAlertRulePage';
-import { LogsEmptyState } from './LogsPrimitives';
+import { LogsEmptyState, LogsErrorLine } from './LogsPrimitives';
+import { LogsEntitySelector } from './LogsEntitySelector';
 import { logsApi, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
 import { routeAccessPriority } from './ServicePickerPanel';
 
@@ -204,22 +204,20 @@ export function LogsAlertsPage() {
   }, [ruleQuery, selectedServiceRules]);
 
   useEffect(() => {
-    const paramServiceId = searchParams.get('service_id') ?? '';
     if (alertServices.length === 0) {
       if (selectedServiceId) setSelectedServiceId('');
       return;
     }
+    const paramServiceId = searchParams.get('service_id') ?? '';
     const paramService = alertServices.find((service) => service.id === paramServiceId);
     if (paramService) {
       if (selectedServiceId !== paramService.id) setSelectedServiceId(paramService.id);
       return;
     }
-    const fallbackServiceId = alertServices.some((service) => service.id === selectedServiceId) ? selectedServiceId : alertServices[0].id;
-    if (selectedServiceId !== fallbackServiceId) setSelectedServiceId(fallbackServiceId);
-    const next = new URLSearchParams(searchParams);
-    next.set('service_id', fallbackServiceId);
-    setSearchParams(next, { replace: true });
-  }, [alertServices, searchParams, selectedServiceId, setSearchParams]);
+    if (!selectedServiceId || !alertServices.some((service) => service.id === selectedServiceId)) {
+      setSelectedServiceId(alertServices[0].id);
+    }
+  }, [alertServices, searchParams, selectedServiceId]);
 
   function selectService(serviceId: string) {
     setSelectedServiceId(serviceId);
@@ -234,14 +232,36 @@ export function LogsAlertsPage() {
   const closeEditorTo = selectedServiceId ? `/logs/alerts?service_id=${encodeURIComponent(selectedServiceId)}` : '/logs/alerts';
   const createDisabled = !selectedService?.canCreateAlert;
 
+  const selectorIcon = selectedService?.logLinkKind === 'platform' ? Route : Server;
+
   return (
     <div className="logs-alerts-workbench console-workbench flex min-h-0 flex-col">
       <section className="console-panel flex min-h-0 flex-1 flex-col overflow-hidden">
-        {error ? <ErrorLine message={(error as Error).message} /> : null}
+        {error ? <LogsErrorLine message={(error as Error).message} /> : null}
         <div className="console-panel-header shrink-0">
           <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="logs-alert-service-selector w-full lg:max-w-[420px]">
-              <AlertServiceSelector services={alertServices} activeService={selectedService} onSelect={selectService} />
+              <LogsEntitySelector<AlertServiceRow>
+                items={alertServices}
+                activeItem={selectedService}
+                onSelect={(service) => selectService(service.id)}
+                getId={(service) => service.id}
+                triggerIcon={selectorIcon}
+                triggerTitle={selectedService?.name ?? ''}
+                triggerMeta={serviceMetaLabel(selectedService)}
+                placeholder="选择服务"
+                ariaLabel="日志告警服务"
+                renderOption={(service, selected) => (
+                  <>
+                    <div className="flex items-center justify-between gap-3">
+                      <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{service.name}</span>
+                      <span className="font-mono text-[11px] text-muted">{service.enabledCount}/{service.ruleCount}</span>
+                    </div>
+                    <div className="mt-1 truncate text-[11px] font-medium text-muted">{service.environment || service.ownerTeam || '-'} · {service.logLinkLabel} · {service.logLinkStatus}</div>
+                    <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{service.endpointName}</div>
+                  </>
+                )}
+              />
             </div>
             <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
               <label className="relative w-full md:w-80">
@@ -322,98 +342,3 @@ export function LogsAlertsPage() {
   );
 }
 
-function AlertServiceSelector({ services, activeService, onSelect }: {
-  services: AlertServiceRow[];
-  activeService: AlertServiceRow | null;
-  onSelect: (serviceId: string) => void;
-}) {
-  const triggerRef = useRef<HTMLButtonElement>(null);
-  const [open, setOpen] = useState(false);
-  const [popoverStyle, setPopoverStyle] = useState({ top: 0, left: 0, width: 0 });
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const updatePosition = () => {
-      const rect = triggerRef.current?.getBoundingClientRect();
-      if (!rect) return;
-      const viewportPadding = 12;
-      const width = Math.min(Math.max(rect.width, 360), window.innerWidth - viewportPadding * 2);
-      const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - width - viewportPadding);
-      const estimatedHeight = Math.min(Math.max(services.length, 1) * 66 + 8, 320);
-      const below = rect.bottom + 6;
-      const top = below + estimatedHeight <= window.innerHeight - viewportPadding
-        ? below
-        : Math.max(viewportPadding, rect.top - estimatedHeight - 6);
-      setPopoverStyle({ top, left, width });
-    };
-    updatePosition();
-    window.addEventListener('resize', updatePosition);
-    window.addEventListener('scroll', updatePosition, true);
-    return () => {
-      window.removeEventListener('resize', updatePosition);
-      window.removeEventListener('scroll', updatePosition, true);
-    };
-  }, [open, services.length]);
-
-  return (
-    <div className="rounded-md">
-      <button
-        ref={triggerRef}
-        type="button"
-        className="flex h-12 w-full items-center gap-3 rounded-md border border-outline/80 bg-white px-3 text-left shadow-[0_2px_6px_rgba(24,52,96,0.06)] transition-colors hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
-        aria-expanded={open}
-        aria-haspopup="listbox"
-        disabled={services.length === 0}
-        onClick={() => setOpen((value) => !value)}
-      >
-        {activeService?.logLinkKind === 'platform' ? <Route className="h-4 w-4 shrink-0 text-primary" /> : <Server className="h-4 w-4 shrink-0 text-primary" />}
-        <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold text-on-surface">{activeService?.name || '选择服务'}</div>
-          <div className="mt-1 truncate font-mono text-[11px] text-muted">{serviceMetaLabel(activeService)}</div>
-        </div>
-        <ChevronDown className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
-      </button>
-      {open && typeof document !== 'undefined' ? createPortal((
-        <>
-          <button type="button" className="fixed inset-0 z-40 cursor-default border-0 bg-transparent" aria-label="关闭服务选择" onClick={() => setOpen(false)} />
-          <div className="fixed z-50 max-h-80 overflow-y-auto rounded-md border border-outline bg-white p-1 shadow-[0_14px_36px_rgba(24,52,96,0.2)]" style={popoverStyle} role="listbox" aria-label="日志告警服务">
-            {services.map((service) => {
-              const selected = service.id === activeService?.id;
-              return (
-                <button
-                  key={service.id}
-                  type="button"
-                  role="option"
-                  aria-selected={selected}
-                  className={`w-full rounded px-3 py-2.5 text-left transition-colors ${selected ? 'bg-primary-soft/70' : 'hover:bg-surface-low'}`}
-                  onClick={() => {
-                    onSelect(service.id);
-                    setOpen(false);
-                  }}
-                >
-                  <div className="flex items-center justify-between gap-3">
-                    <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{service.name}</span>
-                    <span className="flex shrink-0 items-center gap-2">
-                      <span className="font-mono text-[11px] text-muted">{service.enabledCount}/{service.ruleCount}</span>
-                      {selected ? <Check className="h-4 w-4 text-primary" /> : null}
-                    </span>
-                  </div>
-                  <div className="mt-1 truncate text-[11px] font-medium text-muted">{service.environment || service.ownerTeam || '-'} · {service.logLinkLabel} · {service.logLinkStatus}</div>
-                  <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{service.endpointName}</div>
-                </button>
-              );
-            })}
-          </div>
-        </>
-      ), document.body) : null}
-    </div>
-  );
-}
-
-function ErrorLine({ message }: { message: string }) {
-  return (
-    <div className="m-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
-      <XCircle className="h-4 w-4" />{message}
-    </div>
-  );
-}

@@ -20,9 +20,12 @@ const terminalSource = readFileSync(new URL('./TerminalPage.tsx', import.meta.ur
 const platformAccessSource = readFileSync(new URL('./PlatformAccessPage.tsx', import.meta.url), 'utf8');
 const routeSource = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 
-test('K8s 运维模块使用顶部入口和页面内横向分组导航承接集群工作台', () => {
+test('K8s 运维模块使用可折叠垂直 Rail 承接 fleet 入口，并保留集群上下文横幅', () => {
   assert.equal(layoutSource.includes('K8s 运维'), true);
-  assert.equal(layoutSource.includes('sr-only module-navigation-title'), true);
+  assert.equal(layoutSource.includes('ModuleWorkbench'), true);
+  assert.equal(layoutSource.includes('module="k8s"'), true);
+  assert.equal(layoutSource.includes('showRail={!hasClusterContext}'), true);
+  assert.equal(layoutSource.includes('FleetNavigation'), false);
   assert.equal(layoutSource.includes('page-title module-navigation-title'), false);
   assert.equal(layoutSource.includes('useParams'), true);
   assert.equal(layoutSource.includes('k8sApi.listClusters'), true);

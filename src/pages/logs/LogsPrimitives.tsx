@@ -1,5 +1,24 @@
 import type { PropsWithChildren, ReactNode } from 'react';
-import { Search } from 'lucide-react';
+import { Search, XCircle } from 'lucide-react';
+
+export function shortHash(value?: string, length = 12): string {
+  if (!value) return '-';
+  return value.length > length ? value.slice(0, length) : value;
+}
+
+export function shortIdentity(value?: string, length = 16): string {
+  if (!value) return '-';
+  return value.length > length ? value.slice(0, length) : value;
+}
+
+export function LogsErrorLine({ message }: { message: string }) {
+  return (
+    <div className="m-3 flex items-center gap-2 rounded border border-red-500/30 bg-red-50 px-3 py-2 text-sm text-red-600">
+      <XCircle className="h-4 w-4" />
+      {message}
+    </div>
+  );
+}
 
 interface LogsSectionProps extends PropsWithChildren {
   title: string;
