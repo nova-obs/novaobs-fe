@@ -8,6 +8,7 @@ const workspaceSource = readFileSync(new URL('./LogsWorkspace.tsx', import.meta.
 const exploreSource = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 'utf8');
 const agentsSource = readFileSync(new URL('./LogsAgentsPage.tsx', import.meta.url), 'utf8');
 const alertsSource = readFileSync(new URL('./LogsAlertsPage.tsx', import.meta.url), 'utf8');
+const publishPreviewSource = readFileSync(new URL('./LogsPublishPreviewPanel.tsx', import.meta.url), 'utf8');
 
 test('Logs 接入配置收敛为接入和发布路径', () => {
   assert.equal(onboardingSource.includes('logs-onboarding-toolbar'), false);
@@ -53,21 +54,36 @@ test('Logs 接入配置以 route collector fragment 作为主要编辑对象', (
   assert.equal(onboardingSource.includes('重新生成示例'), true);
   assert.equal(onboardingSource.includes('表单占位已变更'), true);
   assert.equal(onboardingSource.includes('发布时会与同集群其他业务片段合并成完整 collector.yaml'), true);
-  assert.equal(onboardingSource.includes('完整 collector.yaml · 同集群业务片段合并结果'), true);
+  assert.equal(onboardingSource.includes('logs-route-config-editor'), true);
+  assert.equal(onboardingSource.includes('bodyClassName="min-h-0 flex-1 overflow-hidden bg-surface/35"'), true);
+  assert.equal(onboardingSource.includes('logs-route-config-editor min-h-0 flex-1 resize-none overflow-auto'), true);
+  assert.equal(onboardingSource.includes('logs-route-preview-code-grid'), true);
+  assert.equal(onboardingSource.includes('RoutePreviewCodePanel'), true);
+  assert.equal(onboardingSource.includes('完整 collector.yaml'), true);
+  assert.equal(onboardingSource.includes('同集群业务片段合并结果'), true);
+  assert.equal(publishPreviewSource.includes('logs-publish-preview-panel'), true);
   assert.equal(onboardingSource.includes('Runtime 日志目录'), false);
   assert.equal(onboardingSource.includes('runtimeLogPaths'), false);
 });
 
-test('Logs 接入配置以渐进任务卡承载服务、目标、端点和发布动作', () => {
+test('Logs 接入配置以三栏画布承载服务、目标、端点和发布动作', () => {
   assert.equal(onboardingSource.includes('logs-route-task-stack'), true);
-  assert.equal(onboardingSource.includes('logs-route-task-card'), true);
+  assert.equal(onboardingSource.includes('logs-route-canvas'), true);
+  assert.equal(onboardingSource.includes('logs-route-stepper'), true);
+  assert.equal(onboardingSource.includes('logs-route-active-panel'), true);
+  assert.equal(onboardingSource.includes('logs-route-active-panel flex min-h-0 flex-1'), true);
+  assert.equal(onboardingSource.includes('logs-route-task-card'), false);
   assert.equal(onboardingSource.includes('logs-route-service-card'), true);
   assert.equal(onboardingSource.includes('logs-route-target-card'), true);
   assert.equal(onboardingSource.includes('logs-route-endpoint-card'), true);
   assert.equal(onboardingSource.includes('logs-route-config-card'), true);
   assert.equal(onboardingSource.includes('logs-route-preview-card'), true);
   assert.equal(onboardingSource.includes('logs-route-summary-card'), true);
-  assert.equal(onboardingSource.includes('lg:grid-cols-[minmax(0,1fr)_320px]'), true);
+  assert.equal(onboardingSource.includes('configSnippet'), false);
+  assert.equal(onboardingSource.includes('<SummaryGroup title="配置片段">'), false);
+  assert.equal(onboardingSource.includes('xl:grid-cols-[220px_minmax(0,1fr)_340px]'), true);
+  assert.equal(onboardingSource.includes('2xl:grid-cols-[240px_minmax(0,1fr)_380px]'), true);
+  assert.equal(onboardingSource.includes('lg:grid-cols-[minmax(0,1fr)_320px]'), false);
   assert.equal(onboardingSource.includes('logs-runtime-configuration-panel'), true);
   assert.equal(onboardingSource.includes('logs-runtime-configuration-panel grid items-start'), false);
   assert.equal(onboardingSource.includes('logs-endpoint-picker'), true);
@@ -77,14 +93,16 @@ test('Logs 接入配置以渐进任务卡承载服务、目标、端点和发布
   assert.equal(onboardingSource.includes('<SummaryCard'), false);
   assert.equal(onboardingSource.includes('logs-onboarding-action-bar'), false);
   assert.equal(onboardingSource.includes('lg:sticky lg:bottom-3'), false);
-  assert.equal(servicePickerSource.includes('logs-service-picker-panel relative flex min-h-[560px] flex-col'), true);
+  assert.equal(servicePickerSource.includes('logs-service-picker-table'), true);
+  assert.equal(servicePickerSource.includes('搜索服务、命名空间或标签'), true);
+  assert.equal(servicePickerSource.includes('logs-service-picker-panel relative flex min-h-[520px] flex-col'), true);
   assert.equal(servicePickerSource.includes('xl:h-full'), true);
 });
 
 test('Logs K8s 服务同步必须先显式选择集群和 Namespace', () => {
   assert.equal(onboardingSource.includes("const [syncClusterId, setSyncClusterId] = useState('')"), true);
   assert.equal(onboardingSource.includes("const [syncNamespace, setSyncNamespace] = useState('')"), true);
-  assert.equal(onboardingSource.includes('logs-service-sync-action'), true);
+  assert.equal(servicePickerSource.includes('logs-service-picker-toolbar'), true);
   assert.equal(onboardingSource.includes('logs-service-sync-trigger'), true);
   assert.equal(onboardingSource.includes('logs-service-sync-dialog'), true);
   assert.equal(onboardingSource.includes('logs-service-sync-scope'), false);
@@ -96,11 +114,25 @@ test('Logs K8s 服务同步必须先显式选择集群和 Namespace', () => {
   assert.equal(onboardingSource.includes('result.services[0]'), false);
 });
 
+test('Logs K8s 运行目标默认选择不覆盖用户手动绑定', () => {
+  assert.equal(onboardingSource.includes('const defaultWorkloadKey = sourceType === \'vm_file\''), true);
+  assert.equal(onboardingSource.includes("serviceScopeWorkloadKey || (workloads[0] ? workloadIdentity(workloads[0]) : '')"), true);
+  assert.equal(onboardingSource.includes("if (sourceType === 'vm_file' || workloadKey || !defaultWorkloadKey) return;"), true);
+  assert.equal(onboardingSource.includes('setWorkloadKey(defaultWorkloadKey)'), true);
+  assert.equal(onboardingSource.includes('workloadKey !== serviceScopeWorkloadKey'), false);
+  assert.equal(onboardingSource.includes('setWorkloadKey(serviceScopeWorkloadKey)'), false);
+});
+
+test('Logs 选择服务后不自动跳过绑定运行目标', () => {
+  assert.equal(onboardingSource.includes("setSetupTask('target')"), true);
+  assert.equal(onboardingSource.includes("currentStep === 1 && setupTask === 'target' && runtimeTargetReady"), false);
+});
+
 test('Logs 创建采集路由来源选择位于左侧任务上下文', () => {
   assert.equal(onboardingSource.includes('logs-source-mode-switch'), true);
   assert.equal(onboardingSource.includes('aria-label="采集来源"'), true);
-  assert.equal(onboardingSource.includes('context={('), true);
-  assert.equal(onboardingSource.includes('action={('), false);
+  assert.equal(onboardingSource.includes('context={sourceModeSwitch}'), true);
+  assert.equal(onboardingSource.includes('action={('), true);
 });
 
 test('Logs 接入配置按当前任务步骤渐进展示', () => {
@@ -162,6 +194,9 @@ test('Logs Explore 只展示真实下游查询入口', () => {
   assert.equal(exploreSource.includes('新窗口'), true);
   assert.equal(exploreSource.includes('创建告警'), true);
   assert.equal(exploreSource.includes('查看采集路由'), true);
+  assert.equal(exploreSource.includes('登记外部日志链路'), true);
+  assert.equal(exploreSource.includes('/logs/targets'), false);
+  assert.equal(exploreSource.includes('查看日志目标'), false);
   assert.equal(exploreSource.includes('Log query'), false);
   assert.equal(exploreSource.includes('Rows3'), false);
   assert.equal(exploreSource.includes('Table2'), false);
@@ -170,24 +205,24 @@ test('Logs Explore 只展示真实下游查询入口', () => {
   assert.equal(exploreSource.includes('租户'), true);
 });
 
-test('Logs Explore 将路由收敛为顶部一次性选择并突出检索主区域', () => {
+test('Logs Explore 将服务日志链路收敛为顶部服务选择并突出检索主区域', () => {
   assert.equal(exploreSource.includes('<LogsSection title="日志路由"'), false);
   assert.equal(exploreSource.includes('title="日志分析"'), false);
   assert.equal(exploreSource.includes('xl:grid-cols-[minmax(0,1fr)_300px]'), true);
   assert.equal(exploreSource.includes('{routes.length} routes'), false);
-  assert.equal(exploreSource.includes('<RouteSelector'), true);
-  assert.equal(exploreSource.includes('route-selector-trigger'), true);
-  assert.equal(exploreSource.includes('route-option-context'), true);
+  assert.equal(exploreSource.includes('<ServiceSelector'), true);
+  assert.equal(exploreSource.includes('service-selector-trigger'), true);
+  assert.equal(exploreSource.includes('service-option-context'), true);
+  assert.equal(exploreSource.includes('service_id'), true);
   assert.equal(exploreSource.includes('query-context-summary'), true);
   assert.equal((exploreSource.match(/logs-explore-context-panel/g) ?? []).length, 2);
   assert.equal((exploreSource.match(/logs-explore-context-header/g) ?? []).length, 2);
   assert.equal(exploreSource.includes('logs-explore-query-actions'), true);
   assert.equal(exploreSource.includes('aria-label="在新窗口打开查询"'), true);
   assert.equal(exploreSource.includes('aria-label="刷新日志上下文"'), true);
-  assert.equal(exploreSource.includes('route-selector-popover'), true);
+  assert.equal(exploreSource.includes('service-selector-popover'), true);
   assert.equal(exploreSource.includes('createPortal'), true);
   assert.equal(exploreSource.includes('<details'), false);
-  assert.equal(exploreSource.includes('<select'), false);
   assert.equal(exploreSource.includes('routeQuery'), false);
   assert.equal(exploreSource.includes('过滤 service / endpoint'), false);
   assert.equal(exploreSource.includes('打开 VMUI'), false);
@@ -197,10 +232,10 @@ test('Logs Explore 将路由收敛为顶部一次性选择并突出检索主区�
 });
 
 test('Logs 工作台将可用高度传递给采集路由和日志分析内容区域', () => {
-  assert.equal(workspaceSource.includes('logs-workbench route-transition-page flex h-full min-h-0 flex-col gap-3'), true);
+  assert.equal(workspaceSource.includes('logs-workbench route-transition-page relative flex h-full min-h-0'), true);
   assert.equal(workspaceSource.includes('route-transition-page min-h-0 flex-1'), true);
   assert.equal(agentsSource.includes('logs-routes-workbench flex min-h-[720px] flex-col xl:h-full xl:min-h-0'), true);
-  assert.equal(agentsSource.includes('logs-routes-content grid min-h-0 flex-1'), true);
+  assert.equal(agentsSource.includes('logs-routes-content flex min-h-0 flex-1 flex-col'), true);
   assert.equal(agentsSource.includes('采集路由工作区'), true);
   assert.equal((agentsSource.match(/>刷新</g) ?? []).length, 1);
   assert.equal(exploreSource.includes('logs-explore-workbench grid min-h-[760px] gap-3 xl:h-full xl:min-h-0'), true);

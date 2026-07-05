@@ -41,6 +41,11 @@ test('获取 Logs 接入工作台时调用统一 onboarding workspace 接口', a
       clusters: [{ id: 'test03', name: 'test03', version: 'v1.28.3', access_mode: 'direct/ro', read_only: true }],
       endpoints: [{ id: 'vl-001', name: 'vl-prod', sink_type: 'vl', stream_name: '', write_url: 'http://vl/insert', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527', scope_type: 'k8s_cluster', cluster_id: 'test03' }],
       routes: [],
+      targets: [{
+        target: { id: 'target-001', name: 'orders 自建 VL', service_id: 'svc-001', endpoint_id: 'vl-001', source_kind: 'external_vlogs', base_filter: '"stream":"orders"', status: 'verified' },
+        service: { id: 'svc-001', name: 'order-api', environment: 'prod' },
+        endpoint: { id: 'vl-001', name: 'vl-prod', sink_type: 'vl', query_url: 'http://vl/select/logsql/query', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527' },
+      }],
     },
   );
 
@@ -54,6 +59,23 @@ test('获取 Logs 接入工作台时调用统一 onboarding workspace 接口', a
   assert.equal(result.endpoints[0].clusterId, 'test03');
   assert.equal(result.endpoints[0].accountId, '9527');
   assert.equal(result.endpoints[0].projectId, '9527');
+  assert.equal(result.targets[0].target.baseFilter, '"stream":"orders"');
+  assert.equal(result.targets[0].endpoint.accountId, '9527');
+});
+
+test('登记服务外部 VictoriaLogs 日志链路时调用内部 targets 接口', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.createTarget({ name: 'orders 自建 VL', serviceId: 'svc-001', endpointId: 'vl-001', baseFilter: '"stream":"orders"' }),
+    { target: { id: 'target-001', name: 'orders 自建 VL', service_id: 'svc-001', endpoint_id: 'vl-001', source_kind: 'external_vlogs', base_filter: '"stream":"orders"', status: 'pending_verification' } },
+  );
+
+  assert.equal(request.path, '/api/v1/logs/targets');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.body.service_id, 'svc-001');
+  assert.equal(request.body.endpoint_id, 'vl-001');
+  assert.equal(request.body.source_kind, 'external_vlogs');
+  assert.equal(request.body.base_filter, '"stream":"orders"');
+  assert.equal(result.target.id, 'target-001');
 });
 
 test('VictoriaLogs VMUI 地址固定到端点登记的租户', () => {

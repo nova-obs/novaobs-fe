@@ -1,0 +1,793 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>NovaObs Logs 采集路由卡片流原型</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --background: #eef3fb;
+      --surface: #f6f8fc;
+      --surface-lowest: #ffffff;
+      --surface-low: #edf4ff;
+      --on-surface: #122033;
+      --muted: #637083;
+      --outline: #d8e2ef;
+      --primary: #0d5bd7;
+      --primary-soft: #e5f0ff;
+      --warning: #cc6b1e;
+      --danger: #b4232f;
+      --success: #0b8f63;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: var(--background);
+      color: var(--on-surface);
+      font-family: Inter, "PingFang SC", "Microsoft YaHei", system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+
+    .topbar {
+      height: 52px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--outline);
+      background: #fff;
+      padding: 0 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+    }
+
+    .mark {
+      width: 28px;
+      height: 28px;
+      border-radius: 6px;
+      display: grid;
+      place-items: center;
+      background: var(--primary-soft);
+      color: var(--primary);
+      font-weight: 800;
+    }
+
+    .domain-nav {
+      display: flex;
+      gap: 20px;
+      color: var(--muted);
+      font-weight: 600;
+    }
+
+    .domain-active {
+      color: var(--primary);
+      box-shadow: inset 0 -2px 0 var(--primary);
+      padding-block: 16px;
+    }
+
+    .shell {
+      height: calc(100vh - 52px);
+      padding: 12px;
+    }
+
+    .workbench {
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid #cfdbea;
+      border-radius: 8px;
+      background: var(--surface);
+      box-shadow: 0 8px 24px -22px rgba(18, 32, 51, 0.5);
+    }
+
+    .workspace-header {
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--outline);
+      background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+      padding: 0 12px;
+    }
+
+    .back {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+      border-right: 1px solid var(--outline);
+      padding-right: 12px;
+    }
+
+    .workspace-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .workspace-title h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .mono {
+      font-family: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+    }
+
+    .task-meta {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .module-nav {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid var(--outline);
+      background: #fff;
+      padding: 0 12px;
+    }
+
+    .module-title {
+      width: 76px;
+      border-right: 1px solid var(--outline);
+      font-size: 16px;
+      font-weight: 700;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 4px;
+      padding-left: 12px;
+    }
+
+    .tab {
+      height: 40px;
+      display: inline-flex;
+      align-items: center;
+      padding: 0 12px;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 700;
+    }
+
+    .tab.active {
+      color: var(--primary);
+      box-shadow: inset 0 -2px 0 var(--primary);
+    }
+
+    .content {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+      padding: 14px;
+    }
+
+    .task-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 330px;
+      gap: 14px;
+      align-items: start;
+      max-width: 1480px;
+      margin: 0 auto;
+    }
+
+    .task-stack {
+      display: grid;
+      gap: 10px;
+    }
+
+    .task-card,
+    .summary-card {
+      overflow: hidden;
+      border: 1px solid var(--outline);
+      border-radius: 8px;
+      background: var(--surface-lowest);
+      box-shadow: 0 1px 2px rgba(18, 32, 51, 0.035);
+    }
+
+    .task-card.active {
+      border-color: rgba(13, 91, 215, 0.35);
+      box-shadow: inset 3px 0 0 var(--primary), 0 8px 22px -20px rgba(13, 91, 215, 0.6);
+    }
+
+    .task-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--outline);
+      background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+      padding: 10px 12px;
+    }
+
+    .task-title {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .step-no {
+      width: 26px;
+      height: 26px;
+      display: inline-grid;
+      place-items: center;
+      border-radius: 50%;
+      border: 1px solid var(--outline);
+      background: #fff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    .done .step-no {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .active .step-no {
+      border-color: var(--primary);
+      color: var(--primary);
+      background: var(--primary-soft);
+    }
+
+    .task-title h2 {
+      margin: 0;
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .task-summary {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      border-radius: 5px;
+      border: 1px solid var(--outline);
+      background: #fff;
+      padding: 3px 8px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .status-pill.success {
+      border-color: rgba(11, 143, 99, 0.22);
+      background: #eaf8f1;
+      color: var(--success);
+    }
+
+    .status-pill.primary {
+      border-color: rgba(13, 91, 215, 0.22);
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    .dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: currentColor;
+    }
+
+    .task-body {
+      padding: 12px;
+    }
+
+    .field-grid {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr) 170px;
+      gap: 12px;
+      align-items: end;
+      margin-bottom: 12px;
+    }
+
+    .field label {
+      display: block;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 5px;
+    }
+
+    .input {
+      height: 34px;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--outline);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--on-surface);
+      padding: 0 10px;
+      font-weight: 700;
+    }
+
+    .split {
+      display: grid;
+      grid-template-columns: 250px minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .cluster-list {
+      display: grid;
+      gap: 8px;
+    }
+
+    .cluster-card {
+      border: 1px solid var(--outline);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .cluster-card.selected {
+      border-color: rgba(13, 91, 215, 0.35);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .cluster-name {
+      font-weight: 800;
+    }
+
+    .cluster-sub {
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 600;
+    }
+
+    .table-wrap {
+      overflow: hidden;
+      border: 1px solid var(--outline);
+      border-radius: 7px;
+      background: #fff;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      table-layout: fixed;
+    }
+
+    th,
+    td {
+      border-bottom: 1px solid var(--outline);
+      padding: 9px 10px;
+      text-align: left;
+      vertical-align: middle;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    th {
+      background: #f3f7ff;
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+    }
+
+    td {
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    tr.selected td {
+      background: var(--primary-soft);
+      color: var(--primary);
+    }
+
+    tr:last-child td {
+      border-bottom: 0;
+    }
+
+    .endpoint-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) 96px minmax(0, 1.7fr) 82px;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--outline);
+      border-radius: 7px;
+      background: #fff;
+      padding: 10px;
+    }
+
+    .endpoint-row.selected {
+      border-color: rgba(13, 91, 215, 0.35);
+      background: var(--primary-soft);
+      box-shadow: inset 3px 0 0 var(--primary);
+    }
+
+    .collapsed-body {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 12px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .pending {
+      opacity: 0.68;
+    }
+
+    .summary-card {
+      position: sticky;
+      top: 0;
+    }
+
+    .summary-head {
+      border-bottom: 1px solid var(--outline);
+      background: #fff;
+      padding: 12px;
+      font-weight: 800;
+    }
+
+    .summary-body {
+      display: grid;
+      gap: 8px;
+      padding: 12px;
+    }
+
+    .summary-line {
+      border: 1px solid var(--outline);
+      border-radius: 7px;
+      background: #fff;
+      padding: 9px 10px;
+    }
+
+    .summary-line .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .summary-line .value {
+      margin-top: 3px;
+      overflow: hidden;
+      color: var(--on-surface);
+      font-size: 12px;
+      font-weight: 800;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .notice {
+      border: 1px solid rgba(204, 107, 30, 0.28);
+      border-radius: 7px;
+      background: #fff8ed;
+      color: var(--warning);
+      padding: 9px 10px;
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      border-top: 1px solid var(--outline);
+      padding: 10px 12px;
+      background: #fff;
+    }
+
+    .button {
+      height: 32px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      border: 1px solid var(--outline);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--muted);
+      padding: 0 12px;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .button.primary {
+      border-color: var(--primary);
+      background: var(--primary);
+      color: #fff;
+    }
+
+    .button.disabled {
+      opacity: 0.45;
+    }
+
+    .code-preview {
+      min-height: 120px;
+      border: 1px solid var(--outline);
+      border-radius: 7px;
+      background: #101827;
+      color: #dce8ff;
+      padding: 12px;
+      font-size: 11px;
+      line-height: 1.65;
+      white-space: pre-wrap;
+    }
+
+    @media (max-width: 1100px) {
+      .task-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .summary-card {
+        position: static;
+      }
+
+      .field-grid,
+      .split {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="mark">N</div>
+      <span>NovaObs</span>
+    </div>
+    <nav class="domain-nav" aria-label="主导航">
+      <span class="domain-active">可观测性</span>
+      <span>K8s 运维</span>
+      <span>平台管理</span>
+    </nav>
+    <div class="task-meta">开发管理员 · user</div>
+  </header>
+
+  <main class="shell">
+    <section class="workbench">
+      <div class="workspace-header">
+        <div class="workspace-title">
+          <span class="back">返回采集路由</span>
+          <h1>创建采集路由</h1>
+          <span class="task-meta mono">new route</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <span class="status-pill primary">K8s</span>
+          <button class="button">同步服务</button>
+        </div>
+      </div>
+
+      <div class="module-nav">
+        <div class="module-title">Logs</div>
+        <div class="tabs">
+          <span class="tab">日志分析</span>
+          <span class="tab active">采集路由</span>
+          <span class="tab">日志告警</span>
+          <span class="tab">接入配置</span>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="task-grid">
+          <section class="task-stack" aria-label="采集路由任务卡">
+            <article class="task-card done">
+              <div class="task-head">
+                <div class="task-title">
+                  <span class="step-no">✓</span>
+                  <div>
+                    <h2>选择服务</h2>
+                    <div class="task-summary">utrace-api · prod · 支付团队</div>
+                  </div>
+                </div>
+                <span class="status-pill success"><span class="dot"></span>已完成</span>
+              </div>
+              <div class="collapsed-body">
+                <span class="mono">service/utrace-api · identity k8s_workload</span>
+                <button class="button">更换</button>
+              </div>
+            </article>
+
+            <article class="task-card active">
+              <div class="task-head">
+                <div class="task-title">
+                  <span class="step-no">02</span>
+                  <div>
+                    <h2>绑定运行目标</h2>
+                    <div class="task-summary">选择集群、Namespace 和 Workload，确定采集作用域</div>
+                  </div>
+                </div>
+                <span class="status-pill primary"><span class="dot"></span>当前步骤</span>
+              </div>
+              <div class="task-body">
+                <div class="field-grid">
+                  <div class="field">
+                    <label>Namespace</label>
+                    <div class="input mono">checkout</div>
+                  </div>
+                  <div class="field">
+                    <label>搜索 Workload</label>
+                    <div class="input mono">kind / name / selector</div>
+                  </div>
+                  <div class="field">
+                    <label>Agent Namespace</label>
+                    <div class="input mono">novaobs-system</div>
+                  </div>
+                </div>
+                <div class="split">
+                  <aside class="cluster-list">
+                    <div class="cluster-card selected">
+                      <div class="cluster-name">calico-test03-02</div>
+                      <div class="cluster-sub mono">v1.29 · writeable</div>
+                    </div>
+                    <div class="cluster-card">
+                      <div class="cluster-name">prod-shanghai-01</div>
+                      <div class="cluster-sub mono">v1.30 · writeable</div>
+                    </div>
+                    <div class="cluster-card">
+                      <div class="cluster-name">staging-ops</div>
+                      <div class="cluster-sub mono">v1.28 · writeable</div>
+                    </div>
+                  </aside>
+                  <div class="table-wrap">
+                    <table>
+                      <thead>
+                        <tr>
+                          <th>Workload</th>
+                          <th style="width:88px;">类型</th>
+                          <th style="width:96px;">Pods</th>
+                          <th>Selector</th>
+                          <th style="width:96px;">状态</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr class="selected">
+                          <td>utrace-api</td>
+                          <td>Deployment</td>
+                          <td class="mono">8 / 8</td>
+                          <td class="mono">app=utrace-api, env=prod</td>
+                          <td>已选择</td>
+                        </tr>
+                        <tr>
+                          <td>payment-worker</td>
+                          <td>Deployment</td>
+                          <td class="mono">3 / 3</td>
+                          <td class="mono">app=payment-worker</td>
+                          <td>可选择</td>
+                        </tr>
+                        <tr>
+                          <td>callback-gateway</td>
+                          <td>StatefulSet</td>
+                          <td class="mono">2 / 2</td>
+                          <td class="mono">app=callback</td>
+                          <td>可选择</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+              <div class="actions">
+                <button class="button">上一步</button>
+                <button class="button primary">下一步：选择端点</button>
+              </div>
+            </article>
+
+            <article class="task-card">
+              <div class="task-head">
+                <div class="task-title">
+                  <span class="step-no">03</span>
+                  <div>
+                    <h2>选择下游端点</h2>
+                    <div class="task-summary">目标就绪后选择当前作用域可用的写入端点</div>
+                  </div>
+                </div>
+                <span class="status-pill">待选择</span>
+              </div>
+              <div class="task-body" style="display:grid; gap:8px;">
+                <div class="endpoint-row selected">
+                  <strong>vl-test03</strong>
+                  <span class="mono">VL</span>
+                  <span class="mono">http://10.86.11.30:9428/insert/...</span>
+                  <span>可用</span>
+                </div>
+                <div class="endpoint-row">
+                  <strong>otel-global</strong>
+                  <span class="mono">OTel</span>
+                  <span class="mono">http://collector:4318/v1/logs</span>
+                  <span>可用</span>
+                </div>
+              </div>
+            </article>
+
+            <article class="task-card pending">
+              <div class="task-head">
+                <div class="task-title">
+                  <span class="step-no">04</span>
+                  <div>
+                    <h2>配置采集片段</h2>
+                    <div class="task-summary">生成并编辑 route collector fragment，解析规则按需打开</div>
+                  </div>
+                </div>
+                <span class="status-pill">未开始</span>
+              </div>
+              <div class="collapsed-body">
+                <span class="mono">file_log/checkout-utrace-api · transform/json parser</span>
+                <button class="button disabled">等待上一步</button>
+              </div>
+            </article>
+
+            <article class="task-card pending">
+              <div class="task-head">
+                <div class="task-title">
+                  <span class="step-no">05</span>
+                  <div>
+                    <h2>预览与发布</h2>
+                    <div class="task-summary">后端校验、部署清单预览、保存草稿和确认发布</div>
+                  </div>
+                </div>
+                <span class="status-pill">未开始</span>
+              </div>
+              <div class="task-body">
+                <div class="code-preview mono">receivers:
+  file_log/checkout-utrace-api:
+    include: ["/var/log/pods/checkout_utrace-api_*/*/*.log"]
+exporters:
+  otlp_http/endpoint_checkout:
+    logs_endpoint: "http://10.86.11.30:9428/insert/..."</div>
+              </div>
+            </article>
+          </section>
+
+          <aside class="summary-card">
+            <div class="summary-head">当前路由摘要</div>
+            <div class="summary-body">
+              <div class="summary-line">
+                <div class="label">服务</div>
+                <div class="value">utrace-api · prod</div>
+              </div>
+              <div class="summary-line">
+                <div class="label">运行目标</div>
+                <div class="value mono">calico-test03-02 / checkout / Deployment/utrace-api</div>
+              </div>
+              <div class="summary-line">
+                <div class="label">下游端点</div>
+                <div class="value">vl-test03 · VictoriaLogs</div>
+              </div>
+              <div class="summary-line">
+                <div class="label">采集片段</div>
+                <div class="value mono">等待生成 fragment</div>
+              </div>
+              <div class="notice">下一步：确认下游端点后进入采集片段配置。</div>
+            </div>
+            <div class="actions">
+              <button class="button">取消</button>
+              <button class="button primary">继续</button>
+            </div>
+          </aside>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

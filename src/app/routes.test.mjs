@@ -25,7 +25,7 @@ test('K8s 运维使用嵌套路由承载模块子页面', () => {
   assert.equal(route?.children?.some((item) => item.path === 'rbac'), true);
 });
 
-test('Logs 保留四个默认模块入口，并把创建更新归入对应父模块', () => {
+test('Logs 保留服务维度日志分析、采集路由、告警和接入配置入口', () => {
   const paths = routeDefinitions.map((r) => r.path);
   const logs = routeDefinitions.find((r) => r.path === '/logs');
   assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'onboarding', 'agents/new', 'agents/:id/edit', 'agents', 'alerts/new', 'alerts/:id', 'alerts', 'endpoints']);

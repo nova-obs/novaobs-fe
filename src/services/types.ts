@@ -484,9 +484,11 @@ export interface AlertRuleSpec {
     serviceId: string;
     serviceName: string;
     logRouteId: string;
+    logTargetId?: string;
     endpointId: string;
     accountId: string;
     projectId: string;
+    baseFilter?: string;
   };
   query: { mode: 'contains' | 'exact' | 'logsql'; expression: string };
   trigger: {

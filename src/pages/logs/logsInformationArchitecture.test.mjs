@@ -13,6 +13,9 @@ const explore = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 
 const servicePicker = readFileSync(new URL('./ServicePickerPanel.tsx', import.meta.url), 'utf8');
 
 test('Logs 保留四个子入口并把创建更新归入父模块子路径', () => {
+  assert.doesNotMatch(routes, /path: 'targets'/);
+  assert.doesNotMatch(workspace, /\/logs\/targets/);
+  assert.doesNotMatch(workspace, /日志目标/);
   assert.match(routes, /path: 'agents\/new'/);
   assert.match(routes, /path: 'agents\/:id\/edit'/);
   assert.match(routes, /path: 'onboarding'.*Navigate to="\/logs\/agents\/new"/);
@@ -26,6 +29,8 @@ test('Logs 保留四个子入口并把创建更新归入父模块子路径', () 
 
 test('采集路由保留任务页，日志告警新增编辑进入列表表单抽屉', () => {
   assert.match(primitives, /export function LogsTaskPageHeader/);
+  assert.match(primitives, /logs-task-page-header flex shrink-0/);
+  assert.doesNotMatch(primitives, /mt-2 flex flex-wrap items-center/);
   assert.doesNotMatch(primitives, /返回\{parentLabel\}/);
   assert.doesNotMatch(primitives, /parentTo/);
   assert.doesNotMatch(primitives, /parentLabel/);
@@ -41,6 +46,19 @@ test('采集路由保留任务页，日志告警新增编辑进入列表表单�
   assert.doesNotMatch(alertRule, /<LogsTaskPageHeader/);
 });
 
+test('日志告警以服务为维度选择并展示当前服务规则', () => {
+  assert.match(alerts, /AlertServiceSelector/);
+  assert.match(alerts, /logs-alert-service-selector/);
+  assert.match(alerts, /useSearchParams/);
+  assert.match(alerts, /selectedServiceRules/);
+  assert.match(alerts, /alertServices/);
+  assert.match(alerts, /setSelectedServiceId/);
+  assert.match(alerts, /service_id=\$\{encodeURIComponent\(selectedServiceId\)\}/);
+  assert.doesNotMatch(alerts, /logs-alerts-service-list/);
+  assert.doesNotMatch(alerts, /lg:grid-cols-\[280px_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(alerts, /const logRules = rules;/);
+});
+
 test('采集路由使用单一工作面突出列表选择和当前路由功能', () => {
   assert.match(agents, /const \[routeView, setRouteView\] = useState<'overview' \| 'instances'>\('overview'\)/);
   assert.match(agents, />运行概览</);
@@ -54,7 +72,7 @@ test('采集路由使用单一工作面突出列表选择和当前路由功能',
 });
 
 test('Logs 模块层只保留导航，不和页面重复提供刷新工具条', () => {
-  assert.match(workspace, /sr-only module-navigation-title/);
+  assert.match(workspace, /ModuleRail/);
   assert.doesNotMatch(workspace, /page-title module-navigation-title/);
   assert.doesNotMatch(workspace, /RefreshCw/);
   assert.doesNotMatch(workspace, /console-panel shrink-0/);

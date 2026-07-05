@@ -51,8 +51,8 @@ export function LogsPublishPreviewPanel({ preview }: { preview: LogPublishResult
     }));
 
   return (
-    <div className="mt-4 overflow-hidden rounded-md border border-primary/25 bg-primary-soft/35">
-      <div className="flex flex-col gap-3 border-b border-primary/15 px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
+    <div className="logs-publish-preview-panel mt-3 overflow-hidden rounded-lg border border-outline bg-surface-lowest">
+      <div className="flex flex-col gap-3 border-b border-outline bg-white px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="text-sm font-semibold text-on-surface">发布预览</div>
           <div className="mt-1 flex flex-wrap gap-2 font-mono text-[11px] text-muted">
@@ -64,7 +64,7 @@ export function LogsPublishPreviewPanel({ preview }: { preview: LogPublishResult
         <span className="inline-flex w-fit rounded border border-primary/20 bg-white px-2 py-1 font-mono text-[11px] font-semibold text-primary">等待确认</span>
       </div>
       {preview.warnings.map((item) => <WarnLine key={item} message={item} />)}
-      <div className="overflow-auto bg-white/70">
+      <div className="overflow-auto bg-white">
         <table className="console-table min-w-[760px] w-full">
           <thead>
             <tr>

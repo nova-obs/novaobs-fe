@@ -1,40 +1,26 @@
-import { NavLink, Outlet, useLocation } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import { Bell, RadioTower, Search, ServerCog } from 'lucide-react';
+import { ModuleRail, type ModuleRailItem } from '../../components/navigation/ModuleRail';
 
-const logsNav = [
-  { to: '/logs/explore', label: '日志分析', meta: '下游查询', icon: Search },
-  { to: '/logs/agents', label: '采集路由', icon: ServerCog },
-  { to: '/logs/alerts', label: '日志告警', icon: Bell },
-  { to: '/logs/endpoints', label: '接入配置', icon: RadioTower },
+const logsRailItems: ModuleRailItem[] = [
+  { to: '/logs/explore', label: '日志分析', description: '检索原始日志与构建查询', icon: Search },
+  { to: '/logs/agents', label: '采集路由', description: '采集器实例、发布与运行状态', icon: ServerCog },
+  { to: '/logs/alerts', label: '日志告警', description: '基于日志内容的告警规则', icon: Bell },
+  { to: '/logs/endpoints', label: '接入配置', description: '日志下游端点与接入密钥', icon: RadioTower },
 ];
 
 function LogsWorkspace() {
   const location = useLocation();
 
   return (
-    <div className="logs-workbench route-transition-page flex h-full min-h-0 flex-col gap-3">
-      <div className="module-navigation-bar shrink-0">
-        <h1 className="sr-only module-navigation-title">Logs</h1>
-        <nav className="module-navigation-tabs" aria-label="Logs 模块导航">
-          {logsNav.map((item) => {
-            const Icon = item.icon;
-            return (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={({ isActive }) => `module-navigation-link gap-2 px-3 text-sm font-semibold transition-colors ${
-                  isActive ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'
-                }`}
-              >
-                <Icon className="h-4 w-4" />
-                <span>{item.label}</span>
-                {'meta' in item ? <span className="hidden font-mono text-[11px] font-medium text-primary/70 2xl:inline">{item.meta}</span> : null}
-              </NavLink>
-            );
-          })}
-        </nav>
-      </div>
-      <div className="route-transition-page min-h-0 flex-1" key={location.pathname}>
+    <div className="logs-workbench route-transition-page relative flex h-full min-h-0">
+      <h1 className="sr-only">Logs</h1>
+      <ModuleRail
+        items={logsRailItems}
+        ariaLabel="Logs 模块导航"
+        storageKey="novaobs.module-rail.logs"
+      />
+      <div className="logs-workbench-outlet route-transition-page min-h-0 flex-1" key={location.pathname}>
         <Outlet />
       </div>
     </div>

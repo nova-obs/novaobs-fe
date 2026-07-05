@@ -73,20 +73,14 @@ export function LogsTaskPageHeader({
   action?: ReactNode;
 }) {
   return (
-    <header className="logs-task-page-header shrink-0 border-b border-outline pb-3">
-      <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-        <div className="flex min-w-0 items-start gap-3">
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-center gap-2">
-              <h2 className="text-base font-semibold text-on-surface">{title}</h2>
-              {meta ? <span className="font-mono text-[11px] font-medium text-muted">{meta}</span> : null}
-            </div>
-            <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
-            {context ? <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">{context}</div> : null}
-          </div>
-        </div>
-        {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
+    <header className="logs-task-page-header flex shrink-0 flex-col gap-2 border-b border-outline pb-2 lg:flex-row lg:items-center lg:justify-between">
+      <div className="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1.5">
+        <h2 className="shrink-0 text-base font-semibold text-on-surface">{title}</h2>
+        {meta ? <span className="shrink-0 font-mono text-[11px] font-medium text-muted">{meta}</span> : null}
+        {context ? <div className="shrink-0">{context}</div> : null}
+        <span className="hidden min-w-0 truncate text-xs leading-5 text-muted 2xl:inline">{description}</span>
       </div>
+      {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
     </header>
   );
 }

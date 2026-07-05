@@ -106,6 +106,45 @@ export interface LogRouteView {
   endpoint: LogEndpoint | null;
 }
 
+export interface LogActorRef {
+  id: string;
+  type: string;
+  name: string;
+}
+
+export interface LogTarget {
+  id: string;
+  name: string;
+  serviceId: string;
+  endpointId: string;
+  sourceKind: 'external_vlogs';
+  logRouteId: string;
+  baseFilter: string;
+  status: 'pending_verification' | 'verified' | 'disabled' | string;
+  lastProbeStatus: string;
+  lastProbeMessage: string;
+  lastProbeAt: string;
+  lastSeenLogAt: string;
+  createdBy: LogActorRef;
+  updatedBy: LogActorRef;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LogTargetView {
+  target: LogTarget;
+  service: LogsServiceSummary | null;
+  endpoint: LogEndpoint | null;
+}
+
+export interface LogTargetInput {
+  name?: string;
+  serviceId: string;
+  endpointId: string;
+  baseFilter: string;
+  status?: string;
+}
+
 export interface LogsServiceSummary {
   id: string;
   name: string;
@@ -148,6 +187,7 @@ export interface LogOnboardingWorkspace {
   clusters: LogsClusterSummary[];
   endpoints: LogEndpoint[];
   routes: LogRouteView[];
+  targets: LogTargetView[];
 }
 
 export interface LogsWorkload {
@@ -320,6 +360,8 @@ export interface LogProbeResult {
   warnings: string[];
 }
 
+export interface LogTargetProbeResult extends LogTargetView {}
+
 export interface LogParsePreviewResult {
   status: string;
   fields: Record<string, unknown>;
@@ -398,21 +440,62 @@ function mapRouteView(raw: any): LogRouteView {
   };
 }
 
+function mapActorRef(raw: any): LogActorRef {
+  return {
+    id: raw?.id ?? '',
+    type: raw?.type ?? '',
+    name: raw?.name ?? '',
+  };
+}
+
+function mapTarget(raw: any): LogTarget {
+  return {
+    id: String(raw.id ?? ''),
+    name: raw.name ?? '',
+    serviceId: raw.service_id ?? raw.serviceId ?? '',
+    endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
+    sourceKind: raw.source_kind ?? raw.sourceKind ?? 'external_vlogs',
+    logRouteId: raw.log_route_id ?? raw.logRouteId ?? '',
+    baseFilter: raw.base_filter ?? raw.baseFilter ?? '',
+    status: raw.status ?? '',
+    lastProbeStatus: raw.last_probe_status ?? raw.lastProbeStatus ?? '',
+    lastProbeMessage: raw.last_probe_message ?? raw.lastProbeMessage ?? '',
+    lastProbeAt: raw.last_probe_at ?? raw.lastProbeAt ?? '',
+    lastSeenLogAt: raw.last_seen_log_at ?? raw.lastSeenLogAt ?? '',
+    createdBy: mapActorRef(raw.created_by ?? raw.createdBy),
+    updatedBy: mapActorRef(raw.updated_by ?? raw.updatedBy),
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapServiceSummary(raw: any): LogsServiceSummary {
+  return {
+    id: String(raw.id ?? ''),
+    name: raw.name ?? '',
+    displayName: raw.display_name ?? raw.displayName ?? '',
+    environment: raw.environment ?? '',
+    cluster: raw.cluster ?? '',
+    namespace: raw.namespace ?? '',
+    ownerTeam: raw.owner_team ?? raw.ownerTeam ?? '',
+    identityType: raw.identity_type ?? raw.identityType ?? '',
+    serviceType: raw.service_type ?? raw.serviceType ?? '',
+    source: raw.source ?? '',
+    syncStatus: raw.sync_status ?? raw.syncStatus ?? '',
+  };
+}
+
+function mapTargetView(raw: any): LogTargetView {
+  return {
+    target: mapTarget(raw.target ?? {}),
+    service: raw.service ? mapServiceSummary(raw.service) : null,
+    endpoint: raw.endpoint ? mapEndpoint(raw.endpoint) : null,
+  };
+}
+
 function mapWorkspace(raw: any): LogOnboardingWorkspace {
   return {
-    services: Array.isArray(raw.services) ? raw.services.map((item: any) => ({
-      id: String(item.id ?? ''),
-      name: item.name ?? '',
-      displayName: item.display_name ?? item.displayName ?? '',
-      environment: item.environment ?? '',
-      cluster: item.cluster ?? '',
-      namespace: item.namespace ?? '',
-      ownerTeam: item.owner_team ?? item.ownerTeam ?? '',
-      identityType: item.identity_type ?? item.identityType ?? '',
-      serviceType: item.service_type ?? item.serviceType ?? '',
-      source: item.source ?? '',
-      syncStatus: item.sync_status ?? item.syncStatus ?? '',
-    })) : [],
+    services: Array.isArray(raw.services) ? raw.services.map(mapServiceSummary) : [],
     collectorGroups: Array.isArray(raw.collector_groups ?? raw.collectorGroups) ? (raw.collector_groups ?? raw.collectorGroups).map((item: any) => ({
       id: String(item.id ?? ''),
       name: item.name ?? '',
@@ -435,6 +518,7 @@ function mapWorkspace(raw: any): LogOnboardingWorkspace {
     })) : [],
     endpoints: Array.isArray(raw.endpoints) ? raw.endpoints.map(mapEndpoint) : [],
     routes: Array.isArray(raw.routes) ? raw.routes.map(mapRouteView) : [],
+    targets: Array.isArray(raw.targets) ? raw.targets.map(mapTargetView) : [],
   };
 }
 
@@ -618,6 +702,17 @@ function toRoutePayload(input: LogRouteInput) {
   };
 }
 
+function toTargetPayload(input: Partial<LogTargetInput>) {
+  return {
+    name: input.name,
+    service_id: input.serviceId,
+    endpoint_id: input.endpointId,
+    source_kind: 'external_vlogs',
+    base_filter: input.baseFilter,
+    status: input.status,
+  };
+}
+
 function mapPublishResource(raw: any): K8sPublishResource {
   return {
     clusterId: raw.cluster_id ?? raw.clusterId ?? '',
@@ -710,6 +805,28 @@ export const logsApi = {
   async listEndpoints(): Promise<LogEndpoint[]> {
     const raw = await apiRequest<any[]>('/logs/endpoints');
     return raw.map(mapEndpoint);
+  },
+  async listTargets(serviceId?: string): Promise<LogTargetView[]> {
+    const params = new URLSearchParams();
+    if (serviceId) params.set('service_id', serviceId);
+    const suffix = params.toString() ? `?${params.toString()}` : '';
+    const raw = await apiRequest<any[]>(`/logs/targets${suffix}`);
+    return raw.map(mapTargetView);
+  },
+  async createTarget(input: LogTargetInput): Promise<LogTargetView> {
+    return mapTargetView(await apiRequest<any>('/logs/targets', {
+      method: 'POST',
+      body: JSON.stringify(toTargetPayload(input)),
+    }));
+  },
+  async updateTarget(targetId: string, input: Partial<LogTargetInput>): Promise<LogTargetView> {
+    return mapTargetView(await apiRequest<any>(`/logs/targets/${targetId}`, {
+      method: 'PATCH',
+      body: JSON.stringify(toTargetPayload(input)),
+    }));
+  },
+  async probeTarget(targetId: string): Promise<LogTargetView> {
+    return mapTargetView(await apiRequest<any>(`/logs/targets/${targetId}/probe`, { method: 'POST' }));
   },
   async publishEndpointVmalertRuntime(endpointId: string, input: LogRuntimePublishInput): Promise<LogRuntimePublishResult> {
     return mapRuntimePublish(await apiRequest<any>(`/logs/endpoints/${endpointId}/vmalert-runtime/publish`, {

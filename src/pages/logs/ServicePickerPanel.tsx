@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { PencilLine, Search, Server } from 'lucide-react';
 import type { LogRouteView, LogsServiceSummary } from './api';
 
@@ -57,34 +58,6 @@ export function statusPillClass(tone: StatusTone) {
   }
 }
 
-function serviceAccessCardClass(tone: StatusTone, selected: boolean) {
-  const base = 'logs-service-access-card relative grid w-full gap-1 overflow-hidden rounded-lg border px-3 py-2.5 text-left transition-all before:absolute before:inset-y-2 before:left-0 before:w-1 active:translate-y-px';
-  if (selected) {
-    return `${base} ${selectedServiceAccessCardClass()}`;
-  }
-  if (tone === 'success') {
-    return `${base} ${runningServiceAccessCardClass()}`;
-  }
-  if (tone === 'warning') {
-    return `${base} border-warning/28 bg-amber-50/78 text-on-surface before:bg-warning hover:border-warning/45 hover:bg-amber-50`;
-  }
-  if (tone === 'danger') {
-    return `${base} border-danger/28 bg-red-50/72 text-on-surface before:bg-danger hover:border-danger/45 hover:bg-red-50`;
-  }
-  if (tone === 'primary') {
-    return `${base} border-primary/28 bg-white text-on-surface before:bg-primary hover:bg-surface-low/80`;
-  }
-  return `${base} border-outline bg-white/62 text-on-surface before:bg-outline hover:bg-surface-low/80`;
-}
-
-function selectedServiceAccessCardClass() {
-  return 'border-primary bg-primary-soft text-on-surface before:bg-primary shadow-[inset_3px_0_0_rgba(13,91,215,0.82),0_0_0_1px_rgba(13,91,215,0.18)]';
-}
-
-function runningServiceAccessCardClass() {
-  return 'border-outline bg-white/82 text-on-surface before:bg-primary hover:border-primary/35 hover:bg-primary-soft/45';
-}
-
 function statusDotClass(tone: StatusTone) {
   if (tone === 'success') return 'bg-primary';
   if (tone === 'warning') return 'bg-warning';
@@ -105,97 +78,30 @@ function serviceAccessState(serviceRoutes: LogRouteView[]) {
   };
 }
 
-function serviceMetaItems(service: LogsServiceSummary) {
-  return [
-    service.environment || 'env -',
-    service.ownerTeam || 'owner -',
-    service.serviceType || 'service',
-    service.source || 'local',
-  ];
+function serviceWorkloadLabel(service: LogsServiceSummary) {
+  if (service.identityType === 'host_process') return service.serviceType || 'host process';
+  return service.serviceType || service.identityType || 'workload';
 }
 
-function ServiceAccessCard({
-  service,
-  selected,
-  routeEditMode,
-  locked,
-  serviceRoutes,
-  onSelect,
-  onEditRoute,
-}: {
-  service: LogsServiceSummary;
-  selected: boolean;
-  routeEditMode: boolean;
-  locked: boolean;
-  serviceRoutes: LogRouteView[];
-  onSelect: () => void;
-  onEditRoute: (route: LogRouteView) => void;
-}) {
-  const serviceRoute = serviceRoutes.find(isCollectingRoute) ?? null;
-  const accessState = serviceAccessState(serviceRoutes);
-  const displayName = serviceDisplayName(service);
+function serviceLogPath(service: LogsServiceSummary) {
+  if (service.identityType === 'host_process') return '/data/logs/*.log';
+  if (!service.namespace && !service.name) return '-';
+  return `/var/log/pods/${service.namespace || '*'}_${service.name || '*'}*/*/*.log`;
+}
+
+function serviceFreshnessLabel(service: LogsServiceSummary) {
+  return service.syncStatus || service.source || '-';
+}
+
+function PickerEmpty({ label, action }: { label: string; action?: ReactNode }) {
   return (
-    <div
-      role={locked ? undefined : 'button'}
-      tabIndex={locked ? undefined : 0}
-      className={`mb-1.5 ${serviceAccessCardClass(accessState.tone, selected)}`}
-      onClick={() => {
-        if (!locked) onSelect();
-      }}
-      onKeyDown={(event) => {
-        if (locked) return;
-        if (event.key === 'Enter' || event.key === ' ') {
-          event.preventDefault();
-          onSelect();
-        }
-      }}
-    >
-      <div className="grid grid-cols-[minmax(0,1fr)_auto] items-start gap-2">
-        <div className="min-w-0">
-          <div className="service-card-primary whitespace-normal break-words text-sm font-semibold leading-5">{displayName}</div>
-          <div className="service-card-meta-grid mt-1 flex flex-wrap gap-1.5 font-mono text-[11px] font-semibold text-muted">
-            {serviceMetaItems(service).map((item) => (
-              <span key={item} className="max-w-full rounded border border-outline bg-white/78 px-1.5 py-0.5 leading-4 break-all">{item}</span>
-            ))}
-          </div>
-        </div>
-        <span className={`inline-flex shrink-0 items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(accessState.tone)}`}>
-          <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass(accessState.tone)}`} />
-          {accessState.label}
-        </span>
+    <div className="console-empty-state min-h-[320px] rounded-none border-0 border-t border-outline bg-surface-lowest">
+      <div>
+        <Server className="mx-auto h-5 w-5 text-muted" />
+        <div className="mt-3 text-sm font-semibold text-on-surface">{label}</div>
+        <div className="mt-1 text-xs text-muted">当前范围没有可选服务，先同步 K8s 服务或调整搜索条件。</div>
+        {action ? <div className="mt-4">{action}</div> : null}
       </div>
-      <div className="whitespace-normal break-words text-[11px] font-semibold leading-4 text-muted">{accessState.detail}</div>
-      {service.identityType === 'k8s_workload' ? (
-        <div className="service-card-runtime-grid grid grid-cols-[52px_minmax(0,1fr)] gap-x-2 gap-y-0.5 font-mono text-[11px] leading-4 text-muted">
-          <span className="font-semibold text-muted/85">集群</span>
-          <span className="break-all text-on-surface/75">{service.cluster || '-'}</span>
-          <span className="font-semibold text-muted/85">空间</span>
-          <span className="break-all text-on-surface/75">{service.namespace || '-'}</span>
-        </div>
-      ) : null}
-      {serviceRoute ? (
-        <div className="mt-2 flex justify-end gap-1.5">
-          <button
-            type="button"
-            className="inline-flex h-7 items-center gap-1.5 rounded-md border border-primary bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
-            onClick={(event) => {
-              event.stopPropagation();
-              onEditRoute(serviceRoute);
-            }}
-          >
-            <PencilLine className="h-3.5 w-3.5" />
-            {selected && routeEditMode ? '编辑中' : '更新配置'}
-          </button>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-function PickerEmpty({ label }: { label: string }) {
-  return (
-    <div className="flex items-center gap-2 py-6 text-sm text-muted">
-      <Server className="h-4 w-4" />{label}
     </div>
   );
 }
@@ -207,6 +113,9 @@ export function ServicePickerPanel({
   routeEditMode,
   locked = false,
   serviceRoutesByService,
+  toolbarAction,
+  emptyAction,
+  syncMessage,
   onServiceQueryChange,
   onSelectService,
   onEditRoute,
@@ -217,37 +126,112 @@ export function ServicePickerPanel({
   routeEditMode: boolean;
   locked?: boolean;
   serviceRoutesByService: Map<string, LogRouteView[]>;
+  toolbarAction?: ReactNode;
+  emptyAction?: ReactNode;
+  syncMessage?: ReactNode;
   onServiceQueryChange: (query: string) => void;
   onSelectService: (service: LogsServiceSummary) => void;
   onEditRoute: (route: LogRouteView) => void;
 }) {
   return (
-    <section className="logs-service-picker-panel relative flex min-h-[560px] flex-col overflow-hidden bg-surface-lowest xl:h-full xl:min-h-[640px]">
-      <div className="flex items-center justify-between gap-2 border-b border-outline px-3 py-2.5">
-        <div className="flex items-center gap-2 text-sm font-semibold text-on-surface">
-          <span className="h-2 w-2 rounded-full bg-primary shadow-[0_0_0_4px_rgba(13,91,215,0.12)]" />
-          服务
-        </div>
-      </div>
-      <div className="border-b border-outline px-3 py-3">
-        <div className="relative">
+    <section className="logs-service-picker-panel relative flex min-h-[520px] flex-col overflow-hidden bg-surface-lowest xl:h-full xl:min-h-0">
+      <div className="logs-service-picker-toolbar flex flex-col gap-2 border-b border-outline bg-surface-lowest px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
+        <div className="relative min-w-0 flex-1">
           <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-          <input className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed disabled:opacity-70" value={serviceQuery} onChange={(event) => onServiceQueryChange(event.target.value)} placeholder={locked ? '当前路由服务' : '搜索服务'} disabled={locked} />
-        </div>
-      </div>
-      <div className="min-h-0 flex-1 overflow-auto p-2">
-        {services.length === 0 ? <PickerEmpty label="暂无匹配服务" /> : services.map((service) => (
-          <ServiceAccessCard
-            key={service.id}
-            service={service}
-            selected={service.id === selectedServiceId}
-            routeEditMode={routeEditMode}
-            locked={locked}
-            serviceRoutes={serviceRoutesByService.get(service.id) ?? []}
-            onSelect={() => onSelectService(service)}
-            onEditRoute={onEditRoute}
+          <input
+            className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed disabled:opacity-70"
+            value={serviceQuery}
+            onChange={(event) => onServiceQueryChange(event.target.value)}
+            placeholder={locked ? '当前路由服务' : '搜索服务、命名空间或标签'}
+            disabled={locked}
           />
-        ))}
+        </div>
+        {toolbarAction ? <div className="flex shrink-0 items-center gap-2">{toolbarAction}</div> : null}
+      </div>
+      {syncMessage ? (
+        <div className="border-b border-outline bg-primary-soft/35 px-3 py-2 text-[11px] font-semibold text-primary">
+          {syncMessage}
+        </div>
+      ) : null}
+      <div className="min-h-0 flex-1 overflow-auto">
+        {services.length === 0 ? <PickerEmpty label="暂无匹配服务" action={emptyAction} /> : (
+          <table className="console-table logs-service-picker-table min-w-[960px] w-full">
+            <thead>
+              <tr>
+                <th>服务</th>
+                <th>命名空间</th>
+                <th className="w-24">状态</th>
+                <th>工作负载</th>
+                <th>日志路径</th>
+                <th>最近发现</th>
+                <th className="w-24">操作</th>
+              </tr>
+            </thead>
+            <tbody>
+              {services.map((service) => {
+                const serviceRoutes = serviceRoutesByService.get(service.id) ?? [];
+                const serviceRoute = serviceRoutes.find(isCollectingRoute) ?? null;
+                const accessState = serviceAccessState(serviceRoutes);
+                const selected = service.id === selectedServiceId;
+                const selectable = !locked;
+                return (
+                  <tr
+                    key={service.id}
+                    role={selectable ? 'button' : undefined}
+                    tabIndex={selectable ? 0 : undefined}
+                    aria-pressed={selected || undefined}
+                    className={`${selectable ? 'cursor-pointer' : ''} ${selected ? 'console-selected-row' : ''}`}
+                    onClick={() => {
+                      if (selectable) onSelectService(service);
+                    }}
+                    onKeyDown={(event) => {
+                      if (!selectable) return;
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        onSelectService(service);
+                      }
+                    }}
+                  >
+                    <td>
+                      <div className="min-w-0">
+                        <div className="truncate font-semibold text-on-surface">{serviceDisplayName(service)}</div>
+                        <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{service.id}</div>
+                      </div>
+                    </td>
+                    <td className="font-mono text-xs text-muted">
+                      <div className="truncate">{service.namespace || '-'}</div>
+                      <div className="mt-0.5 truncate text-[11px]">{service.cluster || service.environment || '-'}</div>
+                    </td>
+                    <td>
+                      <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(accessState.tone)}`}>
+                        <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass(accessState.tone)}`} />
+                        {accessState.label}
+                      </span>
+                    </td>
+                    <td className="font-mono text-xs text-muted">{serviceWorkloadLabel(service)}</td>
+                    <td className="max-w-[300px] truncate font-mono text-xs text-muted">{serviceLogPath(service)}</td>
+                    <td className="font-mono text-xs text-muted">{serviceFreshnessLabel(service)}</td>
+                    <td>
+                      {serviceRoute ? (
+                        <button
+                          type="button"
+                          className="console-table-action"
+                          onClick={(event) => {
+                            event.stopPropagation();
+                            onEditRoute(serviceRoute);
+                          }}
+                        >
+                          <PencilLine className="h-3.5 w-3.5" />
+                          {selected && routeEditMode ? '编辑中' : '更新配置'}
+                        </button>
+                      ) : <span className="font-mono text-xs text-muted">-</span>}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        )}
       </div>
     </section>
   );

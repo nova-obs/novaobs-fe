@@ -5,9 +5,85 @@ import { Check, ChevronDown, FlaskConical, LoaderCircle, X } from 'lucide-react'
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import type { AlertRuleSpec, AlertRuleTestResult } from '../../services/types';
-import { logsApi } from './api';
+import { logsApi, type LogEndpoint, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
+import { routeAccessPriority } from './ServicePickerPanel';
 
 const fieldClass = 'mt-1.5 h-9 w-full rounded-md border border-outline bg-white px-3 text-sm text-on-surface outline-none focus:border-primary';
+
+type ServiceLogMode = 'external' | 'platform';
+
+interface ServiceLogLink {
+  id: string;
+  mode: ServiceLogMode;
+  serviceId: string;
+  serviceName: string;
+  service: LogsServiceSummary;
+  sourceLabel: string;
+  endpoint: LogEndpoint | null;
+  baseFilter: string;
+  route?: LogRouteView;
+  target?: LogTargetView;
+}
+
+function serviceLabel(service?: LogsServiceSummary | null, fallback = '') {
+  return service?.displayName || service?.name || fallback || '-';
+}
+
+function buildServiceLogLinks(services: LogsServiceSummary[], routes: LogRouteView[], targets: LogTargetView[]): ServiceLogLink[] {
+  const routesByService = new Map<string, LogRouteView[]>();
+  for (const route of routes) {
+    const items = routesByService.get(route.route.serviceId) ?? [];
+    routesByService.set(route.route.serviceId, [...items, route]);
+  }
+  const targetsByService = new Map<string, LogTargetView[]>();
+  for (const target of targets) {
+    if (target.target.status === 'disabled') continue;
+    const items = targetsByService.get(target.target.serviceId) ?? [];
+    targetsByService.set(target.target.serviceId, [...items, target]);
+  }
+  const links: ServiceLogLink[] = [];
+  for (const service of services) {
+    const target = (targetsByService.get(service.id) ?? [])[0];
+    if (target?.endpoint) {
+      links.push({
+        id: service.id,
+        mode: 'external',
+        serviceId: service.id,
+        serviceName: serviceLabel(service, service.id),
+        service,
+        sourceLabel: '纳管日志链路',
+        endpoint: target.endpoint,
+        baseFilter: target.target.baseFilter,
+        target,
+      });
+      continue;
+    }
+    const route = [...(routesByService.get(service.id) ?? [])].sort((left, right) => routeAccessPriority(left) - routeAccessPriority(right))[0];
+    if (!route?.endpoint) continue;
+    links.push({
+      id: service.id,
+      mode: 'platform',
+      serviceId: service.id,
+      serviceName: serviceLabel(service, service.id),
+      service,
+      sourceLabel: '平台采集路由',
+      endpoint: route.endpoint,
+      baseFilter: '',
+      route,
+    });
+  }
+  return links;
+}
+
+function serviceIdFromParams(searchParams: URLSearchParams, routes: LogRouteView[], targets: LogTargetView[]) {
+  const direct = searchParams.get('service_id');
+  if (direct) return direct;
+  const targetId = searchParams.get('target_id');
+  if (targetId) return targets.find((item) => item.target.id === targetId)?.target.serviceId ?? '';
+  const routeId = searchParams.get('route_id');
+  if (routeId) return routes.find((item) => item.route.id === routeId)?.route.serviceId ?? '';
+  return '';
+}
 
 export function LogsAlertRulePage() {
   const navigate = useNavigate();
@@ -22,10 +98,14 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
   const ruleQuery = useQuery({ queryKey: ['logs-alert-rule', ruleId], queryFn: () => api.getAlertRule(ruleId), enabled: Boolean(ruleId) });
   const updatesQuery = useQuery({ queryKey: ['logs-alert-rule-updates', ruleId], queryFn: () => api.getAlertRuleUpdates(ruleId), enabled: Boolean(ruleId) });
   const routes = workspace?.routes ?? [];
-  const initialRouteId = searchParams.get('route_id') || routes[0]?.route.id || '';
-  const [routeId, setRouteId] = useState(initialRouteId);
-  const selectedRoute = routes.find((item) => item.route.id === routeId) ?? routes[0];
-  const selectedService = workspace?.services.find((item) => item.id === selectedRoute?.route.serviceId);
+  const targets = workspace?.targets ?? [];
+  const services = workspace?.services ?? [];
+  const serviceLinks = useMemo(() => buildServiceLogLinks(services, routes, targets), [routes, services, targets]);
+  const paramServiceId = serviceIdFromParams(searchParams, routes, targets);
+  const initialServiceId = paramServiceId || serviceLinks[0]?.serviceId || '';
+  const [serviceId, setServiceId] = useState(initialServiceId);
+  const selectedLink = serviceLinks.find((item) => item.serviceId === serviceId) ?? serviceLinks[0];
+  const selectedService = selectedLink?.service;
   const policiesQuery = useQuery({
     queryKey: ['alert-notification-policies', selectedService?.id],
     queryFn: () => api.getNotificationPolicies(selectedService?.id),
@@ -50,7 +130,7 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
     const rule = ruleQuery.data;
     if (!rule || initializedRuleID.current === rule.id) return;
     initializedRuleID.current = rule.id;
-    setRouteId(rule.spec.scope.logRouteId);
+    setServiceId(rule.spec.scope.serviceId);
     setName(rule.spec.name);
     setMode(rule.spec.query.mode);
     setExpression(rule.spec.query.expression);
@@ -65,6 +145,16 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
   }, [ruleQuery.data]);
 
   useEffect(() => {
+    if (paramServiceId && serviceId !== paramServiceId) {
+      setServiceId(paramServiceId);
+      return;
+    }
+    if (!serviceId && serviceLinks[0]) {
+      setServiceId(serviceLinks[0].serviceId);
+    }
+  }, [paramServiceId, serviceId, serviceLinks]);
+
+  useEffect(() => {
     if (policyId || !policiesQuery.data?.length) return;
     const firstEnabled = policiesQuery.data.find((item) => item.enabled);
     if (firstEnabled) setPolicyId(firstEnabled.id);
@@ -76,10 +166,12 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
     scope: {
       serviceId: selectedService?.id ?? '',
       serviceName: selectedService?.name ?? '',
-      logRouteId: selectedRoute?.route.id ?? '',
-      endpointId: selectedRoute?.endpoint?.id ?? '',
-      accountId: selectedRoute?.endpoint?.accountId ?? '',
-      projectId: selectedRoute?.endpoint?.projectId ?? '',
+      logRouteId: selectedLink?.mode === 'platform' ? selectedLink.route?.route.id ?? '' : '',
+      logTargetId: selectedLink?.mode === 'external' ? selectedLink.target?.target.id ?? '' : '',
+      endpointId: selectedLink?.endpoint?.id ?? '',
+      accountId: selectedLink?.endpoint?.accountId ?? '',
+      projectId: selectedLink?.endpoint?.projectId ?? '',
+      baseFilter: selectedLink?.mode === 'external' ? selectedLink.baseFilter : '',
     },
     query: { mode, expression: expression.trim() },
     trigger: {
@@ -92,12 +184,12 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
       ownerTeam: ownerTeam.trim() || selectedService?.ownerTeam || '', runbookUrl: '',
     },
     derivedMetric: derivedMetric ? { enabled: true, signal: 'match_count', labels: {} } : undefined,
-  }), [derivedMetric, evaluationDelay, expression, groupFields, mode, name, ownerTeam, policyId, selectedRoute, selectedService, severity, threshold, window]);
+  }), [derivedMetric, evaluationDelay, expression, groupFields, mode, name, ownerTeam, policyId, selectedLink, selectedService, severity, threshold, window]);
   const inputSnapshot = JSON.stringify(spec);
   const missingFields = useMemo(() => {
     const missing: string[] = [];
     if (!spec.name) missing.push('规则名称');
-    if (!spec.scope.logRouteId) missing.push('日志路由');
+    if (!spec.scope.logRouteId && !spec.scope.logTargetId) missing.push('服务日志链路');
     if (!spec.query.expression) missing.push(mode === 'logsql' ? 'LogsQL 表达式' : '匹配内容');
     if (!spec.notification.policyId) missing.push('通知策略');
     if (!spec.notification.ownerTeam) missing.push('责任团队');
@@ -159,19 +251,20 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-surface px-4 py-4">
           <AlertRuleProfileStrip
-            routeName={selectedRoute?.route.name || selectedRoute?.route.id || '-'}
+            serviceName={selectedLink?.serviceName || '-'}
             thresholdLabel={`${window} 内匹配 ≥ ${threshold} 次`}
             policyLabel={policyId || '未选择通知策略'}
             testLabel={testCurrent ? '已测试' : '待测试'}
           />
 
-          <FormCard number="01" title="匹配日志" description="选择作用路由，并定义要匹配的日志内容。">
+          <FormCard number="01" title="匹配日志" description="选择作用服务，并定义要匹配的日志内容。">
             <div className="grid gap-3 md:grid-cols-2">
               <Field label="规则名称"><input className={fieldClass} value={name} onChange={(event) => setName(event.target.value)} placeholder="例如：支付失败日志" /></Field>
-              <Field label="日志路由">
-                <select className={fieldClass} value={selectedRoute?.route.id ?? ''} onChange={(event) => setRouteId(event.target.value)}>
-                  {routes.map((item) => <option key={item.route.id} value={item.route.id}>{item.route.name || item.route.id}</option>)}
+              <Field label="服务">
+                <select className={fieldClass} value={selectedLink?.serviceId ?? ''} onChange={(event) => setServiceId(event.target.value)}>
+                  {serviceLinks.map((item) => <option key={item.id} value={item.serviceId}>{item.serviceName} · {item.sourceLabel}</option>)}
                 </select>
+                {!serviceLinks.length ? <span className="mt-1 block text-[11px] font-normal text-amber-700">当前没有可用于告警的服务日志链路，请先完成平台采集路由或在日志分析中登记外部日志链路。</span> : null}
               </Field>
             </div>
             <div className="mt-3 inline-flex rounded-md border border-outline bg-surface-low p-1">
@@ -265,18 +358,18 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
 
 function previewLogsQL(spec: AlertRuleSpec) {
   if (!spec.query.expression) return '';
-  const service = JSON.stringify(spec.scope.serviceName);
+  const scopeFilter = spec.scope.baseFilter ? `(${spec.scope.baseFilter})` : `"service.name":=${JSON.stringify(spec.scope.serviceName)}`;
   const expression = spec.query.mode === 'contains'
     ? JSON.stringify(spec.query.expression)
     : spec.query.mode === 'exact' ? `_msg:=${JSON.stringify(spec.query.expression)}` : spec.query.expression;
-  return `_time:${spec.trigger.window} AND "service.name":=${service} AND (${expression})\n| stats count() AS matches\n| filter matches >= ${spec.trigger.threshold}`;
+  return `_time:${spec.trigger.window} AND ${scopeFilter} AND (${expression})\n| stats count() AS matches\n| filter matches >= ${spec.trigger.threshold}`;
 }
 
-function AlertRuleProfileStrip({ routeName, thresholdLabel, policyLabel, testLabel }: { routeName: string; thresholdLabel: string; policyLabel: string; testLabel: string }) {
+function AlertRuleProfileStrip({ serviceName, thresholdLabel, policyLabel, testLabel }: { serviceName: string; thresholdLabel: string; policyLabel: string; testLabel: string }) {
   return (
     <section className="overflow-hidden rounded-md border border-outline bg-white">
       <div className="grid divide-y divide-outline md:grid-cols-4 md:divide-x md:divide-y-0">
-        <SummaryItem label="作用路由" value={routeName} />
+        <SummaryItem label="作用服务" value={serviceName} />
         <SummaryItem label="触发门槛" value={thresholdLabel} />
         <SummaryItem label="通知策略" value={policyLabel} />
         <SummaryItem label="测试状态" value={testLabel} tone={testLabel === '已测试' ? 'success' : 'warning'} />

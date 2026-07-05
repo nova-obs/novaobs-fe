@@ -657,9 +657,11 @@ function mapAlertRuleSpec(raw: any): AlertRuleSpec {
       serviceId: raw.scope?.service_id ?? '',
       serviceName: raw.scope?.service_name ?? '',
       logRouteId: raw.scope?.log_route_id ?? '',
+      logTargetId: raw.scope?.log_target_id ?? '',
       endpointId: raw.scope?.endpoint_id ?? '',
       accountId: raw.scope?.account_id ?? '',
       projectId: raw.scope?.project_id ?? '',
+      baseFilter: raw.scope?.base_filter ?? '',
     },
     query: { mode: raw.query?.mode ?? 'contains', expression: raw.query?.expression ?? '' },
     trigger: {
@@ -696,9 +698,11 @@ function alertRuleSpecBody(spec: AlertRuleSpec) {
       service_id: spec.scope.serviceId,
       service_name: spec.scope.serviceName,
       log_route_id: spec.scope.logRouteId,
+      log_target_id: spec.scope.logTargetId,
       endpoint_id: spec.scope.endpointId,
       account_id: spec.scope.accountId,
       project_id: spec.scope.projectId,
+      base_filter: spec.scope.baseFilter,
     },
     query: spec.query,
     trigger: {

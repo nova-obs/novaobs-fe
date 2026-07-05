@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Copy, FileText, PanelRightOpen, Plus, RefreshCw, Search, ShieldCheck, WifiOff, XCircle } from 'lucide-react';
+import { Check, ChevronDown, Copy, FileText, PanelRightOpen, Plus, RefreshCw, Server, ShieldCheck, WifiOff, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
-import { logSinkLabel, logSourceLabel, logsApi, type LogRouteView } from './api';
+import { logSinkLabel, logSourceLabel, logsApi, type LogRouteView, type LogsServiceSummary } from './api';
 import { routeLifecycle, serviceDisplayName, statusPillClass } from './ServicePickerPanel';
 import { LogsEmptyState, LogsInfoCell, LogsToolbarButton } from './LogsPrimitives';
 
 export function LogsAgentsPage() {
-  const [params] = useSearchParams();
-  const initialRouteId = params.get('route_id') ?? '';
-  const [selectedRouteId, setSelectedRouteId] = useState(initialRouteId);
-  const [routeQuery, setRouteQuery] = useState('');
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [selectedRouteId, setSelectedRouteId] = useState(searchParams.get('route_id') ?? '');
   const [collectorConfigRoute, setCollectorConfigRoute] = useState<LogRouteView | null>(null);
   const [contextRoute, setContextRoute] = useState<LogRouteView | null>(null);
   const [routeView, setRouteView] = useState<'overview' | 'instances'>('overview');
@@ -24,34 +22,29 @@ export function LogsAgentsPage() {
   const services = workspace?.services ?? [];
   const groups = workspace?.collectorGroups ?? [];
   const routes = workspace?.routes ?? [];
-  const filteredRoutes = useMemo(() => {
-    const query = routeQuery.trim().toLowerCase();
-    if (!query) return routes;
-    return routes.filter((route) => {
-      const service = services.find((item) => item.id === route.route.serviceId);
-      return [
-        service ? serviceDisplayName(service) : '',
-        route.route.name,
-        route.route.id,
-        routeScope(route),
-        logSourceLabel(route.route.sourceType),
-        route.endpoint?.name,
-      ].filter(Boolean).join(' ').toLowerCase().includes(query);
-    });
-  }, [routeQuery, routes, services]);
+  const filteredRoutes = routes;
   const activeRoute = filteredRoutes.find((route) => route.route.id === selectedRouteId) ?? filteredRoutes[0] ?? null;
   const activeGroupId = activeRoute?.route.agentGroupId ?? '';
   const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
   const activeService = activeRoute ? services.find((service) => service.id === activeRoute.route.serviceId) ?? null : null;
+
   useEffect(() => {
+    const paramRouteId = searchParams.get('route_id') ?? '';
     if (filteredRoutes.length === 0) {
-      setSelectedRouteId('');
+      if (selectedRouteId) setSelectedRouteId('');
       return;
     }
-    if (selectedRouteId && filteredRoutes.some((route) => route.route.id === selectedRouteId)) return;
-    const routeFromUrl = initialRouteId ? filteredRoutes.find((route) => route.route.id === initialRouteId) : null;
-    setSelectedRouteId(routeFromUrl?.route.id ?? filteredRoutes[0].route.id);
-  }, [filteredRoutes, initialRouteId, selectedRouteId]);
+    const paramRoute = filteredRoutes.find((route) => route.route.id === paramRouteId);
+    if (paramRoute) {
+      if (selectedRouteId !== paramRoute.route.id) setSelectedRouteId(paramRoute.route.id);
+      return;
+    }
+    const fallbackRouteId = filteredRoutes.some((route) => route.route.id === selectedRouteId) ? selectedRouteId : filteredRoutes[0].route.id;
+    if (selectedRouteId !== fallbackRouteId) setSelectedRouteId(fallbackRouteId);
+    const next = new URLSearchParams(searchParams);
+    next.set('route_id', fallbackRouteId);
+    setSearchParams(next, { replace: true });
+  }, [filteredRoutes, searchParams, selectedRouteId, setSearchParams]);
 
   const { data: instances = [], isLoading: instancesLoading, error: instancesError, refetch: refetchInstances } = useQuery({
     queryKey: ['logs-agent-instances', activeGroupId],
@@ -75,6 +68,14 @@ export function LogsAgentsPage() {
     collectorConfigMutation.reset();
   }
 
+  function selectRoute(routeId: string) {
+    setSelectedRouteId(routeId);
+    setRouteView('overview');
+    const next = new URLSearchParams(searchParams);
+    next.set('route_id', routeId);
+    setSearchParams(next, { replace: true });
+  }
+
   const activeLifecycle = activeRoute ? routeLifecycle(activeRoute) : null;
   const activeServiceName = activeService ? serviceDisplayName(activeService) : activeRoute?.route.serviceId ?? '-';
   const contextService = contextRoute ? services.find((service) => service.id === contextRoute.route.serviceId) ?? null : null;
@@ -85,73 +86,33 @@ export function LogsAgentsPage() {
   return (
     <div className="console-workbench logs-routes-workbench flex min-h-[720px] flex-col xl:h-full xl:min-h-0 xl:overflow-hidden">
       <section className="console-panel flex min-h-0 flex-1 flex-col overflow-hidden" aria-label="采集路由工作区">
-        <div className="console-list-toolbar">
-          <div className="console-list-toolbar-actions">
-            <Link className="console-button console-button-primary" to="/logs/agents/new"><Plus className="h-3.5 w-3.5" />创建采集路由</Link>
-            <LogsToolbarButton onClick={() => {
-              void refetchWorkspace();
-              if (activeGroupId) void refetchInstances();
-            }}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>
+        {workspaceError ? <ErrorLine message={(workspaceError as Error).message} /> : null}
+        <div className="console-panel-header shrink-0">
+          <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+            <div className="logs-route-selector w-full lg:max-w-[420px]">
+              <RouteSelector routes={filteredRoutes} services={services} activeRoute={activeRoute} onSelect={selectRoute} />
+            </div>
+            <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
+              <LogsToolbarButton onClick={() => {
+                void refetchWorkspace();
+                if (activeGroupId) void refetchInstances();
+              }}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>
+              <Link className="console-button console-button-primary" to="/logs/agents/new"><Plus className="h-3.5 w-3.5" />创建采集路由</Link>
+            </div>
           </div>
-          <label className="console-list-toolbar-search sm:w-[360px]">
-            <span className="sr-only">搜索采集路由</span>
-            <Search className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-            <input className="console-input h-8 w-full pl-8" value={routeQuery} onChange={(event) => setRouteQuery(event.target.value)} placeholder="搜索服务、Route ID、范围、来源、端点" />
-          </label>
         </div>
 
-        <div className="console-workbench logs-routes-content grid min-h-0 flex-1 xl:grid-cols-[360px_minmax(0,1fr)] xl:overflow-hidden">
-          <aside className="flex min-h-0 flex-col border-b border-outline xl:border-b-0 xl:border-r" aria-label="采集路由">
-          {workspaceError ? <ErrorLine message={(workspaceError as Error).message} /> : null}
-          {routes.length === 0 ? <LogsEmptyState title="暂无采集路由" description="创建路由后可在此查看发布状态、Agent 心跳和完整采集配置。" action={<Link className="console-button console-button-primary" to="/logs/agents/new">创建采集路由</Link>} /> : (
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {filteredRoutes.length === 0 ? <LogsEmptyState title="未找到匹配的采集路由" description="请调整搜索关键字。" /> : filteredRoutes.map((route) => {
-                const active = route.route.id === (activeRoute?.route.id ?? '');
-                const lifecycle = routeLifecycle(route);
-                const service = services.find((item) => item.id === route.route.serviceId) ?? null;
-                return (
-                  <div
-                    key={route.route.id}
-                    className={`group flex w-full items-start border-b border-outline/60 transition-colors ${
-                      active ? 'console-selected-row bg-primary-soft/70 text-primary' : 'bg-white/46 text-on-surface hover:bg-surface-low/70'
-                    }`}
-                  >
-                    <button type="button" className="min-w-0 flex-1 px-3 py-2.5 text-left" onClick={() => {
-                      setSelectedRouteId(route.route.id);
-                      setRouteView('overview');
-                    }}>
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 break-words text-sm font-semibold">{service ? serviceDisplayName(service) : route.route.serviceId}</div>
-                        <span className={`inline-flex shrink-0 rounded border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(lifecycle.tone)}`}>{lifecycle.label}</span>
-                      </div>
-                      <div className="mt-1 flex flex-wrap gap-1.5 font-mono text-[11px] text-muted">
-                        <span>{logSourceLabel(route.route.sourceType)}</span>
-                        <span>{shortHash(route.route.collectorConfigHash)}</span>
-                        <span>{route.endpoint ? logSinkLabel(route.endpoint.sinkType) : 'endpoint -'}</span>
-                      </div>
-                    </button>
-                    <button
-                      type="button"
-                      className="console-icon-button mr-2 mt-2 border-outline/70 bg-white/80"
-                      aria-label={`查看 ${service ? serviceDisplayName(service) : route.route.serviceId} 的路由详情`}
-                      title="查看路由详情"
-                      onClick={() => {
-                        setSelectedRouteId(route.route.id);
-                        setRouteView('overview');
-                        setContextRoute(route);
-                      }}
-                    >
-                      <PanelRightOpen className="h-4 w-4" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-          </aside>
-
+        <div className="logs-routes-content flex min-h-0 flex-1 flex-col">
           <main className="flex min-h-0 min-w-0 flex-col">
-            {!activeRoute ? <LogsEmptyState title="未选择采集路由" /> : (
+            {routes.length === 0 ? (
+              <LogsEmptyState
+                title="暂无采集路由"
+                description="创建路由后可在此查看发布状态、Agent 心跳和完整采集配置。"
+                action={<Link className="console-button console-button-primary" to="/logs/agents/new">创建采集路由</Link>}
+              />
+            ) : !activeRoute ? (
+              <LogsEmptyState title="未选择采集路由" />
+            ) : (
               <>
                 <div className="grid gap-3 border-b border-outline px-4 py-3 lg:grid-cols-[minmax(0,1fr)_auto_auto] lg:items-center">
                   <div className="min-w-0">
@@ -165,78 +126,87 @@ export function LogsAgentsPage() {
                     <button type="button" className={`h-8 border-b-2 text-xs font-semibold ${routeView === 'instances' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'}`} onClick={() => setRouteView('instances')}>Agent 实例</button>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <button
+                      type="button"
+                      className="console-icon-button"
+                      aria-label="查看路由详情"
+                      title="查看路由详情"
+                      onClick={() => setContextRoute(activeRoute)}
+                    >
+                      <PanelRightOpen className="h-4 w-4" />
+                    </button>
                     <button type="button" className="console-button" onClick={() => openCollectorConfig(activeRoute)}><FileText className="h-3.5 w-3.5" />查看配置</button>
                     <Link className="console-button console-button-primary" to={`/logs/agents/${activeRoute.route.id}/edit`}>更新路由</Link>
                   </div>
                 </div>
-              </>
-            )}
 
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {!activeRoute ? null : routeView === 'overview' ? (
-                <div className="p-4">
-                  <dl className="grid border-y border-outline md:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-outline">
-                    <RuntimeFact label="发布状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
-                    <RuntimeFact label="Agent 健康" value={`${onlineCount} / ${instances.length}`} tone={instances.length > 0 && onlineCount === instances.length ? 'primary' : undefined} />
-                    <RuntimeFact label="采集配置 hash" value={activeRoute.route.collectorConfigHash || activeRoute.source?.collectorConfigHash || '-'} tone="primary" />
-                    <RuntimeFact label="最近发布时间" value={activeRoute.route.lastPublishedAt || '-'} />
-                  </dl>
-                  <button type="button" className="mt-4 text-xs font-semibold text-primary hover:underline" onClick={() => setRouteView('instances')}>查看 Agent 实例 →</button>
-                </div>
-              ) : !activeGroupId ? (
-                <LogsEmptyState title="路由尚未绑定采集域" description="完成预览并发布后，这里将展示 Agent 实例和运行状态。" />
-              ) : (
-                <div className="min-h-0">
-                  {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
-                  {instancesLoading ? <LogsEmptyState title="正在加载 Agent 实例" /> : instances.length === 0 ? <LogsEmptyState title="暂无 Agent 心跳数据" /> : (
-                    <div className="overflow-auto">
-                      <table className="console-table min-w-[960px] w-full">
-                        <thead>
-                          <tr>
-                            <th>运行身份</th>
-                            <th>运行态</th>
-                            <th>K8s 范围</th>
-                            <th>Pod / Node</th>
-                            <th>Remote Config</th>
-                            <th>Hash</th>
-                            <th>最后心跳</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {instances.map((item) => (
-                            <tr key={item.runtimeIdentity || item.instanceUid}>
-                              <td>
-                                <Link className="font-mono text-xs font-semibold text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.runtimeIdentity || item.podName || item.hostname || item.instanceUid}</Link>
-                                <div className="mt-1 break-all font-mono text-[11px] text-muted">opamp_instance_uid {item.opampInstanceUid || item.instanceUid || '-'}</div>
-                              </td>
-                              <td>
-                                <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-semibold ${item.healthy ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-500/30 bg-amber-50 text-amber-700'}`}>
-                                  {item.healthy ? <ShieldCheck className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
-                                  {item.runtimeStatus || '-'}
-                                </span>
-                              </td>
-                              <td className="font-mono text-xs">
-                                <div>{item.clusterId || activeGroup?.cluster || '-'}</div>
-                                <div className="mt-1 text-[11px] text-muted">{item.namespace || activeGroup?.namespace || '-'}</div>
-                                <div className="mt-1 text-[11px] text-muted">agent ns {item.agentNamespace || activeGroup?.namespace || '-'}</div>
-                              </td>
-                              <td className="font-mono text-xs">
-                                <div>{item.podName || '-'}</div>
-                                <div className="mt-1 text-[11px] text-muted">pod_uid {shortIdentity(item.podUid)}</div>
-                                <div className="mt-1 text-[11px] text-muted">{item.nodeName || item.hostname || '-'} · {item.podIp || item.ip || '-'}</div>
-                              </td>
-                              <td>{item.remoteConfigStatus}</td>
-                              <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
-                              <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                <div className="min-h-0 flex-1 overflow-y-auto">
+                  {routeView === 'overview' ? (
+                    <div className="p-4">
+                      <dl className="grid border-y border-outline md:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-outline">
+                        <RuntimeFact label="发布状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
+                        <RuntimeFact label="Agent 健康" value={`${onlineCount} / ${instances.length}`} tone={instances.length > 0 && onlineCount === instances.length ? 'primary' : undefined} />
+                        <RuntimeFact label="采集配置 hash" value={activeRoute.route.collectorConfigHash || activeRoute.source?.collectorConfigHash || '-'} tone="primary" />
+                        <RuntimeFact label="最近发布时间" value={activeRoute.route.lastPublishedAt || '-'} />
+                      </dl>
+                      <button type="button" className="mt-4 text-xs font-semibold text-primary hover:underline" onClick={() => setRouteView('instances')}>查看 Agent 实例 →</button>
+                    </div>
+                  ) : !activeGroupId ? (
+                    <LogsEmptyState title="路由尚未绑定采集域" description="完成预览并发布后，这里将展示 Agent 实例和运行状态。" />
+                  ) : (
+                    <div className="min-h-0">
+                      {instancesError ? <ErrorLine message={(instancesError as Error).message} /> : null}
+                      {instancesLoading ? <LogsEmptyState title="正在加载 Agent 实例" /> : instances.length === 0 ? <LogsEmptyState title="暂无 Agent 心跳数据" /> : (
+                        <div className="overflow-auto">
+                          <table className="console-table min-w-[960px] w-full">
+                            <thead>
+                              <tr>
+                                <th>运行身份</th>
+                                <th>运行态</th>
+                                <th>K8s 范围</th>
+                                <th>Pod / Node</th>
+                                <th>Remote Config</th>
+                                <th>Hash</th>
+                                <th>最后心跳</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {instances.map((item) => (
+                                <tr key={item.runtimeIdentity || item.instanceUid}>
+                                  <td>
+                                    <Link className="font-mono text-xs font-semibold text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.runtimeIdentity || item.podName || item.hostname || item.instanceUid}</Link>
+                                    <div className="mt-1 break-all font-mono text-[11px] text-muted">opamp_instance_uid {item.opampInstanceUid || item.instanceUid || '-'}</div>
+                                  </td>
+                                  <td>
+                                    <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-semibold ${item.healthy ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-500/30 bg-amber-50 text-amber-700'}`}>
+                                      {item.healthy ? <ShieldCheck className="h-3.5 w-3.5" /> : <WifiOff className="h-3.5 w-3.5" />}
+                                      {item.runtimeStatus || '-'}
+                                    </span>
+                                  </td>
+                                  <td className="font-mono text-xs">
+                                    <div>{item.clusterId || activeGroup?.cluster || '-'}</div>
+                                    <div className="mt-1 text-[11px] text-muted">{item.namespace || activeGroup?.namespace || '-'}</div>
+                                    <div className="mt-1 text-[11px] text-muted">agent ns {item.agentNamespace || activeGroup?.namespace || '-'}</div>
+                                  </td>
+                                  <td className="font-mono text-xs">
+                                    <div>{item.podName || '-'}</div>
+                                    <div className="mt-1 text-[11px] text-muted">pod_uid {shortIdentity(item.podUid)}</div>
+                                    <div className="mt-1 text-[11px] text-muted">{item.nodeName || item.hostname || '-'} · {item.podIp || item.ip || '-'}</div>
+                                  </td>
+                                  <td>{item.remoteConfigStatus}</td>
+                                  <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
+                                  <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
-              )}
-            </div>
+              </>
+            )}
           </main>
         </div>
       </section>
@@ -343,6 +313,106 @@ export function LogsAgentsPage() {
         </div>),
         document.body,
       ) : null}
+    </div>
+  );
+}
+
+function RouteSelector({ routes, services, activeRoute, onSelect }: {
+  routes: LogRouteView[];
+  services: LogsServiceSummary[];
+  activeRoute: LogRouteView | null;
+  onSelect: (routeId: string) => void;
+}) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [open, setOpen] = useState(false);
+  const [popoverStyle, setPopoverStyle] = useState({ top: 0, left: 0, width: 0 });
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const updatePosition = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const viewportPadding = 12;
+      const width = Math.min(Math.max(rect.width, 360), window.innerWidth - viewportPadding * 2);
+      const left = Math.min(Math.max(viewportPadding, rect.left), window.innerWidth - width - viewportPadding);
+      const estimatedHeight = Math.min(Math.max(routes.length, 1) * 66 + 8, 320);
+      const below = rect.bottom + 6;
+      const top = below + estimatedHeight <= window.innerHeight - viewportPadding
+        ? below
+        : Math.max(viewportPadding, rect.top - estimatedHeight - 6);
+      setPopoverStyle({ top, left, width });
+    };
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [open, routes.length]);
+
+  const activeService = activeRoute ? services.find((service) => service.id === activeRoute.route.serviceId) ?? null : null;
+  const activeName = activeService ? serviceDisplayName(activeService) : activeRoute?.route.serviceId ?? '选择采集路由';
+  const activeLifecycle = activeRoute ? routeLifecycle(activeRoute) : null;
+  const activeMeta = activeRoute
+    ? `${logSourceLabel(activeRoute.route.sourceType)} · ${activeRoute.endpoint ? logSinkLabel(activeRoute.endpoint.sinkType) : 'endpoint -'} · ${activeLifecycle?.label ?? '-'}`
+    : '服务 · 采集来源 · 下游端点';
+
+  return (
+    <div className="rounded-md">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="flex h-12 w-full items-center gap-3 rounded-md border border-outline/80 bg-white px-3 text-left shadow-[0_2px_6px_rgba(24,52,96,0.06)] transition-colors hover:border-primary/40 disabled:cursor-not-allowed disabled:opacity-60"
+        aria-expanded={open}
+        aria-haspopup="listbox"
+        disabled={routes.length === 0}
+        onClick={() => setOpen((value) => !value)}
+      >
+        <Server className="h-4 w-4 shrink-0 text-primary" />
+        <div className="min-w-0 flex-1">
+          <div className="truncate text-sm font-semibold text-on-surface">{activeName}</div>
+          <div className="mt-1 truncate font-mono text-[11px] text-muted">{activeMeta}</div>
+        </div>
+        <ChevronDown className={`h-4 w-4 shrink-0 text-muted transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && typeof document !== 'undefined' ? createPortal((
+        <>
+          <button type="button" className="fixed inset-0 z-40 cursor-default border-0 bg-transparent" aria-label="关闭采集路由选择" onClick={() => setOpen(false)} />
+          <div className="fixed z-50 max-h-80 overflow-y-auto rounded-md border border-outline bg-white p-1 shadow-[0_14px_36px_rgba(24,52,96,0.2)]" style={popoverStyle} role="listbox" aria-label="采集路由">
+            {routes.map((route) => {
+              const selected = route.route.id === (activeRoute?.route.id ?? '');
+              const service = services.find((item) => item.id === route.route.serviceId) ?? null;
+              const name = service ? serviceDisplayName(service) : route.route.serviceId;
+              const lifecycle = routeLifecycle(route);
+              const endpoint = route.endpoint ? logSinkLabel(route.endpoint.sinkType) : 'endpoint -';
+              return (
+                <button
+                  key={route.route.id}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  className={`w-full rounded px-3 py-2.5 text-left transition-colors ${selected ? 'bg-primary-soft/70' : 'hover:bg-surface-low'}`}
+                  onClick={() => {
+                    onSelect(route.route.id);
+                    setOpen(false);
+                  }}
+                >
+                  <div className="flex items-center justify-between gap-3">
+                    <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{name}</span>
+                    <span className="flex shrink-0 items-center gap-2">
+                      <span className={`inline-flex rounded border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(lifecycle.tone)}`}>{lifecycle.label}</span>
+                      {selected ? <Check className="h-4 w-4 text-primary" /> : null}
+                    </span>
+                  </div>
+                  <div className="mt-1 truncate text-[11px] font-medium text-muted">{route.route.name || route.route.id} · {logSourceLabel(route.route.sourceType)} · {endpoint}</div>
+                  <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{shortHash(route.route.collectorConfigHash)}</div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      ), document.body) : null}
     </div>
   );
 }

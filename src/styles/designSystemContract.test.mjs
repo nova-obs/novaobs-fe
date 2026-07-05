@@ -53,11 +53,10 @@ test('全局排版标尺与 prototype 控制台层级一致', () => {
   assert.match(styles, /\.console-field-label\s*\{[\s\S]*font-size:\s*13px/);
   assert.match(styles, /\.console-table th\s*\{[\s\S]*font-size:\s*13px/);
   assert.match(styles, /\.console-table td\s*\{[\s\S]*font-size:\s*13px/);
-  assert.match(logsWorkspace, /px-3 text-sm font-semibold transition-colors/);
 });
 
 test('模块导航统一标题边界、文字基线和激活位置', () => {
-  for (const source of [logsWorkspace, k8sLayout, platformLayout]) {
+  for (const source of [k8sLayout, platformLayout]) {
     assert.match(source, /module-navigation-bar/);
     assert.match(source, /module-navigation-title/);
     assert.match(source, /module-navigation-tabs/);
@@ -69,4 +68,13 @@ test('模块导航统一标题边界、文字基线和激活位置', () => {
   assert.match(styles, /\.module-navigation-title\s*\{[\s\S]*font-size:\s*16px/);
   assert.match(styles, /\.module-navigation-link,[\s\S]*\.k8s-context-navigation \.console-input\s*\{[\s\S]*font-size:\s*13px/);
   assert.match(styles, /\.k8s-context-navigation\s*\{[\s\S]*overflow:\s*visible/);
+});
+
+test('Logs 模块导航采用可折叠垂直 Rail', () => {
+  assert.match(logsWorkspace, /ModuleRail/);
+  assert.match(logsWorkspace, /storageKey="novaobs\.module-rail\.logs"/);
+  assert.match(styles, /\.module-rail\s*\{[\s\S]*position:\s*absolute/);
+  assert.match(styles, /\.module-rail-collapsed\s*\{[\s\S]*width:\s*44px/);
+  assert.match(styles, /\.module-rail-expanded\s*\{[\s\S]*width:\s*216px/);
+  assert.match(styles, /\.module-rail-link\s*\{[\s\S]*min-height:\s*36px/);
 });

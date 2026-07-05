@@ -526,6 +526,25 @@ test('日志告警测试和启用使用结构化规则契约', async () => {
   assert.equal('draft' in request.body, false);
 });
 
+test('日志告警支持绑定服务外部日志链路', async () => {
+  const spec = {
+    name: '自建日志错误', description: '',
+    scope: { serviceId: 'svc-a', serviceName: 'payment', logRouteId: '', logTargetId: 'target-a', endpointId: 'vl-a', accountId: '1', projectId: '2', baseFilter: '"stream":"payment"' },
+    query: { mode: 'contains', expression: 'error' },
+    trigger: { mode: 'window', aggregation: 'count', operator: 'gte', threshold: 3, window: '1m', evaluationInterval: '30s', evaluationDelay: '5s', pendingFor: '0s', keepFiringFor: '0s' },
+    grouping: { fields: [], maxInstances: 100 },
+    notification: { policyId: 'default-webhook', severity: 'warning', ownerTeam: 'pay', runbookUrl: '' },
+  };
+  const request = await captureRequest(
+    () => api.createAlertRule(spec, 'test-token'),
+    { rule: { id: 'rule-a', spec: { name: '自建日志错误' }, state: 'enabled', apply_status: 'pending' } },
+  );
+
+  assert.equal(request.body.spec.scope.log_route_id, '');
+  assert.equal(request.body.spec.scope.log_target_id, 'target-a');
+  assert.equal(request.body.spec.scope.base_filter, '"stream":"payment"');
+});
+
 test('日志告警实例和更新记录使用统一 alerts API', async () => {
   const instances = await captureRequest(() => api.getAlertInstances({ state: 'firing' }), []);
   assert.equal(instances.path, '/api/v1/alerts/instances?state=firing');
