@@ -3,7 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { ChevronsLeft, ChevronsRight } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
-export type ModuleRailModuleId = 'logs' | 'k8s' | 'platform';
+export type ModuleRailModuleId = 'logs' | 'k8s' | 'platform' | 'metrics';
 
 export function moduleRailStorageKey(module: ModuleRailModuleId): string {
   return `novaobs.module-rail.${module}`;

@@ -23,7 +23,13 @@ import { LogsAlertsPage } from '../pages/logs/LogsAlertsPage';
 import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
 import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
-import { MonitoringPage } from '../pages/monitoring/MonitoringPage';
+import { MetricsAlertsPage } from '../pages/metrics/MetricsAlertsPage';
+import { MetricsCollectionPage } from '../pages/metrics/MetricsCollectionPage';
+import { MetricsDashboardsPage } from '../pages/metrics/MetricsDashboardsPage';
+import { MetricsEndpointsPage } from '../pages/metrics/MetricsEndpointsPage';
+import { MetricsExplorePage } from '../pages/metrics/MetricsExplorePage';
+import { MetricsLayout } from '../pages/metrics/MetricsLayout';
+import { MetricsOverviewPage } from '../pages/metrics/MetricsOverviewPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
 import { ObservabilitySettingsPage } from '../pages/platform/ObservabilitySettingsPage';
 import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPage';
@@ -94,13 +100,24 @@ const platformChildRoutes: RouteDefinition[] = [
   { path: 'observability', title: '观测接入配置', element: <Navigate to="/logs/endpoints" replace /> },
 ];
 
+const metricsChildRoutes: RouteDefinition[] = [
+  { index: true, title: '指标查询', element: <Navigate to="/metrics/explore" replace /> },
+  { path: 'explore', title: '指标查询', element: <MetricsExplorePage /> },
+  { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
+  { path: 'dashboards', title: 'Dashboard', element: <MetricsDashboardsPage /> },
+  { path: 'collection', title: '采集接入', element: <MetricsCollectionPage /> },
+  { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
+  { path: 'endpoints', title: '接入端点', element: <MetricsEndpointsPage /> },
+];
+
 export const routeDefinitions: RouteDefinition[] = [
   { path: '/', title: '平台总览', element: <OverviewPage /> },
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/logs/agents/new" replace /> },
   { path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
   { path: '/observability/endpoints', title: '观测接入配置', element: <Navigate to="/logs/endpoints" replace /> },
-  { path: '/monitoring', title: '监控', element: <MonitoringPage /> },
+  { path: '/metrics', title: '监控', element: <MetricsLayout />, children: metricsChildRoutes },
+  { path: '/monitoring', title: '监控', element: <Navigate to="/metrics" replace /> },
   { path: '/traces', title: 'Trace', element: <TracesPage /> },
   { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },
   { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },

@@ -545,6 +545,70 @@ test('日志告警支持绑定服务外部日志链路', async () => {
   assert.equal(request.body.spec.scope.base_filter, '"stream":"payment"');
 });
 
+test('指标告警列表使用 metrics 专用接口并映射服务绑定作用域', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse([{
+      id: 'rule-metric',
+      spec: {
+        signal_type: 'metrics',
+        name: '订单 5xx',
+        scope: {
+          service_id: 'svc-orders',
+          service_name: 'orders-api',
+          endpoint_id: 'vm-prod',
+          metrics_binding_id: 'binding-orders',
+          base_promql: '{service_name="orders-api"}',
+        },
+        query: { mode: 'promql', expression: 'sum(rate(http_requests_total{status=~"5.."}[5m]))' },
+        trigger: { operator: 'gte', threshold: 10 },
+        grouping: { fields: [], max_instances: 20 },
+        notification: { policy_id: 'orders-oncall', severity: 'warning', owner_team: 'orders' },
+      },
+      state: 'enabled',
+      apply_status: 'applied',
+      updated_at: '2026-07-05T10:00:00Z',
+    }]);
+  };
+
+  try {
+    const rules = await api.getMetricsAlertRules('svc-orders');
+    assert.equal(requests[0].path, '/api/v1/metrics/alert-rules?service_id=svc-orders');
+    assert.equal(rules[0].spec.signalType, 'metrics');
+    assert.equal(rules[0].spec.scope.metricsBindingId, 'binding-orders');
+    assert.equal(rules[0].spec.scope.basePromQL, '{service_name="orders-api"}');
+    assert.equal(rules[0].spec.query.mode, 'promql');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('指标告警创建强制 metrics signal 并提交 PromQL 作用域', async () => {
+  const spec = {
+    signalType: 'logs',
+    name: '订单 5xx', description: '',
+    scope: { serviceId: 'svc-orders', serviceName: 'orders-api', logRouteId: '', metricsBindingId: 'binding-orders', endpointId: 'vm-prod', accountId: '', projectId: '', basePromQL: '{service_name="orders-api"}' },
+    query: { mode: 'promql', expression: 'sum(rate(http_requests_total{status=~"5.."}[5m]))' },
+    trigger: { mode: 'window', aggregation: 'count', operator: 'gte', threshold: 10, window: '5m', evaluationInterval: '1m', evaluationDelay: '0s', pendingFor: '0s', keepFiringFor: '0s' },
+    grouping: { fields: [], maxInstances: 20 },
+    notification: { policyId: 'orders-oncall', severity: 'warning', ownerTeam: 'orders', runbookUrl: '' },
+  };
+  const request = await captureRequest(
+    () => api.createMetricsAlertRule(spec, 'test-token'),
+    { rule: { id: 'rule-metric', spec: { signal_type: 'metrics', name: '订单 5xx' }, state: 'enabled', apply_status: 'pending' } },
+  );
+
+  assert.equal(request.path, '/api/v1/metrics/alert-rules');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.body.test_token, 'test-token');
+  assert.equal(request.body.spec.signal_type, 'metrics');
+  assert.equal(request.body.spec.scope.metrics_binding_id, 'binding-orders');
+  assert.equal(request.body.spec.scope.base_promql, '{service_name="orders-api"}');
+  assert.equal(request.body.spec.query.mode, 'promql');
+});
+
 test('日志告警实例和更新记录使用统一 alerts API', async () => {
   const instances = await captureRequest(() => api.getAlertInstances({ state: 'firing' }), []);
   assert.equal(instances.path, '/api/v1/alerts/instances?state=firing');

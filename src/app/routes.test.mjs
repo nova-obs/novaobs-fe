@@ -9,6 +9,7 @@ test('路由定义覆盖主路径', () => {
     '/onboarding',
     '/logs',
     '/observability/endpoints',
+    '/metrics',
     '/monitoring',
     '/traces',
     '/platform',
@@ -16,6 +17,16 @@ test('路由定义覆盖主路径', () => {
     '/agents/:uid',
     '/alerts',
   ]);
+});
+
+test('Metrics 使用嵌套路由并保留 monitoring 兼容重定向', () => {
+  const metrics = routeDefinitions.find((item) => item.path === '/metrics');
+  const monitoring = routeDefinitions.find((item) => item.path === '/monitoring');
+
+  assert.equal(metrics?.children?.[0].index, true);
+  assert.equal(metrics?.children?.[0].element?.props?.to, '/metrics/explore');
+  assert.deepEqual(metrics?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'alerts', 'dashboards', 'collection', 'overview', 'endpoints']);
+  assert.equal(monitoring?.element?.props?.to, '/metrics');
 });
 
 test('K8s 运维使用嵌套路由承载模块子页面', () => {
@@ -52,6 +63,13 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/logs/agents'), 'Logs 采集路由');
   assert.equal(getRouteTitle('/logs/endpoints'), '观测接入配置');
   assert.equal(getRouteTitle('/observability/endpoints'), '观测接入配置');
+  assert.equal(getRouteTitle('/metrics'), '指标查询');
+  assert.equal(getRouteTitle('/metrics/explore'), '指标查询');
+  assert.equal(getRouteTitle('/metrics/overview'), '监控总览');
+  assert.equal(getRouteTitle('/metrics/collection'), '采集接入');
+  assert.equal(getRouteTitle('/metrics/dashboards'), 'Dashboard');
+  assert.equal(getRouteTitle('/metrics/alerts'), '指标告警');
+  assert.equal(getRouteTitle('/metrics/endpoints'), '接入端点');
   assert.equal(getRouteTitle('/monitoring'), '监控');
   assert.equal(getRouteTitle('/traces'), 'Trace');
   assert.equal(getRouteTitle('/platform/settings'), '平台设置');
@@ -69,6 +87,10 @@ test('浏览器标签页标题包含当前模块和产品名', () => {
   assert.equal(getDocumentTitle('/logs/agents/route-1/edit'), '更新采集路由 - NovaObs');
   assert.equal(getDocumentTitle('/logs/endpoints'), '观测接入配置 - NovaObs');
   assert.equal(getDocumentTitle('/observability/endpoints'), '观测接入配置 - NovaObs');
+  assert.equal(getDocumentTitle('/metrics'), '指标查询 - NovaObs');
+  assert.equal(getDocumentTitle('/metrics/explore'), '指标查询 - NovaObs');
+  assert.equal(getDocumentTitle('/metrics/alerts'), '指标告警 - NovaObs');
+  assert.equal(getDocumentTitle('/metrics/endpoints'), '接入端点 - NovaObs');
   assert.equal(getDocumentTitle('/monitoring'), '监控 - NovaObs');
   assert.equal(getDocumentTitle('/traces'), 'Trace - NovaObs');
   assert.equal(getDocumentTitle('/platform/settings'), '平台设置 - NovaObs');

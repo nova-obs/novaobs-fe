@@ -10,6 +10,7 @@ const emptyState = readFileSync(new URL('../components/EmptyState.tsx', import.m
 const statusBadge = readFileSync(new URL('../components/StatusBadge.tsx', import.meta.url), 'utf8');
 const k8sLayout = readFileSync(new URL('../pages/k8s/K8sOpsLayout.tsx', import.meta.url), 'utf8');
 const platformLayout = readFileSync(new URL('../pages/platform/PlatformLayout.tsx', import.meta.url), 'utf8');
+const metricsLayout = readFileSync(new URL('../pages/metrics/MetricsLayout.tsx', import.meta.url), 'utf8');
 
 test('全站提供统一的页面、按钮、提示和空态视觉语义', () => {
   assert.equal(styles.includes('.app-workspace'), true);
@@ -61,14 +62,16 @@ test('K8s 集群上下文导航沿用统一横幅样式', () => {
   assert.match(styles, /\.k8s-context-navigation\s*\{[\s\S]*overflow:\s*visible/);
 });
 
-test('Logs、K8s、平台管理模块导航统一采用可折叠垂直 Rail', () => {
-  for (const source of [logsWorkspace, k8sLayout, platformLayout]) {
+test('Logs、K8s、平台管理和 Metrics 模块导航统一采用可折叠垂直 Rail', () => {
+  for (const source of [logsWorkspace, k8sLayout, platformLayout, metricsLayout]) {
     assert.match(source, /ModuleWorkbench/);
-    assert.match(source, /module="(logs|k8s|platform)"/);
+    assert.match(source, /module="(logs|k8s|platform|metrics)"/);
   }
   assert.match(logsWorkspace, /module="logs"/);
   assert.match(k8sLayout, /module="k8s"/);
   assert.match(platformLayout, /module="platform"/);
+  assert.match(metricsLayout, /module="metrics"/);
+  assert.doesNotMatch(metricsLayout, /remountOnPathChange/);
   assert.match(styles, /\.module-rail\s*\{[\s\S]*position:\s*absolute/);
   assert.match(styles, /\.module-rail-collapsed\s*\{[\s\S]*width:\s*44px/);
   assert.match(styles, /\.module-rail-expanded\s*\{[\s\S]*width:\s*216px/);

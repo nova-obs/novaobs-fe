@@ -476,8 +476,10 @@ export interface CollectorConfigSources {
 }
 
 export type AlertSeverity = 'info' | 'warning' | 'critical';
+export type AlertSignalType = 'logs' | 'metrics';
 
 export interface AlertRuleSpec {
+  signalType?: AlertSignalType;
   name: string;
   description: string;
   scope: {
@@ -485,12 +487,14 @@ export interface AlertRuleSpec {
     serviceName: string;
     logRouteId: string;
     logTargetId?: string;
+    metricsBindingId?: string;
     endpointId: string;
     accountId: string;
     projectId: string;
     baseFilter?: string;
+    basePromQL?: string;
   };
-  query: { mode: 'contains' | 'exact' | 'logsql'; expression: string };
+  query: { mode: 'contains' | 'exact' | 'logsql' | 'promql' | 'metricsql'; expression: string };
   trigger: {
     mode: 'window';
     aggregation: 'count' | 'rate';

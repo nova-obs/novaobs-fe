@@ -650,18 +650,23 @@ function mapAlertRule(raw: any): AlertRule {
 }
 
 function mapAlertRuleSpec(raw: any): AlertRuleSpec {
+  const scope = raw.scope ?? {};
+  const notification = raw.notification ?? {};
   return {
+    signalType: raw.signal_type ?? raw.signalType ?? 'logs',
     name: raw.name ?? '',
     description: raw.description ?? '',
     scope: {
-      serviceId: raw.scope?.service_id ?? '',
-      serviceName: raw.scope?.service_name ?? '',
-      logRouteId: raw.scope?.log_route_id ?? '',
-      logTargetId: raw.scope?.log_target_id ?? '',
-      endpointId: raw.scope?.endpoint_id ?? '',
-      accountId: raw.scope?.account_id ?? '',
-      projectId: raw.scope?.project_id ?? '',
-      baseFilter: raw.scope?.base_filter ?? '',
+      serviceId: scope.service_id ?? scope.serviceId ?? '',
+      serviceName: scope.service_name ?? scope.serviceName ?? '',
+      logRouteId: scope.log_route_id ?? scope.logRouteId ?? '',
+      logTargetId: scope.log_target_id ?? scope.logTargetId ?? '',
+      metricsBindingId: scope.metrics_binding_id ?? scope.metricsBindingId ?? '',
+      endpointId: scope.endpoint_id ?? scope.endpointId ?? '',
+      accountId: scope.account_id ?? scope.accountId ?? '',
+      projectId: scope.project_id ?? scope.projectId ?? '',
+      baseFilter: scope.base_filter ?? scope.baseFilter ?? '',
+      basePromQL: scope.base_promql ?? scope.basePromQL ?? '',
     },
     query: { mode: raw.query?.mode ?? 'contains', expression: raw.query?.expression ?? '' },
     trigger: {
@@ -677,10 +682,10 @@ function mapAlertRuleSpec(raw: any): AlertRuleSpec {
     },
     grouping: { fields: parseStringList(raw.grouping?.fields), maxInstances: Number(raw.grouping?.max_instances ?? 100) },
     notification: {
-      policyId: raw.notification?.policy_id ?? '',
-      severity: raw.notification?.severity ?? 'warning',
-      ownerTeam: raw.notification?.owner_team ?? '',
-      runbookUrl: raw.notification?.runbook_url ?? '',
+      policyId: notification.policy_id ?? notification.policyId ?? '',
+      severity: notification.severity ?? 'warning',
+      ownerTeam: notification.owner_team ?? notification.ownerTeam ?? '',
+      runbookUrl: notification.runbook_url ?? notification.runbookUrl ?? '',
     },
     derivedMetric: raw.derived_metric ? {
       enabled: Boolean(raw.derived_metric.enabled),
@@ -692,6 +697,7 @@ function mapAlertRuleSpec(raw: any): AlertRuleSpec {
 
 function alertRuleSpecBody(spec: AlertRuleSpec) {
   return {
+    signal_type: spec.signalType,
     name: spec.name,
     description: spec.description,
     scope: {
@@ -699,10 +705,12 @@ function alertRuleSpecBody(spec: AlertRuleSpec) {
       service_name: spec.scope.serviceName,
       log_route_id: spec.scope.logRouteId,
       log_target_id: spec.scope.logTargetId,
+      metrics_binding_id: spec.scope.metricsBindingId,
       endpoint_id: spec.scope.endpointId,
       account_id: spec.scope.accountId,
       project_id: spec.scope.projectId,
       base_filter: spec.scope.baseFilter,
+      base_promql: spec.scope.basePromQL,
     },
     query: spec.query,
     trigger: {
@@ -1010,6 +1018,12 @@ export const api = {
     const raw = await request<any[]>('/alerts/rules');
     return Array.isArray(raw) ? raw.map(mapAlertRule) : [];
   },
+  async getMetricsAlertRules(serviceId?: string): Promise<AlertRule[]> {
+    const search = new URLSearchParams();
+    if (serviceId) search.set('service_id', serviceId);
+    const raw = await request<any[]>(`/metrics/alert-rules${search.size ? `?${search}` : ''}`);
+    return Array.isArray(raw) ? raw.map(mapAlertRule) : [];
+  },
   async getAlertRule(id: string): Promise<AlertRule> {
     return mapAlertRule(await request<any>(`/alerts/rules/${id}`));
   },
@@ -1033,10 +1047,37 @@ export const api = {
       warnings: parseStringList(raw.warnings),
     };
   },
+  async testMetricsAlertRule(spec: AlertRuleSpec, rangeMinutes = 5): Promise<AlertRuleTestResult> {
+    const rangeEnd = new Date();
+    const rangeStart = new Date(rangeEnd.getTime() - rangeMinutes * 60_000);
+    const raw = await request<any>('/metrics/alert-rules/test', {
+      method: 'POST',
+      body: JSON.stringify({ spec: alertRuleSpecBody({ ...spec, signalType: 'metrics' }), range_start: rangeStart.toISOString(), range_end: rangeEnd.toISOString() }),
+    });
+    return {
+      inputHash: raw.input_hash ?? '',
+      testToken: raw.test_token ?? '',
+      testedAt: raw.tested_at ?? '',
+      compiledQuery: raw.compiled_query ?? '',
+      matchedLogCount: Number(raw.matched_log_count ?? 0),
+      estimatedInstanceCount: Number(raw.estimated_instance_count ?? 0),
+      queryDurationMillis: Number(raw.query_duration_ms ?? 0),
+      partialResponse: Boolean(raw.partial_response),
+      topGroups: Array.isArray(raw.top_groups) ? raw.top_groups : [],
+      warnings: parseStringList(raw.warnings),
+    };
+  },
   async createAlertRule(spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
     const raw = await request<any>('/alerts/rules', {
       method: 'POST',
       body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: '创建并启用日志告警' }),
+    });
+    return mapAlertRule(raw.rule);
+  },
+  async createMetricsAlertRule(spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
+    const raw = await request<any>('/metrics/alert-rules', {
+      method: 'POST',
+      body: JSON.stringify({ spec: alertRuleSpecBody({ ...spec, signalType: 'metrics' }), test_token: testToken, change_summary: '创建并启用指标告警' }),
     });
     return mapAlertRule(raw.rule);
   },

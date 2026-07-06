@@ -2,6 +2,9 @@ import {
   Bell,
   BookOpenCheck,
   Boxes,
+  Activity,
+  BarChart3,
+  Database,
   FileText,
   Gauge,
   GitBranch,
@@ -79,7 +82,21 @@ const navigationDomains: NavigationDomain[] = [
               { id: 'logs-endpoints', label: '接入配置', description: '日志下游端点', path: '/logs/endpoints', icon: RadioTower },
             ],
           },
-          { id: 'monitoring', label: '监控', description: '指标与运行信号', path: '/monitoring', icon: Monitor },
+          {
+            id: 'metrics',
+            label: '监控',
+            description: '指标查询、服务作用域和指标告警',
+            path: '/metrics',
+            icon: Monitor,
+            children: [
+              { id: 'metrics-explore', label: '指标查询', description: '按服务作用域查看指标', path: '/metrics/explore', icon: Activity },
+              { id: 'metrics-alerts', label: '指标告警', description: '指标规则与告警入口', path: '/metrics/alerts', icon: Bell },
+              { id: 'metrics-dashboards', label: 'Dashboard', description: 'Grafana 目录与受控代理入口', path: '/metrics/dashboards', icon: BarChart3 },
+              { id: 'metrics-collection', label: '采集接入', description: 'Collector 接入与服务作用域绑定', path: '/metrics/collection', icon: RadioTower },
+              { id: 'metrics-overview', label: '监控总览', description: '服务指标健康与接入状态', path: '/metrics/overview', icon: Gauge },
+              { id: 'metrics-endpoints', label: '接入端点', description: '指标下游端点目录', path: '/metrics/endpoints', icon: Database },
+            ],
+          },
           { id: 'traces', label: 'Trace', description: '链路查询、Span 详情与日志反跳', path: '/traces', icon: GitBranch },
           { id: 'alerts', label: '告警', description: '告警实例、通知策略与处置记录', path: '/alerts', icon: Bell },
         ],
@@ -161,6 +178,9 @@ export const getNavigationByPath = (path: string) => {
   if (normalizedPath === '/observability/endpoints') {
     return allNavigationItems.find((item) => item.id === 'logs-endpoints');
   }
+  if (normalizedPath === '/monitoring') {
+    return allNavigationItems.find((item) => item.id === 'metrics');
+  }
   return [...allNavigationItems]
     .sort((left, right) => {
       const pathDelta = right.path.length - left.path.length;
@@ -181,6 +201,7 @@ export const getNavigationDomainByPath = (path: string) => {
     || normalizedPath.startsWith('/agents/')
     || normalizedPath === '/onboarding'
     || normalizedPath.startsWith('/observability')
+    || normalizedPath.startsWith('/metrics')
     || normalizedPath.startsWith('/monitoring')
     || normalizedPath.startsWith('/traces')
     || normalizedPath.startsWith('/alerts')

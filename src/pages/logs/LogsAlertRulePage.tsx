@@ -11,6 +11,12 @@ import { routeAccessPriority } from './ServicePickerPanel';
 const fieldClass = 'mt-1.5 h-9 w-full rounded-md border border-outline bg-white px-3 text-sm text-on-surface outline-none focus:border-primary';
 
 type ServiceLogMode = 'external' | 'platform';
+type LogAlertQueryMode = 'contains' | 'exact' | 'logsql';
+
+function asLogAlertQueryMode(mode: AlertRuleSpec['query']['mode']): LogAlertQueryMode {
+  if (mode === 'exact' || mode === 'logsql') return mode;
+  return 'contains';
+}
 
 interface ServiceLogLink {
   id: string;
@@ -112,7 +118,7 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
     enabled: Boolean(selectedService?.id),
   });
   const [name, setName] = useState('');
-  const [mode, setMode] = useState<'contains' | 'exact' | 'logsql'>('contains');
+  const [mode, setMode] = useState<LogAlertQueryMode>('contains');
   const [expression, setExpression] = useState('');
   const [window, setWindow] = useState('1m');
   const [threshold, setThreshold] = useState(3);
@@ -132,7 +138,7 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
     initializedRuleID.current = rule.id;
     setServiceId(rule.spec.scope.serviceId);
     setName(rule.spec.name);
-    setMode(rule.spec.query.mode);
+    setMode(asLogAlertQueryMode(rule.spec.query.mode));
     setExpression(rule.spec.query.expression);
     setWindow(rule.spec.trigger.window);
     setThreshold(rule.spec.trigger.threshold);
@@ -161,6 +167,7 @@ export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: s
   }, [policiesQuery.data, policyId]);
 
   const spec = useMemo<AlertRuleSpec>(() => ({
+    signalType: 'logs',
     name: name.trim(),
     description: '',
     scope: {

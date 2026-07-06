@@ -23,7 +23,12 @@ test('超级菜单按业务域组织现有叶子入口且路径唯一', () => {
     '/logs/agents',
     '/logs/alerts',
     '/logs/endpoints',
-    '/monitoring',
+    '/metrics/explore',
+    '/metrics/alerts',
+    '/metrics/dashboards',
+    '/metrics/collection',
+    '/metrics/overview',
+    '/metrics/endpoints',
     '/traces',
     '/alerts',
     '/k8s',
@@ -38,11 +43,15 @@ test('可观测性导航以四大模块为一级，Logs 内收日志子功能', 
   const observability = getNavigationDomains().find((domain) => domain.id === 'observability');
   const primaryItems = observability?.groups.flatMap((group) => group.items) ?? [];
   const logs = primaryItems.find((item) => item.id === 'logs');
+  const metrics = primaryItems.find((item) => item.id === 'metrics');
 
   assert.deepEqual(primaryItems.map((item) => item.label), ['Logs', '监控', 'Trace', '告警']);
   assert.equal(logs?.path, '/logs');
   assert.deepEqual(logs?.children?.map((item) => item.label), ['日志分析', '采集路由', '日志告警', '接入配置']);
   assert.deepEqual(logs?.children?.map((item) => item.path), ['/logs/explore', '/logs/agents', '/logs/alerts', '/logs/endpoints']);
+  assert.equal(metrics?.path, '/metrics');
+  assert.deepEqual(metrics?.children?.map((item) => item.label), ['指标查询', '指标告警', 'Dashboard', '采集接入', '监控总览', '接入端点']);
+  assert.deepEqual(metrics?.children?.map((item) => item.path), ['/metrics/explore', '/metrics/alerts', '/metrics/dashboards', '/metrics/collection', '/metrics/overview', '/metrics/endpoints']);
 });
 
 test('K8s 运维导航按默认父模块卡片承载集群入口', () => {
@@ -62,7 +71,12 @@ test('根据路径解析当前导航项', () => {
   assert.equal(getNavigationByPath('/logs/alerts/new')?.id, 'logs-alerts');
   assert.equal(getNavigationByPath('/logs/endpoints')?.id, 'logs-endpoints');
   assert.equal(getNavigationByPath('/observability/endpoints')?.id, 'logs-endpoints');
-  assert.equal(getNavigationByPath('/monitoring')?.id, 'monitoring');
+  assert.equal(getNavigationByPath('/metrics')?.id, 'metrics');
+  assert.equal(getNavigationByPath('/metrics/explore')?.id, 'metrics-explore');
+  assert.equal(getNavigationByPath('/metrics/collection')?.id, 'metrics-collection');
+  assert.equal(getNavigationByPath('/metrics/alerts')?.id, 'metrics-alerts');
+  assert.equal(getNavigationByPath('/metrics/endpoints')?.id, 'metrics-endpoints');
+  assert.equal(getNavigationByPath('/monitoring')?.id, 'metrics');
   assert.equal(getNavigationByPath('/traces')?.id, 'traces');
   assert.equal(getNavigationByPath('/platform/settings')?.id, 'platform-settings');
   assert.equal(getNavigationByPath('/platform/access')?.id, 'platform-access');
@@ -77,6 +91,7 @@ test('根据任意子页面解析当前业务域', () => {
   assert.equal(getNavigationDomainByPath('/logs/agents/new')?.id, 'observability');
   assert.equal(getNavigationDomainByPath('/agents/agent-1')?.id, 'observability');
   assert.equal(getNavigationDomainByPath('/observability/endpoints')?.id, 'observability');
+  assert.equal(getNavigationDomainByPath('/metrics/explore')?.id, 'observability');
   assert.equal(getNavigationDomainByPath('/monitoring')?.id, 'observability');
   assert.equal(getNavigationDomainByPath('/traces')?.id, 'observability');
   assert.equal(getNavigationDomainByPath('/alerts')?.id, 'observability');
