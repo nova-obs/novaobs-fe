@@ -246,7 +246,7 @@ export function LogsExplorePage() {
         <LogsInfoCell label="范围" value={activeLink?.scopeLabel || '-'} />
         <LogsInfoCell label="端点" value={activeLink?.endpoint?.name || '-'} />
         <LogsInfoCell label="租户" value={activeLink?.endpoint?.accountId && activeLink?.endpoint?.projectId ? `${activeLink.endpoint.accountId}:${activeLink.endpoint.projectId}` : '0:0（默认）'} />
-        <LogsInfoCell label={activeLink?.mode === 'external' ? '基础过滤条件' : '采集配置 hash'} value={activeLink?.mode === 'external' ? activeLink.baseFilter || '-' : activeLink?.route?.route.collectorConfigHash || '-'} />
+        {activeLink?.mode === 'external' ? <LogsInfoCell label="基础过滤条件" value={activeLink.baseFilter || '-'} /> : null}
         <LogsInfoCell label="状态" value={activeLink?.status || '-'} />
         <div className="border-t border-outline/70 p-3">
           <div className="mb-2 text-xs font-semibold text-on-surface">动作</div>

@@ -7,7 +7,7 @@ function jsonResponse(data) {
     ok: true,
     status: 200,
     headers: { get: () => null },
-    json: async () => ({ success: true, data, error: null, meta: { total: data.length } }),
+    json: async () => ({ success: true, data, error: null, meta: { total: Array.isArray(data) ? data.length : 0 } }),
   };
 }
 
@@ -75,6 +75,23 @@ test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async 
     assert.equal(cluster.status, 'active');
     assert.equal(cluster.accessMode, 'agent');
     assert.equal(cluster.readOnly, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('K8s 集群列表返回 null 时按空列表处理', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse(null);
+  };
+
+  try {
+    const clusters = await k8sApi.listClusters();
+    assert.equal(requests[0].path, '/api/v1/k8s/clusters');
+    assert.deepEqual(clusters, []);
   } finally {
     globalThis.fetch = originalFetch;
   }

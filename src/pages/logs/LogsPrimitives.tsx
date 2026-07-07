@@ -1,11 +1,6 @@
 import type { PropsWithChildren, ReactNode } from 'react';
 import { Search, XCircle } from 'lucide-react';
 
-export function shortHash(value?: string, length = 12): string {
-  if (!value) return '-';
-  return value.length > length ? value.slice(0, length) : value;
-}
-
 export function shortIdentity(value?: string, length = 16): string {
   if (!value) return '-';
   return value.length > length ? value.slice(0, length) : value;

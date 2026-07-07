@@ -216,10 +216,43 @@ test('创建 VictoriaLogs 端点时传递租户 AccountID 和 ProjectID', async 
   assert.equal(result.projectId, '9527');
 });
 
+test('日志下游端点列表返回 null 时按空列表处理', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.listEndpoints(),
+    null,
+  );
+
+  assert.equal(request.path, '/api/v1/logs/endpoints');
+  assert.deepEqual(result, []);
+});
+
+test('查询观测运行时列表时映射集群级 runtime 状态', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.listObservabilityRuntimes(),
+    [{
+      id: 'logs-collector:test03:novaobs-system',
+      kind: 'logs_collector',
+      signal_type: 'logs',
+      cluster_id: 'test03',
+      namespace: 'novaobs-system',
+      collector_config_hash: 'collector-hash',
+      manifest_hash: 'manifest-hash',
+      status: 'ready',
+      last_audit_id: 'audit-001',
+    }],
+  );
+
+  assert.equal(request.path, '/api/v1/observability/runtimes');
+  assert.equal(result[0].kind, 'logs_collector');
+  assert.equal(result[0].clusterId, 'test03');
+  assert.equal(result[0].status, 'ready');
+  assert.equal(result[0].collectorConfigHash, 'collector-hash');
+});
+
 test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.publishEndpointVmalertRuntime('vl-9527', {
-      clusterId: 'test03',
+      deployClusterId: 'test03',
       namespace: 'novaobs-system',
       alertIngestURL: 'http://novaobs-api:8080',
       previewId: 'preview-1',
@@ -228,7 +261,7 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
     {
       runtime_id: 'vmalert-logs:vl-9527',
       endpoint_id: 'vl-9527',
-      cluster_id: 'test03',
+      deploy_cluster_id: 'test03',
       namespace: 'novaobs-system',
       datasource_url: 'http://victorialogs:9428',
       alert_ingest_url: 'http://novaobs-api:8080',
@@ -249,16 +282,50 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
 
   assert.equal(request.path, '/api/v1/logs/endpoints/vl-9527/vmalert-runtime/publish');
   assert.equal(request.init.method, 'POST');
-  assert.equal(request.body.cluster_id, 'test03');
+  assert.equal(request.body.deploy_cluster_id, 'test03');
   assert.equal(request.body.namespace, 'novaobs-system');
   assert.equal(request.body.alert_ingest_url, 'http://novaobs-api:8080');
   assert.equal(request.body.preview_id, 'preview-1');
   assert.equal(request.body.confirmation_token, 'confirm-1');
   assert.equal(result.runtimeId, 'vmalert-logs:vl-9527');
+  assert.equal(result.deployClusterId, 'test03');
   assert.equal(result.alertIngestURL, 'http://novaobs-api:8080');
   assert.equal(result.status, 'applied');
   assert.equal(result.appliedRules, 2);
   assert.equal(result.resources[0].kind, 'Deployment');
+});
+
+test('发布 K8s logs_collector Runtime 时使用观测运行时接口', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.publishLogsCollectorRuntime({
+      clusterId: 'test03',
+      namespace: 'novaobs-system',
+      previewId: 'preview-001',
+      confirmationToken: 'token-001',
+    }),
+    {
+      runtime: { id: 'logs-collector:test03:novaobs-system', kind: 'logs_collector', status: 'ready' },
+      status: 'applied',
+      message: '已发布',
+      requires_confirmation: false,
+      audit_id: 'audit-001',
+      resources: [
+        { cluster_id: 'test03', api_version: 'v1', kind: 'Namespace', name: 'novaobs-system' },
+        { cluster_id: 'test03', namespace: 'novaobs-system', api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaobs-logs-agent' },
+      ],
+      diffs: [],
+      warnings: [],
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/publish');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.body.cluster_id, 'test03');
+  assert.equal(request.body.namespace, 'novaobs-system');
+  assert.equal(request.body.preview_id, 'preview-001');
+  assert.equal(request.body.confirmation_token, 'token-001');
+  assert.equal(result.auditId, 'audit-001');
+  assert.equal(result.resources[1].kind, 'DaemonSet');
 });
 
 test('更新 Logs 下游端点时使用 PATCH 并保留端点 ID', async () => {
@@ -491,34 +558,15 @@ test('预览 Logs 解析规则时调用 parse-preview 接口并映射字段', as
   assert.equal(result.fields.level, 'WARN');
 });
 
-test('发布 Logs route 时传递 preview confirmation token', async () => {
+test('发布 VM Logs route 时传递 preview confirmation token', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.publishRoute('route-001', { previewId: 'preview-001', confirmationToken: 'token-001' }),
     {
-      status: 'published',
-      message: '已发布',
+      status: 'ready_for_agent_sync',
+      message: 'VM Agent 配置已生成',
       requires_confirmation: false,
       audit_id: 'audit-001',
-      resources: [
-        { cluster_id: 'test03', api_version: 'v1', kind: 'Namespace', name: 'novaobs-system' },
-        { cluster_id: 'test03', namespace: 'novaobs-system', api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaobs-logs-agent' },
-      ],
-      diffs: [
-        { cluster_id: 'test03', api_version: 'v1', kind: 'Namespace', name: 'novaobs-system', operation: 'apply', after_hash: 'hash-ns' },
-        { cluster_id: 'test03', namespace: 'novaobs-system', api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaobs-logs-agent', operation: 'apply', after_hash: 'hash-ds' },
-      ],
       warnings: [],
-      plan: {
-        id: 'plan-001',
-        route_id: 'route-001',
-        agent_group_id: 'ag-001',
-        source_type: 'k8s_stdout',
-        collector_config_hash: 'collector-abc123',
-        deployment_manifest_hash: 'manifest-abc123',
-        rendered_yaml: 'apiVersion: apps/v1\n',
-        status: 'published',
-        audit_id: 'audit-001',
-      },
     },
   );
 
@@ -527,11 +575,7 @@ test('发布 Logs route 时传递 preview confirmation token', async () => {
   assert.equal(request.body.preview_id, 'preview-001');
   assert.equal(request.body.confirmation_token, 'token-001');
   assert.equal(result.auditId, 'audit-001');
-  assert.equal(result.plan?.sourceType, 'k8s_stdout');
-  assert.equal(result.plan?.collectorConfigHash, 'collector-abc123');
-  assert.equal(result.plan?.deploymentManifestHash, 'manifest-abc123');
-  assert.equal(result.resources[0].kind, 'Namespace');
-  assert.equal(result.resources[1].namespace, 'novaobs-system');
-  assert.equal(result.diffs[1].operation, 'apply');
-  assert.equal(result.diffs[1].afterHash, 'hash-ds');
+  assert.equal('plan' in result, false);
+  assert.equal('resources' in result, false);
+  assert.equal('diffs' in result, false);
 });

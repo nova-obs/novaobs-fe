@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Database, RefreshCw, Server } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -23,6 +23,7 @@ function statusTone(status: string) {
 }
 
 export function MetricsExplorePage() {
+  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const [serviceId, setServiceId] = useState(searchParams.get('service_id') ?? '');
   const { data: workspace, error, isLoading, refetch } = useQuery({
@@ -154,6 +155,21 @@ export function MetricsExplorePage() {
                     </tbody>
                   </table>
                 </section>
+
+                {activeEndpoint?.vmuiURL ? (
+                  <section className="overflow-hidden rounded-md border border-outline bg-surface-lowest">
+                    <div className="flex items-center justify-between border-b border-outline/70 px-3 py-2">
+                      <span className="text-xs font-semibold text-on-surface">vmui 查询面板</span>
+                      <a className="text-xs font-semibold text-primary" href={activeEndpoint.vmuiURL} target="_blank" rel="noopener noreferrer">新窗口打开 ↗</a>
+                    </div>
+                    <iframe
+                      className="h-[600px] w-full border-0"
+                      src={activeEndpoint.vmuiURL}
+                      title="VictoriaMetrics vmui"
+                      sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                    />
+                  </section>
+                ) : null}
               </div>
             )}
           </div>
@@ -177,14 +193,15 @@ export function MetricsExplorePage() {
           <div className="border-t border-outline/70 p-3">
             <button
               type="button"
-              className="console-button w-full"
-              disabled
-              title="指标告警创建表单接入中"
+              className="console-button console-button-primary w-full"
+              disabled={!activeBinding}
+              title={activeBinding ? '从当前作用域创建指标告警' : '请先绑定指标端点'}
+              onClick={() => navigate(`/metrics/alerts/new?service_id=${encodeURIComponent(selectedServiceId)}`)}
             >
               <Bell className="h-3.5 w-3.5" />
               创建指标告警
             </button>
-            <p className="mt-2 text-[11px] leading-5 text-muted">创建表单接入后，将从当前服务作用域带入 labelMatch 与 metrics binding。</p>
+            <p className="mt-2 text-[11px] leading-5 text-muted">从当前服务作用域带入 labelMatch 与 metrics binding 创建告警。</p>
           </div>
         </div>
       </aside>

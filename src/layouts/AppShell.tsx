@@ -457,7 +457,7 @@ function K8sMegaMenuClusterWork() {
       {!isLoading && !error && !clusters.length ? (
         <div className="mt-3 flex flex-col gap-2 rounded-md border border-outline/70 bg-surface px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>当前还没有可选择的集群。</span>
-          <Link className="font-semibold text-primary hover:underline" to="/k8s/access">去集群接入</Link>
+          <Link className="font-semibold text-primary hover:underline" to="/k8s">去集群总览</Link>
         </div>
       ) : null}
 

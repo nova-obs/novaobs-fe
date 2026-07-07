@@ -521,8 +521,6 @@ function OperationPlanSummary({ plan, activeMode }: { plan: K8sDeploymentOperati
                 <th>操作</th>
                 <th>资源</th>
                 <th>命名空间</th>
-                <th>Before</th>
-                <th>After</th>
               </tr>
             </thead>
             <tbody>
@@ -534,8 +532,6 @@ function OperationPlanSummary({ plan, activeMode }: { plan: K8sDeploymentOperati
                     <div className="font-mono text-[11px] text-muted">{diff.apiVersion}</div>
                   </td>
                   <td className="font-mono text-xs">{resourceNamespaceLabel(diff.namespace)}</td>
-                  <td className="font-mono text-[11px] text-muted">{diff.beforeHash || '-'}</td>
-                  <td className="font-mono text-[11px] text-muted">{diff.afterHash || '-'}</td>
                 </tr>
               ))}
             </tbody>

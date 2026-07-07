@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
-import { Activity, Database, KeyRound, Network, Plus, RotateCcw, ShieldAlert, ShieldCheck, Trash2 } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Activity, Database, KeyRound, Network, Plus, RotateCcw, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sClusterCredential, type K8sClusterProbe, type K8sWriteResult } from './api';
 import { useK8sOpsContext } from './context';
@@ -13,13 +14,29 @@ function clusterProbeQueryKey(clusterId: string) {
   return ['k8s-cluster-probe', clusterId] as const;
 }
 
+interface ClusterAccessDraft {
+  id: string;
+  name: string;
+  version: string;
+  region: string;
+  description: string;
+  accessMode: string;
+  readOnly: boolean;
+}
+
+interface CredentialDraft {
+  clusterId: string;
+  name: string;
+  kubeconfig: string;
+  expiresAt: string;
+}
+
 export function K8sClusterPage() {
   const queryClient = useQueryClient();
   const location = useLocation();
   const { activeClusterId, activeCluster, clusters: data, isLoadingClusters: isLoading, clusterError: error } = useK8sOpsContext();
-  const isAccessView = location.pathname === '/k8s/access';
-  const isNewAccessView = isAccessView && !activeClusterId;
   const isCredentialView = Boolean(activeClusterId && location.pathname.endsWith('/credentials'));
+  const [accessDrawerOpen, setAccessDrawerOpen] = useState(false);
   const [credentialClusterId, setCredentialClusterId] = useState('');
   const [credentialName, setCredentialName] = useState('');
   const [credentialExpiresAt, setCredentialExpiresAt] = useState('');
@@ -33,7 +50,15 @@ export function K8sClusterPage() {
   const [clusterReadOnly, setClusterReadOnly] = useState(true);
   const [manualProbeIds, setManualProbeIds] = useState<string[]>([]);
   const createCluster = useMutation({
-    mutationFn: () => k8sApi.createCluster({ id: clusterId, name: clusterName, version: clusterVersion, region: clusterRegion, description: clusterDescription, accessMode: clusterAccessMode, readOnly: clusterReadOnly }),
+    mutationFn: (input?: ClusterAccessDraft) => k8sApi.createCluster({
+      id: input?.id ?? clusterId,
+      name: input?.name ?? clusterName,
+      version: input?.version ?? clusterVersion,
+      region: input?.region ?? clusterRegion,
+      description: input?.description ?? clusterDescription,
+      accessMode: input?.accessMode ?? clusterAccessMode,
+      readOnly: input?.readOnly ?? clusterReadOnly,
+    }),
     onSuccess: (cluster) => {
       setCredentialClusterId(cluster.id);
       if (!credentialName) {
@@ -59,7 +84,12 @@ export function K8sClusterPage() {
     retry: false,
   });
   const createCredential = useMutation({
-    mutationFn: () => k8sApi.createClusterCredential({ clusterId: credentialClusterId, name: credentialName, kubeconfig, expiresAt: credentialExpiryISO(credentialExpiresAt) }),
+    mutationFn: (input?: CredentialDraft) => k8sApi.createClusterCredential({
+      clusterId: input?.clusterId ?? credentialClusterId,
+      name: input?.name ?? credentialName,
+      kubeconfig: input?.kubeconfig ?? kubeconfig,
+      expiresAt: credentialExpiryISO(input?.expiresAt ?? credentialExpiresAt),
+    }),
     onSuccess: (result) => {
       handleCredentialWriteSuccess(result);
       setKubeconfig('');
@@ -102,7 +132,9 @@ export function K8sClusterPage() {
   const historicalCredentials = credentials.filter((item) => item.secretId !== activeCredential?.secretId);
   const credentialResult = createCredential.data ?? rotateCredential.data ?? rollbackCredential.data;
   const credentialError = createCredential.error?.message || rotateCredential.error?.message || rollbackCredential.error?.message || '';
-  const clusterError = createCluster.error?.message || deleteCluster.error?.message || '';
+  const clusterWriteError = createCluster.error?.message || deleteCluster.error?.message || '';
+  const accessMissing = clusterAccessMissingFields(clusterId, clusterName, kubeconfig);
+  const accessSaving = createCluster.isPending || createCredential.isPending;
 
   async function runProbe(id: string) {
     if (!id) return;
@@ -125,14 +157,70 @@ export function K8sClusterPage() {
     }
   }
 
+  function openClusterAccessDrawer() {
+    createCluster.reset();
+    createCredential.reset();
+    setClusterId('');
+    setClusterName('');
+    setClusterVersion('');
+    setClusterRegion('');
+    setClusterDescription('');
+    setClusterAccessMode('direct');
+    setClusterReadOnly(true);
+    setCredentialExpiresAt('');
+    setKubeconfig('');
+    setAccessDrawerOpen(true);
+  }
+
+  function closeClusterAccessDrawer() {
+    setAccessDrawerOpen(false);
+  }
+
+  async function submitClusterAccess() {
+    const draft = {
+      id: clusterId.trim(),
+      name: clusterName.trim(),
+      version: clusterVersion.trim(),
+      region: clusterRegion.trim(),
+      description: clusterDescription.trim(),
+      accessMode: clusterAccessMode,
+      readOnly: clusterReadOnly,
+    };
+    const credentialDraft = {
+      clusterId: draft.id,
+      name: draft.name || draft.id,
+      kubeconfig: kubeconfig.trim(),
+      expiresAt: credentialExpiresAt,
+    };
+    if (clusterAccessMissingFields(draft.id, draft.name, credentialDraft.kubeconfig).length > 0) return;
+    try {
+      const cluster = await createCluster.mutateAsync(draft);
+      const targetClusterId = cluster.id || draft.id;
+      const targetCredentialName = cluster.name || credentialDraft.name;
+      setCredentialClusterId(targetClusterId);
+      setCredentialName(targetCredentialName);
+      await createCredential.mutateAsync({
+        ...credentialDraft,
+        clusterId: targetClusterId,
+        name: targetCredentialName,
+      });
+      setAccessDrawerOpen(false);
+    } catch {
+      // mutation 错误由抽屉内的就地提示展示
+    }
+  }
+
   useEffect(() => {
     if (activeClusterId) {
+      if (accessDrawerOpen) {
+        setAccessDrawerOpen(false);
+      }
       if (credentialClusterId !== activeClusterId) {
         setCredentialClusterId(activeClusterId);
       }
       return;
     }
-    if (isNewAccessView) {
+    if (accessDrawerOpen) {
       if (!credentialClusterId && clusterId) {
         setCredentialClusterId(clusterId);
       }
@@ -148,9 +236,9 @@ export function K8sClusterPage() {
     if (!credentialClusterId || !exists) {
       setCredentialClusterId(displayClusters[0].id);
     }
-  }, [activeClusterId, clusterId, credentialClusterId, displayClusters, isNewAccessView]);
+  }, [accessDrawerOpen, activeClusterId, clusterId, credentialClusterId, displayClusters]);
 
-  if (!activeClusterId && !isAccessView) {
+  if (!activeClusterId) {
     return (
       <div className="space-y-4">
         <div className="grid gap-4 md:grid-cols-3">
@@ -159,7 +247,16 @@ export function K8sClusterPage() {
           <ClusterMetric icon={ShieldCheck} label="只读保护" value={String(displayClusters.filter((cluster) => cluster.readOnly).length)} meta="read-only policy" />
         </div>
 
-        <DataPanel title="集群总览" meta="registered clusters · probe cache">
+        <DataPanel
+          title="集群总览"
+          meta="registered clusters · probe cache"
+          action={(
+            <button className="console-button console-button-primary" onClick={openClusterAccessDrawer}>
+              <Plus className="h-3.5 w-3.5" />
+              接入集群
+            </button>
+          )}
+        >
           {error ? (
             <div className="mb-3 rounded-lg bg-rose-50 px-3 py-2 text-sm font-semibold text-danger">
               集群 API 请求失败：{error.message}
@@ -193,102 +290,46 @@ export function K8sClusterPage() {
           {!isLoading && !error && !displayClusters.length ? (
             <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               <div className="font-semibold text-on-surface">集群清单为空</div>
+              <button className="console-button console-button-primary mt-3" onClick={openClusterAccessDrawer}>
+                <Plus className="h-3.5 w-3.5" />
+                接入集群
+              </button>
             </div>
           ) : null}
         </DataPanel>
-      </div>
-    );
-  }
 
-  if (isNewAccessView) {
-    return (
-      <div className="space-y-4">
-        <section className="console-panel px-4 py-3">
-          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="text-xs font-semibold text-primary">新集群登记</div>
-            <Link className="quiet-button h-9 justify-center bg-white/70 px-3 text-xs text-primary" to="/k8s">
-              返回集群总览
-            </Link>
-          </div>
-        </section>
-
-        <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]">
-          <section className="console-panel px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-on-surface">集群登记</div>
-              </div>
-              <Plus className="h-4 w-4 text-primary" />
-            </div>
-            {clusterError ? <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-danger">{clusterError}</div> : null}
-            {createCluster.data ? <div className="mt-3 rounded-lg bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">已登记集群：{createCluster.data.name}</div> : null}
-            <CredentialInput label="cluster_id" value={clusterId} onChange={(value) => {
+        {accessDrawerOpen ? createPortal((
+          <ClusterAccessDrawer
+            clusterId={clusterId}
+            clusterName={clusterName}
+            clusterVersion={clusterVersion}
+            clusterRegion={clusterRegion}
+            clusterDescription={clusterDescription}
+            clusterAccessMode={clusterAccessMode}
+            clusterReadOnly={clusterReadOnly}
+            credentialExpiresAt={credentialExpiresAt}
+            kubeconfig={kubeconfig}
+            missing={accessMissing}
+            saving={accessSaving}
+            clusterError={clusterWriteError}
+            credentialError={credentialError}
+            credentialResult={credentialResult}
+            onClusterIdChange={(value) => {
               setClusterId(value);
               setCredentialClusterId(value);
-            }} />
-            <CredentialInput label="name" value={clusterName} onChange={setClusterName} />
-            <CredentialInput label="version" value={clusterVersion} onChange={setClusterVersion} />
-            <CredentialInput label="region" value={clusterRegion} onChange={setClusterRegion} />
-            <label className="mt-3 block text-xs font-semibold text-muted">
-              access_mode
-              <select className="console-input mt-2 w-full" value={clusterAccessMode} onChange={(event) => setClusterAccessMode(event.target.value)}>
-                <option value="direct">direct</option>
-                <option value="agent">agent</option>
-              </select>
-            </label>
-            <label className="mt-3 flex items-center justify-between gap-3 rounded-lg border border-outline/70 bg-white/50 px-3 py-2 text-xs font-semibold text-muted">
-              <span>
-                只读接入
-                <span className="mt-0.5 block font-normal text-muted/80">默认只读</span>
-              </span>
-              <input className="h-4 w-4 accent-primary" type="checkbox" checked={clusterReadOnly} onChange={(event) => setClusterReadOnly(event.target.checked)} />
-            </label>
-            <label className="mt-3 block text-xs font-semibold text-muted">
-              description
-              <textarea className="console-input mt-2 min-h-20 w-full text-xs" value={clusterDescription} onChange={(event) => setClusterDescription(event.target.value)} />
-            </label>
-            <button className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!clusterId || !clusterName || createCluster.isPending} onClick={() => createCluster.mutate()}>
-              <Plus className="h-4 w-4" />
-              登记集群
-            </button>
-          </section>
-
-          <section className="console-panel px-4 py-3">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <div className="text-sm font-semibold text-on-surface">初始凭据录入</div>
-                <p className="mt-1 text-xs text-muted">probe passed · Secret version</p>
-              </div>
-              <KeyRound className="h-4 w-4 text-primary" />
-            </div>
-            {credentialError ? <div className="mt-3 rounded-lg bg-rose-50 px-3 py-2 text-xs font-semibold text-danger">{credentialError}</div> : null}
-            {credentialResult ? <div className="mt-3 rounded-lg bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">操作已落审计：{credentialResult.auditId}</div> : null}
-            {credentialResult?.probe ? (
-              <div className="mt-3 rounded-lg bg-white/65 px-3 py-2 text-xs font-semibold text-primary shadow-[inset_0_0_0_1px_rgba(13,91,215,0.16)]">
-                连接校验通过：server {credentialResult.probe.serverVersion || 'unknown'} · {credentialResult.probe.resourceCount} resources
-              </div>
-            ) : null}
-            <CredentialInput label="cluster_id" value={credentialClusterId} onChange={setCredentialClusterId} />
-            <CredentialInput label="name" value={credentialName} onChange={setCredentialName} />
-            <label className="mt-3 block text-xs font-semibold text-muted">
-              expires_at
-              <input className="console-input mt-2 w-full" type="datetime-local" value={credentialExpiresAt} onChange={(event) => setCredentialExpiresAt(event.target.value)} />
-            </label>
-            <label className="mt-3 block text-xs font-semibold text-muted">
-              kubeconfig
-              <textarea
-                className="console-input mt-2 min-h-44 w-full font-mono text-xs"
-                placeholder={'apiVersion: v1\nkind: Config\nclusters: []'}
-                value={kubeconfig}
-                onChange={(event) => setKubeconfig(event.target.value)}
-              />
-            </label>
-            <button className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || createCredential.isPending} onClick={() => createCredential.mutate()}>
-              <KeyRound className="h-4 w-4" />
-              录入初始凭据
-            </button>
-          </section>
-        </div>
+            }}
+            onClusterNameChange={setClusterName}
+            onClusterVersionChange={setClusterVersion}
+            onClusterRegionChange={setClusterRegion}
+            onClusterDescriptionChange={setClusterDescription}
+            onClusterAccessModeChange={setClusterAccessMode}
+            onClusterReadOnlyChange={setClusterReadOnly}
+            onCredentialExpiresAtChange={setCredentialExpiresAt}
+            onKubeconfigChange={setKubeconfig}
+            onClose={closeClusterAccessDrawer}
+            onSubmit={submitClusterAccess}
+          />
+        ), document.body) : null}
       </div>
     );
   }
@@ -375,8 +416,8 @@ export function K8sClusterPage() {
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="text-xs font-semibold text-primary">当前生效版本</div>
-                    <div className="mt-2 truncate text-lg font-semibold text-on-surface">{activeCredential.name || activeCredential.secretId}</div>
-                    <div className="mt-1 truncate font-mono text-xs text-muted">v{activeCredential.version || 1} · {shortFingerprint(activeCredential.fingerprint)}</div>
+                    <div className="mt-2 truncate text-lg font-semibold text-on-surface">{activeCredential.name || '平台托管凭据'}</div>
+                    <div className="mt-1 truncate text-xs text-muted">v{activeCredential.version || 1} · Secret Store 托管</div>
                   </div>
                   <span className={`rounded-lg px-2 py-1 text-[11px] font-semibold ${credentialStatusClass(activeCredential)}`}>
                     {credentialStatusText(activeCredential)}
@@ -422,12 +463,11 @@ export function K8sClusterPage() {
             {credentials.length ? (
               <>
               <div className="mb-2 text-xs font-semibold text-muted">历史版本</div>
-              <table className="console-table min-w-[920px] w-full">
+              <table className="console-table min-w-[820px] w-full">
                 <thead>
                   <tr>
                     <th>版本</th>
                     <th>凭据</th>
-                    <th>指纹</th>
                     <th>状态</th>
                     <th>有效期</th>
                     <th>最近更新时间</th>
@@ -440,9 +480,8 @@ export function K8sClusterPage() {
                       <td className="font-mono text-xs">v{item.version || 1}</td>
                       <td>
                         <div className="font-semibold text-primary">{item.name}</div>
-                        <div className="max-w-64 truncate text-[11px] text-muted">{item.secretId}</div>
+                        <div className="max-w-64 truncate text-[11px] text-muted">Secret Store 托管</div>
                       </td>
-                      <td className="font-mono text-xs">{shortFingerprint(item.fingerprint)}</td>
                       <td>
                         <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${credentialStatusClass(item)}`}>
                           {credentialStatusText(item)}
@@ -459,7 +498,7 @@ export function K8sClusterPage() {
                             disabled={item.expired || rollbackCredential.isPending}
                             title={item.expired ? '过期版本不可回滚' : '将该历史版本重新探测并提升为当前生效版本'}
                             onClick={() => {
-                              if (window.confirm(`确认将 ${item.name || item.secretId} v${item.version || 1} 回滚为当前生效版本？`)) {
+                              if (window.confirm(`确认将 ${item.name || '平台托管凭据'} v${item.version || 1} 回滚为当前生效版本？`)) {
                                 rollbackCredential.mutate(item);
                               }
                             }}
@@ -518,7 +557,7 @@ export function K8sClusterPage() {
             />
           </label>
           <div className="mt-4 grid grid-cols-2 gap-2">
-            <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || createCredential.isPending} onClick={() => createCredential.mutate()}>
+            <button className="inline-flex items-center justify-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-semibold text-white transition active:scale-[0.98] disabled:opacity-60" disabled={!credentialClusterId || !credentialName || !kubeconfig || createCredential.isPending} onClick={() => createCredential.mutate(undefined)}>
               <KeyRound className="h-4 w-4" />
               录入
             </button>
@@ -530,6 +569,187 @@ export function K8sClusterPage() {
         </section>
       </div>
     </div>
+  );
+}
+
+function ClusterAccessDrawer({
+  clusterId,
+  clusterName,
+  clusterVersion,
+  clusterRegion,
+  clusterDescription,
+  clusterAccessMode,
+  clusterReadOnly,
+  credentialExpiresAt,
+  kubeconfig,
+  missing,
+  saving,
+  clusterError,
+  credentialError,
+  credentialResult,
+  onClusterIdChange,
+  onClusterNameChange,
+  onClusterVersionChange,
+  onClusterRegionChange,
+  onClusterDescriptionChange,
+  onClusterAccessModeChange,
+  onClusterReadOnlyChange,
+  onCredentialExpiresAtChange,
+  onKubeconfigChange,
+  onClose,
+  onSubmit,
+}: {
+  clusterId: string;
+  clusterName: string;
+  clusterVersion: string;
+  clusterRegion: string;
+  clusterDescription: string;
+  clusterAccessMode: string;
+  clusterReadOnly: boolean;
+  credentialExpiresAt: string;
+  kubeconfig: string;
+  missing: string[];
+  saving: boolean;
+  clusterError: string;
+  credentialError: string;
+  credentialResult?: K8sWriteResult<K8sClusterCredential>;
+  onClusterIdChange: (value: string) => void;
+  onClusterNameChange: (value: string) => void;
+  onClusterVersionChange: (value: string) => void;
+  onClusterRegionChange: (value: string) => void;
+  onClusterDescriptionChange: (value: string) => void;
+  onClusterAccessModeChange: (value: string) => void;
+  onClusterReadOnlyChange: (value: boolean) => void;
+  onCredentialExpiresAtChange: (value: string) => void;
+  onKubeconfigChange: (value: string) => void;
+  onClose: () => void;
+  onSubmit: () => void;
+}) {
+  const disabled = missing.length > 0 || saving;
+  const missingLabel = missing.join('、');
+
+  return (
+    <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
+      <button type="button" className="absolute inset-0 cursor-default border-0 bg-transparent" aria-label="关闭集群接入遮罩" onClick={onClose} />
+      <aside className="k8s-cluster-access-drawer console-drawer-panel relative flex h-full w-full max-w-[760px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="cluster-access-title">
+        <form
+          className="flex min-h-0 flex-1 flex-col"
+          onSubmit={(event) => {
+            event.preventDefault();
+            onSubmit();
+          }}
+        >
+          <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
+            <div className="min-w-0">
+              <div id="cluster-access-title" className="truncate text-sm font-semibold text-on-surface">接入 K8s 集群</div>
+              <div className="mt-1 truncate font-mono text-[11px] text-muted">cluster metadata / kubeconfig / probe audit</div>
+            </div>
+            <button type="button" className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭集群接入" title="关闭">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-surface px-4 py-4">
+            <section className="rounded-md border border-outline bg-surface-lowest px-3 py-3">
+              <div className="grid gap-2 text-xs text-muted sm:grid-cols-3">
+                <AccessFact label="目标集群" value={clusterId || '-'} />
+                <AccessFact label="访问模式" value={clusterAccessMode} />
+                <AccessFact label="接入策略" value={clusterReadOnly ? '只读接入' : '允许写操作'} />
+              </div>
+              {credentialResult ? <InlineNotice tone="success" message={`操作已落审计：${credentialResult.auditId}`} /> : null}
+              {credentialResult?.probe ? (
+                <InlineNotice tone="success" message={`连接校验通过：server ${credentialResult.probe.serverVersion || 'unknown'} · ${credentialResult.probe.resourceCount} resources`} />
+              ) : null}
+              {clusterError ? <InlineNotice tone="danger" message={clusterError} /> : null}
+              {credentialError ? <InlineNotice tone="danger" message={credentialError} /> : null}
+            </section>
+
+            <ClusterAccessFormSection title="基础信息" meta="登记集群生产元数据">
+              <div className="grid gap-3 md:grid-cols-2">
+                <ClusterAccessField label="cluster_id">
+                  <input className="console-input w-full font-mono" value={clusterId} onChange={(event) => onClusterIdChange(event.target.value)} placeholder="prod-cn" autoFocus />
+                </ClusterAccessField>
+                <ClusterAccessField label="name">
+                  <input className="console-input w-full" value={clusterName} onChange={(event) => onClusterNameChange(event.target.value)} placeholder="生产集群" />
+                </ClusterAccessField>
+                <ClusterAccessField label="version">
+                  <input className="console-input w-full font-mono" value={clusterVersion} onChange={(event) => onClusterVersionChange(event.target.value)} placeholder="v1.29.3" />
+                </ClusterAccessField>
+                <ClusterAccessField label="region">
+                  <input className="console-input w-full font-mono" value={clusterRegion} onChange={(event) => onClusterRegionChange(event.target.value)} placeholder="cn-bj2" />
+                </ClusterAccessField>
+                <ClusterAccessField label="access_mode">
+                  <select className="console-input w-full" value={clusterAccessMode} onChange={(event) => onClusterAccessModeChange(event.target.value)}>
+                    <option value="direct">direct</option>
+                    <option value="agent">agent</option>
+                  </select>
+                </ClusterAccessField>
+                <label className="flex min-h-[58px] items-center justify-between gap-3 rounded-md border border-outline bg-white px-3 py-2 text-xs font-semibold text-muted">
+                  <span>
+                    只读接入
+                    <span className="mt-0.5 block font-normal text-muted">默认不允许写操作</span>
+                  </span>
+                  <input className="h-4 w-4 accent-primary" type="checkbox" checked={clusterReadOnly} onChange={(event) => onClusterReadOnlyChange(event.target.checked)} />
+                </label>
+              </div>
+              <ClusterAccessField label="description" className="mt-3">
+                <textarea className="console-input min-h-20 w-full text-xs" value={clusterDescription} onChange={(event) => onClusterDescriptionChange(event.target.value)} placeholder="记录集群用途、负责人或网络边界" />
+              </ClusterAccessField>
+            </ClusterAccessFormSection>
+
+            <ClusterAccessFormSection title="连接凭据" meta="kubeconfig 只用于写入 Secret，不在页面回显">
+              <div className="grid gap-3">
+                <ClusterAccessField label="expires_at">
+                  <input className="console-input w-full" type="datetime-local" value={credentialExpiresAt} onChange={(event) => onCredentialExpiresAtChange(event.target.value)} />
+                </ClusterAccessField>
+                <ClusterAccessField label="kubeconfig">
+                  <textarea
+                    className="console-input min-h-52 w-full font-mono text-xs"
+                    placeholder={'apiVersion: v1\nkind: Config\nclusters: []'}
+                    value={kubeconfig}
+                    onChange={(event) => onKubeconfigChange(event.target.value)}
+                  />
+                </ClusterAccessField>
+              </div>
+            </ClusterAccessFormSection>
+          </div>
+
+          <div className="console-action-bar shrink-0">
+            <div className="min-w-0 text-xs text-muted">
+              {missing.length > 0 ? `保存前还需：${missingLabel}` : '提交后将登记集群、写入初始 kubeconfig 并执行连接校验。'}
+            </div>
+            <div className="flex gap-2">
+              <button type="button" className="console-button" onClick={onClose}>取消</button>
+              <button className="console-button console-button-primary" disabled={disabled} title={missing.length > 0 ? `还需：${missingLabel}` : '保存并接入集群'}>
+                {saving ? <Activity className="h-3.5 w-3.5 animate-spin" /> : <Plus className="h-3.5 w-3.5" />}
+                保存并接入
+              </button>
+            </div>
+          </div>
+        </form>
+      </aside>
+    </div>
+  );
+}
+
+function ClusterAccessFormSection({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
+  return (
+    <section className="rounded-md border border-outline bg-surface-lowest px-3 py-3">
+      <div className="mb-3">
+        <div className="text-sm font-semibold text-on-surface">{title}</div>
+        <div className="mt-1 text-[11px] text-muted">{meta}</div>
+      </div>
+      {children}
+    </section>
+  );
+}
+
+function ClusterAccessField({ label, className = '', children }: { label: string; className?: string; children: ReactNode }) {
+  return (
+    <label className={`block text-xs font-semibold text-muted ${className}`}>
+      <span className="mb-2 block">{label}</span>
+      {children}
+    </label>
   );
 }
 
@@ -602,6 +822,28 @@ function ClusterOverviewCard({
   );
 }
 
+function InlineNotice({ tone, message }: { tone: 'danger' | 'success' | 'warning'; message: string }) {
+  const toneClass = tone === 'danger'
+    ? 'border-danger/20 bg-rose-50 text-danger'
+    : tone === 'warning'
+      ? 'border-warning/20 bg-amber-50 text-warning'
+      : 'border-primary/20 bg-primary-soft text-primary';
+  return (
+    <div className={`mt-3 rounded-md border px-3 py-2 text-xs font-semibold ${toneClass}`}>
+      {message}
+    </div>
+  );
+}
+
+function AccessFact({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-center justify-between gap-3 border-b border-outline pb-2 last:border-b-0 last:pb-0">
+      <span>{label}</span>
+      <span className="max-w-48 truncate font-mono font-semibold text-on-surface">{value}</span>
+    </div>
+  );
+}
+
 function ProbeDatum({ label, value }: { label: string; value: string }) {
   return (
     <div className="rounded-lg bg-surface-low/70 px-3 py-2">
@@ -624,6 +866,14 @@ function activeClusterMissing(clusterId: string, isLoading: boolean, cluster?: {
   return Boolean(clusterId && !isLoading && !cluster);
 }
 
+function clusterAccessMissingFields(clusterId: string, clusterName: string, kubeconfig: string) {
+  const missing: string[] = [];
+  if (!clusterId.trim()) missing.push('cluster_id');
+  if (!clusterName.trim()) missing.push('name');
+  if (!kubeconfig.trim()) missing.push('kubeconfig');
+  return missing;
+}
+
 function compactProbeTime(value?: string) {
   if (!value) return 'checked';
   return value.includes('T') ? value.slice(11, 19) : value;
@@ -634,12 +884,6 @@ function credentialExpiryISO(value: string) {
   if (!trimmed) return undefined;
   const parsed = new Date(trimmed);
   return Number.isNaN(parsed.getTime()) ? trimmed : parsed.toISOString();
-}
-
-function shortFingerprint(value: string) {
-  if (!value) return '-';
-  if (value.length <= 24) return value;
-  return `${value.slice(0, 14)}...${value.slice(-8)}`;
 }
 
 function credentialTime(value: string) {
@@ -690,15 +934,6 @@ function CredentialInput({ label, value, onChange }: { label: string; value: str
       {label}
       <input className="console-input mt-2 w-full" value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
-  );
-}
-
-function StatusPill({ status }: { status: string }) {
-  const active = status === 'active';
-  return (
-    <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${active ? 'bg-primary-soft text-primary' : 'bg-amber-100 text-warning'}`}>
-      {active ? '运行中' : status || 'unknown'}
-    </span>
   );
 }
 

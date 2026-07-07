@@ -1,7 +1,8 @@
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Database, RefreshCw } from 'lucide-react';
-import { metricsApi } from './api';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Database, Loader2, RefreshCw, Scan } from 'lucide-react';
+import { metricsApi, type EndpointTestResult } from './api';
 
 function endpointURL(endpoint: { queryURL: string; remoteWriteURL: string; vmuiURL: string }) {
   return endpoint.queryURL || endpoint.remoteWriteURL || endpoint.vmuiURL || '-';
@@ -27,7 +28,7 @@ export function MetricsEndpointsPage() {
         <div className="console-panel-header">
           <div className="min-w-0">
             <h2 className="console-section-title">接入端点</h2>
-            <p className="console-section-meta">victoriametrics endpoints</p>
+            <p className="console-section-meta">victoriametrics endpoints · 共 {endpoints.length} 个</p>
           </div>
           <button type="button" className="console-icon-button border-outline bg-white" aria-label="刷新指标端点" title="刷新指标端点" onClick={() => void refetch()}>
             <RefreshCw className="h-3.5 w-3.5" />
@@ -36,7 +37,7 @@ export function MetricsEndpointsPage() {
         {error ? <div className="console-notice console-notice-danger m-3 mb-0">{(error as Error).message}</div> : null}
         <div className="console-panel-body">
           <div className="overflow-auto">
-            <table className="console-table w-full min-w-[860px]">
+            <table className="console-table w-full min-w-[960px]">
               <thead>
                 <tr>
                   <th>端点</th>
@@ -45,16 +46,17 @@ export function MetricsEndpointsPage() {
                   <th>地址</th>
                   <th>租户</th>
                   <th>状态</th>
+                  <th className="w-[100px]">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {isLoading ? (
                   <tr>
-                    <td colSpan={6}><div className="console-skeleton h-10" /></td>
+                    <td colSpan={7}><div className="console-skeleton h-10" /></td>
                   </tr>
                 ) : endpoints.length === 0 ? (
                   <tr>
-                    <td colSpan={6}>
+                    <td colSpan={7}>
                       <div className="console-empty-state my-2 min-h-[300px]">
                         <Database className="h-5 w-5 text-muted/80" />
                         <div className="text-sm font-semibold text-on-surface">暂无指标接入端点</div>
@@ -64,22 +66,7 @@ export function MetricsEndpointsPage() {
                     </td>
                   </tr>
                 ) : endpoints.map((endpoint) => (
-                  <tr key={endpoint.id}>
-                    <td>
-                      <div className="font-semibold text-on-surface">{endpoint.name || endpoint.id}</div>
-                      <div className="font-mono text-[11px] text-muted">{endpoint.id}</div>
-                    </td>
-                    <td>{endpoint.endpointType || '-'}</td>
-                    <td>{endpoint.scopeType || 'global'}</td>
-                    <td className="max-w-[360px] truncate font-mono text-xs">{endpointURL(endpoint)}</td>
-                    <td className="font-mono text-xs">{endpoint.accountId || '0'}:{endpoint.projectId || '0'}</td>
-                    <td>
-                      <span className={`status-badge ${statusClass(endpoint.status)}`}>
-                        <span className="status-dot" aria-hidden />
-                        {endpoint.status || 'unknown'}
-                      </span>
-                    </td>
-                  </tr>
+                  <EndpointRow key={endpoint.id} endpoint={endpoint} />
                 ))}
               </tbody>
             </table>
@@ -87,5 +74,55 @@ export function MetricsEndpointsPage() {
         </div>
       </section>
     </div>
+  );
+}
+
+function EndpointRow({ endpoint }: { endpoint: { id: string; name: string; endpointType: string; scopeType: string; queryURL: string; remoteWriteURL: string; vmuiURL: string; accountId: string; projectId: string; status: string } }) {
+  const [testResult, setTestResult] = useState<EndpointTestResult | null>(null);
+  const testMutation = useMutation({
+    mutationFn: () => metricsApi.testEndpoint(endpoint.id),
+    onSuccess: (result) => setTestResult(result),
+  });
+
+  return (
+    <tr>
+      <td>
+        <div className="font-semibold text-on-surface">{endpoint.name || endpoint.id}</div>
+        <div className="font-mono text-[11px] text-muted">{endpoint.id}</div>
+      </td>
+      <td>{endpoint.endpointType || '-'}</td>
+      <td>{endpoint.scopeType || 'global'}</td>
+      <td className="max-w-[360px] truncate font-mono text-xs">{endpointURL(endpoint)}</td>
+      <td className="font-mono text-xs">{endpoint.accountId || '0'}:{endpoint.projectId || '0'}</td>
+      <td>
+        <div className="flex flex-col gap-1">
+          <span className={`status-badge ${statusClass(endpoint.status)}`}>
+            <span className="status-dot" aria-hidden />
+            {endpoint.status || 'unknown'}
+          </span>
+          {testResult ? (
+            <span className={`status-badge ${statusClass(testResult.status)}`}>
+              <span className="status-dot" aria-hidden />
+              {testResult.status} · {testResult.responseTimeMs}ms
+            </span>
+          ) : null}
+          {testMutation.error ? (
+            <span className="text-[11px] text-danger">{(testMutation.error as Error).message}</span>
+          ) : null}
+        </div>
+      </td>
+      <td>
+        <button
+          type="button"
+          className="console-button gap-1 text-xs"
+          disabled={testMutation.isPending}
+          onClick={() => testMutation.mutate()}
+          title="测试端点连通性"
+        >
+          {testMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Scan className="h-3 w-3" />}
+          测试
+        </button>
+      </td>
+    </tr>
   );
 }

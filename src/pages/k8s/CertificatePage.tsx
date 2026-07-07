@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, FileKey2, Fingerprint, Plus, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
+import { CalendarClock, FileKey2, Plus, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sCertificate } from './api';
 import { useK8sOpsContext } from './context';
@@ -163,8 +163,6 @@ export function K8sCertificatePage() {
                   <th>集群</th>
                   <th>命名空间</th>
                   <th>Common Name</th>
-                  <th>Fingerprint</th>
-                  <th>Secret</th>
                   <th>Not After</th>
                   <th>状态</th>
                   <th>来源</th>
@@ -179,13 +177,11 @@ export function K8sCertificatePage() {
                   >
                     <td>
                       <div className="font-semibold text-primary">{item.name}</div>
-                      <div className="text-[11px] text-muted">{item.id}</div>
+                      <div className="text-[11px] text-muted">{item.source || 'Kubernetes TLS Secret'}</div>
                     </td>
                     <td className="font-mono text-xs">{item.clusterId}</td>
                     <td className="font-mono text-xs">{item.namespace || '-'}</td>
                     <td className="font-mono text-xs">{item.commonName || '-'}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.fingerprint || '-'}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.secretId || '-'}</td>
                     <td className="font-mono text-xs">{formatDate(item.notAfter)}</td>
                     <td><StatusPill status={item.status} /></td>
                     <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
@@ -234,9 +230,9 @@ export function K8sCertificatePage() {
         <CertificateActionDrawer title="删除证书" onClose={() => setActiveAction(null)}>
           <div className="text-sm font-semibold text-on-surface">删除确认摘要</div>
           <div className="rounded-lg bg-surface px-3 py-3 text-xs text-muted">
-            <div className="font-mono">id={current?.id ?? '-'}</div>
-            <div className="font-mono">name={current?.name ?? '-'}</div>
-            <div className="font-mono">fingerprint={current?.fingerprint ?? '-'}</div>
+            <div>证书：{current?.name ?? '-'}</div>
+            <div>命名空间：{current?.namespace ?? '-'}</div>
+            <div>状态：{current?.status ?? '-'}</div>
           </div>
           <DrawerFooter>
             <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
@@ -249,10 +245,10 @@ export function K8sCertificatePage() {
         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <div className="text-sm font-semibold text-on-surface">证书安全边界</div>
-            <p className="mt-1 text-xs text-muted">仅展示名称、指纹、有效期和来源；密钥材料留在后端受控域。</p>
+            <p className="mt-1 text-xs text-muted">仅展示名称、有效期和来源；密钥材料留在后端受控域。</p>
           </div>
           <div className="inline-flex items-center gap-2 rounded-lg bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">
-            <Fingerprint className="h-3.5 w-3.5" />
+            <ShieldCheck className="h-3.5 w-3.5" />
             metadata only
           </div>
         </div>

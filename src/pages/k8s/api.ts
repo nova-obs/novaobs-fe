@@ -1105,8 +1105,8 @@ async function terminalRequest(input: { clusterId: string; namespace: string; co
 export const k8sApi = {
   async listClusters(query = ''): Promise<K8sCluster[]> {
     const search = query.trim();
-    const raw = await apiRequest<any[]>(`/k8s/clusters${search ? `?q=${encodeURIComponent(search)}` : ''}`);
-    return raw.map(mapCluster);
+    const raw = await apiRequest<any[] | null>(`/k8s/clusters${search ? `?q=${encodeURIComponent(search)}` : ''}`);
+    return Array.isArray(raw) ? raw.map(mapCluster) : [];
   },
   async createCluster(input: K8sClusterInput): Promise<K8sCluster> {
     const raw = await apiRequest<any>('/k8s/clusters', {

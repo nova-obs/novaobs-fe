@@ -7,6 +7,7 @@ const dashboardSource = readFileSync(new URL('./DashboardPage.tsx', import.meta.
 const navigationSource = readFileSync(new URL('./navigation.ts', import.meta.url), 'utf8');
 const clusterSource = readFileSync(new URL('./ClusterPage.tsx', import.meta.url), 'utf8');
 const namespaceSource = readFileSync(new URL('./NamespacePage.tsx', import.meta.url), 'utf8');
+const observabilitySource = readFileSync(new URL('./ObservabilityAccessPage.tsx', import.meta.url), 'utf8');
 const resourceSource = readFileSync(new URL('./ResourcePage.tsx', import.meta.url), 'utf8');
 const deploymentHistorySource = readFileSync(new URL('./DeploymentHistoryPage.tsx', import.meta.url), 'utf8');
 const auditSource = readFileSync(new URL('./AuditPage.tsx', import.meta.url), 'utf8');
@@ -50,8 +51,31 @@ test('K8s 运维模块使用可折叠垂直 Rail 承接 fleet 入口，并保留
   assert.equal(layoutSource.includes('k8s-account-session'), false);
   assert.equal(layoutSource.includes('AccountSessionPanel'), false);
   assert.equal(navigationSource.includes('访问控制'), true);
+  assert.equal(layoutSource.includes("to: '/k8s/access'"), false);
+  assert.equal(layoutSource.includes("label: '集群接入'"), false);
+  assert.equal(navigationSource.includes('观测接入'), true);
   assert.equal(navigationSource.includes('证书中心'), true);
   assert.equal(navigationSource.includes('受控终端'), true);
+});
+
+test('K8s 观测接入页面承载集群级 runtime 发布入口', () => {
+  assert.equal(routeSource.includes("path: 'observability'"), true);
+  assert.equal(routeSource.includes('K8sObservabilityRedirect'), true);
+  assert.equal(layoutSource.includes('/k8s/observability'), true);
+  assert.equal(navigationSource.includes("id: 'observability-entry'"), true);
+  assert.equal(observabilitySource.includes('listObservabilityRuntimes'), true);
+  assert.equal(observabilitySource.includes('publishLogsCollectorRuntime'), true);
+  assert.equal(observabilitySource.includes('LogsPublishPreviewPanel'), true);
+  assert.equal(observabilitySource.includes("defaultRuntimeNamespace = 'novaobs-system'"), true);
+  assert.equal(observabilitySource.includes('useSearchParams'), true);
+  assert.equal(observabilitySource.includes('selectedCluster?.readOnly'), true);
+  assert.equal(observabilitySource.includes('选择观测接入集群'), true);
+  assert.equal(observabilitySource.includes('Config Hash'), false);
+  assert.equal(observabilitySource.includes('Manifest Hash'), false);
+  assert.equal(observabilitySource.includes('<th>配置状态</th>'), false);
+  assert.equal(observabilitySource.includes('资源清单状态'), false);
+  assert.equal(observabilitySource.includes('审计状态'), false);
+  assert.equal(observabilitySource.includes('runtimeConfigStatus'), false);
 });
 
 test('K8s Dashboard 展示来源、同步和审计上下文', () => {
@@ -72,9 +96,12 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('职责边界'), false);
   assert.equal(clusterSource.includes('登记入口'), false);
   assert.equal(clusterSource.includes('凭据入口'), false);
-  assert.equal(clusterSource.includes('isNewAccessView'), true);
+  assert.equal(clusterSource.includes('isNewAccessView'), false);
+  assert.equal(clusterSource.includes('accessDrawerOpen'), true);
+  assert.equal(clusterSource.includes('openClusterAccessDrawer'), true);
+  assert.equal(clusterSource.includes('closeClusterAccessDrawer'), true);
   assert.equal(clusterSource.includes('isCredentialView'), true);
-  assert.equal(clusterSource.includes('新集群登记'), true);
+  assert.equal(clusterSource.includes('接入 K8s 集群'), true);
   assert.equal(clusterSource.includes('凭据维护在集群卡片内处理'), false);
   assert.equal(clusterSource.includes('进入凭据维护'), true);
   assert.equal(clusterSource.includes('只读探测'), false);
@@ -115,7 +142,37 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(navigationSource.includes("segment: 'credentials'"), true);
   assert.equal(clusterSource.includes('集群凭据 API 暂未连接'), false);
   assert.equal(clusterSource.includes('kubeconfig'), true);
-  assert.equal(clusterSource.includes('不在页面回显'), false);
+  assert.equal(clusterSource.includes('不在页面回显'), true);
+  assert.equal(clusterSource.includes('<th>指纹</th>'), false);
+  assert.equal(clusterSource.includes('shortFingerprint'), false);
+  assert.equal(clusterSource.includes('<th>校验状态</th>'), false);
+  assert.equal(clusterSource.includes('credentialValidationStatus'), false);
+  assert.equal(clusterSource.includes('Secret Store 托管'), true);
+});
+
+test('K8s 集群接入作为总览页右侧抽屉单表单', () => {
+  assert.equal(routeSource.includes("{ path: 'access', title: 'K8s 运维'"), false);
+  assert.equal(navigationSource.includes("id: 'access-entry'"), false);
+  assert.equal(navigationSource.includes("path: '/k8s/access'"), false);
+  assert.equal(clusterSource.includes('k8s-cluster-access-drawer'), true);
+  assert.equal(clusterSource.includes('createPortal'), true);
+  assert.equal(clusterSource.includes('role="dialog"'), true);
+  assert.equal(clusterSource.includes('<form'), true);
+  assert.equal(clusterSource.includes('接入集群'), true);
+  assert.equal(clusterSource.includes('保存并接入'), true);
+  assert.equal(clusterSource.includes('基础信息'), true);
+  assert.equal(clusterSource.includes('连接凭据'), true);
+  assert.equal(clusterSource.includes('clusterAccessMissingFields'), true);
+  assert.equal(clusterSource.includes('createCluster.mutateAsync'), true);
+  assert.equal(clusterSource.includes('createCredential.mutateAsync'), true);
+  assert.equal(clusterSource.includes('console-button console-button-primary'), true);
+  assert.equal(clusterSource.includes('k8s-cluster-access-card'), false);
+  assert.equal(clusterSource.includes('登记信息'), false);
+  assert.equal(clusterSource.includes('初始凭据'), false);
+  assert.equal(clusterSource.includes('录入初始凭据'), false);
+  assert.equal(clusterSource.includes('k8s-cluster-access-layout'), false);
+  assert.equal(clusterSource.includes('grid gap-4 xl:grid-cols-[minmax(0,1fr)_420px]'), false);
+  assert.equal(clusterSource.includes('probe passed · Secret version'), false);
 });
 
 test('K8s 访问授权页面消费平台 IAM 主体并授予 K8s 权限', () => {
@@ -239,7 +296,10 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('DEFAULT_CLUSTER'), false);
   assert.equal(certificateSource.includes('DEFAULT_NAMESPACE'), false);
   assert.equal(certificateSource.includes('DEFAULT_CERTIFICATE'), false);
-  assert.equal(certificateSource.includes('Fingerprint'), true);
+  assert.equal(certificateSource.includes('Fingerprint'), false);
+  assert.equal(certificateSource.includes('证书校验'), false);
+  assert.equal(certificateSource.includes('校验状态'), false);
+  assert.equal(certificateSource.includes('certificateValidationStatus'), false);
   assert.equal(certificateSource.includes('Not After'), true);
   assert.equal(certificateSource.includes('密钥材料留在后端受控域'), true);
   assert.equal(certificateSource.includes('证书写操作'), true);
@@ -302,6 +362,8 @@ test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导
   assert.equal(kubeconfigSource.includes('DEFAULT_NAMESPACE'), false);
   assert.equal(kubeconfigSource.includes("useState('orders-reader')"), false);
   assert.equal(kubeconfigSource.includes('Secret 元数据'), true);
+  assert.equal(kubeconfigSource.includes('fingerprint'), false);
+  assert.equal(kubeconfigSource.includes('校验状态'), false);
   assert.equal(kubeconfigSource.includes('权限不足'), true);
   assert.equal(kubeconfigSource.includes('审计导出'), true);
   assert.equal(kubeconfigSource.includes('普通响应只返回 Secret 元数据'), true);

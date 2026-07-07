@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Boxes, Check, ChevronDown, Network } from 'lucide-react';
+import { Activity, Boxes, Check, ChevronDown } from 'lucide-react';
 import { k8sApi } from './api';
 import {
   getK8sNavigationByPath,
@@ -16,7 +16,7 @@ import type { ModuleRailItem } from '../../components/navigation/ModuleRail';
 
 const k8sRailItems: ModuleRailItem[] = [
   { to: '/k8s', label: '集群总览', description: '集群清单、连接状态与巡检', icon: Boxes, end: true },
-  { to: '/k8s/access', label: '集群接入', description: '登记集群、维护凭据与只读接入', icon: Network },
+  { to: '/k8s/observability', label: '观测接入', description: '启用集群级可观测性运行时', icon: Activity },
 ];
 
 export function K8sOpsLayout() {

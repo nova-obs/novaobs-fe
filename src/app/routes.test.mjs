@@ -32,6 +32,7 @@ test('Metrics 使用嵌套路由并保留 monitoring 兼容重定向', () => {
 test('K8s 运维使用嵌套路由承载模块子页面', () => {
   const route = routeDefinitions.find((item) => item.path === '/k8s');
   assert.equal(route?.children?.[0].index, true);
+  assert.equal(route?.children?.some((item) => item.path === 'access'), false);
   assert.equal(route?.children?.some((item) => item.path === 'namespaces'), true);
   assert.equal(route?.children?.some((item) => item.path === 'rbac'), true);
 });
@@ -76,7 +77,9 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/platform/access'), '平台管理');
   assert.equal(getRouteTitle('/platform/observability'), '观测接入配置');
   assert.equal(getRouteTitle('/k8s'), 'K8s 运维');
+  assert.equal(getRouteTitle('/k8s/observability'), 'K8s 观测接入');
   assert.equal(getRouteTitle('/k8s/namespaces'), 'K8s 运维');
+  assert.equal(getRouteTitle('/k8s/access'), '平台总览');
   assert.equal(getRouteTitle('/agents/018f4f9a'), 'Agent Detail');
   assert.equal(getRouteTitle('/missing'), '平台总览');
 });
@@ -96,6 +99,8 @@ test('浏览器标签页标题包含当前模块和产品名', () => {
   assert.equal(getDocumentTitle('/platform/settings'), '平台设置 - NovaObs');
   assert.equal(getDocumentTitle('/platform/access'), '平台管理 - NovaObs');
   assert.equal(getDocumentTitle('/platform/observability'), '观测接入配置 - NovaObs');
+  assert.equal(getDocumentTitle('/k8s/observability'), 'K8s 观测接入 - NovaObs');
   assert.equal(getDocumentTitle('/k8s/namespaces'), 'K8s 运维 - NovaObs');
+  assert.equal(getDocumentTitle('/k8s/access'), '平台总览 - NovaObs');
   assert.equal(getDocumentTitle('/'), '平台总览 - NovaObs');
 });

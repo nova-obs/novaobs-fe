@@ -177,7 +177,7 @@ function AlertInstancesTable({
                 <td><InstanceState state={item.state} /></td>
                 <td>
                   <div className="font-semibold text-on-surface">{item.annotations.summary || ruleNames.get(item.ruleId) || item.ruleId}</div>
-                  <div className="max-w-[320px] truncate font-mono text-[11px] text-muted">{item.fingerprint}</div>
+                  <div className="max-w-[320px] truncate text-[11px] text-muted">{item.serviceId ? `服务范围：${item.serviceId}` : '全局告警范围'}</div>
                 </td>
                 <td className="font-mono text-xs">{item.serviceId || '-'}</td>
                 <td><StatusBadge value={(item.labels.severity as 'critical' | 'warning' | 'info') || 'info'} /></td>
@@ -320,7 +320,7 @@ function AlertEventsDrawer({
     <Drawer title="状态更新记录" meta={ruleName || instance.ruleId} onClose={onClose}>
       <div className="grid gap-4">
         <div className="grid gap-2 rounded-md border border-outline bg-surface px-3 py-3 text-xs">
-          <DetailRow label="Fingerprint" value={instance.fingerprint} mono />
+          <DetailRow label="告警身份" value={`${ruleName || instance.ruleId} · ${instance.serviceId || '全局范围'}`} />
           <DetailRow label="服务" value={instance.serviceId || '-'} mono />
           <DetailRow label="当前状态" value={<InstanceState state={instance.state} />} />
           <DetailRow label="最近接收" value={formatTime(instance.lastReceivedAt)} />

@@ -276,34 +276,18 @@ export interface LogRouteCollectorConfig {
   collectorYAML: string;
 }
 
-export interface LogPublishResult {
+export interface LogRoutePublishResult {
   status: string;
   message: string;
   requiresConfirmation: boolean;
   previewId: string;
   confirmationToken: string;
   auditId: string;
-  resources: K8sPublishResource[];
-  diffs: K8sPublishDiff[];
   warnings: string[];
-  plan?: {
-    id: string;
-    routeId: string;
-    agentGroupId: string;
-    sourceType: LogSourceType;
-    collectorConfigHash: string;
-    deploymentManifestHash: string;
-    renderedYAML: string;
-    status: string;
-    previewId: string;
-    confirmationToken: string;
-    auditId: string;
-    message: string;
-  };
 }
 
 export interface LogRuntimePublishInput {
-  clusterId?: string;
+  deployClusterId?: string;
   namespace?: string;
   alertIngestURL?: string;
   previewId?: string;
@@ -313,7 +297,7 @@ export interface LogRuntimePublishInput {
 export interface LogRuntimePublishResult {
   runtimeId: string;
   endpointId: string;
-  clusterId: string;
+  deployClusterId: string;
   namespace: string;
   datasourceURL: string;
   alertIngestURL: string;
@@ -330,6 +314,34 @@ export interface LogRuntimePublishResult {
   resources: K8sPublishResource[];
   diffs: K8sPublishDiff[];
   warnings: string[];
+}
+
+export interface ObservabilityRuntime {
+  id: string;
+  kind: string;
+  signalType: string;
+  clusterId: string;
+  namespace: string;
+  endpointId: string;
+  collectorConfigHash: string;
+  artifactHash: string;
+  manifestHash: string;
+  status: string;
+  lastPreviewId: string;
+  lastAuditId: string;
+  lastError: string;
+  lastPublishedAt: string;
+  resources: K8sPublishResource[];
+}
+
+export interface LogsCollectorRuntimePublishResult extends LogRoutePublishResult {
+  runtime?: ObservabilityRuntime;
+  manifestYAML: string;
+  collectorYAML: string;
+  collectorConfigHash: string;
+  manifestHash: string;
+  resources: K8sPublishResource[];
+  diffs: K8sPublishDiff[];
 }
 
 export interface K8sPublishResource {
@@ -619,7 +631,7 @@ function mapParsePreview(raw: any): LogParsePreviewResult {
   };
 }
 
-function mapPublish(raw: any): LogPublishResult {
+function mapRoutePublish(raw: any): LogRoutePublishResult {
   return {
     status: raw.status ?? '',
     message: raw.message ?? '',
@@ -627,23 +639,40 @@ function mapPublish(raw: any): LogPublishResult {
     previewId: raw.preview_id ?? raw.previewId ?? '',
     confirmationToken: raw.confirmation_token ?? raw.confirmationToken ?? '',
     auditId: raw.audit_id ?? raw.auditId ?? '',
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+  };
+}
+
+function mapCollectorRuntimePublish(raw: any): LogsCollectorRuntimePublishResult {
+  return {
+    ...mapRoutePublish(raw),
+    runtime: raw.runtime ? mapObservabilityRuntime(raw.runtime) : undefined,
+    manifestYAML: raw.manifest_yaml ?? raw.manifestYAML ?? '',
+    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    manifestHash: raw.manifest_hash ?? raw.manifestHash ?? '',
     resources: Array.isArray(raw.resources) ? raw.resources.map(mapPublishResource) : [],
     diffs: Array.isArray(raw.diffs) ? raw.diffs.map(mapPublishDiff) : [],
-    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
-    plan: raw.plan ? {
-      id: String(raw.plan.id ?? ''),
-      routeId: raw.plan.route_id ?? raw.plan.routeId ?? '',
-      agentGroupId: raw.plan.agent_group_id ?? raw.plan.agentGroupId ?? '',
-      sourceType: raw.plan.source_type ?? raw.plan.sourceType ?? 'vm_file',
-      collectorConfigHash: raw.plan.collector_config_hash ?? raw.plan.collectorConfigHash ?? '',
-      deploymentManifestHash: raw.plan.deployment_manifest_hash ?? raw.plan.deploymentManifestHash ?? '',
-      renderedYAML: raw.plan.rendered_yaml ?? raw.plan.renderedYAML ?? '',
-      status: raw.plan.status ?? '',
-      previewId: raw.plan.preview_id ?? raw.plan.previewId ?? '',
-      confirmationToken: raw.plan.confirmation_token ?? raw.plan.confirmationToken ?? '',
-      auditId: raw.plan.audit_id ?? raw.plan.auditId ?? '',
-      message: raw.plan.message ?? '',
-    } : undefined,
+  };
+}
+
+function mapObservabilityRuntime(raw: any): ObservabilityRuntime {
+  return {
+    id: String(raw.id ?? ''),
+    kind: raw.kind ?? '',
+    signalType: raw.signal_type ?? raw.signalType ?? '',
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
+    artifactHash: raw.artifact_hash ?? raw.artifactHash ?? '',
+    manifestHash: raw.manifest_hash ?? raw.manifestHash ?? '',
+    status: raw.status ?? '',
+    lastPreviewId: raw.last_preview_id ?? raw.lastPreviewId ?? '',
+    lastAuditId: raw.last_audit_id ?? raw.lastAuditId ?? '',
+    lastError: raw.last_error ?? raw.lastError ?? '',
+    lastPublishedAt: raw.last_published_at ?? raw.lastPublishedAt ?? '',
+    resources: Array.isArray(raw.resources) ? raw.resources.map(mapPublishResource) : [],
   };
 }
 
@@ -651,7 +680,7 @@ function mapRuntimePublish(raw: any): LogRuntimePublishResult {
   return {
     runtimeId: raw.runtime_id ?? raw.runtimeId ?? '',
     endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
-    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    deployClusterId: raw.deploy_cluster_id ?? raw.deployClusterId ?? '',
     namespace: raw.namespace ?? '',
     datasourceURL: raw.datasource_url ?? raw.datasourceURL ?? '',
     alertIngestURL: raw.alert_ingest_url ?? raw.alertIngestURL ?? '',
@@ -803,8 +832,8 @@ export const logsApi = {
     return mapEndpoint(raw);
   },
   async listEndpoints(): Promise<LogEndpoint[]> {
-    const raw = await apiRequest<any[]>('/logs/endpoints');
-    return raw.map(mapEndpoint);
+    const raw = await apiRequest<any[] | null>('/logs/endpoints');
+    return Array.isArray(raw) ? raw.map(mapEndpoint) : [];
   },
   async listTargets(serviceId?: string): Promise<LogTargetView[]> {
     const params = new URLSearchParams();
@@ -832,13 +861,28 @@ export const logsApi = {
     return mapRuntimePublish(await apiRequest<any>(`/logs/endpoints/${endpointId}/vmalert-runtime/publish`, {
       method: 'POST',
       body: JSON.stringify({
-        cluster_id: input.clusterId,
+        deploy_cluster_id: input.deployClusterId,
         namespace: input.namespace,
         alert_ingest_url: input.alertIngestURL,
         preview_id: input.previewId,
         confirmation_token: input.confirmationToken,
       }),
     }));
+  },
+  async publishLogsCollectorRuntime(input: { clusterId: string; namespace?: string; previewId?: string; confirmationToken?: string }): Promise<LogsCollectorRuntimePublishResult> {
+    return mapCollectorRuntimePublish(await apiRequest<any>('/observability/runtimes/logs-collector/publish', {
+      method: 'POST',
+      body: JSON.stringify({
+        cluster_id: input.clusterId,
+        namespace: input.namespace,
+        preview_id: input.previewId,
+        confirmation_token: input.confirmationToken,
+      }),
+    }));
+  },
+  async listObservabilityRuntimes(): Promise<ObservabilityRuntime[]> {
+    const raw = await apiRequest<any[] | null>('/observability/runtimes');
+    return Array.isArray(raw) ? raw.map(mapObservabilityRuntime) : [];
   },
   async previewRoute(input: LogRouteInput): Promise<LogRoutePreview> {
     return mapPreview(await apiRequest<any>('/logs/routes/preview', {
@@ -880,13 +924,16 @@ export const logsApi = {
       warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     };
   },
-  async publishRoute(routeId: string, confirmation?: { previewId?: string; confirmationToken?: string }): Promise<LogPublishResult> {
-    return mapPublish(await apiRequest<any>(`/logs/routes/${routeId}/publish`, {
+  async publishRoute(routeId: string, confirmation?: { previewId?: string; confirmationToken?: string }): Promise<LogRoutePublishResult> {
+    return mapRoutePublish(await apiRequest<any>(`/logs/routes/${routeId}/publish`, {
       method: 'POST',
       body: JSON.stringify({
         preview_id: confirmation?.previewId,
         confirmation_token: confirmation?.confirmationToken,
       }),
     }));
+  },
+  async deleteRoute(routeId: string): Promise<void> {
+    await apiRequest<any>(`/logs/routes/${routeId}`, { method: 'DELETE' });
   },
 };

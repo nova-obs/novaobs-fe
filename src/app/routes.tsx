@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Navigate } from 'react-router-dom';
+import { Navigate, useParams } from 'react-router-dom';
 import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
 import { K8sAuditPage } from '../pages/k8s/AuditPage';
@@ -10,6 +10,7 @@ import { K8sDeploymentHistoryPage } from '../pages/k8s/DeploymentHistoryPage';
 import { K8sDeploymentPage } from '../pages/k8s/DeploymentPage';
 import { K8sOpsLayout } from '../pages/k8s/K8sOpsLayout';
 import { K8sNamespacePage } from '../pages/k8s/NamespacePage';
+import { K8sObservabilityAccessPage } from '../pages/k8s/ObservabilityAccessPage';
 import { K8sPlatformAccessPage } from '../pages/k8s/PlatformAccessPage';
 import { K8sResourcePage } from '../pages/k8s/ResourcePage';
 import { K8sRbacPage } from '../pages/k8s/RbacPage';
@@ -24,7 +25,9 @@ import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
 import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MetricsAlertsPage } from '../pages/metrics/MetricsAlertsPage';
+import { MetricsAlertRulePage } from '../pages/metrics/MetricsAlertRulePage';
 import { MetricsCollectionPage } from '../pages/metrics/MetricsCollectionPage';
+import { MetricsDashboardDetailPage } from '../pages/metrics/MetricsDashboardDetailPage';
 import { MetricsDashboardsPage } from '../pages/metrics/MetricsDashboardsPage';
 import { MetricsEndpointsPage } from '../pages/metrics/MetricsEndpointsPage';
 import { MetricsExplorePage } from '../pages/metrics/MetricsExplorePage';
@@ -48,7 +51,7 @@ export interface RouteDefinition {
 
 const k8sChildRoutes: RouteDefinition[] = [
   { index: true, title: 'K8s 运维', element: <K8sClusterPage /> },
-  { path: 'access', title: 'K8s 运维', element: <K8sClusterPage /> },
+  { path: 'observability', title: 'K8s 观测接入', element: <K8sObservabilityAccessPage /> },
   { path: 'clusters', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
   { path: 'namespaces', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
   { path: 'resource-view', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
@@ -64,6 +67,7 @@ const k8sChildRoutes: RouteDefinition[] = [
   { path: 'releases', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
   { path: 'terminal', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
   { path: 'clusters/:clusterId', title: 'K8s 运维', element: <DashboardPage /> },
+  { path: 'clusters/:clusterId/observability', title: 'K8s 观测接入', element: <K8sObservabilityRedirect /> },
   { path: 'clusters/:clusterId/namespaces', title: 'K8s 运维', element: <K8sNamespacePage /> },
   { path: 'clusters/:clusterId/resource-view', title: 'K8s 运维', element: <K8sResourcePage /> },
   { path: 'clusters/:clusterId/runtime-topology', title: 'K8s 运维', element: <K8sRuntimeTopologyPage /> },
@@ -103,7 +107,10 @@ const platformChildRoutes: RouteDefinition[] = [
 const metricsChildRoutes: RouteDefinition[] = [
   { index: true, title: '指标查询', element: <Navigate to="/metrics/explore" replace /> },
   { path: 'explore', title: '指标查询', element: <MetricsExplorePage /> },
+  { path: 'alerts/new', title: '创建指标告警', element: <MetricsAlertRulePage /> },
+  { path: 'alerts/:id', title: '编辑指标告警', element: <MetricsAlertRulePage /> },
   { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
+  { path: 'dashboards/:uid', title: 'Dashboard 详情', element: <MetricsDashboardDetailPage /> },
   { path: 'dashboards', title: 'Dashboard', element: <MetricsDashboardsPage /> },
   { path: 'collection', title: '采集接入', element: <MetricsCollectionPage /> },
   { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
@@ -138,21 +145,29 @@ function findRouteTitle(routes: RouteDefinition[], normalizedPath: string, baseP
   for (const route of routes) {
     const fullPath = route.index ? basePath : route.path?.startsWith('/') ? route.path : `${basePath}/${route.path ?? ''}`.replace(/\/+/g, '/');
     if (!fullPath) continue;
+    const hasChildren = Boolean(route.children?.length);
     const matched = route.index
       ? normalizedPath === fullPath
       : fullPath === '/'
         ? normalizedPath === '/'
-        : routePathMatches(fullPath, normalizedPath);
+        : routePathMatches(fullPath, normalizedPath, hasChildren);
     if (!matched) continue;
     const child = route.children ? findRouteTitle(route.children, normalizedPath, fullPath) : undefined;
-    return child ?? route;
+    if (child) return child;
+    if (hasChildren && normalizedPath !== fullPath) continue;
+    return route;
   }
   return undefined;
 }
 
-function routePathMatches(pattern: string, path: string) {
+function routePathMatches(pattern: string, path: string, allowPrefix = false) {
   const patternSegments = pattern.split('/').filter(Boolean);
   const pathSegments = path.split('/').filter(Boolean);
-  if (pathSegments.length < patternSegments.length) return false;
+  if (allowPrefix ? pathSegments.length < patternSegments.length : pathSegments.length !== patternSegments.length) return false;
   return patternSegments.every((segment, index) => segment.startsWith(':') || segment === pathSegments[index]);
+}
+
+function K8sObservabilityRedirect() {
+  const { clusterId = '' } = useParams();
+  return <Navigate to={clusterId ? `/k8s/observability?cluster_id=${encodeURIComponent(clusterId)}` : '/k8s/observability'} replace />;
 }

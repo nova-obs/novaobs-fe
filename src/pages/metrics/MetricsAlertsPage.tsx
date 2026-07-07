@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Bell, RefreshCw } from 'lucide-react';
+import { Bell, Plus, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
 import type { AlertRule } from '../../services/types';
 
@@ -22,6 +23,10 @@ export function MetricsAlertsPage() {
             <p className="console-section-meta">共 {rules.length} 条 · 启用 {enabledCount} 条</p>
           </div>
           <div className="flex items-center gap-2">
+            <Link className="console-button console-button-primary gap-1.5" to="/metrics/alerts/new">
+              <Plus className="h-3.5 w-3.5" />
+              创建告警
+            </Link>
             <button type="button" className="console-icon-button border-outline bg-white" aria-label="刷新指标告警" title="刷新指标告警" onClick={() => void rulesQuery.refetch()}>
               <RefreshCw className="h-3.5 w-3.5" />
             </button>

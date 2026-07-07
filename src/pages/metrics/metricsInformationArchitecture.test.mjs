@@ -42,9 +42,9 @@ test('Metrics Explore 以服务作用域为主任务且不嵌入未实现 iframe
   assert.match(explore, /activeTenant/);
   assert.match(explore, /尚未绑定指标端点/);
   assert.match(explore, /创建指标告警/);
-  assert.match(explore, /disabled/);
-  assert.match(explore, /title="指标告警创建表单接入中"/);
-  assert.doesNotMatch(explore, /<iframe/i);
+  assert.match(explore, /\/metrics\/alerts\/new/);
+  assert.match(explore, /vmuiURL/);
+  assert.match(explore, /vmui 查询面板/);
   assert.doesNotMatch(explore, /mock/i);
 });
 
@@ -64,13 +64,18 @@ test('Metrics API 只保留真实资源契约，不在前端伪造数据', () =>
 test('Metrics 待接入页面使用控制台面板、表格或真实空态', () => {
   for (const source of [overview, collection, dashboards, alerts, endpoints]) {
     assert.match(source, /console-panel/);
-    assert.match(source, /console-empty-state|console-table/);
     assert.doesNotMatch(source, /hero/i);
     assert.doesNotMatch(source, /gradient/i);
   }
+  assert.match(overview, /metricsApi\.getWorkspace/);
+  assert.match(overview, /api\.getMetricsAlertRules/);
+  assert.match(overview, /refetchInterval/);
   assert.match(collection, /metricsApi\.listServiceBindings/);
-  assert.match(dashboards, /Grafana 保持 dashboard 生产真值/);
+  assert.match(collection, /metricsApi\.createServiceBinding/);
+  assert.match(dashboards, /searchGrafanaDashboards/);
+  assert.match(dashboards, /grafanaEndpoint/);
   assert.match(alerts, /api\.getMetricsAlertRules/);
   assert.match(alerts, /暂无指标告警规则/);
   assert.match(endpoints, /metricsApi\.listEndpoints/);
+  assert.match(endpoints, /metricsApi\.testEndpoint/);
 });

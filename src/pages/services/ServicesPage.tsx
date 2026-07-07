@@ -12,12 +12,7 @@ const emptyForm: CreateServiceInput & { description?: string } = {
   name: '',
   environment: 'prod',
   displayName: '',
-  cluster: '',
-  namespace: '',
   ownerTeam: '',
-  owner: '',
-  alertRoute: '',
-  sloLevel: '',
   identityType: 'k8s_workload',
 };
 
@@ -51,10 +46,6 @@ function sourceLabel(source: string) {
   return source === 'cmdb' ? 'CMDB' : '本地录入';
 }
 
-function syncLabel(status: string) {
-  return status === 'synced' ? '已同步' : '本地';
-}
-
 export function ServicesPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({ q: '', environment: '', status: '', source: '' });
@@ -79,7 +70,7 @@ export function ServicesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => api.createService({ name: form.name, environment: form.environment, displayName: form.displayName || undefined, cluster: form.cluster || undefined, namespace: form.namespace || undefined, ownerTeam: form.ownerTeam || undefined, owner: form.owner || undefined, alertRoute: form.alertRoute || undefined, sloLevel: form.sloLevel || undefined, identityType: form.identityType }),
+    mutationFn: () => api.createService({ name: form.name, environment: form.environment, displayName: form.displayName || undefined, ownerTeam: form.ownerTeam || undefined, identityType: form.identityType }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
       setShowForm(false);
@@ -95,12 +86,7 @@ export function ServicesPage() {
       if (form.environment) patch.environment = form.environment;
       if (form.displayName !== undefined) patch.displayName = form.displayName;
       if (form.description !== undefined) patch.description = form.description;
-      if (form.cluster !== undefined) patch.cluster = form.cluster;
-      if (form.namespace !== undefined) patch.namespace = form.namespace;
       if (form.ownerTeam !== undefined) patch.ownerTeam = form.ownerTeam;
-      if (form.owner !== undefined) patch.owner = form.owner;
-      if (form.alertRoute !== undefined) patch.alertRoute = form.alertRoute;
-      if (form.sloLevel !== undefined) patch.sloLevel = form.sloLevel;
       if (form.identityType !== undefined) patch.identityType = form.identityType;
       return api.updateService(editingId, patch);
     },
@@ -151,7 +137,7 @@ export function ServicesPage() {
   const openEdit = (svc: Service) => {
     setConfirmDeleteServiceId(null);
     setEditingId(svc.id);
-    setForm({ name: svc.name, environment: svc.environment, displayName: svc.displayName, description: svc.description, cluster: svc.cluster, namespace: svc.namespace, ownerTeam: svc.ownerTeam, owner: svc.owner, alertRoute: svc.alertRoute, sloLevel: svc.sloLevel, identityType: svc.identityType });
+    setForm({ name: svc.name, environment: svc.environment, displayName: svc.displayName, description: svc.description, ownerTeam: svc.ownerTeam, identityType: svc.identityType });
     setShowForm(true);
   };
 
@@ -159,7 +145,7 @@ export function ServicesPage() {
   const closeEditor = () => {
     setShowForm(false);
     setEditingId(null);
-    setForm(selectedService ? { name: selectedService.name, environment: selectedService.environment, displayName: selectedService.displayName, description: selectedService.description, cluster: selectedService.cluster, namespace: selectedService.namespace, ownerTeam: selectedService.ownerTeam, owner: selectedService.owner, alertRoute: selectedService.alertRoute, sloLevel: selectedService.sloLevel, identityType: selectedService.identityType } : { ...emptyForm });
+    setForm(selectedService ? { name: selectedService.name, environment: selectedService.environment, displayName: selectedService.displayName, description: selectedService.description, ownerTeam: selectedService.ownerTeam, identityType: selectedService.identityType } : { ...emptyForm });
   };
 
   return (
@@ -247,8 +233,6 @@ export function ServicesPage() {
                       <th>定位</th>
                       <th>Owner</th>
                       <th>来源</th>
-                      <th>同步</th>
-                      <th>告警路由</th>
                       <th>运行身份</th>
                       <th>状态</th>
                       <th>操作</th>
@@ -265,8 +249,6 @@ export function ServicesPage() {
                         <td className="font-mono text-xs">{svc.cluster || '-'}{svc.namespace ? ` / ${svc.namespace}` : ''}</td>
                         <td className="text-sm">{svc.ownerTeam}{svc.owner ? ` · ${svc.owner}` : ''}</td>
                         <td><span className={`text-xs ${svc.source === 'cmdb' ? 'text-info' : 'text-muted'}`}>{sourceLabel(svc.source)}</span></td>
-                        <td><span className={`text-xs ${svc.syncStatus === 'synced' ? 'text-primary' : 'text-muted'}`}>{syncLabel(svc.syncStatus)}</span></td>
-                        <td className="font-mono text-xs text-muted">{svc.alertRoute || '-'}</td>
                         <td className="font-mono text-xs text-muted">{svc.identityType || 'k8s_workload'}</td>
                         <td><StatusBadge value={svc.status} /></td>
                         <td>
@@ -418,8 +400,6 @@ function ServiceProductionDetails({ service }: { service: Service }) {
         <ServiceDetailCell label="定位" value={service.cluster ? `${service.cluster}${service.namespace ? ` / ${service.namespace}` : ''}` : '-'} mono />
         <ServiceDetailCell label="Owner" value={service.ownerTeam || service.owner ? `${service.ownerTeam || '-'}${service.owner ? ` / ${service.owner}` : ''}` : '-'} />
         <ServiceDetailCell label="来源" value={sourceLabel(service.source)} />
-        <ServiceDetailCell label="同步" value={syncLabel(service.syncStatus)} />
-        <ServiceDetailCell label="告警路由" value={service.alertRoute || '-'} mono />
         <ServiceDetailCell label="运行身份" value={service.identityType || 'k8s_workload'} mono />
       </div>
     </section>
@@ -476,13 +456,15 @@ function ServiceEditorDrawer({
               <label className="text-sm font-semibold">服务名称 *<input className="console-input mt-2 w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
               <label className="text-sm font-semibold">环境 *<select className="console-input mt-2 w-full" value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })}><option value="prod">prod</option><option value="staging">staging</option><option value="dev">dev</option></select></label>
               <label className="text-sm font-semibold">别名<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
-              <label className="text-sm font-semibold">集群<input className="console-input mt-2 w-full" value={form.cluster ?? ''} onChange={(e) => setForm({ ...form, cluster: e.target.value })} /></label>
-              <label className="text-sm font-semibold">Namespace<input className="console-input mt-2 w-full" value={form.namespace ?? ''} onChange={(e) => setForm({ ...form, namespace: e.target.value })} /></label>
               <label className="text-sm font-semibold">Owner Team<input className="console-input mt-2 w-full" value={form.ownerTeam ?? ''} onChange={(e) => setForm({ ...form, ownerTeam: e.target.value })} /></label>
-              <label className="text-sm font-semibold">Owner<input className="console-input mt-2 w-full" value={form.owner ?? ''} onChange={(e) => setForm({ ...form, owner: e.target.value })} /></label>
-              <label className="text-sm font-semibold">告警路由<input className="console-input mt-2 w-full" value={form.alertRoute ?? ''} onChange={(e) => setForm({ ...form, alertRoute: e.target.value })} /></label>
-              <label className="text-sm font-semibold">SLO Level<input className="console-input mt-2 w-full" value={form.sloLevel ?? ''} onChange={(e) => setForm({ ...form, sloLevel: e.target.value })} /></label>
               <label className="text-sm font-semibold">运行身份<select className="console-input mt-2 w-full" value={form.identityType ?? 'k8s_workload'} onChange={(e) => setForm({ ...form, identityType: e.target.value as typeof form.identityType })}><option value="k8s_workload">K8s Workload</option><option value="host_process">物理机 / VM 进程</option></select></label>
+            </div>
+            <div className="mt-4 rounded-md border border-dashed border-outline bg-surface-lowest px-3 py-3">
+              <button type="button" className="console-button gap-1.5 text-xs" disabled title="CMDB 同步接口接入后启用">
+                <RefreshCw className="h-3 w-3" />
+                从 CMDB 同步
+              </button>
+              <p className="mt-2 text-[11px] leading-5 text-muted">接入后将自动填充集群、命名空间等部署元数据。</p>
             </div>
             {createError ? <p className="console-notice console-notice-danger mt-3">{createError.message}</p> : null}
             {updateError ? <p className="console-notice console-notice-danger mt-3">{updateError.message}</p> : null}

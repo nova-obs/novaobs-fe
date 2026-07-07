@@ -136,6 +136,41 @@ function mapWorkspace(raw: any): MetricsWorkspace {
   };
 }
 
+export interface CreateServiceBindingInput {
+  serviceId: string;
+  endpointId: string;
+  tenant?: { accountId?: string; projectId?: string };
+  labelMatch: Record<string, string>;
+  basePromQL?: string;
+  status?: string;
+}
+
+export interface UpdateServiceBindingInput {
+  endpointId?: string;
+  tenant?: { accountId?: string; projectId?: string };
+  labelMatch?: Record<string, string>;
+  basePromQL?: string;
+  status?: string;
+}
+
+export interface EndpointTestResult {
+  status: string;
+  message: string;
+  responseTimeMs: number;
+  checkedAt: string;
+}
+
+export interface GrafanaDashboardHit {
+  uid: string;
+  title: string;
+  uri: string;
+  url: string;
+  type: string;
+  tags: string[];
+  folderTitle: string;
+  folderUid: string;
+}
+
 export const metricsApi = {
   async getWorkspace(serviceId?: string): Promise<MetricsWorkspace> {
     const params = new URLSearchParams();
@@ -153,5 +188,61 @@ export const metricsApi = {
     const suffix = params.toString() ? `?${params.toString()}` : '';
     const raw = await apiRequest<any[]>(`/metrics/service-bindings${suffix}`);
     return Array.isArray(raw) ? raw.map(mapServiceBinding) : [];
+  },
+  async createServiceBinding(input: CreateServiceBindingInput): Promise<MetricServiceBinding> {
+    const raw = await apiRequest<any>('/metrics/service-bindings', {
+      method: 'POST',
+      body: JSON.stringify({
+        service_id: input.serviceId,
+        endpoint_id: input.endpointId,
+        tenant: input.tenant ? { account_id: input.tenant.accountId ?? '', project_id: input.tenant.projectId ?? '' } : undefined,
+        label_match: input.labelMatch,
+        base_promql: input.basePromQL ?? '',
+        status: input.status ?? 'active',
+      }),
+    });
+    return mapServiceBinding(raw);
+  },
+  async updateServiceBinding(id: string, input: UpdateServiceBindingInput): Promise<MetricServiceBinding> {
+    const body: Record<string, unknown> = {};
+    if (input.endpointId !== undefined) body.endpoint_id = input.endpointId;
+    if (input.tenant !== undefined) body.tenant = { account_id: input.tenant.accountId ?? '', project_id: input.tenant.projectId ?? '' };
+    if (input.labelMatch !== undefined) body.label_match = input.labelMatch;
+    if (input.basePromQL !== undefined) body.base_promql = input.basePromQL;
+    if (input.status !== undefined) body.status = input.status;
+    const raw = await apiRequest<any>(`/metrics/service-bindings/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    });
+    return mapServiceBinding(raw);
+  },
+  async probeServiceBinding(id: string): Promise<MetricServiceBinding> {
+    const raw = await apiRequest<any>(`/metrics/service-bindings/${id}/probe`, { method: 'POST' });
+    return mapServiceBinding(raw);
+  },
+  async searchGrafanaDashboards(grafanaBaseURL: string): Promise<GrafanaDashboardHit[]> {
+    const url = `${grafanaBaseURL.replace(/\/+$/, '')}/api/search?type=dash-db`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Grafana API 请求失败: ${res.status}`);
+    const raw = await res.json() as any[];
+    return Array.isArray(raw) ? raw.map((d) => ({
+      uid: d.uid ?? '',
+      title: d.title ?? '',
+      uri: d.uri ?? '',
+      url: d.url ?? '',
+      type: d.type ?? '',
+      tags: Array.isArray(d.tags) ? d.tags : [],
+      folderTitle: d.folderTitle ?? '',
+      folderUid: d.folderUid ?? '',
+    })) : [];
+  },
+  async testEndpoint(id: string): Promise<EndpointTestResult> {
+    const raw = await apiRequest<any>(`/observability/endpoints/${id}/test`, { method: 'POST' });
+    return {
+      status: raw.status ?? '',
+      message: raw.message ?? '',
+      responseTimeMs: raw.response_time_ms ?? raw.responseTimeMs ?? 0,
+      checkedAt: raw.checked_at ?? raw.checkedAt ?? '',
+    };
   },
 };

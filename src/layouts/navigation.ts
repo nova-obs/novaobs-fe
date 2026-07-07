@@ -10,7 +10,6 @@ import {
   GitBranch,
   LayoutDashboard,
   Monitor,
-  Network,
   RadioTower,
   Search,
   ServerCog,
@@ -106,7 +105,7 @@ const navigationDomains: NavigationDomain[] = [
   {
     id: 'k8s',
     label: 'K8s 运维',
-    description: '集群接入与工程运维',
+    description: '集群总览与工程运维',
     icon: ServerCog,
     groups: [
       {
@@ -121,7 +120,7 @@ const navigationDomains: NavigationDomain[] = [
             icon: Boxes,
             children: [
               { id: 'k8s-fleet', label: '集群总览', description: '集群登记与连接状态', path: '/k8s', icon: Boxes },
-              { id: 'k8s-access', label: '集群接入', description: '登记集群与维护凭据', path: '/k8s/access', icon: Network },
+              { id: 'k8s-observability', label: '观测接入', description: '启用集群级可观测性运行时', path: '/k8s/observability', icon: Activity },
             ],
           },
         ],
@@ -172,6 +171,9 @@ function cloneNavigationItem(item: NavigationItem): NavigationItem {
 
 export const getNavigationByPath = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
+  if (normalizedPath === '/k8s/access') {
+    return undefined;
+  }
   if (normalizedPath.startsWith('/agents/') || normalizedPath === '/onboarding') {
     return allNavigationItems.find((item) => item.id === 'logs-agents');
   }

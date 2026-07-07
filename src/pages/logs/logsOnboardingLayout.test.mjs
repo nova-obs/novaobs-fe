@@ -43,7 +43,12 @@ test('Logs 接入配置不再前端渲染 collector YAML', () => {
   assert.equal(onboardingSource.includes('<logs-downstream-write-address>'), false);
   assert.equal(onboardingSource.includes('logsApi.getRouteCollectorConfig'), false);
   assert.equal(onboardingSource.includes('LogsParseRuleDialog'), true);
-  assert.equal(onboardingSource.includes('LogsPublishPreviewPanel'), true);
+  assert.equal(onboardingSource.includes('LogsPublishPreviewPanel'), false);
+  assert.equal(onboardingSource.includes('publishLogsCollectorRuntime'), false);
+  assert.equal(onboardingSource.includes('listObservabilityRuntimes'), true);
+  assert.equal(onboardingSource.includes('/k8s/observability?cluster_id='), true);
+  assert.equal(onboardingSource.includes('启用集群观测接入'), true);
+  assert.equal(onboardingSource.includes('前往观测接入'), true);
 });
 
 test('Logs 接入配置以 route collector fragment 作为主要编辑对象', () => {
@@ -61,9 +66,23 @@ test('Logs 接入配置以 route collector fragment 作为主要编辑对象', (
   assert.equal(onboardingSource.includes('RoutePreviewCodePanel'), true);
   assert.equal(onboardingSource.includes('完整 collector.yaml'), true);
   assert.equal(onboardingSource.includes('同集群业务片段合并结果'), true);
+  assert.equal(onboardingSource.includes('业务 Route 片段'), true);
+  assert.equal(onboardingSource.includes('由 K8s 观测接入统一合并发布'), true);
   assert.equal(publishPreviewSource.includes('logs-publish-preview-panel'), true);
   assert.equal(onboardingSource.includes('Runtime 日志目录'), false);
   assert.equal(onboardingSource.includes('runtimeLogPaths'), false);
+});
+
+test('观测接入发布预览展示完整资源部署 YAML', () => {
+  assert.equal(publishPreviewSource.includes('完整资源部署 YAML'), true);
+  assert.equal(publishPreviewSource.includes('preview.manifestYAML'), true);
+  assert.equal(publishPreviewSource.includes('资源部署 YAML 为空'), true);
+  assert.equal(publishPreviewSource.includes('navigator.clipboard?.writeText(preview.manifestYAML'), true);
+  assert.equal(publishPreviewSource.includes('<th>Hash</th>'), false);
+  assert.equal(publishPreviewSource.includes('preview {shortHash'), false);
+  assert.equal(publishPreviewSource.includes('<th>配置结果</th>'), false);
+  assert.equal(publishPreviewSource.includes('资源清单已生成'), false);
+  assert.equal(publishPreviewSource.includes('部署预览已生成'), false);
 });
 
 test('Logs 接入配置以三栏画布承载服务、目标、端点和发布动作', () => {
@@ -177,7 +196,12 @@ test('Logs 采集路由页负责运行态和配置查看', () => {
   assert.equal(agentsSource.includes('logsApi.getRouteCollectorConfig'), true);
   assert.equal(agentsSource.includes('完整 collector.yaml'), true);
   assert.equal(agentsSource.includes('非 K8s 部署清单'), true);
-  assert.equal(agentsSource.includes('部署清单 hash'), true);
+  assert.equal(agentsSource.includes('部署清单 hash'), false);
+  assert.equal(agentsSource.includes('部署清单状态'), false);
+  assert.equal(agentsSource.includes('采集配置状态'), false);
+  assert.equal(agentsSource.includes('采集配置已生成'), false);
+  assert.equal(agentsSource.includes('<th>Hash</th>'), false);
+  assert.equal(agentsSource.includes('shortHash'), false);
   assert.equal(agentsSource.includes('/logs/agents/${contextRoute.route.id}/edit'), true);
   assert.equal(agentsSource.includes('实例状态'), false);
   assert.equal(agentsSource.includes('<DomainMetric label="Audit"'), false);
@@ -214,6 +238,8 @@ test('Logs Explore 将服务日志链路收敛为顶部服务选择并突出检�
   assert.equal(exploreSource.includes('service-selector'), true);
   assert.equal(exploreSource.includes('service-option-context'), true);
   assert.equal(exploreSource.includes('service_id'), true);
+  assert.equal(exploreSource.includes('采集配置 hash'), false);
+  assert.equal(exploreSource.includes('采集配置状态'), false);
   assert.equal(exploreSource.includes('query-context-summary'), true);
   assert.equal((exploreSource.match(/logs-explore-context-panel/g) ?? []).length, 2);
   assert.equal((exploreSource.match(/logs-explore-context-header/g) ?? []).length, 2);

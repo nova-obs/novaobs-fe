@@ -201,9 +201,8 @@ export function K8sKubeconfigPage() {
           <div className="min-w-0 space-y-4">
             <section className="console-panel min-w-0 px-4 py-3">
               <div className="text-sm font-semibold text-on-surface">Secret 元数据</div>
-              <div className="mt-3 grid gap-3 md:grid-cols-3">
-                <MetaItem label="secret_id" value={metadata?.secretId ?? '-'} />
-                <MetaItem label="fingerprint" value={metadata?.fingerprint ?? '-'} />
+              <div className="mt-3 grid gap-3 md:grid-cols-2">
+                <MetaItem label="存储位置" value={metadata?.secretId ? 'Secret Store 托管' : '-'} />
                 <MetaItem label="expires_at" value={formatDate(metadata?.expiresAt ?? '')} />
               </div>
               {metadata?.auditId ? <div className="mt-3 text-xs font-semibold text-primary">生成审计：<span className="font-mono">{metadata.auditId}</span></div> : null}

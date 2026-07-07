@@ -32,7 +32,7 @@ test('超级菜单按业务域组织现有叶子入口且路径唯一', () => {
     '/traces',
     '/alerts',
     '/k8s',
-    '/k8s/access',
+    '/k8s/observability',
     '/platform/settings',
     '/platform/access',
   ]);
@@ -61,8 +61,8 @@ test('K8s 运维导航按默认父模块卡片承载集群入口', () => {
 
   assert.deepEqual(primaryItems.map((item) => item.label), ['集群']);
   assert.equal(cluster?.path, '/k8s');
-  assert.deepEqual(cluster?.children?.map((item) => item.label), ['集群总览', '集群接入']);
-  assert.deepEqual(cluster?.children?.map((item) => item.path), ['/k8s', '/k8s/access']);
+  assert.deepEqual(cluster?.children?.map((item) => item.label), ['集群总览', '观测接入']);
+  assert.deepEqual(cluster?.children?.map((item) => item.path), ['/k8s', '/k8s/observability']);
 });
 
 test('根据路径解析当前导航项', () => {
@@ -81,7 +81,8 @@ test('根据路径解析当前导航项', () => {
   assert.equal(getNavigationByPath('/platform/settings')?.id, 'platform-settings');
   assert.equal(getNavigationByPath('/platform/access')?.id, 'platform-access');
   assert.equal(getNavigationByPath('/k8s')?.id, 'k8s-fleet');
-  assert.equal(getNavigationByPath('/k8s/access')?.id, 'k8s-access');
+  assert.equal(getNavigationByPath('/k8s/access'), undefined);
+  assert.equal(getNavigationByPath('/k8s/observability')?.id, 'k8s-observability');
   assert.equal(getNavigationByPath('/k8s/clusters/prod/namespaces')?.id, 'k8s-fleet');
   assert.equal(getNavigationByPath('/unknown'), undefined);
 });

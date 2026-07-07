@@ -1,20 +1,22 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Link, useSearchParams } from 'react-router-dom';
-import { useMutation, useQuery } from '@tanstack/react-query';
-import { Copy, FileText, PanelRightOpen, Plus, RefreshCw, Server, ShieldCheck, WifiOff, XCircle } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Copy, FileText, Loader2, PanelRightOpen, Plus, RefreshCw, Server, ShieldCheck, Trash2, WifiOff, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
 import { logSinkLabel, logSourceLabel, logsApi, type LogRouteView } from './api';
 import { routeLifecycle, serviceDisplayName, statusPillClass } from './ServicePickerPanel';
-import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsToolbarButton, shortHash, shortIdentity } from './LogsPrimitives';
+import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsToolbarButton, shortIdentity } from './LogsPrimitives';
 import { LogsEntitySelector } from './LogsEntitySelector';
 
 export function LogsAgentsPage() {
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRouteId, setSelectedRouteId] = useState(searchParams.get('route_id') ?? '');
   const [collectorConfigRoute, setCollectorConfigRoute] = useState<LogRouteView | null>(null);
   const [contextRoute, setContextRoute] = useState<LogRouteView | null>(null);
   const [routeView, setRouteView] = useState<'overview' | 'instances'>('overview');
+  const [confirmDeleteRouteId, setConfirmDeleteRouteId] = useState<string | null>(null);
   const { data: workspace, error: workspaceError, refetch: refetchWorkspace } = useQuery({
     queryKey: ['logs-onboarding-workspace'],
     queryFn: logsApi.getWorkspace,
@@ -57,6 +59,15 @@ export function LogsAgentsPage() {
     mutationFn: (routeId: string) => logsApi.getRouteCollectorConfig(routeId),
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: (routeId: string) => logsApi.deleteRoute(routeId),
+    onSuccess: () => {
+      setConfirmDeleteRouteId(null);
+      setSelectedRouteId('');
+      void queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
+    },
+  });
+
   function openCollectorConfig(route: LogRouteView) {
     setCollectorConfigRoute(route);
     collectorConfigMutation.mutate(route.route.id);
@@ -69,6 +80,7 @@ export function LogsAgentsPage() {
 
   function selectRoute(routeId: string) {
     setSelectedRouteId(routeId);
+    setConfirmDeleteRouteId(null);
     setRouteView('overview');
     const next = new URLSearchParams(searchParams);
     next.set('route_id', routeId);
@@ -92,6 +104,7 @@ export function LogsAgentsPage() {
     <div className="console-workbench logs-routes-workbench flex min-h-[720px] flex-col xl:h-full xl:min-h-0 xl:overflow-hidden">
       <section className="console-panel flex min-h-0 flex-1 flex-col overflow-hidden" aria-label="采集路由工作区">
         {workspaceError ? <LogsErrorLine message={(workspaceError as Error).message} /> : null}
+        {deleteMutation.error ? <LogsErrorLine message={(deleteMutation.error as Error).message} /> : null}
         <div className="console-panel-header shrink-0">
           <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="logs-route-selector w-full lg:max-w-[420px]">
@@ -117,7 +130,6 @@ export function LogsAgentsPage() {
                         <span className={`inline-flex shrink-0 rounded border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(lifecycle.tone)}`}>{lifecycle.label}</span>
                       </div>
                       <div className="mt-1 truncate text-[11px] font-medium text-muted">{route.route.name || route.route.id} · {logSourceLabel(route.route.sourceType)} · {endpoint}</div>
-                      <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{shortHash(route.route.collectorConfigHash)}</div>
                     </>
                   );
                 }}
@@ -168,16 +180,30 @@ export function LogsAgentsPage() {
                     </button>
                     <button type="button" className="console-button" onClick={() => openCollectorConfig(activeRoute)}><FileText className="h-3.5 w-3.5" />查看配置</button>
                     <Link className="console-button console-button-primary" to={`/logs/agents/${activeRoute.route.id}/edit`}>更新路由</Link>
+                    <button
+                      type="button"
+                      className={`console-button gap-1 text-xs ${confirmDeleteRouteId === activeRoute.route.id ? 'console-button-danger' : ''}`}
+                      disabled={deleteMutation.isPending}
+                      onClick={() => {
+                        if (confirmDeleteRouteId === activeRoute.route.id) {
+                          deleteMutation.mutate(activeRoute.route.id);
+                        } else {
+                          setConfirmDeleteRouteId(activeRoute.route.id);
+                        }
+                      }}
+                    >
+                      {deleteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      {confirmDeleteRouteId === activeRoute.route.id ? '确认删除' : '删除'}
+                    </button>
                   </div>
                 </div>
 
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   {routeView === 'overview' ? (
                     <div className="p-4">
-                      <dl className="grid border-y border-outline md:grid-cols-2 xl:grid-cols-4 xl:divide-x xl:divide-outline">
+                      <dl className="grid border-y border-outline md:grid-cols-3 md:divide-x md:divide-outline">
                         <RuntimeFact label="发布状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
                         <RuntimeFact label="Agent 健康" value={`${onlineCount} / ${instances.length}`} tone={instances.length > 0 && onlineCount === instances.length ? 'primary' : undefined} />
-                        <RuntimeFact label="采集配置 hash" value={activeRoute.route.collectorConfigHash || activeRoute.source?.collectorConfigHash || '-'} tone="primary" />
                         <RuntimeFact label="最近发布时间" value={activeRoute.route.lastPublishedAt || '-'} />
                       </dl>
                       <button type="button" className="mt-4 text-xs font-semibold text-primary hover:underline" onClick={() => setRouteView('instances')}>查看 Agent 实例 →</button>
@@ -197,7 +223,6 @@ export function LogsAgentsPage() {
                                 <th>K8s 范围</th>
                                 <th>Pod / Node</th>
                                 <th>Remote Config</th>
-                                <th>Hash</th>
                                 <th>最后心跳</th>
                               </tr>
                             </thead>
@@ -225,7 +250,6 @@ export function LogsAgentsPage() {
                                     <div className="mt-1 text-[11px] text-muted">{item.nodeName || item.hostname || '-'} · {item.podIp || item.ip || '-'}</div>
                                   </td>
                                   <td>{item.remoteConfigStatus}</td>
-                                  <td className="font-mono text-xs">{item.effectiveConfigHash || item.lastConfigHash || '-'}</td>
                                   <td className="font-mono text-xs">{item.lastSeenAt || '-'}</td>
                                 </tr>
                               ))}
@@ -249,7 +273,7 @@ export function LogsAgentsPage() {
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
               <div className="min-w-0">
                 <div id="route-context-title" className="text-base font-semibold text-on-surface">路由详情</div>
-                <div className="mt-1 truncate font-mono text-[11px] text-muted">{shortHash(contextRoute.route.collectorConfigHash)} · {logSourceLabel(contextRoute.route.sourceType)}</div>
+                <div className="mt-1 truncate text-[11px] text-muted">{logSourceLabel(contextRoute.route.sourceType)} · {routeLifecycle(contextRoute).label}</div>
               </div>
               <button type="button" className="console-icon-button border-outline bg-white" aria-label="关闭路由详情" title="关闭" onClick={() => setContextRoute(null)}>
                 <XCircle className="h-4 w-4" />
@@ -264,9 +288,6 @@ export function LogsAgentsPage() {
               <LogsInfoCell label="采集域模式" value={contextGroup?.mode || '-'} />
               <LogsInfoCell label="采集域范围" value={contextGroup ? contextAgentScope : '-'} />
               <LogsInfoCell label="Agent Namespace" value={instances[0]?.agentNamespace || contextGroup?.namespace || '-'} />
-              <LogsInfoCell label="部署清单 hash" value={contextRoute.source?.deploymentManifestHash || '-'} />
-              <LogsInfoCell label="Audit" value={contextRoute.route.lastAuditId || '-'} />
-              <LogsInfoCell label="Preview" value={contextRoute.route.lastPreviewId || '-'} />
             </div>
             <div className="shrink-0 border-t border-outline bg-surface-lowest p-3">
               <div className="grid gap-2">
@@ -299,16 +320,10 @@ export function LogsAgentsPage() {
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
                   <div className="text-base font-semibold text-on-surface">完整 collector.yaml</div>
                   <span className="rounded border border-outline bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted">非 K8s 部署清单</span>
-                  <span className="rounded border border-primary/20 bg-primary-soft px-2 py-0.5 font-mono text-[11px] font-semibold text-primary">{shortHash(collectorConfigMutation.data?.collectorConfigHash || collectorConfigRoute.route.collectorConfigHash)}</span>
                 </div>
                 <div className="mt-1 break-all font-mono text-[11px] text-muted">
                   {routeScope(collectorConfigRoute)} · {logSourceLabel(collectorConfigRoute.route.sourceType)}
                 </div>
-                {collectorConfigMutation.data?.deploymentManifestHash ? (
-                  <div className="mt-1 break-all font-mono text-[11px] text-muted">
-                    部署清单 hash {shortHash(collectorConfigMutation.data.deploymentManifestHash)}
-                  </div>
-                ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button

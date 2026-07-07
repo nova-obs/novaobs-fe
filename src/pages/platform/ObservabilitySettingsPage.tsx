@@ -43,7 +43,7 @@ export function endpointOperationProfile(endpoint: Partial<LogEndpoint>, registe
   const sinkType = endpoint.sinkType || 'vl';
   const scopeType = endpoint.scopeType || 'global';
   const clusterId = endpoint.clusterId || '';
-  const runtimeCapable = sinkType === 'vl' && scopeType === 'k8s_cluster' && Boolean(clusterId);
+  const runtimeCapable = sinkType === 'vl' && Boolean(endpoint.queryURL);
 
   if (status === 'disabled') {
     blockers.push('端点已停用');
@@ -94,7 +94,7 @@ export function endpointOperationProfile(endpoint: Partial<LogEndpoint>, registe
 
   if (runtimeCapable) {
     score += 1;
-    strengths.push('K8s 作用域完整');
+    strengths.push('可作为 vmalert 数据源');
   } else if (endpoint.secretRef) {
     score += 1;
     strengths.push('凭据引用已配置');

@@ -5,11 +5,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
-import { logSinkLabel, logsApi, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogPublishResult, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload } from './api';
+import { logSinkLabel, logsApi, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogRouteInput, type LogRoutePreview, type LogRoutePublishResult, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload } from './api';
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
-import { LogsPublishPreviewPanel } from './LogsPublishPreviewPanel';
-import { LogsErrorLine, LogsTaskPageHeader, shortHash } from './LogsPrimitives';
+import { LogsErrorLine, LogsTaskPageHeader } from './LogsPrimitives';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
   { value: 'k8s', label: 'K8s' },
@@ -207,7 +206,7 @@ export function LogsOnboardingPage() {
   const [routeEditMode, setRouteEditMode] = useState(false);
   const [preview, setPreview] = useState<LogRoutePreview | null>(null);
   const [createdRoute, setCreatedRoute] = useState<LogRouteView | null>(null);
-  const [pendingPublish, setPendingPublish] = useState<LogPublishResult | null>(null);
+  const [pendingRoutePublish, setPendingRoutePublish] = useState<LogRoutePublishResult | null>(null);
   const routeUpdateMode = Boolean(onboardingRouteId);
 
   const services = workspace?.services ?? [];
@@ -268,7 +267,7 @@ export function LogsOnboardingPage() {
     }
     setPreview(null);
     setCreatedRoute(null);
-    setPendingPublish(null);
+    setPendingRoutePublish(null);
   }, [sourceType, serviceId, endpointId, clusterId, namespace, workloadKey, hostGroup, hostSelectorText, vmPath, collectorConfigYaml, parserMode, parserRuleName, parserPattern]);
 
   useEffect(() => {
@@ -316,6 +315,12 @@ export function LogsOnboardingPage() {
     enabled: sourceType !== 'vm_file' && Boolean(clusterId && namespace),
   });
   const workloads = workloadsQuery.data ?? [];
+  const observabilityRuntimesQuery = useQuery({
+    queryKey: ['observability-runtimes'],
+    queryFn: () => logsApi.listObservabilityRuntimes(),
+    enabled: sourceType !== 'vm_file',
+    retry: false,
+  });
 
   const filteredServices = useMemo(() => {
     const query = serviceQuery.trim().toLowerCase();
@@ -352,6 +357,34 @@ export function LogsOnboardingPage() {
   const selectedEndpoint = availableEndpoints.find((item) => item.id === endpointId) ?? null;
   const effectiveEndpoint = selectedEndpoint ?? (sourceType !== 'vm_file' ? availableEndpoints[0] ?? null : null);
   const selectedCluster = clusters.find((item) => item.id === clusterId) ?? null;
+  const logsCollectorRuntime = useMemo(() => {
+    if (sourceType === 'vm_file' || !clusterId) return null;
+    const runtimeNamespace = agentNamespace || 'novaobs-system';
+    return (observabilityRuntimesQuery.data ?? []).find((runtime) => (
+      runtime.kind === 'logs_collector'
+      && runtime.clusterId === clusterId
+      && (runtime.namespace || 'novaobs-system') === runtimeNamespace
+      && runtime.status === 'ready'
+    )) ?? null;
+  }, [agentNamespace, clusterId, observabilityRuntimesQuery.data, sourceType]);
+  const observabilityAccessURL = clusterId ? `/k8s/observability?cluster_id=${encodeURIComponent(clusterId)}` : '/k8s/observability';
+  const observabilityAccessError = observabilityRuntimesQuery.error instanceof Error
+    ? observabilityRuntimesQuery.error.message
+    : observabilityRuntimesQuery.error
+      ? '观测接入状态读取失败'
+      : '';
+  const observabilityAccessReady = sourceType === 'vm_file' || Boolean(logsCollectorRuntime);
+  const observabilityAccessBlockedReason = sourceType === 'vm_file'
+    ? ''
+    : !clusterId
+      ? '请先选择 K8s 集群'
+      : observabilityRuntimesQuery.isLoading
+        ? '正在确认集群观测接入状态'
+        : observabilityAccessError
+          ? `观测接入状态读取失败：${observabilityAccessError}`
+          : !logsCollectorRuntime
+            ? '目标集群尚未启用 logs_collector 观测接入，请先到 K8s / 观测接入完成部署。'
+            : '';
   const restoredWorkload = workloadFromRouteSource(restoredSource);
   const selectedWorkloadFromApi = workloads.find((item) => workloadIdentity(item) === workloadKey) ?? null;
   const selectedWorkload = selectedWorkloadFromApi ?? (routeUpdateMode ? restoredWorkload : null);
@@ -494,10 +527,13 @@ export function LogsOnboardingPage() {
   const publishMutation = useMutation({
     mutationFn: (confirmation?: { previewId?: string; confirmationToken?: string }) => {
       if (!createdRoute) throw new Error('请先保存路由');
+      if (createdRoute.route.sourceType === 'k8s_stdout') {
+        throw new Error('K8s 路由只保存业务采集片段，logs_collector 运行时请在 K8s / 观测接入统一预览和部署。');
+      }
       return logsApi.publishRoute(createdRoute.route.id, confirmation);
     },
     onSuccess: async (result) => {
-      setPendingPublish(result.requiresConfirmation ? result : null);
+      setPendingRoutePublish(result.requiresConfirmation ? result : null);
       await queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
     },
   });
@@ -652,7 +688,7 @@ export function LogsOnboardingPage() {
     setParserPattern(parserForm.pattern);
     setPreview(null);
     setCreatedRoute(route);
-    setPendingPublish(null);
+    setPendingRoutePublish(null);
     setServiceQuery('');
     setEndpointQuery('');
     if (source.sourceType === 'vm_file') {
@@ -686,6 +722,7 @@ export function LogsOnboardingPage() {
       ]
       : [
         { key: 'cluster', label: '选择 K8s 集群', done: Boolean(clusterId) },
+        { key: 'observability-access', label: '启用集群观测接入', done: observabilityAccessReady },
         { key: 'namespace', label: '选择 Namespace', done: Boolean(namespace) },
         { key: 'workload', label: '选择 Workload', done: Boolean(selectedWorkload) },
         { key: 'agent-namespace', label: '填写 Agent Namespace', done: Boolean(agentNamespace) },
@@ -711,16 +748,17 @@ export function LogsOnboardingPage() {
     namespace || restoredSource?.namespace || '',
     selectedWorkload?.name || restoredSource?.workloadName || '',
   );
-  const runtimeTargetReady = sourceType === 'vm_file'
+  const runtimeTargetBound = sourceType === 'vm_file'
     ? Boolean(serviceId && (hostGroup || hostSelectorText.trim()) && vmPath)
     : Boolean(serviceId && selectedWorkload);
+  const runtimeTargetReady = runtimeTargetBound && observabilityAccessReady;
   useEffect(() => {
     if (!serviceId) {
       setSetupTask('service');
     }
   }, [serviceId]);
   const endpointBlocked = !runtimeTargetReady;
-  const endpointDisabledReason = endpointBlocked ? '运行目标未绑定时禁用日志下游端点' : '';
+  const endpointDisabledReason = endpointBlocked ? observabilityAccessBlockedReason || '运行目标未绑定时禁用日志下游端点' : '';
   const targetStepReady = runtimeTargetReady && hasEndpointForSource;
   const targetDisabledReason = targetMissing.length ? `当前步骤还需：${formatMissing(targetMissing)}` : '';
   const previewDisabledReason = previewMissing.length ? `预览前还需：${formatMissing(previewMissing)}` : '';
@@ -751,16 +789,12 @@ export function LogsOnboardingPage() {
             : '';
   const activeTaskLabel = currentStep === 1
     ? setupTask === 'service' ? '选择服务' : setupTask === 'target' ? '绑定运行目标' : '选择下游端点'
-    : currentStep === 2 ? '业务采集配置' : '发布预览';
+    : currentStep === 2 ? '业务采集配置' : sourceType === 'vm_file' ? '发布预览' : '配置预览';
   const sourceModeLabel = sourceMode === 'k8s' ? 'K8s' : 'VM';
-  const summaryHashLabel = preview?.collectorConfigHash
-    || createdRoute?.route.collectorConfigHash
-    || selectedRoute?.route.collectorConfigHash
-    || '-';
   const summaryImpactLabel = sourceType === 'vm_file'
     ? hostGroup || hostSelectorText || 'VM target'
     : `${selectedCluster?.name || clusterId || '-'} / ${namespace || '-'} / ${selectedWorkload?.name || restoredSource?.workloadName || '-'}`;
-  const summaryAuditLabel = pendingPublish?.auditId || createdRoute?.route.lastAuditId || selectedRoute?.route.lastAuditId || '-';
+  const summaryAuditLabel = pendingRoutePublish?.auditId || createdRoute?.route.lastAuditId || selectedRoute?.route.lastAuditId || '-';
 
   const sourceModeSwitch = (
     <div className="logs-source-mode-switch inline-flex rounded-md border border-outline bg-surface-lowest p-0.5" aria-label="采集来源">
@@ -823,13 +857,13 @@ export function LogsOnboardingPage() {
           下一步：采集配置
         </button>
       ) : currentStep === 2 ? (
-        <button className="console-button console-button-primary h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成部署清单预览'}>
+        <button className="console-button console-button-primary h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || (sourceType === 'vm_file' ? '生成部署清单预览' : '生成路由配置预览')}>
           {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
           生成预览
         </button>
       ) : (
         <>
-          <button className="console-button h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '重新生成部署清单预览'}>
+          <button className="console-button h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || (sourceType === 'vm_file' ? '重新生成部署清单预览' : '重新生成路由配置预览')}>
             {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             重新预览
           </button>
@@ -837,15 +871,29 @@ export function LogsOnboardingPage() {
             {createRouteMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             {selectedRouteId ? '更新路由' : '保存草稿'}
           </button>
-          <button className="console-button console-button-primary h-9 w-full" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
-            {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-            发布预览
-          </button>
-          {pendingPublish ? (
-            <button className="console-button console-button-primary h-9 w-full" disabled={publishMutation.isPending} onClick={() => publishMutation.mutate({ previewId: pendingPublish.previewId, confirmationToken: pendingPublish.confirmationToken })}>
-              确认发布
-            </button>
-          ) : null}
+          {sourceType === 'vm_file' ? (
+            <>
+              <button className="console-button console-button-primary h-9 w-full" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
+                {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
+                发布预览
+              </button>
+              {pendingRoutePublish ? (
+                <button className="console-button console-button-primary h-9 w-full" disabled={publishMutation.isPending} onClick={() => publishMutation.mutate({ previewId: pendingRoutePublish.previewId, confirmationToken: pendingRoutePublish.confirmationToken })}>
+                  确认发布
+                </button>
+              ) : null}
+            </>
+          ) : (
+            <Link
+              className={`console-button console-button-primary h-9 w-full ${!createdRoute ? 'pointer-events-none opacity-60' : ''}`}
+              to={observabilityAccessURL}
+              aria-disabled={!createdRoute}
+              title={createdRoute ? '前往 K8s 观测接入预览并部署 logs_collector 运行时配置' : '先保存路由'}
+            >
+              <Play className="h-4 w-4" />
+              前往观测接入
+            </Link>
+          )}
         </>
       )}
     </>
@@ -857,7 +905,7 @@ export function LogsOnboardingPage() {
         <LogsTaskPageHeader
           title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
           description="按运行目标、采集配置、预览发布的顺序完成路由任务。"
-          meta={routeUpdateMode ? `route ${shortHash(onboardingRouteId)}` : 'new route'}
+          meta={routeUpdateMode ? '更新现有采集路由' : '新建采集路由'}
         />
         <DataPanel title="采集路由加载失败" meta="Logs">
           <ErrorInline message={(error as Error).message} onRetry={() => refetch()} />
@@ -870,8 +918,8 @@ export function LogsOnboardingPage() {
     <div className="logs-task-page flex h-full min-h-[720px] flex-col overflow-hidden">
       <LogsTaskPageHeader
         title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
-        description="选择目标、校验配置并发布。"
-        meta={routeUpdateMode ? `route ${shortHash(onboardingRouteId)}` : 'new route'}
+        description={sourceType === 'vm_file' ? '选择目标、校验配置并发布。' : '选择目标、校验配置并保存业务路由。'}
+        meta={routeUpdateMode ? '更新现有采集路由' : '新建采集路由'}
         context={sourceModeSwitch}
         action={(
           <>
@@ -967,6 +1015,24 @@ export function LogsOnboardingPage() {
                   </div>
                 ) : (
                   <div className="grid gap-3">
+                    {observabilityAccessBlockedReason ? (
+                      <div className="flex flex-col gap-2 rounded-lg border border-amber-500/30 bg-amber-50 px-3 py-2 text-sm text-amber-700 lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          <span>{observabilityAccessBlockedReason}</span>
+                        </div>
+                        <Link className="inline-flex h-8 shrink-0 items-center justify-center rounded-md border border-amber-500/30 bg-white px-3 text-xs font-semibold text-amber-700 hover:bg-amber-100" to={observabilityAccessURL}>
+                          前往观测接入
+                        </Link>
+                      </div>
+                    ) : logsCollectorRuntime ? (
+                      <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary lg:flex-row lg:items-center lg:justify-between">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <CheckCircle className="h-4 w-4 shrink-0" />
+                          <span>集群已启用 logs_collector 观测接入，路由会作为业务片段由运行时统一合并发布。</span>
+                        </div>
+                      </div>
+                    ) : null}
                     <aside className="logs-k8s-cluster-picker rounded-lg border border-primary/20 bg-primary-soft/30 p-3 shadow-[0_10px_28px_rgba(13,91,215,0.08)]">
                       <div className="mb-3 flex items-start justify-between gap-2">
                         <div>
@@ -1280,12 +1346,12 @@ export function LogsOnboardingPage() {
           <RouteTaskCard
             className="logs-route-preview-card"
             index={5}
-            title="发布预览"
-            summary={preview ? `config ${shortHash(preview.collectorConfigHash)}` : '等待预览'}
+            title={sourceType === 'vm_file' ? '发布预览' : '配置预览'}
+            summary={preview ? '已预览' : '等待预览'}
             active={currentStep === 3}
             done={Boolean(createdRoute)}
             disabled={!preview}
-            disabledReason="先生成部署清单预览"
+            disabledReason={sourceType === 'vm_file' ? '先生成部署清单预览' : '先生成路由配置预览'}
             onSelect={() => {
               if (!preview) return;
               setCurrentStep(3);
@@ -1314,15 +1380,14 @@ export function LogsOnboardingPage() {
           <MutationErrors errors={[previewMutation.error, createRouteMutation.error, publishMutation.error]} />
           {preview?.publishBlocked ? <WarnLine message={preview.publishBlockedReason} /> : null}
           {preview?.warnings.map((item) => <WarnLine key={item} message={item} />)}
-          {publishMutation.data && !pendingPublish ? <SuccessLine message={publishMutation.data.message || publishMutation.data.status} /> : null}
-          {pendingPublish ? <LogsPublishPreviewPanel preview={pendingPublish} /> : null}
+          {publishMutation.data && !pendingRoutePublish ? <SuccessLine message={publishMutation.data.message || publishMutation.data.status} /> : null}
           {preview ? (
             <div className="logs-route-preview-code-grid mt-3 grid gap-3 2xl:grid-cols-2">
               <RoutePreviewCodePanel
-                title="部署清单预览"
-                meta={`采集配置 hash ${preview.collectorConfigHash}`}
-                content={preview.agentYAML}
-                emptyLabel="部署清单预览为空"
+                title={sourceType === 'vm_file' ? '部署清单预览' : '业务 Route 片段'}
+                meta={sourceType === 'vm_file' ? 'VM 采集器部署清单' : '由 K8s 观测接入统一合并发布'}
+                content={sourceType === 'vm_file' ? preview.agentYAML : preview.source.collectorFragmentYAML || collectorConfigYaml}
+                emptyLabel={sourceType === 'vm_file' ? '部署清单预览为空' : '业务 Route 片段为空'}
                 copyTitle="复制 YAML"
               />
               <RoutePreviewCodePanel
@@ -1348,7 +1413,6 @@ export function LogsOnboardingPage() {
           scopeLabel={selectedScopeLabel}
           endpointLabel={selectedEndpointLabel}
           configLabel={collectorConfigState}
-          configHashLabel={summaryHashLabel}
           impactLabel={summaryImpactLabel}
           auditLabel={summaryAuditLabel}
           actionHint={actionHint}
@@ -1700,7 +1764,6 @@ function RouteTaskSummaryCard({
   scopeLabel,
   endpointLabel,
   configLabel,
-  configHashLabel,
   impactLabel,
   auditLabel,
   actionHint,
@@ -1713,7 +1776,6 @@ function RouteTaskSummaryCard({
   scopeLabel: string;
   endpointLabel: string;
   configLabel: string;
-  configHashLabel: string;
   impactLabel: string;
   auditLabel: string;
   actionHint: string;
@@ -1738,7 +1800,6 @@ function RouteTaskSummaryCard({
           <SummaryValue label="配置状态" value={configLabel} />
         </SummaryGroup>
         <SummaryGroup title="发布线索">
-          <SummaryValue label="配置 hash" value={configHashLabel} />
           <SummaryValue label="影响范围" value={impactLabel} />
           <SummaryValue label="审计" value={auditLabel} />
         </SummaryGroup>
