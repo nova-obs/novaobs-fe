@@ -27,8 +27,8 @@ test('Metrics 使用服务嵌套路由并收敛到具体租户', () => {
 
   assert.equal(metrics?.children?.[0].index, true);
 	assert.equal(metrics?.children?.[0].element?.type?.name, 'ServiceMetricsIndexRedirect');
-  assert.deepEqual(metrics?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'alerts/new', 'alerts/:id', 'alerts', 'dashboards', 'collection', 'overview', 'endpoints']);
-	assert.deepEqual(metricsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'alerts', 'dashboards', 'collection', 'overview', 'endpoints']);
+  assert.deepEqual(metrics?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'alerts/new', 'alerts/:id', 'alerts', 'dashboards', 'routes/new', 'routes/:id/edit', 'routes', 'overview', 'endpoints']);
+	assert.deepEqual(metricsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'alerts', 'dashboards', 'routes', 'overview', 'endpoints']);
   assert.equal(monitoring, undefined);
 });
 
@@ -76,12 +76,14 @@ test('路由标题可按路径查找', () => {
 	assert.equal(getRouteTitle('/metrics/explore'), '指标查询');
 	assert.equal(getRouteTitle('/metrics/alerts'), '指标告警');
 	assert.equal(getRouteTitle('/metrics/dashboards'), 'Dashboard');
-	assert.equal(getRouteTitle('/metrics/collection'), '采集接入');
+	assert.equal(getRouteTitle('/metrics/routes'), '采集路由');
 	assert.equal(getRouteTitle('/metrics/overview'), '监控总览');
 	assert.equal(getRouteTitle('/metrics/endpoints'), '接入端点');
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/explore'), '指标查询');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/overview'), '监控总览');
-  assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/collection'), '采集接入');
+  assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/routes'), '采集路由');
+  assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/routes/new'), '创建指标采集路由');
+  assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/routes/route-1/edit'), '更新指标采集路由');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/dashboards'), 'Dashboard');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/alerts'), '指标告警');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/endpoints'), '接入端点');

@@ -26,13 +26,6 @@ export function MetricsOverviewPage() {
     retry: false,
     refetchInterval: 30_000,
   });
-  const bindingsQuery = useQuery({
-	queryKey: ['metrics-service-bindings', productId, serviceId],
-	queryFn: () => metricsApi.listServiceBindings(productId, serviceId),
-	enabled: Boolean(productId && serviceId),
-    retry: false,
-    refetchInterval: 30_000,
-  });
   const alertsQuery = useQuery({
     queryKey: ['metrics-alert-rules'],
     queryFn: () => api.getMetricsAlertRules(),
@@ -41,21 +34,21 @@ export function MetricsOverviewPage() {
   });
 
   const endpoints = workspaceQuery.data?.endpoints ?? [];
-  const services = workspaceQuery.data?.services ?? [];
-  const bindings = bindingsQuery.data ?? [];
+  const routes = workspaceQuery.data?.routes ?? [];
   const alertRules = alertsQuery.data ?? [];
 
-  const isLoading = workspaceQuery.isLoading || bindingsQuery.isLoading || alertsQuery.isLoading;
-  const error = workspaceQuery.error || bindingsQuery.error || alertsQuery.error;
+  const isLoading = workspaceQuery.isLoading || alertsQuery.isLoading;
+  const error = workspaceQuery.error || alertsQuery.error;
 
-  const activeBindings = bindings.filter((b) => b.status === 'active');
-  const failedBindings = bindings.filter((b) => b.status === 'failed' || b.lastProbeStatus === 'failed');
+  const activeRoutes = routes.filter((route) => route.status === 'active');
+  const deployedRoutes = activeRoutes.filter((route) => route.lastPublishStatus === 'applied' && route.desiredConfigHash === route.appliedConfigHash);
+  const failedRoutes = routes.filter((route) => route.lastPublishStatus === 'failed');
+  const pendingRoutes = activeRoutes.filter((route) => route.lastPublishStatus !== 'failed' && !(route.lastPublishStatus === 'applied' && route.desiredConfigHash === route.appliedConfigHash));
   const enabledAlerts = alertRules.filter((r) => r.state === 'enabled');
   const failedAlerts = alertRules.filter((r) => r.applyStatus === 'failed');
 
   function refetchAll() {
     void workspaceQuery.refetch();
-    void bindingsQuery.refetch();
     void alertsQuery.refetch();
   }
 
@@ -65,7 +58,7 @@ export function MetricsOverviewPage() {
         <div className="console-panel-header">
           <div className="min-w-0">
             <h2 className="console-section-title">监控总览</h2>
-            <p className="console-section-meta">service metrics overview · 30s 自动刷新</p>
+            <p className="console-section-meta">服务指标状态 · 30s 自动刷新</p>
           </div>
           <button type="button" className="console-icon-button border-outline bg-white" aria-label="刷新监控总览" title="刷新监控总览" onClick={refetchAll}>
             <RefreshCw className="h-3.5 w-3.5" />
@@ -79,6 +72,8 @@ export function MetricsOverviewPage() {
               <div className="console-skeleton h-40" />
               <div className="console-skeleton h-40" />
             </div>
+          ) : error ? (
+            <div className="console-empty-state min-h-[320px]"><div className="text-sm font-semibold text-danger">监控总览加载失败</div><div className="text-xs text-muted">请检查指标与告警读取权限后重试。</div></div>
           ) : (
             <div className="grid gap-3 md:grid-cols-3">
               <OverviewCard
@@ -108,26 +103,30 @@ export function MetricsOverviewPage() {
 
               <OverviewCard
                 icon={RadioTower}
-                title="采集绑定"
-				link={`${base}/collection`}
-                linkLabel="查看采集"
+                title="采集路由"
+				link={`${base}/routes`}
+                linkLabel="查看路由"
               >
                 <div className="grid grid-cols-2 gap-2">
-                  <Stat label="总绑定" value={bindings.length} />
-                  <Stat label="活跃" value={activeBindings.length} tone="success" />
-                  <Stat label="服务" value={services.length} />
-                  <Stat label="异常" value={failedBindings.length} tone={failedBindings.length > 0 ? 'danger' : undefined} />
+                  <Stat label="总路由" value={routes.length} />
+                  <Stat label="已部署" value={deployedRoutes.length} tone="success" />
+                  <Stat label="待发布" value={pendingRoutes.length} />
+                  <Stat label="失败" value={failedRoutes.length} tone={failedRoutes.length > 0 ? 'danger' : undefined} />
                 </div>
-                {failedBindings.length > 0 ? (
+                {failedRoutes.length > 0 ? (
                   <div className="mt-3 rounded border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700">
-                    {failedBindings.length} 个绑定探测失败，请检查端点连通性。
+                    {failedRoutes.length} 条路由部署失败，请进入观测接入检查。
                   </div>
-                ) : bindings.length > 0 ? (
+                ) : pendingRoutes.length > 0 ? (
+                  <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-700">
+                    {pendingRoutes.length} 条路由等待预览或重新部署。
+                  </div>
+                ) : routes.length > 0 ? (
                   <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs text-emerald-700">
-                    所有绑定探测正常。
+                    所有启用路由均已部署且配置一致。
                   </div>
                 ) : (
-				  <div className="mt-3 text-xs text-muted">暂无绑定。<Link className="font-semibold text-primary" to={`${base}/collection`}>创建绑定</Link></div>
+				  <div className="mt-3 text-xs text-muted">暂无采集路由。<Link className="font-semibold text-primary" to={`${base}/routes/new`}>新建路由</Link></div>
                 )}
               </OverviewCard>
 

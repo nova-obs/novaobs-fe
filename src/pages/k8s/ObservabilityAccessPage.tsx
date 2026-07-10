@@ -1,12 +1,13 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileCode2, Loader2, RefreshCw, Rocket, Server, ServerCog } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
 import { LogsPublishPreviewPanel } from '../logs/LogsPublishPreviewPanel';
 import { defaultLogsCollectorNamespace, logsApi, normalizeLogsCollectorNamespace, type LogRouteView, type LogsCollectorRuntimePublishResult, type LogsCollectorRuntimeResourceStatus, type LogsCollectorRuntimeStatus, type LogsServiceSummary } from '../logs/api';
+import { metricsApi, type MetricRoute, type MetricsCollectorRuntimePublishResult, type MetricsCollectorRuntimeResourceStatus } from '../metrics/api';
 import { useK8sOpsContext } from './context';
 
 type PublishTaskType = 'base' | 'incremental';
@@ -17,7 +18,42 @@ interface RuntimeRow {
   namespace: string;
 }
 
+interface MetricsPublishContext {
+  routeId: string;
+  clusterId: string;
+  namespace: string;
+  previewId?: string;
+  confirmationToken?: string;
+}
+
+function metricsPublishContextKey(input: Pick<MetricsPublishContext, 'routeId' | 'clusterId' | 'namespace'>) {
+  return `${input.clusterId}\u0000${input.namespace}\u0000${input.routeId}`;
+}
+
 export function K8sObservabilityAccessPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const runtime = searchParams.get('runtime') === 'metrics' ? 'metrics' : 'logs';
+
+  function switchRuntime(nextRuntime: 'logs' | 'metrics') {
+    const next = new URLSearchParams(searchParams);
+    next.set('runtime', nextRuntime);
+    next.delete('route_id');
+    next.delete('task');
+    setSearchParams(next);
+  }
+
+  return (
+    <div className="space-y-3">
+      <div className="inline-flex rounded-md border border-outline bg-white p-1" aria-label="选择观测接入运行时">
+        <button type="button" className={`console-button h-8 border-0 text-xs ${runtime === 'logs' ? 'bg-primary text-white hover:bg-primary' : ''}`} onClick={() => switchRuntime('logs')}>日志采集运行时</button>
+        <button type="button" className={`console-button h-8 border-0 text-xs ${runtime === 'metrics' ? 'bg-primary text-white hover:bg-primary' : ''}`} onClick={() => switchRuntime('metrics')}>指标采集运行时</button>
+      </div>
+      {runtime === 'metrics' ? <MetricsCollectorAccessPanel /> : <LogsCollectorAccessPanel />}
+    </div>
+  );
+}
+
+function LogsCollectorAccessPanel() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeClusterId, activeCluster, clusters, isLoadingClusters, clusterError } = useK8sOpsContext();
@@ -383,6 +419,206 @@ export function K8sObservabilityAccessPage() {
         </div>
       </DataPanel>
     </div>
+  );
+}
+
+function MetricsCollectorAccessPanel() {
+  const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const { activeClusterId, activeCluster, clusters, isLoadingClusters, clusterError } = useK8sOpsContext();
+  const requestedClusterId = activeClusterId || searchParams.get('cluster_id') || '';
+  const requestedRouteId = searchParams.get('route_id') || '';
+  const [selectedClusterId, setSelectedClusterId] = useState(requestedClusterId);
+  const [selectedRouteId, setSelectedRouteId] = useState(requestedRouteId);
+  const namespace = 'novaapm-system';
+  const [pendingPublish, setPendingPublish] = useState<MetricsCollectorRuntimePublishResult | null>(null);
+  const [pendingContext, setPendingContext] = useState<MetricsPublishContext | null>(null);
+  const [lastResult, setLastResult] = useState<MetricsCollectorRuntimePublishResult | null>(null);
+  const effectiveClusterId = activeClusterId || selectedClusterId;
+  const selectedCluster = activeClusterId ? activeCluster : clusters.find((cluster) => cluster.id === effectiveClusterId);
+  const clusterReadOnly = Boolean(selectedCluster?.readOnly);
+
+  const routesQuery = useQuery({
+    queryKey: ['metrics-routes-by-cluster', effectiveClusterId],
+    queryFn: () => metricsApi.listRoutesByCluster(effectiveClusterId),
+    enabled: Boolean(effectiveClusterId && selectedCluster),
+    retry: false,
+  });
+  const routes = routesQuery.data ?? [];
+  const selectedRoute = routes.find((route) => route.id === selectedRouteId) ?? routes[0] ?? null;
+  const runtimeRoutes = selectedRoute ? routes.filter((route) => route.runtimeId === selectedRoute.runtimeId) : [];
+  const currentContextKey = metricsPublishContextKey({ routeId: selectedRoute?.id || '', clusterId: effectiveClusterId, namespace });
+  const currentContextRef = useRef(currentContextKey);
+  currentContextRef.current = currentContextKey;
+
+  useEffect(() => {
+    if (requestedClusterId && requestedClusterId !== selectedClusterId) setSelectedClusterId(requestedClusterId);
+  }, [requestedClusterId, selectedClusterId]);
+
+  useEffect(() => {
+    if (requestedRouteId && requestedRouteId !== selectedRouteId) setSelectedRouteId(requestedRouteId);
+  }, [requestedRouteId, selectedRouteId]);
+
+  useEffect(() => {
+    if (!selectedClusterId && clusters.length) setSelectedClusterId(clusters[0].id);
+  }, [clusters, selectedClusterId]);
+
+  useEffect(() => {
+    if (!selectedRouteId && routes[0]) setSelectedRouteId(routes[0].id);
+  }, [routes, selectedRouteId]);
+
+  useEffect(() => {
+    setPendingPublish(null);
+    setPendingContext(null);
+    setLastResult(null);
+  }, [effectiveClusterId, selectedRouteId, namespace]);
+
+  const runtimeStatusQuery = useQuery({
+    queryKey: ['metrics-collector-runtime-status', selectedRoute?.id, namespace],
+    queryFn: () => metricsApi.getCollectorRuntimeStatus({ routeId: selectedRoute!.id, namespace }),
+    enabled: Boolean(selectedRoute?.id && namespace.trim()), retry: false,
+  });
+  const publishMutation = useMutation({
+    mutationFn: (input: MetricsPublishContext) => metricsApi.publishCollectorRuntime({
+      routeId: input.routeId,
+      namespace: input.namespace,
+      previewId: input.previewId,
+      confirmationToken: input.confirmationToken,
+    }),
+    onSuccess: async (result, input) => {
+      if (metricsPublishContextKey(input) !== currentContextRef.current) return;
+      setLastResult(result);
+      setPendingPublish(result.requiresConfirmation ? result : null);
+      setPendingContext(result.requiresConfirmation ? input : null);
+      await queryClient.invalidateQueries({ queryKey: ['metrics-collector-runtime-status', input.routeId, input.namespace] });
+      await queryClient.invalidateQueries({ queryKey: ['metrics-routes-by-cluster', input.clusterId] });
+      await queryClient.invalidateQueries({ queryKey: ['k8s-deployment-history', input.clusterId] });
+      await queryClient.invalidateQueries({ queryKey: ['k8s-audit-events', input.clusterId] });
+    },
+  });
+
+  const blocker = isLoadingClusters && !effectiveClusterId
+    ? '正在加载已登记集群'
+    : !effectiveClusterId
+      ? '请先选择已登记集群'
+      : !selectedCluster
+        ? '目标集群未登记'
+        : clusterReadOnly
+          ? '当前集群为只读接入，不能部署指标采集运行时'
+          : !selectedRoute
+            ? '当前集群暂无指标采集路由'
+            : '';
+  const runtimeStatus = runtimeStatusQuery.data;
+  const canPublish = !blocker && !pendingPublish?.requiresConfirmation && !publishMutation.isPending;
+
+  function updateSearch(nextClusterId: string, nextRouteId = '') {
+    const next = new URLSearchParams(searchParams);
+    next.set('runtime', 'metrics');
+    if (nextClusterId) next.set('cluster_id', nextClusterId); else next.delete('cluster_id');
+    if (nextRouteId) next.set('route_id', nextRouteId); else next.delete('route_id');
+    next.set('namespace', namespace);
+    setSearchParams(next);
+  }
+
+  function previewRuntime() {
+    if (!selectedRoute) return;
+    setPendingPublish(null);
+    setPendingContext(null);
+    publishMutation.mutate({ routeId: selectedRoute.id, clusterId: effectiveClusterId, namespace });
+  }
+
+  function applyRuntime() {
+    if (!pendingPublish?.previewId || !pendingPublish.confirmationToken || !pendingContext) return;
+    publishMutation.mutate({ ...pendingContext, previewId: pendingPublish.previewId, confirmationToken: pendingPublish.confirmationToken });
+  }
+
+  return (
+    <DataPanel
+      title="指标采集运行时"
+      meta={effectiveClusterId ? `cluster/${selectedCluster?.name || effectiveClusterId} · vmagent Deployment` : '请选择目标集群'}
+      action={(
+        <div className="flex flex-wrap items-center gap-2">
+          {!activeClusterId ? (
+            <select className="console-input h-9 min-w-48 text-sm" value={effectiveClusterId} disabled={publishMutation.isPending} onChange={(event) => { setSelectedClusterId(event.target.value); setSelectedRouteId(''); updateSearch(event.target.value); }} aria-label="选择指标采集集群">
+              <option value="">选择集群</option>
+              {clusters.map((cluster) => <option key={cluster.id} value={cluster.id}>{cluster.name || cluster.id}</option>)}
+            </select>
+          ) : null}
+          <button className="console-button" type="button" disabled={!selectedRoute || runtimeStatusQuery.isFetching} onClick={() => void runtimeStatusQuery.refetch()}><RefreshCw className={`h-3.5 w-3.5 ${runtimeStatusQuery.isFetching ? 'animate-spin' : ''}`} />刷新</button>
+        </div>
+      )}
+    >
+      <div className="space-y-4">
+        {clusterError ? <InlineNotice tone="danger" message={clusterError.message} /> : null}
+        {blocker ? <InlineNotice tone={clusterReadOnly ? 'warning' : 'danger'} message={blocker} /> : null}
+        {routesQuery.error ? <InlineNotice tone="danger" message={(routesQuery.error as Error).message} /> : null}
+        {runtimeStatusQuery.error ? <InlineNotice tone="danger" message={(runtimeStatusQuery.error as Error).message} /> : null}
+        {publishMutation.error ? <InlineNotice tone="danger" message={(publishMutation.error as Error).message} /> : null}
+        {lastResult && !lastResult.requiresConfirmation ? <InlineNotice tone="success" message={lastResult.message || 'vmagent 运行时已部署'} /> : null}
+
+        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+          <div className="overflow-hidden rounded-md border border-outline bg-surface-lowest">
+            <div className="border-b border-outline px-3 py-2 text-xs font-semibold text-on-surface">运行时采集路由</div>
+            {routesQuery.error ? <div className="console-empty-state min-h-[220px]"><div className="text-sm font-semibold text-danger">采集路由加载失败</div><div className="text-xs text-muted">请检查路由读取权限或网络后重试。</div></div> : routes.length ? (
+              <div className="divide-y divide-outline">
+                {routes.map((route) => <MetricRouteRuntimeRow key={route.id} route={route} active={route.id === selectedRoute?.id} disabled={publishMutation.isPending} onSelect={() => { setSelectedRouteId(route.id); updateSearch(effectiveClusterId, route.id); }} />)}
+              </div>
+            ) : <div className="console-empty-state min-h-[220px]"><Server className="h-5 w-5 text-muted" /><div className="text-sm font-semibold">暂无采集路由</div><div className="text-xs text-muted">请先在服务的监控模块中创建 K8s Service 采集路由。</div></div>}
+          </div>
+          <div className="rounded-md border border-outline bg-surface-lowest p-3">
+            <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-on-surface"><ServerCog className="h-4 w-4 text-primary" />vmagent Deployment</div>
+            <label className="block text-xs font-semibold text-muted">运行时 Namespace<input className="console-input mt-1 h-9 w-full font-mono text-sm" value={namespace} readOnly /></label>
+            <div className="mt-3 space-y-2 text-xs text-muted">
+              <RuntimeFact label="运行时 ID" value={runtimeStatus?.runtimeId || selectedRoute?.runtimeId || '-'} />
+              <RuntimeFact label="部署方式" value="Deployment / 1 replica" />
+              <RuntimeFact label="配置路由" value={`${runtimeRoutes.length || (selectedRoute ? 1 : 0)} 条`} />
+              <RuntimeFact label="状态" value={runtimeStatus?.status || 'pending_publish'} />
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-md border border-outline bg-surface-lowest p-3">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div><div className="text-sm font-semibold text-on-surface">预览并部署指标采集运行时</div><p className="mt-1 text-xs leading-5 text-muted">一次发布会重建同一集群、产品与 VictoriaMetrics 端点下的完整 vmagent 配置，避免重复采集和跨租户写入。</p></div>
+            <button className="console-button console-button-primary" type="button" disabled={!canPublish} onClick={previewRuntime}>{publishMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Rocket className="h-3.5 w-3.5" />}预览部署</button>
+          </div>
+          <div className="mt-3 overflow-auto rounded border border-outline"><MetricsRuntimeResourceTable resources={runtimeStatus?.resources ?? []} /></div>
+        </div>
+
+        {pendingPublish ? (
+          <div className="space-y-3 rounded-md border border-primary/30 bg-surface-lowest p-3">
+            <div className="flex items-center justify-between gap-2"><div><div className="text-sm font-semibold text-on-surface">部署预览</div><div className="mt-1 font-mono text-[11px] text-muted">config_hash={pendingPublish.configHash}</div></div><span className="status-badge border-warning/25 bg-amber-50 text-warning"><span className="status-dot" />待确认</span></div>
+            {pendingPublish.warnings.map((warning) => <InlineNotice key={warning} tone="warning" message={warning} />)}
+            <details className="rounded border border-outline bg-white"><summary className="cursor-pointer px-3 py-2 text-xs font-semibold">查看 vmagent scrape 配置</summary><pre className="max-h-[360px] overflow-auto border-t border-outline bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">{pendingPublish.configYAML}</pre></details>
+            <details className="rounded border border-outline bg-white"><summary className="cursor-pointer px-3 py-2 text-xs font-semibold">查看 Kubernetes Manifest</summary><pre className="max-h-[420px] overflow-auto border-t border-outline bg-slate-950 p-3 text-[11px] leading-5 text-slate-100">{pendingPublish.manifestYAML}</pre></details>
+            <div className="flex items-center justify-end"><button className="console-button console-button-primary" type="button" disabled={publishMutation.isPending || !pendingPublish.confirmationToken} onClick={applyRuntime}><CheckCircle2 className="h-3.5 w-3.5" />确认部署</button></div>
+          </div>
+        ) : null}
+      </div>
+    </DataPanel>
+  );
+}
+
+function MetricRouteRuntimeRow({ route, active, disabled, onSelect }: { route: MetricRoute; active: boolean; disabled: boolean; onSelect: () => void }) {
+  const editURL = route.service?.productId && route.serviceId
+    ? `/products/${encodeURIComponent(route.service.productId)}/services/${encodeURIComponent(route.serviceId)}/metrics/routes/${encodeURIComponent(route.id)}/edit`
+    : '';
+  return (
+    <div className={`flex items-center gap-3 px-3 py-2.5 ${active ? 'bg-primary-soft/50' : 'bg-white'}`}>
+      <button type="button" className="min-w-0 flex-1 text-left" disabled={disabled} onClick={onSelect}>
+        <div className="truncate text-sm font-semibold text-on-surface">{route.name}</div>
+        <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{route.namespace}/{route.k8sServiceName}:{route.port}{route.metricsPath}</div>
+      </button>
+      <StatusBadge value={route.lastPublishStatus || 'pending_publish'} />
+      {editURL ? <Link className="console-button text-xs" to={editURL}>编辑</Link> : null}
+    </div>
+  );
+}
+
+function MetricsRuntimeResourceTable({ resources }: { resources: MetricsCollectorRuntimeResourceStatus[] }) {
+  if (!resources.length) return <div className="px-3 py-6 text-center text-xs text-muted">部署后显示 Namespace、RBAC、ConfigMap、Service 与 Deployment 状态</div>;
+  return (
+    <table className="console-table w-full min-w-[680px]"><thead><tr><th>资源</th><th>状态</th><th>Namespace</th><th>API</th></tr></thead><tbody>{resources.map((item) => <tr key={`${item.apiVersion}/${item.kind}/${item.namespace}/${item.name}`}><td className="font-mono text-xs font-semibold">{item.kind}/{item.name}</td><td><StatusBadge value={item.exists && item.healthy ? 'ready' : item.exists ? 'degraded' : 'missing_resources'} /></td><td className="font-mono text-xs text-muted">{item.namespace || 'cluster'}</td><td className="font-mono text-xs text-muted">{item.apiVersion}</td></tr>)}</tbody></table>
   );
 }
 

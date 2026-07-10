@@ -186,7 +186,7 @@ export function MetricsAlertRuleDrawer({ productId, routeServiceId, ruleId = '',
                   {serviceOptions.length === 0 ? <option value="">暂无可用绑定</option> : null}
                   {serviceOptions.map((o) => <option key={o.service.id} value={o.service.id}>{o.service.displayName || o.service.name || o.service.id}</option>)}
                 </select>
-                {serviceOptions.length === 0 ? <span className="mt-1 block text-[11px] text-amber-700">没有服务绑定了指标端点。请先在采集接入页创建绑定。</span> : null}
+                {serviceOptions.length === 0 ? <span className="mt-1 block text-[11px] text-amber-700">没有服务建立受验证的指标查询绑定，暂不能创建告警。</span> : null}
               </Field>
             </div>
             {selectedBinding ? (

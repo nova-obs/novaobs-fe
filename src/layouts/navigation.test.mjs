@@ -26,7 +26,7 @@ test('超级菜单按业务域组织现有叶子入口且路径唯一', () => {
 	'/metrics/explore',
 	'/metrics/alerts',
 	'/metrics/dashboards',
-	'/metrics/collection',
+	'/metrics/routes',
 	'/metrics/overview',
 	'/metrics/endpoints',
     '/traces',
@@ -50,8 +50,8 @@ test('可观测性导航以四大模块为一级，Logs 恢复常用子功能入
 	assert.deepEqual(logs?.children?.map((item) => item.label), ['日志分析', '采集路由', '日志告警', '接入配置']);
 	assert.deepEqual(logs?.children?.map((item) => item.path), ['/logs/explore', '/logs/agents', '/logs/alerts', '/logs/endpoints']);
   assert.equal(metrics?.path, '/metrics');
-	assert.deepEqual(metrics?.children?.map((item) => item.label), ['指标查询', '指标告警', 'Dashboard', '采集接入', '监控总览', '接入端点']);
-	assert.deepEqual(metrics?.children?.map((item) => item.path), ['/metrics/explore', '/metrics/alerts', '/metrics/dashboards', '/metrics/collection', '/metrics/overview', '/metrics/endpoints']);
+	assert.deepEqual(metrics?.children?.map((item) => item.label), ['指标查询', '指标告警', 'Dashboard', '采集路由', '监控总览', '接入端点']);
+	assert.deepEqual(metrics?.children?.map((item) => item.path), ['/metrics/explore', '/metrics/alerts', '/metrics/dashboards', '/metrics/routes', '/metrics/overview', '/metrics/endpoints']);
 });
 
 test('K8s 运维导航按默认父模块卡片承载集群入口', () => {
@@ -77,11 +77,11 @@ test('根据路径解析当前导航项', () => {
 	assert.equal(getNavigationByPath('/observability/endpoints')?.id, 'logs-endpoints');
   assert.equal(getNavigationByPath('/metrics')?.id, 'metrics');
 	assert.equal(getNavigationByPath('/metrics/explore')?.id, 'metrics-explore');
-	assert.equal(getNavigationByPath('/metrics/collection')?.id, 'metrics-collection');
+	assert.equal(getNavigationByPath('/metrics/routes')?.id, 'metrics-routes');
 	assert.equal(getNavigationByPath('/metrics/alerts')?.id, 'metrics-alerts');
 	assert.equal(getNavigationByPath('/metrics/endpoints')?.id, 'metrics-endpoints');
 	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/metrics/explore')?.id, 'metrics-explore');
-	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/metrics/collection')?.id, 'metrics-collection');
+	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/metrics/routes/route-1/edit')?.id, 'metrics-routes');
 	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/metrics/alerts')?.id, 'metrics-alerts');
 	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/metrics/endpoints')?.id, 'metrics-endpoints');
   assert.equal(getNavigationByPath('/monitoring'), undefined);

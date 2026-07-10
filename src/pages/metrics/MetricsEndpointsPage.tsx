@@ -31,7 +31,7 @@ export function MetricsEndpointsPage() {
         <div className="console-panel-header">
           <div className="min-w-0">
             <h2 className="console-section-title">接入端点</h2>
-            <p className="console-section-meta">victoriametrics endpoints · 共 {endpoints.length} 个</p>
+            <p className="console-section-meta">VictoriaMetrics 指标端点</p>
           </div>
           <button type="button" className="console-icon-button border-outline bg-white" aria-label="刷新指标端点" title="刷新指标端点" onClick={() => void refetch()}>
             <RefreshCw className="h-3.5 w-3.5" />
@@ -57,6 +57,8 @@ export function MetricsEndpointsPage() {
                   <tr>
                     <td colSpan={7}><div className="console-skeleton h-10" /></td>
                   </tr>
+                ) : error ? (
+                  <tr><td colSpan={7}><div className="console-empty-state my-2 min-h-[220px]"><div className="text-sm font-semibold text-danger">指标端点加载失败</div><div className="text-xs text-muted">请检查权限或网络后重试。</div></div></td></tr>
                 ) : endpoints.length === 0 ? (
                   <tr>
                     <td colSpan={7}>
@@ -64,7 +66,7 @@ export function MetricsEndpointsPage() {
                         <Database className="h-5 w-5 text-muted/80" />
                         <div className="text-sm font-semibold text-on-surface">暂无指标接入端点</div>
                         <div className="max-w-md text-xs leading-5 text-muted">当前目录只展示支持 metrics 的统一观测端点；端点维护仍由后端统一接入配置收口。</div>
-						<Link className="console-button" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/collection`}>查看采集接入</Link>
+						<Link className="console-button" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/routes`}>查看采集路由</Link>
                       </div>
                     </td>
                   </tr>

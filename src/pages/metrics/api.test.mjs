@@ -207,3 +207,76 @@ test('Metrics 端点与服务绑定列表使用独立资源接口', async () => 
 	assert.equal(bindings.request.path, '/api/v1/products/product-001/services/svc-001/metrics/bindings');
   assert.equal(bindings.result[0].serviceId, 'svc-001');
 });
+
+test('Metrics 工作台映射托管采集路由', async () => {
+  const { result } = await captureRequest(
+    () => metricsApi.getWorkspace('product-001', 'svc-001'),
+    {
+      services: [{ id: 'svc-001', product_id: 'product-001', account_id: '0', project_id: '9528', name: 'orders-api' }],
+      endpoints: [{ id: 'vm-prod', kind: 'victoriametrics', urls: { ui_url: 'http://vmselect/select/0:9528/vmui/' } }],
+      routes: [{
+        route: {
+          id: 'route-001', service_id: 'svc-001', endpoint_id: 'vm-prod', source_kind: 'k8s_service',
+          cluster_id: 'prod-1', namespace: 'orders', k8s_service_name: 'orders-api', port: 'metrics',
+          scheme: 'http', metrics_path: '/metrics', scrape_interval: '30s', scrape_timeout: '10s',
+          base_promql: '{service_name="orders-api"}', status: 'active', last_publish_status: 'applied',
+        },
+        runtime_id: 'metrics-collector:prod-1:novaapm-system:product-001:vm-prod',
+      }],
+    },
+  );
+
+  assert.equal(result.routes[0].id, 'route-001');
+  assert.equal(result.routes[0].k8sServiceName, 'orders-api');
+  assert.equal(result.routes[0].lastPublishStatus, 'applied');
+  assert.equal(result.routes[0].runtimeId, 'metrics-collector:prod-1:novaapm-system:product-001:vm-prod');
+});
+
+test('Metrics 采集路由使用服务嵌套 API 创建、更新和查询', async () => {
+  const input = {
+    productId: 'product-001', serviceId: 'svc-001', name: 'orders metrics', endpointId: 'vm-prod',
+    clusterId: 'prod-1', namespace: 'orders', k8sServiceName: 'orders-api', port: 'metrics',
+    scheme: 'http', metricsPath: '/metrics', scrapeInterval: '30s', scrapeTimeout: '10s',
+  };
+  const created = await captureRequest(
+    () => metricsApi.createRoute(input),
+    { route: { id: 'route-001', service_id: 'svc-001', k8s_service_name: 'orders-api' } },
+  );
+  assert.equal(created.request.path, '/api/v1/products/product-001/services/svc-001/metrics/routes');
+  assert.equal(created.request.init.method, 'POST');
+  assert.equal(created.request.body.k8s_service_name, 'orders-api');
+  assert.equal(created.request.body.account_id, undefined);
+  assert.equal(created.request.body.project_id, undefined);
+
+  const updated = await captureRequest(
+    () => metricsApi.updateRoute('product-001', 'svc-001', 'route-001', { scrapeInterval: '45s' }),
+    { route: { id: 'route-001', scrape_interval: '45s' } },
+  );
+  assert.equal(updated.request.init.method, 'PATCH');
+  assert.equal(updated.request.body.scrape_interval, '45s');
+
+  const listed = await captureRequest(
+    () => metricsApi.listRoutes('product-001', 'svc-001'),
+    [{ route: { id: 'route-001' } }],
+  );
+  assert.equal(listed.request.path, '/api/v1/products/product-001/services/svc-001/metrics/routes');
+});
+
+test('Metrics vmagent 运行时使用预览确认发布 API', async () => {
+  const preview = await captureRequest(
+    () => metricsApi.publishCollectorRuntime({ routeId: 'route-001', namespace: 'novaapm-system' }),
+    { status: 'previewed', requires_confirmation: true, preview_id: 'preview-1', confirmation_token: 'confirm-1', manifest_yaml: 'kind: Deployment' },
+  );
+  assert.equal(preview.request.path, '/api/v1/observability/runtimes/metrics-collector/publish');
+  assert.equal(preview.request.init.method, 'POST');
+  assert.equal(preview.request.body.route_id, 'route-001');
+  assert.equal(preview.result.requiresConfirmation, true);
+
+  const status = await captureRequest(
+    () => metricsApi.getCollectorRuntimeStatus({ routeId: 'route-001', namespace: 'novaapm-system' }),
+    { runtime_id: 'metrics-collector:prod-1:novaapm-system:product-001:vm-prod', status: 'ready', ready: true, resources: [] },
+  );
+  assert.match(status.request.path, /\/api\/v1\/observability\/runtimes\/metrics-collector\/status\?/);
+  assert.match(status.request.path, /route_id=route-001/);
+  assert.equal(status.result.ready, true);
+});

@@ -74,6 +74,96 @@ export interface MetricsWorkspace {
   activeServiceId: string;
   endpoints: MetricEndpoint[];
   serviceBindings: MetricServiceBinding[];
+  routes: MetricRoute[];
+}
+
+export interface MetricRoute {
+  id: string;
+  name: string;
+  productId: string;
+  serviceId: string;
+  endpointId: string;
+  sourceKind: string;
+  clusterId: string;
+  namespace: string;
+  k8sServiceName: string;
+  port: string;
+  scheme: 'http' | 'https' | string;
+  metricsPath: string;
+  scrapeInterval: string;
+  scrapeTimeout: string;
+  labelMatch: Record<string, string>;
+  basePromQL: string;
+  status: string;
+  desiredConfigHash: string;
+  appliedConfigHash: string;
+  lastPublishStatus: string;
+  lastPublishMessage: string;
+  lastPreviewId: string;
+  lastAuditId: string;
+  lastPublishedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  runtimeId: string;
+  service?: MetricsServiceSummary | null;
+  endpoint?: MetricEndpoint | null;
+}
+
+export interface MetricRouteInput {
+  productId: string;
+  serviceId: string;
+  name: string;
+  endpointId: string;
+  clusterId: string;
+  namespace: string;
+  k8sServiceName: string;
+  port: string;
+  scheme: 'http' | 'https';
+  metricsPath: string;
+  scrapeInterval: string;
+  scrapeTimeout: string;
+  status?: string;
+}
+
+export interface MetricsCollectorRuntimeResourceStatus {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  required: boolean;
+  exists: boolean;
+  healthy: boolean;
+}
+
+export interface MetricsCollectorRuntimeStatus {
+  runtimeId: string;
+  clusterId: string;
+  namespace: string;
+  routeIds: string[];
+  ready: boolean;
+  status: string;
+  message: string;
+  resources: MetricsCollectorRuntimeResourceStatus[];
+  missingResources: MetricsCollectorRuntimeResourceStatus[];
+}
+
+export interface MetricsCollectorRuntimePublishResult {
+  runtime: Record<string, unknown> | null;
+  routeIds: string[];
+  manifestYAML: string;
+  configYAML: string;
+  configHash: string;
+  manifestHash: string;
+  status: string;
+  message: string;
+  requiresConfirmation: boolean;
+  previewId: string;
+  confirmationToken: string;
+  auditId: string;
+  resources: unknown[];
+  diffs: unknown[];
+  warnings: string[];
 }
 
 function mapService(raw: any): MetricsServiceSummary {
@@ -157,6 +247,42 @@ function mapWorkspace(raw: any): MetricsWorkspace {
     activeServiceId: raw.active_service_id ?? raw.activeServiceId ?? '',
     endpoints: Array.isArray(raw.endpoints) ? raw.endpoints.map(mapEndpoint) : [],
     serviceBindings: bindings,
+    routes: Array.isArray(raw.routes) ? raw.routes.map(mapMetricRoute) : [],
+  };
+}
+
+function mapMetricRoute(raw: any): MetricRoute {
+  const route = raw?.route ?? raw ?? {};
+  return {
+    id: String(route.id ?? ''),
+    name: route.name ?? '',
+    productId: route.product_id ?? route.productId ?? '',
+    serviceId: route.service_id ?? route.serviceId ?? '',
+    endpointId: route.endpoint_id ?? route.endpointId ?? '',
+    sourceKind: route.source_kind ?? route.sourceKind ?? '',
+    clusterId: route.cluster_id ?? route.clusterId ?? '',
+    namespace: route.namespace ?? '',
+    k8sServiceName: route.k8s_service_name ?? route.k8sServiceName ?? '',
+    port: String(route.port ?? ''),
+    scheme: route.scheme ?? 'http',
+    metricsPath: route.metrics_path ?? route.metricsPath ?? '/metrics',
+    scrapeInterval: route.scrape_interval ?? route.scrapeInterval ?? '30s',
+    scrapeTimeout: route.scrape_timeout ?? route.scrapeTimeout ?? '10s',
+    labelMatch: mapStringRecord(route.label_match ?? route.labelMatch),
+    basePromQL: route.base_promql ?? route.basePromQL ?? '',
+    status: route.status ?? '',
+    desiredConfigHash: route.desired_config_hash ?? route.desiredConfigHash ?? '',
+    appliedConfigHash: route.applied_config_hash ?? route.appliedConfigHash ?? '',
+    lastPublishStatus: route.last_publish_status ?? route.lastPublishStatus ?? '',
+    lastPublishMessage: route.last_publish_message ?? route.lastPublishMessage ?? '',
+    lastPreviewId: route.last_preview_id ?? route.lastPreviewId ?? '',
+    lastAuditId: route.last_audit_id ?? route.lastAuditId ?? '',
+    lastPublishedAt: route.last_published_at ?? route.lastPublishedAt ?? '',
+    createdAt: route.created_at ?? route.createdAt ?? '',
+    updatedAt: route.updated_at ?? route.updatedAt ?? '',
+    runtimeId: raw?.runtime_id ?? raw?.runtimeId ?? '',
+    service: raw?.service ? mapService(raw.service) : null,
+    endpoint: raw?.endpoint ? mapEndpoint(raw.endpoint) : null,
   };
 }
 
@@ -164,7 +290,6 @@ export interface CreateServiceBindingInput {
 	productId: string;
   serviceId: string;
   endpointId: string;
-  tenant?: { accountId?: string; projectId?: string };
   labelMatch: Record<string, string>;
   basePromQL?: string;
   status?: string;
@@ -172,7 +297,6 @@ export interface CreateServiceBindingInput {
 
 export interface UpdateServiceBindingInput {
   endpointId?: string;
-  tenant?: { accountId?: string; projectId?: string };
   labelMatch?: Record<string, string>;
   basePromQL?: string;
   status?: string;
@@ -234,4 +358,107 @@ export const metricsApi = {
       checkedAt: raw.checked_at ?? raw.checkedAt ?? '',
     };
   },
+  async listRoutes(productId: string, serviceId: string): Promise<MetricRoute[]> {
+    const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/routes`);
+    return Array.isArray(raw) ? raw.map(mapMetricRoute) : [];
+  },
+  async listRoutesByCluster(clusterId: string): Promise<MetricRoute[]> {
+    const params = new URLSearchParams({ cluster_id: clusterId });
+    const raw = await apiRequest<any[]>(`/metrics/routes?${params.toString()}`);
+    return Array.isArray(raw) ? raw.map(mapMetricRoute) : [];
+  },
+  async createRoute(input: MetricRouteInput): Promise<MetricRoute> {
+    const raw = await apiRequest<any>(`/products/${encodeURIComponent(input.productId)}/services/${encodeURIComponent(input.serviceId)}/metrics/routes`, {
+      method: 'POST',
+      body: JSON.stringify(toMetricRoutePayload(input)),
+    });
+    return mapMetricRoute(raw);
+  },
+  async updateRoute(productId: string, serviceId: string, id: string, input: Partial<MetricRouteInput>): Promise<MetricRoute> {
+    const raw = await apiRequest<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/routes/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(toMetricRoutePayload(input)),
+    });
+    return mapMetricRoute(raw);
+  },
+  async getCollectorRuntimeStatus(input: { routeId: string; namespace?: string }): Promise<MetricsCollectorRuntimeStatus> {
+    const params = new URLSearchParams({ route_id: input.routeId, namespace: input.namespace || 'novaapm-system' });
+    const raw = await apiRequest<any>(`/observability/runtimes/metrics-collector/status?${params.toString()}`);
+    return mapMetricsCollectorRuntimeStatus(raw);
+  },
+  async publishCollectorRuntime(input: { routeId: string; namespace?: string; previewId?: string; confirmationToken?: string }): Promise<MetricsCollectorRuntimePublishResult> {
+    const raw = await apiRequest<any>('/observability/runtimes/metrics-collector/publish', {
+      method: 'POST',
+      body: JSON.stringify({
+        route_id: input.routeId,
+        namespace: input.namespace || 'novaapm-system',
+        preview_id: input.previewId,
+        confirmation_token: input.confirmationToken,
+      }),
+    });
+    return mapMetricsCollectorRuntimePublish(raw);
+  },
 };
+
+function toMetricRoutePayload(input: Partial<MetricRouteInput>) {
+  return {
+    name: input.name,
+    endpoint_id: input.endpointId,
+    cluster_id: input.clusterId,
+    namespace: input.namespace,
+    k8s_service_name: input.k8sServiceName,
+    port: input.port,
+    scheme: input.scheme,
+    metrics_path: input.metricsPath,
+    scrape_interval: input.scrapeInterval,
+    scrape_timeout: input.scrapeTimeout,
+    status: input.status,
+  };
+}
+
+function mapRuntimeResource(raw: any): MetricsCollectorRuntimeResourceStatus {
+  return {
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    apiVersion: raw.api_version ?? raw.apiVersion ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    required: Boolean(raw.required),
+    exists: Boolean(raw.exists),
+    healthy: Boolean(raw.healthy),
+  };
+}
+
+function mapMetricsCollectorRuntimeStatus(raw: any): MetricsCollectorRuntimeStatus {
+  return {
+    runtimeId: raw.runtime_id ?? raw.runtimeId ?? '',
+    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    namespace: raw.namespace ?? '',
+    routeIds: Array.isArray(raw.route_ids) ? raw.route_ids.map(String) : [],
+    ready: Boolean(raw.ready),
+    status: raw.status ?? '',
+    message: raw.message ?? '',
+    resources: Array.isArray(raw.resources) ? raw.resources.map(mapRuntimeResource) : [],
+    missingResources: Array.isArray(raw.missing_resources) ? raw.missing_resources.map(mapRuntimeResource) : [],
+  };
+}
+
+function mapMetricsCollectorRuntimePublish(raw: any): MetricsCollectorRuntimePublishResult {
+  return {
+    runtime: raw.runtime ?? null,
+    routeIds: Array.isArray(raw.route_ids) ? raw.route_ids.map(String) : [],
+    manifestYAML: raw.manifest_yaml ?? '',
+    configYAML: raw.config_yaml ?? '',
+    configHash: raw.config_hash ?? '',
+    manifestHash: raw.manifest_hash ?? '',
+    status: raw.status ?? '',
+    message: raw.message ?? '',
+    requiresConfirmation: Boolean(raw.requires_confirmation),
+    previewId: raw.preview_id ?? '',
+    confirmationToken: raw.confirmation_token ?? '',
+    auditId: raw.audit_id ?? '',
+    resources: Array.isArray(raw.resources) ? raw.resources : [],
+    diffs: Array.isArray(raw.diffs) ? raw.diffs : [],
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+  };
+}

@@ -28,6 +28,7 @@ import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MetricsAlertsPage } from '../pages/metrics/MetricsAlertsPage';
 import { MetricsAlertRulePage } from '../pages/metrics/MetricsAlertRulePage';
 import { MetricsCollectionPage } from '../pages/metrics/MetricsCollectionPage';
+import { MetricsRouteEditorPage } from '../pages/metrics/MetricsRouteEditorPage';
 import { MetricsDashboardsPage } from '../pages/metrics/MetricsDashboardsPage';
 import { MetricsEndpointsPage } from '../pages/metrics/MetricsEndpointsPage';
 import { MetricsExplorePage } from '../pages/metrics/MetricsExplorePage';
@@ -121,7 +122,9 @@ const metricsChildRoutes: RouteDefinition[] = [
   { path: 'alerts/:id', title: '编辑指标告警', element: <MetricsAlertRulePage /> },
   { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
   { path: 'dashboards', title: 'Dashboard', element: <MetricsDashboardsPage /> },
-  { path: 'collection', title: '采集接入', element: <MetricsCollectionPage /> },
+  { path: 'routes/new', title: '创建指标采集路由', element: <MetricsRouteEditorPage /> },
+  { path: 'routes/:id/edit', title: '更新指标采集路由', element: <MetricsRouteEditorPage /> },
+  { path: 'routes', title: '采集路由', element: <MetricsCollectionPage /> },
   { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
   { path: 'endpoints', title: '接入端点', element: <MetricsEndpointsPage /> },
 ];
@@ -131,7 +134,7 @@ const metricsEntryChildRoutes: RouteDefinition[] = [
   { path: 'explore', title: '指标查询', element: <ServiceModuleEntryPage module="metrics" entry="explore" title="指标查询" actionLabel="进入指标查询" /> },
   { path: 'alerts', title: '指标告警', element: <ServiceModuleEntryPage module="metrics" entry="alerts" title="指标告警" actionLabel="进入指标告警" /> },
   { path: 'dashboards', title: 'Dashboard', element: <ServiceModuleEntryPage module="metrics" entry="dashboards" title="Dashboard" actionLabel="进入 Dashboard" /> },
-  { path: 'collection', title: '采集接入', element: <ServiceModuleEntryPage module="metrics" entry="collection" title="采集接入" actionLabel="进入采集接入" /> },
+  { path: 'routes', title: '采集路由', element: <ServiceModuleEntryPage module="metrics" entry="routes" title="采集路由" actionLabel="进入采集路由" /> },
   { path: 'overview', title: '监控总览', element: <ServiceModuleEntryPage module="metrics" entry="overview" title="监控总览" actionLabel="进入监控总览" /> },
   { path: 'endpoints', title: '接入端点', element: <ServiceModuleEntryPage module="metrics" entry="endpoints" title="接入端点" actionLabel="进入接入端点" /> },
 ];

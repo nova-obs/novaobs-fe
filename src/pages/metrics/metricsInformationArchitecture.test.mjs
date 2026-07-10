@@ -9,6 +9,8 @@ const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8');
 const explore = readFileSync(new URL('./MetricsExplorePage.tsx', import.meta.url), 'utf8');
 const overview = readFileSync(new URL('./MetricsOverviewPage.tsx', import.meta.url), 'utf8');
 const collection = readFileSync(new URL('./MetricsCollectionPage.tsx', import.meta.url), 'utf8');
+const routeEditor = readFileSync(new URL('./MetricsRouteEditorPage.tsx', import.meta.url), 'utf8');
+const observabilityAccess = readFileSync(new URL('../k8s/ObservabilityAccessPage.tsx', import.meta.url), 'utf8');
 const dashboards = readFileSync(new URL('./MetricsDashboardsPage.tsx', import.meta.url), 'utf8');
 const alerts = readFileSync(new URL('./MetricsAlertsPage.tsx', import.meta.url), 'utf8');
 const endpoints = readFileSync(new URL('./MetricsEndpointsPage.tsx', import.meta.url), 'utf8');
@@ -29,8 +31,9 @@ test('Metrics rail 顺序稳定并使用 ModuleWorkbench 非重挂载工作台',
   assert.doesNotMatch(layout, /label: '指标告警'.*end: true/);
   assert.deepEqual(
     Array.from(layout.matchAll(/label: '([^']+)'/g)).map((match) => match[1]),
-    ['指标查询', '指标告警', 'Dashboard', '采集接入', '监控总览', '接入端点'],
+    ['指标查询', '指标告警', 'Dashboard', '采集路由', '监控总览', '接入端点'],
   );
+  assert.doesNotMatch(layout, /label: '采集路由'.*end: true/);
 });
 
 test('Metrics Explore 以路径中的产品与服务作为固定查询作用域', () => {
@@ -39,11 +42,11 @@ test('Metrics Explore 以路径中的产品与服务作为固定查询作用域'
 	assert.match(explore, /useParams/);
 	assert.match(explore, /productId/);
 	assert.match(explore, /serviceId/);
-  assert.match(explore, /当前绑定/);
-  assert.match(explore, /labelMatch/);
+  assert.match(explore, /workspace\?\.routes/);
+  assert.match(explore, /lastPublishStatus === 'applied'/);
   assert.match(explore, /basePromQL/);
   assert.match(explore, /activeTenant/);
-  assert.match(explore, /尚未绑定指标端点/);
+  assert.match(explore, /尚无已部署采集路由/);
   assert.match(explore, /创建指标告警/);
 	assert.match(explore, /const base = `\/products\/\$\{encodeURIComponent\(productId\)\}\/services\/\$\{encodeURIComponent\(serviceId\)\}\/metrics`/);
 	assert.match(explore, /navigate\(`\$\{base\}\/alerts\/new`/);
@@ -56,6 +59,7 @@ test('Metrics API 只保留真实资源契约，不在前端伪造数据', () =>
   assert.match(api, /MetricsWorkspace/);
   assert.match(api, /MetricEndpoint/);
   assert.match(api, /MetricServiceBinding/);
+  assert.match(api, /MetricRoute/);
   assert.match(api, /label_match \?\? binding\.labelMatch/);
   assert.match(api, /raw\.binding/);
   assert.match(api, /binding\.tenant/);
@@ -72,10 +76,18 @@ test('Metrics 待接入页面使用控制台面板、表格或真实空态', () 
     assert.doesNotMatch(source, /gradient/i);
   }
   assert.match(overview, /metricsApi\.getWorkspace/);
+  assert.match(overview, /workspaceQuery\.data\?\.routes/);
+  assert.match(overview, /desiredConfigHash === route\.appliedConfigHash/);
   assert.match(overview, /api\.getMetricsAlertRules/);
   assert.match(overview, /refetchInterval/);
-  assert.match(collection, /metricsApi\.listServiceBindings/);
-  assert.match(collection, /metricsApi\.createServiceBinding/);
+  assert.match(collection, /metricsApi\.listRoutes/);
+  assert.match(collection, /采集路由/);
+  assert.match(collection, /\$\{base\}\/routes\/new/);
+  assert.match(routeEditor, /metricsApi\.createRoute/);
+  assert.match(routeEditor, /metricsApi\.updateRoute/);
+  assert.match(routeEditor, /K8s Service/);
+  assert.match(routeEditor, /Scrape Interval/);
+  assert.match(routeEditor, /runtime=metrics/);
   assert.doesNotMatch(dashboards, /searchGrafanaDashboards/);
   assert.doesNotMatch(api, /\bfetch\(/);
   assert.match(dashboards, /grafanaEndpoint/);
@@ -83,4 +95,17 @@ test('Metrics 待接入页面使用控制台面板、表格或真实空态', () 
   assert.match(alerts, /暂无指标告警规则/);
 	assert.match(endpoints, /metricsApi\.getWorkspace/);
   assert.match(endpoints, /metricsApi\.testEndpoint/);
+});
+
+test('Metrics 采集路由和 vmagent 运行时形成单一部署路径', () => {
+  assert.match(routes, /path: 'routes', title: '采集路由', element: <MetricsCollectionPage/);
+  assert.match(routes, /path: 'routes\/new', title: '创建指标采集路由', element: <MetricsRouteEditorPage/);
+  assert.match(routes, /path: 'routes\/:id\/edit', title: '更新指标采集路由', element: <MetricsRouteEditorPage/);
+  assert.doesNotMatch(routes, /path: 'collection'/);
+  assert.match(observabilityAccess, /runtime.*metrics/);
+  assert.match(observabilityAccess, /metricsApi\.publishCollectorRuntime/);
+  assert.match(observabilityAccess, /metricsApi\.getCollectorRuntimeStatus/);
+  assert.match(observabilityAccess, /MetricsPublishContext/);
+  assert.match(observabilityAccess, /metricsPublishContextKey/);
+  assert.doesNotMatch([overview, collection, endpoints, routeEditor, explore].join('\n'), /metrics\/collection|\$\{base\}\/collection/);
 });
