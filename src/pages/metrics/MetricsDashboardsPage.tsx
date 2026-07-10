@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { BarChart3, ExternalLink, RefreshCw } from 'lucide-react';
 import { metricsApi } from './api';
 import { StatusBadge } from '../../components/StatusBadge';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 export function MetricsDashboardsPage() {
 	const { productId = '', serviceId = '' } = useParams();
@@ -24,10 +25,7 @@ export function MetricsDashboardsPage() {
     <div className="space-y-3">
       <section className="console-panel overflow-hidden">
         <div className="console-panel-header">
-          <div className="min-w-0">
-            <h2 className="console-section-title">Dashboard</h2>
-            <p className="console-section-meta">{grafanaEndpoint ? `endpoint/${grafanaEndpoint.name || grafanaEndpoint.id}` : '未配置 Grafana 端点'}</p>
-          </div>
+          <ServiceContextSelector className="w-full max-w-[420px]" />
           <div className="flex items-center gap-2">
             {grafanaBaseURL ? (
               <a className="console-button gap-1.5 text-xs" href={grafanaBaseURL} target="_blank" rel="noopener noreferrer">
@@ -65,7 +63,6 @@ export function MetricsDashboardsPage() {
                   <tr>
                     <td>
                       <div className="font-semibold text-on-surface">{grafanaEndpoint.name || grafanaEndpoint.id}</div>
-                      <div className="font-mono text-[11px] text-muted">{grafanaEndpoint.id}</div>
                     </td>
                     <td><StatusBadge value={grafanaEndpoint.status || 'unknown'} /></td>
                     <td className="max-w-[360px] truncate font-mono text-xs" title={grafanaBaseURL}>{grafanaBaseURL || '-'}</td>

@@ -195,17 +195,53 @@ test('Metrics mapper 兼容 camelCase 响应字段', async () => {
 test('Metrics 端点与服务绑定列表使用独立资源接口', async () => {
   const endpoints = await captureRequest(
     () => metricsApi.listEndpoints(),
-    [{ id: 'vm-001', name: 'vm-prod', endpoint_type: 'victoriametrics' }],
+    [{ id: 'vm-001', name: 'vm-prod', kind: 'victoriametrics', health: { status: 'healthy', message: 'VictoriaMetrics 查询端点连通', response_time_ms: 8 } }],
   );
   const bindings = await captureRequest(
 	() => metricsApi.listServiceBindings('product-001', 'svc-001'),
     [{ id: 'binding-001', service_id: 'svc-001', endpoint_id: 'vm-001', label_match: { service: 'order-api' } }],
   );
 
-  assert.equal(endpoints.request.path, '/api/v1/metrics/endpoints');
+  assert.equal(endpoints.request.path, '/api/v1/observability/endpoints?signal_type=metrics&kind=victoriametrics');
   assert.equal(endpoints.result[0].endpointType, 'victoriametrics');
+	assert.equal(endpoints.result[0].healthStatus, 'healthy');
+	assert.equal(endpoints.result[0].healthResponseTimeMs, 8);
 	assert.equal(bindings.request.path, '/api/v1/products/product-001/services/svc-001/metrics/bindings');
   assert.equal(bindings.result[0].serviceId, 'svc-001');
+});
+
+test('Metrics 通过统一观测端点 API 登记和更新 VMS 且不提交业务租户', async () => {
+	const input = {
+		name: 'vm-prod',
+		description: '生产 VMS',
+		remoteWriteURL: 'http://vminsert:8480/insert/0/prometheus/api/v1/write',
+		queryURL: 'http://vmselect:8481/select/0/prometheus',
+		vmuiURL: 'http://vmselect:8481/select/0/vmui/',
+		scopeType: 'global',
+		clusterId: '',
+		status: 'active',
+	};
+	const created = await captureRequest(
+		() => metricsApi.createEndpoint(input),
+		{ id: 'vm-prod', name: 'vm-prod', kind: 'victoriametrics', signal_types: ['metrics'], urls: { remote_write_url: input.remoteWriteURL, query_url: input.queryURL, ui_url: input.vmuiURL }, scope: { type: 'global' }, status: 'active' },
+	);
+
+	assert.equal(created.request.path, '/api/v1/observability/endpoints');
+	assert.equal(created.request.init.method, 'POST');
+	assert.equal(created.request.body.kind, 'victoriametrics');
+	assert.deepEqual(created.request.body.signal_types, ['metrics']);
+	assert.equal(created.request.body.scope.type, 'global');
+	assert.equal(created.request.body.urls.remote_write_url, input.remoteWriteURL);
+	assert.equal(created.request.body.tenant, undefined);
+
+	const updated = await captureRequest(
+		() => metricsApi.updateEndpoint('vm-prod', { ...input, name: 'vm-prod-2', scopeType: 'k8s_cluster', clusterId: 'prod-1' }),
+		{ id: 'vm-prod', name: 'vm-prod-2', kind: 'victoriametrics', signal_types: ['metrics'], urls: { remote_write_url: input.remoteWriteURL, query_url: input.queryURL, ui_url: input.vmuiURL }, scope: { type: 'k8s_cluster', cluster_id: 'prod-1' }, status: 'active' },
+	);
+	assert.equal(updated.request.path, '/api/v1/observability/endpoints/vm-prod');
+	assert.equal(updated.request.init.method, 'PATCH');
+	assert.equal(updated.request.body.name, 'vm-prod-2');
+	assert.deepEqual(updated.request.body.scope, { type: 'k8s_cluster', cluster_id: 'prod-1' });
 });
 
 test('Metrics 工作台映射托管采集路由', async () => {

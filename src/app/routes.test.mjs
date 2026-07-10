@@ -29,6 +29,9 @@ test('Metrics 使用服务嵌套路由并收敛到具体租户', () => {
 	assert.equal(metrics?.children?.[0].element?.type?.name, 'ServiceMetricsIndexRedirect');
   assert.deepEqual(metrics?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'alerts/new', 'alerts/:id', 'alerts', 'dashboards', 'routes/new', 'routes/:id/edit', 'routes', 'overview', 'endpoints']);
 	assert.deepEqual(metricsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'alerts', 'dashboards', 'routes', 'overview', 'endpoints']);
+  assert.equal(metricsEntry?.element?.type?.name, 'MetricsLayout');
+  assert.equal(metricsEntry?.children?.find((item) => item.path === 'explore')?.element?.type?.name, 'MetricsExplorePage');
+  assert.equal(metricsEntry?.children?.find((item) => item.path === 'routes')?.element?.type?.name, 'MetricsCollectionPage');
   assert.equal(monitoring, undefined);
 });
 
@@ -45,6 +48,9 @@ test('Logs 保留服务维度日志分析、采集路由、告警和接入配置
 	const logsEntry = routeDefinitions.find((r) => r.path === '/logs');
 	const logs = routeDefinitions.find((r) => r.path === '/products/:productId/services/:serviceId/logs');
 	assert.deepEqual(logsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'agents', 'alerts', 'endpoints']);
+  assert.equal(logsEntry?.element?.type?.name, 'LogsWorkspace');
+  assert.equal(logsEntry?.children?.find((item) => item.path === 'explore')?.element?.type?.name, 'LogsExplorePage');
+  assert.equal(logsEntry?.children?.find((item) => item.path === 'agents')?.element?.type?.name, 'LogsAgentsPage');
   assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'onboarding', 'agents/new', 'agents/:id/edit', 'agents', 'alerts/new', 'alerts/:id', 'alerts', 'endpoints']);
   assert.equal(paths.includes('/pipelines'), false);
   assert.ok(paths.includes('/agents/:uid'));

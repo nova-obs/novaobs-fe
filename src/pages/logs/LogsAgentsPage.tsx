@@ -6,8 +6,9 @@ import { Copy, FileText, Loader2, PanelRightOpen, Plus, RefreshCw, Server, Shiel
 import { api } from '../../services/api';
 import { logSinkLabel, logSourceLabel, logsApi, type LogRouteView } from './api';
 import { routeLifecycle, serviceDisplayName, statusPillClass } from './ServicePickerPanel';
-import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsToolbarButton, shortIdentity } from './LogsPrimitives';
+import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsToolbarButton } from './LogsPrimitives';
 import { LogsEntitySelector } from './LogsEntitySelector';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 export function LogsAgentsPage() {
   const queryClient = useQueryClient();
@@ -116,8 +117,10 @@ export function LogsAgentsPage() {
         {deleteMutation.error ? <LogsErrorLine message={(deleteMutation.error as Error).message} /> : null}
         <div className="console-panel-header shrink-0">
           <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-            <div className="logs-route-selector w-full lg:max-w-[420px]">
-              <LogsEntitySelector<LogRouteView>
+            <div className={`grid w-full gap-2 ${routes.length > 1 ? 'lg:max-w-[860px] lg:grid-cols-2' : 'lg:max-w-[420px]'}`}>
+              <ServiceContextSelector />
+              {routes.length > 1 ? <div className="logs-route-selector min-w-0">
+                <LogsEntitySelector<LogRouteView>
                 items={routes}
                 activeItem={activeRoute}
                 onSelect={(route) => selectRoute(route.route.id)}
@@ -142,7 +145,8 @@ export function LogsAgentsPage() {
                     </>
                   );
                 }}
-              />
+                />
+              </div> : null}
             </div>
             <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
               <LogsToolbarButton onClick={() => {
@@ -240,7 +244,6 @@ export function LogsAgentsPage() {
                                 <tr key={item.runtimeIdentity || item.instanceUid}>
                                   <td>
                                     <Link className="font-mono text-xs font-semibold text-primary hover:underline" to={`/agents/${item.instanceUid}`}>{item.runtimeIdentity || item.podName || item.hostname || item.instanceUid}</Link>
-                                    <div className="mt-1 break-all font-mono text-[11px] text-muted">opamp_instance_uid {item.opampInstanceUid || item.instanceUid || '-'}</div>
                                   </td>
                                   <td>
                                     <span className={`inline-flex items-center gap-1.5 rounded border px-2 py-0.5 text-xs font-semibold ${item.healthy ? 'border-primary/20 bg-primary-soft text-primary' : 'border-amber-500/30 bg-amber-50 text-amber-700'}`}>
@@ -251,11 +254,10 @@ export function LogsAgentsPage() {
                                   <td className="font-mono text-xs">
                                     <div>{item.clusterId || activeGroup?.cluster || '-'}</div>
                                     <div className="mt-1 text-[11px] text-muted">{item.namespace || activeGroup?.namespace || '-'}</div>
-                                    <div className="mt-1 text-[11px] text-muted">agent ns {item.agentNamespace || activeGroup?.namespace || '-'}</div>
+                                    {item.agentNamespace && item.agentNamespace !== (item.namespace || activeGroup?.namespace) ? <div className="mt-1 text-[11px] text-muted">Agent Namespace：{item.agentNamespace}</div> : null}
                                   </td>
                                   <td className="font-mono text-xs">
                                     <div>{item.podName || '-'}</div>
-                                    <div className="mt-1 text-[11px] text-muted">pod_uid {shortIdentity(item.podUid)}</div>
                                     <div className="mt-1 text-[11px] text-muted">{item.nodeName || item.hostname || '-'} · {item.podIp || item.ip || '-'}</div>
                                   </td>
                                   <td>{item.remoteConfigStatus}</td>

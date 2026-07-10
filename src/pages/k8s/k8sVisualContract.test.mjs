@@ -125,7 +125,7 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('probeError={optionalErrorMessage'), true);
   assert.equal(clusterSource.includes("probeCluster.data?.clusterId === cluster.id"), false);
   assert.equal(clusterSource.includes('quiet-button bg-primary px-3 text-white hover:bg-primary/90'), false);
-  assert.equal(clusterSource.includes('集群登记'), true);
+  assert.equal(clusterSource.includes('接入集群'), true);
   assert.equal(clusterSource.includes('删除元数据'), false);
   assert.equal(clusterSource.includes('useK8sOpsContext'), true);
   assert.equal(clusterSource.includes('k8sApi.listClusters'), false);
@@ -143,13 +143,13 @@ test('K8s 集群页面展示集群连接和来源上下文', () => {
   assert.equal(clusterSource.includes('rollbackClusterCredential'), true);
   assert.equal(clusterSource.includes('credentialResult?.probe'), true);
   assert.equal(clusterSource.includes('轮换'), true);
-  assert.equal(clusterSource.includes('/api/v1/k8s/cluster-credentials'), true);
+  assert.equal(clusterSource.includes('/api/v1/k8s/cluster-credentials'), false);
   assert.equal(routeSource.includes("path: 'clusters/:clusterId/credentials'"), true);
   assert.equal(navigationSource.includes("id: 'cluster-credentials'"), true);
   assert.equal(navigationSource.includes("segment: 'credentials'"), true);
   assert.equal(clusterSource.includes('集群凭据 API 暂未连接'), false);
   assert.equal(clusterSource.includes('kubeconfig'), true);
-  assert.equal(clusterSource.includes('不在页面回显'), true);
+  assert.equal(clusterSource.includes('不会在页面回显'), true);
   assert.equal(clusterSource.includes('<th>指纹</th>'), false);
   assert.equal(clusterSource.includes('shortFingerprint'), false);
   assert.equal(clusterSource.includes('<th>校验状态</th>'), false);
@@ -241,8 +241,9 @@ test('K8s 资源页面展示完整资源身份字段', () => {
   assert.equal(resourceSource.includes('命名空间选择'), true);
   assert.equal(resourceSource.includes('未选择集群或命名空间'), true);
   assert.equal(resourceSource.includes('API Version'), true);
-  assert.equal(resourceSource.includes('UID'), true);
-  assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), true);
+  assert.equal(resourceSource.includes('identity.uid'), true);
+  assert.equal(resourceSource.includes('<th>UID</th>'), false);
+  assert.equal(resourceSource.includes('cluster/ns/api/kind/name/uid'), false);
   assert.equal(resourceSource.includes('资源详情'), true);
   assert.equal(resourceSource.includes('资源详情抽屉'), true);
   assert.equal(resourceSource.includes('createPortal'), true);
@@ -308,7 +309,7 @@ test('K8s 证书中心只展示证书元数据和安全边界', () => {
   assert.equal(certificateSource.includes('校验状态'), false);
   assert.equal(certificateSource.includes('certificateValidationStatus'), false);
   assert.equal(certificateSource.includes('Not After'), true);
-  assert.equal(certificateSource.includes('密钥材料留在后端受控域'), true);
+  assert.equal(certificateSource.includes('不读取或回显私钥材料'), true);
   assert.equal(certificateSource.includes('证书写操作'), true);
   assert.equal(certificateSource.includes('操作已落审计'), true);
   assert.equal(certificateSource.includes('删除确认摘要'), true);
@@ -373,7 +374,8 @@ test('K8s Kubeconfig 页面展示 Secret 元数据、权限不足态和审计导
   assert.equal(kubeconfigSource.includes('校验状态'), false);
   assert.equal(kubeconfigSource.includes('权限不足'), true);
   assert.equal(kubeconfigSource.includes('审计导出'), true);
-  assert.equal(kubeconfigSource.includes('普通响应只返回 Secret 元数据'), true);
+  assert.equal(kubeconfigSource.includes('生成操作只返回 Secret 元数据'), true);
+  assert.equal(kubeconfigSource.includes('HelpTip'), true);
 });
 
 test('K8s Kubeconfig 明文导出支持复制且限制长 token 溢出', () => {

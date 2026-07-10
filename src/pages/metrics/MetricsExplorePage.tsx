@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Database, RefreshCw, Route, Server } from 'lucide-react';
 import { buildVictoriaMetricsVMUIURL, metricsApi, type MetricRoute } from './api';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 function statusTone(status: string) {
   if (['active', 'applied', 'ready', 'healthy'].includes(status)) return 'border-emerald-600/20 bg-emerald-50 text-emerald-700';
@@ -47,10 +48,7 @@ export function MetricsExplorePage() {
     <div className="metrics-explore-workbench grid min-h-[720px] gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
       <section className="console-panel flex min-h-0 flex-col overflow-hidden" aria-label="Metrics Explore 工作区">
         <div className="console-panel-header shrink-0">
-          <div className="min-w-0">
-            <h2 className="console-section-title">Metrics Explore</h2>
-            <p className="console-section-meta">已部署采集路由 · VictoriaMetrics vmui</p>
-          </div>
+          <ServiceContextSelector className="w-full max-w-[420px]" />
           <div className="flex items-center gap-2">
             {deployedRoutes.length > 1 ? (
               <select className="console-input h-8 min-w-[220px] text-xs" value={activeRoute?.id ?? ''} onChange={(event) => selectRoute(event.target.value)} aria-label="选择已部署采集路由">
@@ -92,7 +90,7 @@ export function MetricsExplorePage() {
       </section>
 
       <aside className="console-panel flex min-h-0 flex-col overflow-hidden" aria-label="Metrics Explore 详情">
-        <div className="console-panel-header shrink-0"><div><h2 className="console-section-title">采集作用域</h2><p className="console-section-meta">当前路由与服务租户</p></div></div>
+        <div className="console-panel-header shrink-0"><h2 className="console-section-title">采集作用域</h2></div>
         <div className="min-h-0 flex-1 overflow-y-auto">
           <Detail icon={Server} label="服务" value={service?.displayName || service?.name || service?.id || '-'} />
           <Detail icon={Route} label="采集路由" value={activeRoute?.name || '-'} />
@@ -105,7 +103,6 @@ export function MetricsExplorePage() {
             <button type="button" className="console-button console-button-primary w-full" disabled={!activeBinding} title={activeBinding ? '从当前服务查询作用域创建指标告警' : '请先建立指标查询绑定'} onClick={() => navigate(`${base}/alerts/new`)}>
               <Bell className="h-3.5 w-3.5" />创建指标告警
             </button>
-            <p className="mt-2 text-[11px] leading-5 text-muted">告警仍使用受验证的指标查询绑定；托管采集路由不会绕过告警作用域校验。</p>
           </div>
         </div>
       </aside>

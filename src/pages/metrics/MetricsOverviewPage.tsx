@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Activity, AlertTriangle, CheckCircle2, Database, Link2, RadioTower, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
 import { metricsApi } from './api';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 function healthTone(status: string) {
   if (['active', 'healthy', 'verified'].includes(status)) return 'text-emerald-600';
@@ -41,10 +42,8 @@ export function MetricsOverviewPage() {
   const error = workspaceQuery.error || alertsQuery.error;
 
   const activeRoutes = routes.filter((route) => route.status === 'active');
-  const deployedRoutes = activeRoutes.filter((route) => route.lastPublishStatus === 'applied' && route.desiredConfigHash === route.appliedConfigHash);
   const failedRoutes = routes.filter((route) => route.lastPublishStatus === 'failed');
   const pendingRoutes = activeRoutes.filter((route) => route.lastPublishStatus !== 'failed' && !(route.lastPublishStatus === 'applied' && route.desiredConfigHash === route.appliedConfigHash));
-  const enabledAlerts = alertRules.filter((r) => r.state === 'enabled');
   const failedAlerts = alertRules.filter((r) => r.applyStatus === 'failed');
 
   function refetchAll() {
@@ -56,10 +55,7 @@ export function MetricsOverviewPage() {
     <div className="space-y-3">
       <section className="console-panel overflow-hidden">
         <div className="console-panel-header">
-          <div className="min-w-0">
-            <h2 className="console-section-title">监控总览</h2>
-            <p className="console-section-meta">服务指标状态 · 30s 自动刷新</p>
-          </div>
+          <ServiceContextSelector className="w-full max-w-[420px]" />
           <button type="button" className="console-icon-button border-outline bg-white" aria-label="刷新监控总览" title="刷新监控总览" onClick={refetchAll}>
             <RefreshCw className="h-3.5 w-3.5" />
           </button>
@@ -82,7 +78,6 @@ export function MetricsOverviewPage() {
 				link={`${base}/endpoints`}
                 linkLabel="查看端点"
               >
-                <Stat label="总端点" value={endpoints.length} />
                 {endpoints.length > 0 ? (
                   <div className="mt-3 grid gap-1.5">
                     {endpoints.map((ep) => (
@@ -107,12 +102,6 @@ export function MetricsOverviewPage() {
 				link={`${base}/routes`}
                 linkLabel="查看路由"
               >
-                <div className="grid grid-cols-2 gap-2">
-                  <Stat label="总路由" value={routes.length} />
-                  <Stat label="已部署" value={deployedRoutes.length} tone="success" />
-                  <Stat label="待发布" value={pendingRoutes.length} />
-                  <Stat label="失败" value={failedRoutes.length} tone={failedRoutes.length > 0 ? 'danger' : undefined} />
-                </div>
                 {failedRoutes.length > 0 ? (
                   <div className="mt-3 rounded border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700">
                     {failedRoutes.length} 条路由部署失败，请进入观测接入检查。
@@ -121,13 +110,9 @@ export function MetricsOverviewPage() {
                   <div className="mt-3 rounded border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-700">
                     {pendingRoutes.length} 条路由等待预览或重新部署。
                   </div>
-                ) : routes.length > 0 ? (
-                  <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs text-emerald-700">
-                    所有启用路由均已部署且配置一致。
-                  </div>
-                ) : (
+                ) : routes.length === 0 ? (
 				  <div className="mt-3 text-xs text-muted">暂无采集路由。<Link className="font-semibold text-primary" to={`${base}/routes/new`}>新建路由</Link></div>
-                )}
+                ) : null}
               </OverviewCard>
 
               <OverviewCard
@@ -136,22 +121,13 @@ export function MetricsOverviewPage() {
 				link={`${base}/alerts`}
                 linkLabel="查看告警"
               >
-                <div className="grid grid-cols-2 gap-2">
-                  <Stat label="总规则" value={alertRules.length} />
-                  <Stat label="启用" value={enabledAlerts.length} tone="success" />
-                  <Stat label="发布失败" value={failedAlerts.length} tone={failedAlerts.length > 0 ? 'danger' : undefined} />
-                </div>
                 {failedAlerts.length > 0 ? (
                   <div className="mt-3 rounded border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700">
                     {failedAlerts.length} 条规则发布失败。
                   </div>
-                ) : alertRules.length > 0 ? (
-                  <div className="mt-3 rounded border border-emerald-200 bg-emerald-50 px-2.5 py-2 text-xs text-emerald-700">
-                    所有告警规则状态正常。
-                  </div>
-                ) : (
+                ) : alertRules.length === 0 ? (
 				  <div className="mt-3 text-xs text-muted">暂无告警。<Link className="font-semibold text-primary" to={`${base}/alerts/new`}>创建告警</Link></div>
-                )}
+                ) : null}
               </OverviewCard>
             </div>
           )}
@@ -172,16 +148,6 @@ function OverviewCard({ icon: Icon, title, link, linkLabel, children }: { icon: 
         <Link className="text-xs font-semibold text-primary" to={link}>{linkLabel} →</Link>
       </div>
       <div className="p-3">{children}</div>
-    </div>
-  );
-}
-
-function Stat({ label, value, tone }: { label: string; value: number; tone?: 'success' | 'danger' }) {
-  const valueClass = tone === 'success' ? 'text-emerald-700' : tone === 'danger' ? 'text-danger' : 'text-on-surface';
-  return (
-    <div className="min-w-0">
-      <div className="text-[11px] font-semibold text-muted">{label}</div>
-      <div className={`mt-0.5 text-lg font-bold tabular-nums ${valueClass}`}>{value}</div>
     </div>
   );
 }

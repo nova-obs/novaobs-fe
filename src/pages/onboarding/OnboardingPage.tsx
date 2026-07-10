@@ -12,18 +12,9 @@ export function OnboardingPage() {
 
   return (
     <div className="space-y-4">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">服务接入</h1>
-          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-muted">
-            <span className="status-badge border-outline bg-surface-lowest">K8s</span>
-            <span className="status-badge border-outline bg-surface-lowest">VM</span>
-            <span className="status-badge border-outline bg-surface-lowest">日志下游</span>
-          </div>
-        </div>
-      </div>
+      <div className="page-header"><h1 className="page-title">服务接入</h1></div>
 
-      <DataPanel title="接入域" meta={`${domains.length} available`}>
+      <DataPanel title="接入域">
         <div className="overflow-auto">
           <table className="console-table min-w-[760px] w-full">
             <thead>

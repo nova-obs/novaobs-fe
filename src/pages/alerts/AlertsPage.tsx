@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Activity, BellRing, History, Plus, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import { HelpTip } from '../../components/HelpTip';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
 import type { AlertEvent, AlertInstance, AlertRule, NotificationPolicy, Service } from '../../services/types';
@@ -36,12 +37,9 @@ export function AlertsPage() {
   const policies = policiesQuery.data ?? [];
   const services = servicesQuery.data ?? [];
   const ruleNames = useMemo(() => new Map(rules.map((rule) => [rule.id, rule.spec.name])), [rules]);
+  const serviceNames = useMemo(() => new Map(services.map((service) => [service.id, service.displayName || service.name])), [services]);
+  const policyNames = useMemo(() => new Map(policies.map((policy) => [policy.id, policy.name])), [policies]);
   const activeCount = instances.filter((item) => item.state === 'firing' || item.state === 'pending').length;
-  const panelMeta = activeView === 'instances'
-    ? (instancesQuery.isLoading ? '加载中' : `${instances.length} 条实例`)
-    : activeView === 'policies'
-      ? (policiesQuery.isLoading ? '加载中' : `${policies.length} 条策略`)
-      : (rulesQuery.isLoading ? '加载中' : `${rules.length} 条规则`);
   const createPolicyMutation = useMutation({
     mutationFn: () => api.createNotificationPolicy({ name: policyName.trim(), receiver: receiverName.trim(), serviceId: policyServiceId || undefined }),
     onSuccess: async () => {
@@ -60,23 +58,21 @@ export function AlertsPage() {
   return (
     <div className="space-y-4">
       <div className="page-header">
-        <div>
-          <h1 className="page-title">告警中心</h1>
-          <p className="page-description">查看当前告警实例，维护通知策略和规则状态。</p>
-        </div>
+        <h1 className="page-title">告警中心</h1>
         <div className={`status-badge ${activeCount > 0 ? 'border-danger/25 bg-red-50 text-danger' : 'border-emerald-600/20 bg-emerald-50 text-emerald-700'}`}>
           <span className="status-dot" aria-hidden />
           {activeCount} 个活跃告警
         </div>
       </div>
 
-      <DataPanel title="告警工作台" meta={panelMeta} action={<AlertViewTabs activeView={activeView} onChange={setActiveView} />}>
+      <DataPanel action={<AlertViewTabs activeView={activeView} onChange={setActiveView} />}>
         {activeView === 'instances' ? (
           <AlertInstancesTable
             error={instancesQuery.error}
             isLoading={instancesQuery.isLoading}
             instances={instances}
             ruleNames={ruleNames}
+            serviceNames={serviceNames}
             onOpenEvents={setSelectedInstance}
           />
         ) : null}
@@ -85,6 +81,7 @@ export function AlertsPage() {
           <NotificationPoliciesTable
             error={policiesQuery.error}
             policies={policies}
+            serviceNames={serviceNames}
             pending={togglePolicyMutation.isPending}
             onCreate={() => setPolicyDrawerOpen(true)}
             onToggle={(policy, enabled) => togglePolicyMutation.mutate({ policy, enabled })}
@@ -92,7 +89,7 @@ export function AlertsPage() {
         ) : null}
 
         {activeView === 'rules' ? (
-          <AlertRulesTable error={rulesQuery.error} rules={rules} />
+          <AlertRulesTable error={rulesQuery.error} rules={rules} policyNames={policyNames} />
         ) : null}
       </DataPanel>
 
@@ -147,12 +144,14 @@ function AlertInstancesTable({
   isLoading,
   instances,
   ruleNames,
+  serviceNames,
   onOpenEvents,
 }: {
   error: unknown;
   isLoading: boolean;
   instances: AlertInstance[];
   ruleNames: Map<string, string>;
+  serviceNames: Map<string, string>;
   onOpenEvents: (instance: AlertInstance) => void;
 }) {
   return (
@@ -176,10 +175,9 @@ function AlertInstancesTable({
               <tr key={item.fingerprint} className="bg-surface-lowest hover:bg-surface-low">
                 <td><InstanceState state={item.state} /></td>
                 <td>
-                  <div className="font-semibold text-on-surface">{item.annotations.summary || ruleNames.get(item.ruleId) || item.ruleId}</div>
-                  <div className="max-w-[320px] truncate text-[11px] text-muted">{item.serviceId ? `服务范围：${item.serviceId}` : '全局告警范围'}</div>
+                  <div className="font-semibold text-on-surface">{item.annotations.summary || ruleNames.get(item.ruleId) || '未命名告警'}</div>
                 </td>
-                <td className="font-mono text-xs">{item.serviceId || '-'}</td>
+                <td className="text-xs">{item.serviceId ? <ReferenceLabel value={item.serviceId} resolved={serviceNames.get(item.serviceId)} kind="服务" /> : '全局'}</td>
                 <td><StatusBadge value={(item.labels.severity as 'critical' | 'warning' | 'info') || 'info'} /></td>
                 <td className="text-xs text-muted">{formatTime(item.startsAt)}</td>
                 <td className="text-xs text-muted">{formatTime(item.lastReceivedAt)}</td>
@@ -199,20 +197,21 @@ function AlertInstancesTable({
 function NotificationPoliciesTable({
   error,
   policies,
+  serviceNames,
   pending,
   onCreate,
   onToggle,
 }: {
   error: unknown;
   policies: NotificationPolicy[];
+  serviceNames: Map<string, string>;
   pending: boolean;
   onCreate: () => void;
   onToggle: (policy: NotificationPolicy, enabled: boolean) => void;
 }) {
   return (
     <div className="grid gap-3">
-      <div className="console-list-toolbar">
-        <div className="text-xs text-muted">策略关联稳定 receiver，可按服务收敛告警通知。</div>
+      <div className="console-list-toolbar justify-end">
         <button className="console-button console-button-primary" onClick={onCreate}>
           <Plus className="h-4 w-4" />
           新增通知策略
@@ -236,10 +235,10 @@ function NotificationPoliciesTable({
               <tr key={policy.id} className="bg-surface-lowest hover:bg-surface-low">
                 <td>
                   <div className="font-semibold text-on-surface">{policy.name}</div>
-                  <div className="max-w-[320px] truncate text-[11px] text-muted">{policy.description || policy.id}</div>
+                  <div className="max-w-[320px] truncate text-[11px] text-muted">{policy.description || '-'}</div>
                 </td>
                 <td className="font-mono text-xs">{policy.receiver}</td>
-                <td className="font-mono text-xs">{policy.serviceId || 'global'}</td>
+                <td className="text-xs">{policy.serviceId ? <ReferenceLabel value={policy.serviceId} resolved={serviceNames.get(policy.serviceId)} kind="服务" /> : '全局'}</td>
                 <td><StatusBadge value={policy.enabled ? 'enabled' : 'disabled'} /></td>
                 <td className="font-mono text-[11px] text-muted">{formatTime(policy.updatedAt)}</td>
                 <td>
@@ -261,7 +260,7 @@ function NotificationPoliciesTable({
   );
 }
 
-function AlertRulesTable({ error, rules }: { error: unknown; rules: AlertRule[] }) {
+function AlertRulesTable({ error, rules, policyNames }: { error: unknown; rules: AlertRule[]; policyNames: Map<string, string> }) {
   return (
     <div className="grid gap-3">
       {error ? <ErrorLine message={(error as Error).message} /> : null}
@@ -289,7 +288,7 @@ function AlertRulesTable({ error, rules }: { error: unknown; rules: AlertRule[] 
                 <td className="font-mono">{rule.spec.trigger.window} / {rule.spec.trigger.evaluationInterval}</td>
                 <td className="font-mono text-muted">{rule.spec.trigger.operator} {rule.spec.trigger.threshold}</td>
                 <td><StatusBadge value={rule.spec.notification.severity} /></td>
-                <td className="font-mono text-muted">{rule.spec.notification.policyId}</td>
+                <td className="text-muted"><ReferenceLabel value={rule.spec.notification.policyId} resolved={policyNames.get(rule.spec.notification.policyId)} kind="通知策略" /></td>
                 <td><div className="flex items-center gap-2"><StatusBadge value={rule.state} /><span className="text-[11px] text-muted">{rule.applyStatus}</span></div></td>
               </tr>
             ))}
@@ -298,6 +297,17 @@ function AlertRulesTable({ error, rules }: { error: unknown; rules: AlertRule[] 
         </table>
       </div>
     </div>
+  );
+}
+
+function ReferenceLabel({ value, resolved, kind }: { value: string; resolved?: string; kind: string }) {
+  if (!value) return <>未配置</>;
+  if (resolved) return <>{resolved}</>;
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      引用不可解析
+      <HelpTip content={`${kind}标识：${value}`} label={`查看${kind}引用`} />
+    </span>
   );
 }
 

@@ -161,10 +161,7 @@ export function MetricsAlertRuleDrawer({ productId, routeServiceId, ruleId = '',
       <button type="button" className="absolute inset-0 cursor-default border-0 bg-transparent" aria-label="关闭指标告警编辑遮罩" onClick={onClose} />
       <aside className="console-drawer-panel relative flex h-full w-full max-w-[760px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="metrics-alert-editor-title">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
-          <div className="min-w-0">
-            <div id="metrics-alert-editor-title" className="truncate text-sm font-semibold text-on-surface">{title}</div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{ruleId || 'new rule'}</div>
-          </div>
+          <div id="metrics-alert-editor-title" className="truncate text-sm font-semibold text-on-surface">{title}</div>
           <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭指标告警编辑" title="关闭">
             <X className="h-4 w-4" />
           </button>
@@ -330,8 +327,7 @@ function StripItem({ label, value, tone = 'muted' }: { label: string; value: str
 
 function BindingContext({ binding, endpointName }: { binding: MetricServiceBinding; endpointName?: string }) {
   return (
-    <div className="mt-3 grid grid-cols-2 gap-2 rounded-md border border-outline bg-surface-lowest p-3 md:grid-cols-4">
-      <div><div className="text-[11px] font-semibold text-muted">绑定 ID</div><div className="mt-1 truncate font-mono text-xs text-on-surface">{binding.id}</div></div>
+    <div className="mt-3 grid gap-2 rounded-md border border-outline bg-surface-lowest p-3 md:grid-cols-3">
       <div><div className="text-[11px] font-semibold text-muted">端点</div><div className="mt-1 truncate text-xs text-on-surface">{endpointName || binding.endpointId}</div></div>
       <div><div className="text-[11px] font-semibold text-muted">labelMatch</div><div className="mt-1 truncate font-mono text-xs text-on-surface">{formatLabelMatch(binding.labelMatch)}</div></div>
       <div><div className="text-[11px] font-semibold text-muted">basePromQL</div><div className="mt-1 truncate font-mono text-xs text-on-surface">{binding.basePromQL || '-'}</div></div>

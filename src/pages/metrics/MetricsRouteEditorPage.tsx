@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Loader2, Rocket, Save } from 'lucide-react';
+import { HelpTip } from '../../components/HelpTip';
 import { metricsApi, type MetricRouteInput } from './api';
 
 const defaultForm: MetricRouteInput = {
@@ -101,7 +102,7 @@ export function MetricsRouteEditorPage() {
         <div className="console-panel-header">
           <div className="flex min-w-0 items-center gap-3">
             <Link className="console-icon-button border-outline bg-white" to={`${base}/routes`} aria-label="返回采集路由"><ArrowLeft className="h-3.5 w-3.5" /></Link>
-            <div><h2 className="console-section-title">{editing ? '更新指标采集路由' : '创建指标采集路由'}</h2><p className="console-section-meta">结构化 K8s Service 发现，不接受任意抓取配置</p></div>
+            <h2 className="console-section-title">{editing ? '更新指标采集路由' : '创建指标采集路由'}</h2>
           </div>
         </div>
         {error ? <div className="console-notice console-notice-danger m-4 mb-0">{error}</div> : null}
@@ -109,22 +110,16 @@ export function MetricsRouteEditorPage() {
           <div className="console-empty-state m-4 min-h-[300px]"><div className="text-sm font-semibold text-on-surface">无法编辑采集路由</div><div className="text-xs text-muted">请返回路由列表刷新后重试。</div></div>
         ) : <div className="console-panel-body grid gap-x-5 gap-y-4 p-4 lg:grid-cols-2">
           <Field label="路由名称"><input className="console-input w-full" value={form.name} onChange={(e) => setField('name', e.target.value)} placeholder="例如：订单服务指标" required /></Field>
-          <Field label="指标存储端点"><select className="console-input w-full" value={form.endpointId} disabled={Boolean(existing?.appliedConfigHash)} onChange={(e) => setField('endpointId', e.target.value)} required><option value="">选择 VictoriaMetrics 端点</option>{endpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.name || endpoint.id}</option>)}</select>{existing?.appliedConfigHash ? <Hint>已部署路由的运行时分组不可迁移；更换端点需停用并发布旧路由后新建。</Hint> : null}</Field>
+          <Field label="指标存储端点" help="租户由当前产品与服务自动确定，发布时写入对应的 VictoriaMetrics 租户路径。"><select className="console-input w-full" value={form.endpointId} disabled={Boolean(existing?.appliedConfigHash)} onChange={(e) => setField('endpointId', e.target.value)} required><option value="">选择 VictoriaMetrics 端点</option>{endpoints.map((endpoint) => <option key={endpoint.id} value={endpoint.id}>{endpoint.name || endpoint.id}</option>)}</select>{existing?.appliedConfigHash ? <Hint>已部署路由的运行时分组不可迁移；更换端点需停用并发布旧路由后新建。</Hint> : null}</Field>
           <Field label="K8s 集群"><input className="console-input w-full font-mono text-xs" value={form.clusterId} readOnly={Boolean(service?.cluster)} onChange={(e) => setField('clusterId', e.target.value)} required /><Hint>服务已绑定集群时不可跨集群采集。</Hint></Field>
           <Field label="Namespace"><input className="console-input w-full font-mono text-xs" value={form.namespace} readOnly={Boolean(service?.namespace)} onChange={(e) => setField('namespace', e.target.value)} required /></Field>
-          <Field label="K8s Service"><input className="console-input w-full font-mono text-xs" value={form.k8sServiceName} onChange={(e) => setField('k8sServiceName', e.target.value)} placeholder="order-api" required /></Field>
+          <Field label="K8s Service" help="仅支持结构化 K8s Service 发现，不接受任意抓取配置。"><input className="console-input w-full font-mono text-xs" value={form.k8sServiceName} onChange={(e) => setField('k8sServiceName', e.target.value)} placeholder="order-api" required /></Field>
           <Field label="Service Port"><input className="console-input w-full font-mono text-xs" value={form.port} onChange={(e) => setField('port', e.target.value)} placeholder="metrics 或 9090" required /></Field>
           <Field label="Scheme"><select className="console-input w-full" value={form.scheme} onChange={(e) => setField('scheme', e.target.value as 'http' | 'https')}><option value="http">HTTP</option><option value="https">HTTPS</option></select></Field>
           <Field label="Metrics Path"><input className="console-input w-full font-mono text-xs" value={form.metricsPath} onChange={(e) => setField('metricsPath', e.target.value)} required /></Field>
           <Field label="Scrape Interval"><input className="console-input w-full font-mono text-xs" value={form.scrapeInterval} onChange={(e) => setField('scrapeInterval', e.target.value)} required /><Hint>允许 10s–5m。</Hint></Field>
           <Field label="Scrape Timeout"><input className="console-input w-full font-mono text-xs" value={form.scrapeTimeout} onChange={(e) => setField('scrapeTimeout', e.target.value)} required /><Hint>必须小于 Scrape Interval。</Hint></Field>
           <Field label="状态"><select className="console-input w-full" value={form.status} onChange={(e) => setField('status', e.target.value)}><option value="active">启用采集</option><option value="disabled">停用采集</option></select></Field>
-          <div className="rounded-md border border-outline bg-surface-low px-3 py-3 text-xs leading-5 text-muted">
-            <div className="font-semibold text-on-surface">租户归属</div>
-            <div className="mt-1 font-mono">AccountID: {service?.accountId || '0'}</div>
-            <div className="font-mono">ProjectID: {service?.projectId || '-'}</div>
-            <div className="mt-1">由产品与服务自动确定，vmagent 发布时写入对应 VictoriaMetrics 租户路径。</div>
-          </div>
         </div>}
       </section>
       <div className="fixed inset-x-0 bottom-0 z-40 border-t border-outline bg-white/95 px-4 py-3 backdrop-blur md:left-[var(--sidebar-width,0px)]">
@@ -138,8 +133,8 @@ export function MetricsRouteEditorPage() {
   );
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
-  return <label className="block text-xs font-semibold text-muted"><span className="mb-2 block">{label}</span>{children}</label>;
+function Field({ label, help, children }: { label: string; help?: string; children: React.ReactNode }) {
+  return <div className="block text-xs font-semibold text-muted"><div className="mb-2 flex items-center gap-1.5">{label}{help ? <HelpTip content={help} label={`${label}说明`} /> : null}</div><label className="block"><span className="sr-only">{label}</span>{children}</label></div>;
 }
 
 function Hint({ children }: { children: React.ReactNode }) {

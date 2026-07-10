@@ -195,7 +195,6 @@ export function ServicePickerPanel({
                     <td>
                       <div className="min-w-0">
                         <div className="truncate font-semibold text-on-surface">{serviceDisplayName(service)}</div>
-                        <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{service.id}</div>
                       </div>
                     </td>
                     <td className="font-mono text-xs text-muted">

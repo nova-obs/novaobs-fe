@@ -4,6 +4,8 @@ import { existsSync, readFileSync } from 'node:fs';
 
 const routes = readFileSync(new URL('../../app/routes.tsx', import.meta.url), 'utf8');
 const moduleRail = readFileSync(new URL('../../components/navigation/ModuleRail.tsx', import.meta.url), 'utf8');
+const serviceScope = readFileSync(new URL('../../components/navigation/ServiceScopedModuleWorkbench.tsx', import.meta.url), 'utf8');
+const serviceSelector = readFileSync(new URL('../../components/navigation/ServiceContextSelector.tsx', import.meta.url), 'utf8');
 const layout = readFileSync(new URL('./MetricsLayout.tsx', import.meta.url), 'utf8');
 const api = readFileSync(new URL('./api.ts', import.meta.url), 'utf8');
 const explore = readFileSync(new URL('./MetricsExplorePage.tsx', import.meta.url), 'utf8');
@@ -18,14 +20,16 @@ const endpoints = readFileSync(new URL('./MetricsEndpointsPage.tsx', import.meta
 test('Metrics 路由使用 app/routes.tsx 单一路由入口且不保留 monitoring 兼容路径', () => {
   assert.equal(existsSync(new URL('../../routes.tsx', import.meta.url)), false);
 	assert.match(routes, /path: '\/products\/:productId\/services\/:serviceId\/metrics'.*element: <MetricsLayout \/>/s);
+	assert.match(routes, /path: '\/metrics'.*element: <MetricsLayout \/>/s);
 	assert.match(routes, /index: true, title: '指标查询', element: <ServiceMetricsIndexRedirect \/>/);
+  assert.doesNotMatch(routes, /ServiceModuleEntryPage/);
   assert.doesNotMatch(routes, /path: '\/monitoring'/);
   assert.doesNotMatch(routes, /<MonitoringPage \/>/);
 });
 
 test('Metrics rail 顺序稳定并使用 ModuleWorkbench 非重挂载工作台', () => {
   assert.match(moduleRail, /'metrics'/);
-  assert.match(layout, /ModuleWorkbench/);
+  assert.match(layout, /ServiceScopedModuleWorkbench/);
   assert.match(layout, /module="metrics"/);
   assert.doesNotMatch(layout, /remountOnPathChange/);
   assert.doesNotMatch(layout, /label: '指标告警'.*end: true/);
@@ -93,8 +97,29 @@ test('Metrics 待接入页面使用控制台面板、表格或真实空态', () 
   assert.match(dashboards, /grafanaEndpoint/);
   assert.match(alerts, /api\.getMetricsAlertRules/);
   assert.match(alerts, /暂无指标告警规则/);
-	assert.match(endpoints, /metricsApi\.getWorkspace/);
+	assert.match(endpoints, /metricsApi\.listEndpoints/);
+	assert.match(endpoints, /metricsApi\.createEndpoint/);
+	assert.match(endpoints, /metricsApi\.updateEndpoint/);
+	assert.match(endpoints, /MetricsEndpointEditorDrawer/);
+	assert.match(endpoints, /登记 VMS/);
+	assert.match(endpoints, /保存并测试/);
+	assert.doesNotMatch(endpoints, /端点维护仍由后端统一接入配置收口/);
+	assert.match(serviceSelector, /LogsEntitySelector<Service>/);
+	assert.match(serviceSelector, /ariaLabel="选择当前服务"/);
+	assert.doesNotMatch(serviceSelector, /<select/);
+	assert.doesNotMatch(serviceSelector, /<optgroup/);
+	assert.doesNotMatch(serviceScope, /<select/);
+	assert.doesNotMatch(serviceScope, /toolbar=/);
+	assert.doesNotMatch(serviceSelector, />服务作用域</);
+	assert.doesNotMatch(serviceSelector, /选择产品/);
+	assert.match(serviceScope, /localStorage/);
   assert.match(endpoints, /metricsApi\.testEndpoint/);
+});
+
+test('Metrics 在页面上下文卡片中切换服务', () => {
+  for (const source of [explore, overview, collection, dashboards, alerts]) {
+    assert.match(source, /ServiceContextSelector/);
+  }
 });
 
 test('Metrics 采集路由和 vmagent 运行时形成单一部署路径', () => {

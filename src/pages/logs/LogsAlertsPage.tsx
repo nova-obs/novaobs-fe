@@ -9,6 +9,7 @@ import { LogsAlertRuleEditorDrawer } from './LogsAlertRulePage';
 import { LogsEmptyState, LogsErrorLine } from './LogsPrimitives';
 import { logsApi, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
 import { routeAccessPriority } from './ServicePickerPanel';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 type AlertServiceLogKind = 'external' | 'platform' | 'none';
 
@@ -160,12 +161,6 @@ function linkStatusLabel(hasEndpoint: boolean, status = '') {
   return value;
 }
 
-function serviceMetaLabel(service: AlertServiceRow | null) {
-  if (!service) return '服务 · 日志链路 · 告警规则';
-  const owner = service.environment || service.ownerTeam || '-';
-  return `${owner} · ${service.logLinkLabel} · ${service.enabledCount}/${service.ruleCount}`;
-}
-
 export function LogsAlertsPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -215,10 +210,7 @@ export function LogsAlertsPage() {
         <div className="console-panel-header shrink-0">
           <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="logs-alert-service-selector w-full lg:max-w-[420px]">
-			  <div className="rounded-md border border-outline bg-white px-3 py-2">
-				<div className="truncate text-sm font-semibold text-on-surface">{selectedService?.name || '服务不存在'}</div>
-				<div className="mt-1 truncate text-[11px] text-muted">{serviceMetaLabel(selectedService)}</div>
-			  </div>
+              <ServiceContextSelector />
             </div>
             <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
               <label className="relative w-full md:w-80">
@@ -267,7 +259,6 @@ export function LogsAlertsPage() {
                   >
                     <td>
                       <div className="font-semibold text-on-surface">{rule.spec.name}</div>
-                      <div className="font-mono text-[11px] text-muted">{rule.id}</div>
                     </td>
                     <td>{rule.spec.notification.severity}</td>
                     <td className="font-mono text-xs">{rule.spec.trigger.window || '-'}</td>

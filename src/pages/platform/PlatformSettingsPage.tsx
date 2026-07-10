@@ -103,7 +103,7 @@ export function PlatformSettingsPage() {
   return (
     <div className="console-workbench platform-settings-page overflow-hidden">
       <section className="min-w-0">
-          <DataPanel title="镜像模板" meta="平台级运行配置，部署清单渲染时使用">
+          <DataPanel title="镜像模板" help="镜像模板会在部署清单渲染时作为平台级运行配置使用。">
             {imagesQuery.isLoading ? (
               <div className="space-y-2">
                 <div className="h-10 rounded-md bg-surface" />

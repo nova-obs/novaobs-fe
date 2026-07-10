@@ -22,7 +22,6 @@ import { K8sTerminalPage } from '../pages/k8s/TerminalPage';
 import { LogsAgentsPage } from '../pages/logs/LogsAgentsPage';
 import { LogsAlertsPage } from '../pages/logs/LogsAlertsPage';
 import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
-import { LogsEntryLayout } from '../pages/logs/LogsEntryLayout';
 import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MetricsAlertsPage } from '../pages/metrics/MetricsAlertsPage';
@@ -32,7 +31,6 @@ import { MetricsRouteEditorPage } from '../pages/metrics/MetricsRouteEditorPage'
 import { MetricsDashboardsPage } from '../pages/metrics/MetricsDashboardsPage';
 import { MetricsEndpointsPage } from '../pages/metrics/MetricsEndpointsPage';
 import { MetricsExplorePage } from '../pages/metrics/MetricsExplorePage';
-import { MetricsEntryLayout } from '../pages/metrics/MetricsEntryLayout';
 import { MetricsLayout } from '../pages/metrics/MetricsLayout';
 import { MetricsOverviewPage } from '../pages/metrics/MetricsOverviewPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
@@ -41,7 +39,6 @@ import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPa
 import { PlatformLayout } from '../pages/platform/PlatformLayout';
 import { PlatformSettingsPage } from '../pages/platform/PlatformSettingsPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
-import { ServiceModuleEntryPage } from '../pages/services/ServiceModuleEntryPage';
 import { TracesPage } from '../pages/traces/TracesPage';
 
 export interface RouteDefinition {
@@ -97,14 +94,14 @@ const logsChildRoutes: RouteDefinition[] = [
   { path: 'alerts/new', title: '创建日志告警', element: <LogsAlertsPage /> },
   { path: 'alerts/:id', title: '更新日志告警', element: <LogsAlertsPage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
-  { path: 'endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
+  { path: 'endpoints', title: '观测接入配置', element: <Navigate to="/logs/endpoints" replace /> },
 ];
 
 const logsEntryChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <Navigate to="/logs/explore" replace /> },
-  { path: 'explore', title: 'Logs 日志分析', element: <ServiceModuleEntryPage module="logs" entry="explore" title="日志分析" actionLabel="进入日志分析" /> },
-  { path: 'agents', title: 'Logs 采集路由', element: <ServiceModuleEntryPage module="logs" entry="agents" title="采集路由" actionLabel="进入采集路由" /> },
-  { path: 'alerts', title: 'Logs 日志告警', element: <ServiceModuleEntryPage module="logs" entry="alerts" title="日志告警" actionLabel="进入日志告警" /> },
+  { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
+  { path: 'agents', title: 'Logs 采集路由', element: <LogsAgentsPage /> },
+  { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
   { path: 'endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
 ];
 
@@ -126,27 +123,27 @@ const metricsChildRoutes: RouteDefinition[] = [
   { path: 'routes/:id/edit', title: '更新指标采集路由', element: <MetricsRouteEditorPage /> },
   { path: 'routes', title: '采集路由', element: <MetricsCollectionPage /> },
   { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
-  { path: 'endpoints', title: '接入端点', element: <MetricsEndpointsPage /> },
+  { path: 'endpoints', title: '接入端点', element: <Navigate to="/metrics/endpoints" replace /> },
 ];
 
 const metricsEntryChildRoutes: RouteDefinition[] = [
   { index: true, title: '指标查询', element: <Navigate to="/metrics/explore" replace /> },
-  { path: 'explore', title: '指标查询', element: <ServiceModuleEntryPage module="metrics" entry="explore" title="指标查询" actionLabel="进入指标查询" /> },
-  { path: 'alerts', title: '指标告警', element: <ServiceModuleEntryPage module="metrics" entry="alerts" title="指标告警" actionLabel="进入指标告警" /> },
-  { path: 'dashboards', title: 'Dashboard', element: <ServiceModuleEntryPage module="metrics" entry="dashboards" title="Dashboard" actionLabel="进入 Dashboard" /> },
-  { path: 'routes', title: '采集路由', element: <ServiceModuleEntryPage module="metrics" entry="routes" title="采集路由" actionLabel="进入采集路由" /> },
-  { path: 'overview', title: '监控总览', element: <ServiceModuleEntryPage module="metrics" entry="overview" title="监控总览" actionLabel="进入监控总览" /> },
-  { path: 'endpoints', title: '接入端点', element: <ServiceModuleEntryPage module="metrics" entry="endpoints" title="接入端点" actionLabel="进入接入端点" /> },
+  { path: 'explore', title: '指标查询', element: <MetricsExplorePage /> },
+  { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
+  { path: 'dashboards', title: 'Dashboard', element: <MetricsDashboardsPage /> },
+  { path: 'routes', title: '采集路由', element: <MetricsCollectionPage /> },
+  { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
+  { path: 'endpoints', title: '接入端点', element: <MetricsEndpointsPage /> },
 ];
 
 export const routeDefinitions: RouteDefinition[] = [
   { path: '/', title: '平台总览', element: <OverviewPage /> },
   { path: '/services', title: '服务目录', element: <ServicesPage /> },
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/services" replace /> },
-	{ path: '/logs', title: 'Logs', element: <LogsEntryLayout />, children: logsEntryChildRoutes },
+	{ path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsEntryChildRoutes },
   { path: '/products/:productId/services/:serviceId/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
   { path: '/observability/endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
-  { path: '/metrics', title: '指标查询', element: <MetricsEntryLayout />, children: metricsEntryChildRoutes },
+  { path: '/metrics', title: '指标查询', element: <MetricsLayout />, children: metricsEntryChildRoutes },
 	{ path: '/products/:productId/services/:serviceId/metrics', title: '监控', element: <MetricsLayout />, children: metricsChildRoutes },
   { path: '/traces', title: 'Trace', element: <TracesPage /> },
   { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { AlertTriangle, Boxes, CheckCircle2, FileCode2, Layers3, Play, ScrollText, ShieldAlert, TerminalSquare, Trash2, X } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, FileCode2, Play, ScrollText, ShieldAlert, TerminalSquare, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import type { K8sDeploymentIdentity, K8sDeploymentOperationResult, K8sResourceIdentity, K8sResourceSummary } from './api';
 import { k8sApi } from './api';
@@ -277,12 +277,6 @@ export function K8sResourcePage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <ResourceMetric icon={Boxes} label="资源对象" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <ResourceMetric icon={Layers3} label="身份字段" value="6" meta="cluster/ns/api/kind/name/uid" />
-        <ResourceMetric icon={FileCode2} label="详情能力" value="YAML" meta="read-only preview" />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_minmax(160px,220px)_1fr] md:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -311,10 +305,6 @@ export function K8sResourcePage() {
               ))}
             </select>
           </label>
-          <div className="flex flex-wrap gap-2 text-[11px] font-semibold text-muted">
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">cluster/ns/api/kind/name/uid</span>
-            <span className="rounded-lg border border-outline/70 bg-white/70 px-2.5 py-1">UID required</span>
-          </div>
         </div>
         {namespaceError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
@@ -323,7 +313,7 @@ export function K8sResourcePage() {
         ) : null}
       </section>
 
-      <DataPanel title="资源视图" meta={isLoading ? '加载中' : `${data.length} 个资源`}>
+      <DataPanel title="资源视图" meta={isLoading ? '加载中' : undefined}>
         {error ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             资源读取失败：{errorMessage(error)}
@@ -350,7 +340,6 @@ export function K8sResourcePage() {
                   <th>命名空间</th>
                   <th>API Version</th>
                   <th>Kind</th>
-                  <th>UID</th>
                   <th>状态</th>
                 </tr>
               </thead>
@@ -379,7 +368,6 @@ export function K8sResourcePage() {
                     <td className="font-mono text-xs">{resourceNamespaceLabel(item.identity.namespace)}</td>
                     <td className="font-mono text-xs">{item.identity.apiVersion}</td>
                     <td className="font-mono text-xs">{item.identity.kind}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.identity.uid || '-'}</td>
                     <td><StatusPill status={item.status} /></td>
                   </tr>
                 ))}
@@ -458,21 +446,6 @@ export function K8sResourcePage() {
         </>
       ), document.body) : null}
     </div>
-  );
-}
-
-function ResourceMetric({ icon: Icon, label, value, meta }: { icon: typeof Boxes; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
   );
 }
 

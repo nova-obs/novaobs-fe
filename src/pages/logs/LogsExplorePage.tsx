@@ -5,6 +5,7 @@ import { Bell, Database, ExternalLink, ListFilter, RefreshCw, Route, Save, Serve
 import { buildVictoriaLogsVMUIURL, logSinkLabel, logsApi, type LogEndpoint, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
 import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsSection } from './LogsPrimitives';
 import { routeAccessPriority } from './ServicePickerPanel';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 type ServiceLogMode = 'external' | 'platform' | 'none';
 
@@ -137,13 +138,7 @@ export function LogsExplorePage() {
                 <span>服务</span>
               </div>
               <div className="service-selector p-2">
-                <div className="flex h-14 min-w-0 items-center gap-3 rounded-md border border-primary/15 bg-primary-soft/35 px-3 shadow-[inset_3px_0_0_#0d5bd7]">
-                  {activeLink?.mode === 'platform' ? <Route className="h-4 w-4 shrink-0 text-primary" /> : <Server className="h-4 w-4 shrink-0 text-primary" />}
-                  <div className="min-w-0">
-                    <div className="truncate text-sm font-semibold text-on-surface">{activeLink?.serviceName || '服务不存在'}</div>
-                    <div className="mt-1 truncate text-[11px] text-muted">{serviceId}</div>
-                  </div>
-                </div>
+                <ServiceContextSelector icon={activeLink?.mode === 'platform' ? Route : Server} />
               </div>
             </div>
             <div className="logs-explore-context-panel min-w-0 overflow-hidden rounded-md border border-primary/25 bg-white shadow-[0_8px_18px_rgba(24,52,96,0.12)]">

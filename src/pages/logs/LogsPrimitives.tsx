@@ -81,7 +81,7 @@ export function LogsTaskPageHeader({
   action,
 }: {
   title: string;
-  description: string;
+  description?: string;
   meta?: string;
   context?: ReactNode;
   action?: ReactNode;
@@ -92,7 +92,7 @@ export function LogsTaskPageHeader({
         <h2 className="shrink-0 text-base font-semibold text-on-surface">{title}</h2>
         {meta ? <span className="shrink-0 font-mono text-[11px] font-medium text-muted">{meta}</span> : null}
         {context ? <div className="shrink-0">{context}</div> : null}
-        <span className="hidden min-w-0 truncate text-xs leading-5 text-muted 2xl:inline">{description}</span>
+        {description ? <span className="hidden min-w-0 truncate text-xs leading-5 text-muted 2xl:inline">{description}</span> : null}
       </div>
       {action ? <div className="flex shrink-0 flex-wrap items-center gap-2">{action}</div> : null}
     </header>

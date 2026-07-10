@@ -265,7 +265,6 @@ function LogsCollectorAccessPanel() {
                           <RuntimeIcon />
                           <div>
                             <div className="text-sm font-semibold text-on-surface">日志采集运行时</div>
-                            <div className="font-mono text-[11px] text-muted">{runtime.id}</div>
                           </div>
                         </div>
                       </td>

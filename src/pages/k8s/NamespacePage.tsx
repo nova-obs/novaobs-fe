@@ -57,7 +57,7 @@ export function K8sNamespacePage() {
           <div className="console-panel-header shrink-0">
             <div className="min-w-0">
               <h2 className="console-section-title">命名空间列表</h2>
-              <p className="console-section-meta">{activeClusterId ? `${namespaces.length} 个命名空间 · /api/v1/k8s/namespaces` : '等待集群上下文'}</p>
+              {!activeClusterId ? <p className="console-section-meta">等待集群上下文</p> : null}
             </div>
             <div className="hidden min-w-0 text-right md:block">
               <div className="text-[11px] font-semibold text-muted">当前集群</div>
@@ -120,7 +120,6 @@ export function K8sNamespacePage() {
                     >
                       <td>
                         <div className="font-semibold text-primary">{item.name}</div>
-                        <div className="text-[11px] text-muted">{item.id}</div>
                       </td>
                       <td className="font-mono text-xs">{item.clusterId}</td>
                       <td className="font-mono text-xs">{item.phase || '-'}</td>
@@ -198,7 +197,6 @@ function NamespaceInspector({
             <div className="min-w-0">
               <div className="text-[11px] font-semibold text-muted">当前命名空间</div>
               <h2 className="mt-1 truncate text-base font-semibold text-on-surface">{namespace.name}</h2>
-              <div className="mt-1 break-all font-mono text-[11px] text-muted">{namespace.id}</div>
             </div>
             <StatusPill status={namespace.status} />
           </div>

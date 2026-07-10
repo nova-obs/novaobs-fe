@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Bell, Plus, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
 import type { AlertRule } from '../../services/types';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 export function MetricsAlertsPage() {
 	const { productId = '', serviceId = '' } = useParams();
@@ -13,16 +14,12 @@ export function MetricsAlertsPage() {
     retry: false,
   });
 	const rules = useMemo(() => (rulesQuery.data ?? []).filter((rule) => rule.spec.scope.serviceId === serviceId), [rulesQuery.data, serviceId]);
-  const enabledCount = rules.filter((rule) => rule.state === 'enabled').length;
 
   return (
     <div className="space-y-3">
       <section className="console-panel overflow-hidden">
         <div className="console-panel-header">
-          <div className="min-w-0">
-            <h2 className="console-section-title">指标告警</h2>
-            <p className="console-section-meta">共 {rules.length} 条 · 启用 {enabledCount} 条</p>
-          </div>
+          <ServiceContextSelector className="w-full max-w-[420px]" />
           <div className="flex items-center gap-2">
 			<Link className="console-button console-button-primary gap-1.5" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/alerts/new`}>
               <Plus className="h-3.5 w-3.5" />
@@ -83,7 +80,6 @@ function MetricAlertRuleRow({ rule }: { rule: AlertRule }) {
       <td>
         <div className="min-w-0">
           <div className="font-semibold text-on-surface">{rule.spec.name || rule.id}</div>
-          <div className="mt-1 truncate text-[11px] text-muted">{rule.id}</div>
         </div>
       </td>
       <td>

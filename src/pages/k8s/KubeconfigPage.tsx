@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Check, Copy, Download, FileKey2, KeyRound, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Check, Copy, Download, KeyRound, ShieldAlert } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import { HelpTip } from '../../components/HelpTip';
 import { k8sApi, type K8sKubeconfigExport, type K8sKubeconfigMetadata } from './api';
 import { useK8sOpsContext } from './context';
 
@@ -93,12 +94,6 @@ export function K8sKubeconfigPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.8fr]">
-        <KubeconfigMetric icon={KeyRound} label="Secret" value={metadata ? 'created' : 'pending'} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <KubeconfigMetric icon={ShieldCheck} label="权限" value="export" meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
-        <KubeconfigMetric icon={FileKey2} label="明文" value={exported ? 'visible' : 'hidden'} meta="audit gated" />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 xl:grid-cols-[minmax(180px,260px)_minmax(180px,240px)_minmax(220px,280px)_1fr] xl:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -153,7 +148,7 @@ export function K8sKubeconfigPage() {
         ) : null}
       </section>
 
-      <DataPanel title="Kubeconfig" meta="生成写入 Secret，导出单独授权并审计">
+      <DataPanel title="Kubeconfig" help="生成操作只返回 Secret 元数据；明文仅在单独授权并写入审计后导出。">
         {permissionError ? (
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             <ShieldAlert className="h-4 w-4" />
@@ -169,7 +164,6 @@ export function K8sKubeconfigPage() {
         <div className="grid gap-4 lg:grid-cols-[360px_minmax(0,1fr)]">
           <aside className="console-panel px-4 py-3">
             <div className="text-sm font-semibold text-on-surface">生成确认</div>
-            <p className="mt-1 text-xs text-muted">普通响应只返回 Secret 元数据，不展示 kubeconfig 明文。</p>
             <div className="mt-4 rounded-lg bg-white/45 px-3 py-3 text-xs text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
               <div className="font-mono">cluster={activeClusterId || '-'}</div>
               <div className="font-mono">namespace={namespace || '-'}</div>
@@ -210,9 +204,9 @@ export function K8sKubeconfigPage() {
 
             <section className="console-panel min-w-0 overflow-hidden px-4 py-3">
               <div className="flex items-center justify-between gap-3">
-                <div className="min-w-0">
+                <div className="flex min-w-0 items-center gap-1.5">
                   <div className="text-sm font-semibold text-on-surface">明文导出</div>
-                  <p className="mt-1 text-xs text-muted">仅在点击“审计导出”后显示，导出动作单独写审计。</p>
+                  <HelpTip content="仅在点击“审计导出”后显示，导出动作会单独写入审计。" label="明文导出说明" />
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   {exported?.auditId ? <span className="rounded-lg bg-primary-soft px-2 py-1 text-xs font-semibold text-primary">audit {exported.auditId}</span> : null}
@@ -235,21 +229,6 @@ export function K8sKubeconfigPage() {
         </div>
       </DataPanel>
     </div>
-  );
-}
-
-function KubeconfigMetric({ icon: Icon, label, value, meta }: { icon: typeof KeyRound; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
   );
 }
 

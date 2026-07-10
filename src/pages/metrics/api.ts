@@ -49,8 +49,23 @@ export interface MetricEndpoint {
   scopeType: string;
   clusterId: string;
   status: string;
+  healthStatus: string;
+  healthMessage: string;
+  healthCheckedAt: string;
+  healthResponseTimeMs: number;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface MetricEndpointInput {
+  name: string;
+  description: string;
+  remoteWriteURL: string;
+  queryURL: string;
+  vmuiURL: string;
+  scopeType?: string;
+  clusterId?: string;
+  status: string;
 }
 
 export interface MetricServiceBinding {
@@ -189,6 +204,7 @@ function mapEndpoint(raw: any): MetricEndpoint {
   const urls = raw.urls ?? {};
   const tenant = raw.tenant ?? {};
   const scope = raw.scope ?? {};
+  const health = raw.health ?? {};
   return {
     id: String(raw.id ?? ''),
     name: raw.name ?? '',
@@ -203,6 +219,10 @@ function mapEndpoint(raw: any): MetricEndpoint {
     scopeType: raw.scope_type ?? raw.scopeType ?? scope.type ?? '',
     clusterId: raw.cluster_id ?? raw.clusterId ?? scope.cluster_id ?? scope.clusterId ?? '',
     status: raw.status ?? '',
+    healthStatus: health.status ?? raw.health_status ?? raw.healthStatus ?? 'unknown',
+    healthMessage: health.message ?? raw.health_message ?? raw.healthMessage ?? '',
+    healthCheckedAt: health.checked_at ?? health.checkedAt ?? raw.health_checked_at ?? raw.healthCheckedAt ?? '',
+    healthResponseTimeMs: Number(health.response_time_ms ?? health.responseTimeMs ?? raw.health_response_time_ms ?? raw.healthResponseTimeMs ?? 0),
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
@@ -314,8 +334,20 @@ export const metricsApi = {
 	return mapWorkspace(await apiRequest<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/workspace`));
   },
   async listEndpoints(): Promise<MetricEndpoint[]> {
-    const raw = await apiRequest<any[]>('/metrics/endpoints');
+    const raw = await apiRequest<any[]>('/observability/endpoints?signal_type=metrics&kind=victoriametrics');
     return Array.isArray(raw) ? raw.map(mapEndpoint) : [];
+  },
+  async createEndpoint(input: MetricEndpointInput): Promise<MetricEndpoint> {
+    return mapEndpoint(await apiRequest<any>('/observability/endpoints', {
+      method: 'POST',
+      body: JSON.stringify(toMetricEndpointPayload(input)),
+    }));
+  },
+  async updateEndpoint(id: string, input: MetricEndpointInput): Promise<MetricEndpoint> {
+    return mapEndpoint(await apiRequest<any>(`/observability/endpoints/${encodeURIComponent(id)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(toMetricEndpointPayload(input)),
+    }));
   },
   async listServiceBindings(productId: string, serviceId: string): Promise<MetricServiceBinding[]> {
 	const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/bindings`);
@@ -399,6 +431,25 @@ export const metricsApi = {
     return mapMetricsCollectorRuntimePublish(raw);
   },
 };
+
+function toMetricEndpointPayload(input: MetricEndpointInput) {
+  return {
+    name: input.name,
+    description: input.description,
+    kind: 'victoriametrics',
+    signal_types: ['metrics'],
+    scope: {
+      type: input.scopeType || 'global',
+      ...((input.scopeType === 'k8s_cluster' && input.clusterId) ? { cluster_id: input.clusterId } : {}),
+    },
+    urls: {
+      remote_write_url: input.remoteWriteURL,
+      query_url: input.queryURL,
+      ui_url: input.vmuiURL,
+    },
+    status: input.status,
+  };
+}
 
 function toMetricRoutePayload(input: Partial<MetricRouteInput>) {
   return {

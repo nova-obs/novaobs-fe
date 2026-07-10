@@ -245,10 +245,7 @@ export function LogsAlertRuleEditorDrawer({ productId, serviceId: routeServiceId
       <button type="button" className="absolute inset-0 cursor-default border-0 bg-transparent" aria-label="关闭日志告警编辑遮罩" onClick={onClose} />
       <aside className="console-drawer-panel relative flex h-full w-full max-w-[760px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="alert-rule-editor-title">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
-          <div className="min-w-0">
-            <div id="alert-rule-editor-title" className="truncate text-sm font-semibold text-on-surface">{ruleId ? '编辑日志告警' : '创建日志告警'}</div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{ruleId ? ruleId : 'new rule'}</div>
-          </div>
+          <div id="alert-rule-editor-title" className="truncate text-sm font-semibold text-on-surface">{ruleId ? '编辑日志告警' : '创建日志告警'}</div>
           <div className="flex shrink-0 items-center gap-2">
             {ruleId && ruleQuery.data?.state === 'enabled' ? <button className="console-button console-button-danger" disabled={disableMutation.isPending} onClick={() => disableMutation.mutate()}>停用</button> : null}
             <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭日志告警编辑" title="关闭">

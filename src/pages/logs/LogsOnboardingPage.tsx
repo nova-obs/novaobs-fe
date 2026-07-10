@@ -913,10 +913,8 @@ export function LogsOnboardingPage() {
       <div className="logs-task-page space-y-3">
         <LogsTaskPageHeader
           title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
-          description="按运行目标、采集配置、预览发布的顺序完成路由任务。"
-          meta={routeUpdateMode ? '更新现有采集路由' : '新建采集路由'}
         />
-        <DataPanel title="采集路由加载失败" meta="Logs">
+        <DataPanel title="采集路由加载失败">
           <ErrorInline message={(error as Error).message} onRetry={() => refetch()} />
         </DataPanel>
       </div>
@@ -927,8 +925,6 @@ export function LogsOnboardingPage() {
     <div className="logs-task-page flex h-full min-h-[720px] min-w-0 flex-col overflow-hidden">
       <LogsTaskPageHeader
         title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
-        description={sourceType === 'vm_file' ? '选择目标、校验配置并发布。' : '选择目标、校验配置并保存业务路由。'}
-        meta={routeUpdateMode ? '更新现有采集路由' : '新建采集路由'}
         context={sourceModeSwitch}
         action={(
           <>
@@ -1044,13 +1040,7 @@ export function LogsOnboardingPage() {
                       </div>
                     ) : null}
                     <aside className="logs-k8s-cluster-picker rounded-lg border border-primary/20 bg-primary-soft/30 p-3 shadow-[0_10px_28px_rgba(13,91,215,0.08)]">
-                      <div className="mb-3 flex items-start justify-between gap-2">
-                        <div>
-                          <div className="text-sm font-semibold text-on-surface">选择 K8s 集群</div>
-                          <div className="mt-1 text-[11px] font-semibold text-muted">可用集群</div>
-                        </div>
-                        <span className="rounded-lg border border-primary/15 bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-primary shadow-[0_4px_12px_rgba(13,91,215,0.08)]">{writableClusters.length} clusters</span>
-                      </div>
+                      <div className="mb-3 text-sm font-semibold text-on-surface">选择 K8s 集群</div>
                       <div className="space-y-2">
                         {writableClusters.length === 0 ? <Empty label="暂无可发布集群" /> : writableClusters.map((cluster) => (
                           <button
@@ -1070,11 +1060,8 @@ export function LogsOnboardingPage() {
                                 {cluster.id === clusterId ? <CheckCircle className="h-4 w-4" /> : <Server className="h-4 w-4" />}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <div className="flex items-center justify-between gap-2">
-                                  <span className="min-w-0 truncate text-[13px] font-semibold text-on-surface">{cluster.name || cluster.id}</span>
-                                  <span className="shrink-0 rounded-md border border-primary/20 bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary">可发布</span>
-                                </div>
-                                <div className="mt-2 grid grid-cols-3 gap-1.5">
+                                <span className="block min-w-0 truncate text-[13px] font-semibold text-on-surface">{cluster.name || cluster.id}</span>
+                                <div className="mt-2 grid grid-cols-2 gap-1.5">
                                   <div className="rounded-md border border-outline/70 bg-surface-lowest/80 px-2 py-1">
                                     <div className="text-[10px] font-semibold text-muted">版本</div>
                                     <div className="mt-0.5 truncate font-mono text-[11px] font-semibold text-on-surface">{cluster.version || '-'}</div>
@@ -1083,12 +1070,7 @@ export function LogsOnboardingPage() {
                                     <div className="text-[10px] font-semibold text-muted">模式</div>
                                     <div className="mt-0.5 truncate font-mono text-[11px] font-semibold text-on-surface">{cluster.accessMode || '-'}</div>
                                   </div>
-                                  <div className="rounded-md border border-outline/70 bg-surface-lowest/80 px-2 py-1">
-                                    <div className="text-[10px] font-semibold text-muted">Cluster ID</div>
-                                    <div className="mt-0.5 truncate font-mono text-[11px] font-semibold text-on-surface">{cluster.id}</div>
-                                  </div>
                                 </div>
-                                {cluster.id === clusterId ? <div className="mt-2 inline-flex items-center rounded-md bg-primary-soft px-2 py-0.5 text-[11px] font-semibold text-primary">已选择</div> : null}
                               </div>
                             </div>
                           </button>
@@ -1213,11 +1195,7 @@ export function LogsOnboardingPage() {
           >
             <div className="relative space-y-3 p-3">
               {endpointDisabledReason ? <WarnLine message={endpointDisabledReason} /> : null}
-              <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className={`rounded-lg px-2 py-0.5 font-mono text-[11px] font-semibold ${hasEndpointForSource ? 'bg-primary-soft text-primary' : 'bg-white text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>{selectedEndpointLabel}</span>
-                  <span className="rounded-lg bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]">{availableEndpoints.length} endpoints</span>
-                </div>
+              <div className="flex justify-end">
                 <Link
                   className="inline-flex h-7 w-fit items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
 				  to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(pathServiceId)}/logs/endpoints`}
@@ -1240,7 +1218,6 @@ export function LogsOnboardingPage() {
                           <th>类型</th>
                           <th>作用域</th>
                           <th>写入地址</th>
-                          <th>状态</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1259,11 +1236,6 @@ export function LogsOnboardingPage() {
                               <td>{logSinkLabel(endpoint.sinkType)}</td>
                               <td className="font-mono text-xs text-muted">{endpoint.scopeType}{endpoint.clusterId ? ` · ${endpoint.clusterId}` : ''}</td>
                               <td className="max-w-[280px] truncate font-mono text-xs text-muted">{endpoint.writeURL || '-'}</td>
-                              <td>
-                                <span className={`inline-flex rounded-lg px-2 py-0.5 text-[11px] font-semibold ${selected ? 'bg-primary-soft text-primary' : 'bg-white/70 text-muted shadow-[inset_0_0_0_1px_rgba(216,226,239,0.8)]'}`}>
-                                  {selected ? '已选择' : '可选择'}
-                                </span>
-                              </td>
                             </tr>
                           );
                         })}
@@ -1666,11 +1638,7 @@ function RouteCanvasStepper({
 
   return (
     <aside className="logs-route-stepper min-w-0 rounded-lg border border-outline bg-surface-lowest p-3 xl:sticky xl:top-0 xl:h-fit" aria-label="创建采集路由步骤">
-      <div className="border-b border-outline pb-3">
-        <div className="text-xs font-semibold text-muted">创建步骤</div>
-        <div className="mt-1 text-sm font-semibold text-on-surface">采集路由</div>
-      </div>
-      <div className="mt-3 space-y-2">
+      <div className="space-y-2">
         {steps.map((step) => {
           const active = currentStep === 1 && setupTask === step.key;
           const statusLabel = step.disabled ? '待前置' : step.done ? '已完成' : active ? '进行中' : '未开始';
@@ -1708,10 +1676,6 @@ function RouteCanvasStepper({
             </button>
           );
         })}
-      </div>
-      <div className="mt-3 rounded-md border border-outline bg-surface px-3 py-2">
-        <div className="text-[11px] font-semibold text-muted">后续</div>
-        <div className="mt-1 font-mono text-[11px] text-on-surface">采集配置 / 发布预览</div>
       </div>
     </aside>
   );
@@ -1805,7 +1769,6 @@ function RouteTaskSummaryCard({
         <SummaryGroup title="路由规则">
           <SummaryValue label="服务" value={serviceLabel} />
           <SummaryValue label="下游" value={endpointLabel} />
-          <SummaryValue label="采集类型" value="logs" />
           <SummaryValue label="配置状态" value={configLabel} />
         </SummaryGroup>
         <SummaryGroup title="发布线索">

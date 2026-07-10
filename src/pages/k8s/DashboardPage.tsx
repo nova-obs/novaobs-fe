@@ -45,12 +45,7 @@ export function DashboardPage() {
             <span>配置状态 {sync?.status ?? 'unknown'}</span>
           </div>
         </div>
-        <div className="grid divide-y divide-outline md:grid-cols-4 md:divide-x md:divide-y-0">
-          <CompactMetric label="运行工作负载" value={String(stats?.workloads ?? 0)} meta="Deployment" />
-          <CompactMetric label="命名空间" value={String(stats?.namespaces ?? 0)} meta="Kubernetes API" />
-          <CompactMetric label="Pod Ready" value={`${readyPods} / ${totalPods}`} meta={`${warningPods} warning`} />
-          <CompactMetric label="已登记集群" value={String(clusters.length)} meta="NovaAPM metadata" />
-        </div>
+        {warningPods > 0 ? <div className="border-t border-outline px-4 py-2 text-xs font-semibold text-warning">Pod Ready {readyPods} / {totalPods}，{warningPods} 个异常</div> : null}
       </section>
 
       {clusterError || error ? (
@@ -61,7 +56,7 @@ export function DashboardPage() {
       ) : null}
 
       <div className="console-workbench grid gap-4 xl:grid-cols-[minmax(0,1fr)_320px]">
-        <DataPanel title="控制面状态" meta={`cluster/${stats?.clusterId || activeClusterId || '等待登记'}`}>
+        <DataPanel title="控制面状态">
           <div className="console-resource-list">
             <table className="console-table w-full min-w-[620px]">
               <thead>
@@ -81,7 +76,7 @@ export function DashboardPage() {
             </table>
           </div>
         </DataPanel>
-        <DataPanel title="集群策略" meta={activeCluster?.id ?? activeClusterId ?? '-'}>
+        <DataPanel title="集群策略">
           <div className="space-y-2">
             <PolicyRow label="接入模式" value={activeCluster?.accessMode || '-'} />
             <PolicyRow label="写入保护" value={activeCluster?.readOnly ? '只读' : '允许写入'} />
@@ -126,7 +121,7 @@ export function DashboardPage() {
           ) : null}
         </DataPanel>
 
-        <DataPanel title="操作审计" meta={auditError ? '读取失败' : `${auditEvents.length} 条`}>
+        <DataPanel title="操作审计" meta={auditError ? '读取失败' : undefined}>
           <div className="divide-y divide-outline">
             {auditEvents.map((event) => (
               <div key={event.id} className="px-1 py-2.5">
@@ -148,16 +143,6 @@ export function DashboardPage() {
           </div>
         </DataPanel>
       </div>
-    </div>
-  );
-}
-
-function CompactMetric({ label, value, meta }: { label: string; value: string; meta: string }) {
-  return (
-    <div className="px-4 py-3">
-      <div className="text-[11px] font-semibold text-muted">{label}</div>
-      <div className="mt-1 font-mono text-xl font-semibold text-on-surface">{value}</div>
-      <div className="mt-0.5 text-[11px] text-muted">{meta}</div>
     </div>
   );
 }

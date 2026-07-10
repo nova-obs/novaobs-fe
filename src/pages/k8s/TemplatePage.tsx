@@ -289,7 +289,6 @@ export function K8sTemplatePage() {
                   >
                     <td>
                       <div className="font-semibold text-primary">{item.name}</div>
-                      <div className="font-mono text-[11px] text-muted">{item.id}</div>
                     </td>
                     <td>{item.type}</td>
                     <td className="max-w-[280px] truncate text-xs text-muted">{item.variables.map((variable) => variable.name).join(', ') || '-'}</td>
@@ -470,7 +469,7 @@ function TemplatePreviewDrawer({ template, renderedYAML, rendering, error, onRen
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
           <div className="min-w-0">
             <div id="template-preview-title" className="truncate text-sm font-semibold text-on-surface">{template.name}</div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{template.id} · {template.type}</div>
+            <div className="mt-1 text-[11px] text-muted">{template.type}</div>
           </div>
           <div className="flex shrink-0 gap-2">
             <button className="console-button" onClick={onRender} disabled={rendering}>
@@ -523,7 +522,6 @@ function TemplateDeleteDialog({ template, pending, error, onDelete, onClose }: {
         <div className="px-4 py-3">
           <div className="font-semibold text-on-surface">删除确认摘要</div>
           <div className="mt-3 rounded-md border border-outline bg-surface px-3 py-3 text-xs text-muted">
-            <div className="font-mono">id={template.id}</div>
             <div className="font-mono">name={template.name}</div>
             <div className="font-mono">type={template.type}</div>
           </div>

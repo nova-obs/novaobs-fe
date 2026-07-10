@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { KeyRound, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCheck, X } from 'lucide-react';
+import { Plus, ShieldAlert, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sServiceAccount } from './api';
 import { useK8sOpsContext } from './context';
@@ -76,12 +76,6 @@ export function K8sServiceAccountPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[1.1fr_0.9fr_0.9fr]">
-        <ServiceAccountMetric icon={UserRoundCheck} label="ServiceAccount" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <ServiceAccountMetric icon={ShieldCheck} label="权限模型" value="RBAC" meta="k8s.service-account" />
-        <ServiceAccountMetric icon={KeyRound} label="敏感输出" value="none" meta="token hidden" />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -152,7 +146,6 @@ export function K8sServiceAccountPage() {
                   <th>账号</th>
                   <th>集群</th>
                   <th>命名空间</th>
-                  <th>UID</th>
                   <th>状态</th>
                   <th>来源</th>
                 </tr>
@@ -166,11 +159,9 @@ export function K8sServiceAccountPage() {
                   >
                     <td>
                       <div className="font-semibold text-primary">{item.name}</div>
-                      <div className="text-[11px] text-muted">{item.id}</div>
                     </td>
                     <td className="font-mono text-xs">{item.clusterId}</td>
                     <td className="font-mono text-xs">{item.namespace}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.uid}</td>
                     <td><StatusPill status={item.status} /></td>
                     <td className="text-xs text-muted">{item.source || 'startorch'}</td>
                   </tr>
@@ -242,21 +233,6 @@ function ServiceAccountActionDrawer({ title, children, onClose }: { title: strin
 
 function DrawerFooter({ children }: { children: ReactNode }) {
   return <div className="mt-auto flex items-center justify-end gap-2 border-t border-outline pt-4">{children}</div>;
-}
-
-function ServiceAccountMetric({ icon: Icon, label, value, meta }: { icon: typeof UserRoundCheck; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
-  );
 }
 
 function StatusPill({ status }: { status: string }) {

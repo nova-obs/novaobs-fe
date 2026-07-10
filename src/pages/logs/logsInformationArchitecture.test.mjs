@@ -23,7 +23,7 @@ test('Logs 保留四个子入口并把创建更新归入父模块子路径', () 
   assert.match(routes, /path: 'alerts\/:id'/);
   assert.match(routes, /path: 'endpoints'/);
 	assert.match(routes, /path: '\/observability\/endpoints'.*ObservabilitySettingsPage/);
-	assert.match(workspace, /`\$\{base\}\/endpoints`/);
+  assert.match(workspace, /entry: 'endpoints'.*serviceScoped: false/);
   assert.match(workspace, /label: '接入配置'/);
 });
 
@@ -71,11 +71,17 @@ test('采集路由使用单一工作面突出列表选择和当前路由功能',
   assert.doesNotMatch(agents, /路由运行状态/);
 });
 
-test('Logs 模块层只保留导航，不和页面重复提供刷新工具条', () => {
-  assert.match(workspace, /ModuleRail/);
+test('Logs 模块层只保留统一导航和服务作用域，不在业务页面重复实现入口', () => {
+  assert.match(workspace, /ServiceScopedModuleWorkbench/);
   assert.doesNotMatch(workspace, /page-title module-navigation-title/);
   assert.doesNotMatch(workspace, /RefreshCw/);
   assert.doesNotMatch(workspace, /console-panel shrink-0/);
+});
+
+test('Logs 日志分析通过服务上下文卡片切换当前服务', () => {
+  assert.match(explore, /<ServiceContextSelector/);
+  assert.match(explore, /logs-explore-context-header[\s\S]*?<span>服务<\/span>/);
+  assert.doesNotMatch(workspace, /选择当前服务/);
 });
 
 test('Logs 页面不展示无决策价值的汇总计数和英文追加描述', () => {

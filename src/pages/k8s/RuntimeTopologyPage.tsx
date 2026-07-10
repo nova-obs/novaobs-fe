@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Boxes, GitBranch, Network, Route, ShieldCheck } from 'lucide-react';
-import type { LucideIcon } from 'lucide-react';
+import { Network } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sRuntimeGroup, type K8sRuntimeServiceNode, type K8sRuntimeWorkloadNode } from './api';
 import { useK8sOpsContext } from './context';
@@ -50,13 +49,6 @@ export function K8sRuntimeTopologyPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-4">
-        <TopologyMetric icon={GitBranch} label="拓扑分组" value={String(topologyQuery.data?.summary.groupCount ?? groups.length)} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
-        <TopologyMetric icon={Boxes} label="工作负载" value={String(topologyQuery.data?.summary.workloadCount ?? 0)} meta={`${topologyQuery.data?.summary.podCount ?? 0} Pods`} />
-        <TopologyMetric icon={Route} label="Istio 路由" value={String(topologyQuery.data?.summary.virtualServiceCount ?? 0)} meta={`${topologyQuery.data?.summary.gatewayCount ?? 0} Gateway`} />
-        <TopologyMetric icon={ShieldCheck} label="安全策略" value={String(topologyQuery.data?.summary.securityPolicyCount ?? 0)} meta="Peer/Auth/RBAC" />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -84,7 +76,7 @@ export function K8sRuntimeTopologyPage() {
       </section>
 
       <div className="grid gap-4 xl:grid-cols-[340px_minmax(0,1fr)]">
-        <DataPanel title="应用分组" meta={topologyQuery.isLoading ? '加载中' : `${groups.length} 个运行时分组`}>
+        <DataPanel title="应用分组" meta={topologyQuery.isLoading ? '加载中' : undefined}>
           {topologyQuery.error ? (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
               拓扑读取失败：{errorMessage(topologyQuery.error)}
@@ -202,23 +194,6 @@ function WorkloadNode({ workload }: { workload: K8sRuntimeWorkloadNode }) {
         {workload.securityPolicies.map((item) => <Chip key={`${item.kind}-${item.name}`} text={`${item.kind} ${item.name}`} />)}
       </div>
     </TopologyNode>
-  );
-}
-
-function TopologyMetric({ icon: Icon, label, value, meta }: { icon: LucideIcon; label: string; value: string; meta: string }) {
-  return (
-    <div className="console-panel px-4 py-3">
-      <div className="flex items-center justify-between gap-3">
-        <div>
-          <div className="text-xs font-semibold text-muted">{label}</div>
-          <div className="mt-1 font-display text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-1 text-xs text-muted">{meta}</div>
-        </div>
-        <div className="rounded-xl bg-primary-soft p-2.5 text-primary">
-          <Icon className="h-5 w-5" />
-        </div>
-      </div>
-    </div>
   );
 }
 

@@ -2,8 +2,9 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useLocation } from 'react-router-dom';
 import { createPortal } from 'react-dom';
-import { Activity, Database, KeyRound, Network, Plus, RotateCcw, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Activity, KeyRound, Plus, RotateCcw, ShieldAlert, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import { HelpTip } from '../../components/HelpTip';
 import { k8sApi, type K8sClusterCredential, type K8sClusterProbe, type K8sWriteResult } from './api';
 import { useK8sOpsContext } from './context';
 
@@ -241,15 +242,8 @@ export function K8sClusterPage() {
   if (!activeClusterId) {
     return (
       <div className="space-y-4">
-        <div className="grid gap-4 md:grid-cols-3">
-          <ClusterMetric icon={Network} label="连接集群" value={String(displayClusters.length)} meta="已登记" />
-          <ClusterMetric icon={Database} label="区域" value={primaryRegion(displayClusters)} meta="来自集群登记" />
-          <ClusterMetric icon={ShieldCheck} label="只读保护" value={String(displayClusters.filter((cluster) => cluster.readOnly).length)} meta="read-only policy" />
-        </div>
-
         <DataPanel
           title="集群总览"
-          meta="registered clusters · probe cache"
           action={(
             <button className="console-button console-button-primary" onClick={openClusterAccessDrawer}>
               <Plus className="h-3.5 w-3.5" />
@@ -336,7 +330,7 @@ export function K8sClusterPage() {
 
   return (
     <div className="space-y-4">
-      <DataPanel title="当前集群" meta={`${activeClusterId} · 资源操作上下文`}>
+      <DataPanel title="当前集群">
         {activeClusterMissing(activeClusterId, isLoading, managementCluster) ? (
           <div className="rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             当前路由中的集群尚未登记或列表仍在同步，请返回集群总览确认。
@@ -399,7 +393,7 @@ export function K8sClusterPage() {
       </DataPanel>
 
       <div className="grid gap-4">
-        <DataPanel title="集群凭据" meta={`/api/v1/k8s/cluster-credentials · ${credentials.length} 条元数据`}>
+        <DataPanel title="集群凭据">
           {credentialsQuery.error ? (
             <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
               集群凭据读取失败：{errorMessage(credentialsQuery.error)}
@@ -664,7 +658,7 @@ function ClusterAccessDrawer({
               {credentialError ? <InlineNotice tone="danger" message={credentialError} /> : null}
             </section>
 
-            <ClusterAccessFormSection title="基础信息" meta="登记集群生产元数据">
+            <ClusterAccessFormSection title="基础信息" description="这里登记集群的当前生产元数据。">
               <div className="grid gap-3 md:grid-cols-2">
                 <ClusterAccessField label="cluster_id">
                   <input className="console-input w-full font-mono" value={clusterId} onChange={(event) => onClusterIdChange(event.target.value)} placeholder="prod-cn" autoFocus />
@@ -697,7 +691,7 @@ function ClusterAccessDrawer({
               </ClusterAccessField>
             </ClusterAccessFormSection>
 
-            <ClusterAccessFormSection title="连接凭据" meta="kubeconfig 只用于写入 Secret，不在页面回显">
+            <ClusterAccessFormSection title="连接凭据" description="kubeconfig 仅用于写入 Secret，不会在页面回显。">
               <div className="grid gap-3">
                 <ClusterAccessField label="expires_at">
                   <input className="console-input w-full" type="datetime-local" value={credentialExpiresAt} onChange={(event) => onCredentialExpiresAtChange(event.target.value)} />
@@ -732,12 +726,12 @@ function ClusterAccessDrawer({
   );
 }
 
-function ClusterAccessFormSection({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
+function ClusterAccessFormSection({ title, description, children }: { title: string; description: string; children: ReactNode }) {
   return (
     <section className="rounded-md border border-outline bg-surface-lowest px-3 py-3">
-      <div className="mb-3">
+      <div className="mb-3 flex items-center gap-1.5">
         <div className="text-sm font-semibold text-on-surface">{title}</div>
-        <div className="mt-1 text-[11px] text-muted">{meta}</div>
+        <HelpTip content={description} label={`${title}说明`} />
       </div>
       {children}
     </section>
@@ -777,7 +771,6 @@ function ClusterOverviewCard({
           <Link className="truncate text-base font-semibold text-primary hover:underline" to={`/k8s/clusters/${encodeURIComponent(cluster.id)}`}>
             {cluster.name || cluster.id}
           </Link>
-          <div className="mt-1 truncate font-mono text-[11px] text-muted">{cluster.id}</div>
         </div>
         <span className={`shrink-0 rounded-lg px-2 py-0.5 text-[11px] font-semibold ${cluster.readOnly ? 'bg-amber-50 text-warning' : 'bg-primary-soft text-primary'}`}>
           {cluster.readOnly ? 'read-only' : 'write-enabled'}
@@ -907,25 +900,6 @@ function credentialStatusClass(item: K8sClusterCredential) {
 
 function isCredentialActive(item: K8sClusterCredential) {
   return item.active || item.status === 'active';
-}
-
-function ClusterMetric({ icon: Icon, label, value, meta }: { icon: typeof Network; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
-  );
-}
-
-function primaryRegion(clusters: Array<{ region: string }>) {
-  return clusters.find((item) => item.region)?.region || '-';
 }
 
 function CredentialInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {

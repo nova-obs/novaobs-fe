@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Database, Eye, Gauge, HelpCircle, Layers, Pencil, Plus, RefreshCw, Save, Search, X } from 'lucide-react';
+import { Database, Eye, Pencil, Plus, RefreshCw, Save, Search, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import { HelpTip } from '../../components/HelpTip';
 import { StatusBadge } from '../../components/StatusBadge';
 import { k8sApi } from '../k8s/api';
 import { logSinkLabel, logsApi, type LogEndpoint, type LogSinkType } from '../logs/api';
@@ -159,7 +160,6 @@ export function ObservabilitySettingsPage() {
   }, [endpoints, query]);
   const clusterRegistry = clustersQuery.isSuccess ? registeredClusterIds : undefined;
   const listedEndpoints = useMemo(() => sortEndpointsForList(filteredEndpoints, clusterRegistry), [clusterRegistry, filteredEndpoints]);
-  const formProfile = useMemo(() => endpointOperationProfile({ ...form, id: selectedEndpoint?.id ?? '', updatedAt: selectedEndpoint?.updatedAt ?? '' }, clusterRegistry), [clusterRegistry, form, selectedEndpoint?.id, selectedEndpoint?.updatedAt]);
   const selectedProfile = useMemo(() => selectedEndpoint ? endpointOperationProfile(selectedEndpoint, clusterRegistry) : null, [clusterRegistry, selectedEndpoint]);
   const missing = endpointMissingFields(form);
   const formSaved = Boolean(editingEndpoint && selectedEndpoint && endpointFormMatchesEndpoint(form, selectedEndpoint));
@@ -304,8 +304,6 @@ export function ObservabilitySettingsPage() {
         <EndpointEditorDrawer
           mode={editorMode}
           form={form}
-          profile={formProfile}
-          selectedEndpoint={selectedEndpoint}
           clusters={clusters}
           registeredClusterIds={registeredClusterIds}
           clustersLoading={clustersQuery.isLoading}
@@ -341,7 +339,6 @@ function EndpointDetailDrawer({ endpoint, profile, onClose, onEdit }: {
               <span className="rounded border border-outline bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">{logSinkLabel(endpoint.sinkType)}</span>
               <StatusBadge value={endpoint.status || 'active'} />
             </div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{endpoint.id}</div>
           </div>
           <div className="flex shrink-0 gap-2">
             <button className="console-button" onClick={onEdit}>
@@ -354,18 +351,9 @@ function EndpointDetailDrawer({ endpoint, profile, onClose, onEdit }: {
           </div>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-surface px-4 py-4">
-          <section className="overflow-hidden rounded-md border border-outline bg-white">
-            <div className="grid divide-y divide-outline md:grid-cols-4 md:divide-x md:divide-y-0">
-              <EndpointSummaryItem icon={<Gauge className="h-4 w-4" />} label="配置完整度" value={profile.scoreLabel} meta={profile.blockers[0] || '关键字段完整'} tone={profile.tone} />
-              <EndpointSummaryItem icon={<Layers className="h-4 w-4" />} label="作用域" value={scopeLabel(endpoint)} meta={endpoint.clusterId || '按作用域路由'} />
-              <EndpointSummaryItem icon={<Database className="h-4 w-4" />} label="查询能力" value={endpointQuerySummary(endpoint)} meta={endpointAddressMeta(endpoint)} />
-              <EndpointSummaryItem icon={<Save className="h-4 w-4" />} label="更新时间" value={formatTimestamp(endpoint.updatedAt || endpoint.createdAt)} meta={endpoint.createdAt ? `created ${formatTimestamp(endpoint.createdAt)}` : '已保存端点'} />
-            </div>
-          </section>
-
           {profile.blockers.length > 0 ? <InlineNotice tone="warning" message={`当前阻断：${formatMissing(profile.blockers)}`} /> : null}
 
-          <EndpointFormSection title="生产配置" meta="保存后的端点生产真值">
+          <EndpointFormSection title="生产配置" description="这里展示当前已保存并实际生效的端点配置。">
             <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
               <DetailCell label="名称" value={endpoint.name} />
               <DetailCell label="类型" value={logSinkLabel(endpoint.sinkType)} />
@@ -375,7 +363,7 @@ function EndpointDetailDrawer({ endpoint, profile, onClose, onEdit }: {
             </div>
           </EndpointFormSection>
 
-          <EndpointFormSection title="下游地址" meta="采集链路实际投递与查询使用的地址">
+          <EndpointFormSection title="下游地址" description="采集链路实际投递、查询和验证时使用这些地址。">
             <div className="grid gap-y-3">
               <DetailCell label="写入地址" value={endpoint.writeURL || '-'} mono />
               {endpoint.sinkType === 'kafka' ? <DetailCell label="Topic" value={endpoint.streamName || '-'} mono /> : null}
@@ -385,9 +373,8 @@ function EndpointDetailDrawer({ endpoint, profile, onClose, onEdit }: {
             </div>
           </EndpointFormSection>
 
-          <EndpointFormSection title="审计信息" meta="用于定位端点变更与接口返回">
+          <EndpointFormSection title="审计信息" description="时间与配置状态用于定位端点变更。">
             <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
-              <DetailCell label="端点 ID" value={endpoint.id} mono />
               <DetailCell label="配置状态" value={profile.label} />
               <DetailCell label="创建时间" value={formatTimestamp(endpoint.createdAt)} mono />
               <DetailCell label="更新时间" value={formatTimestamp(endpoint.updatedAt)} mono />
@@ -399,11 +386,9 @@ function EndpointDetailDrawer({ endpoint, profile, onClose, onEdit }: {
   );
 }
 
-function EndpointEditorDrawer({ mode, form, profile, selectedEndpoint, clusters, registeredClusterIds, clustersLoading, endpointClusterBlockedReason, missing, formSaved, canSubmit, saving, saveError, onFormChange, onClose, onSave }: {
+function EndpointEditorDrawer({ mode, form, clusters, registeredClusterIds, clustersLoading, endpointClusterBlockedReason, missing, formSaved, canSubmit, saving, saveError, onFormChange, onClose, onSave }: {
   mode: 'create' | 'edit';
   form: EndpointFormState;
-  profile: ReturnType<typeof endpointOperationProfile>;
-  selectedEndpoint: LogEndpoint | null;
   clusters: Array<{ id: string; name?: string }>;
   registeredClusterIds: Set<string>;
   clustersLoading: boolean;
@@ -418,28 +403,17 @@ function EndpointEditorDrawer({ mode, form, profile, selectedEndpoint, clusters,
   onSave: () => void;
 }) {
   const title = mode === 'edit' ? '编辑日志下游端点' : '新增日志下游端点';
-  const meta = mode === 'edit' && selectedEndpoint ? selectedEndpoint.id : 'create draft';
   return (
     <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
       <button type="button" className="absolute inset-0 cursor-default border-0 bg-transparent" aria-label="关闭端点编辑遮罩" onClick={onClose} />
       <aside className="console-drawer-panel relative flex h-full w-full max-w-[760px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="endpoint-editor-title">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
-          <div className="min-w-0">
-            <div id="endpoint-editor-title" className="truncate text-sm font-semibold text-on-surface">{title}</div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{meta}</div>
-          </div>
+          <div id="endpoint-editor-title" className="truncate text-sm font-semibold text-on-surface">{title}</div>
           <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭端点编辑" title="关闭">
             <X className="h-4 w-4" />
           </button>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-surface px-4 py-4">
-          <EndpointProfileStrip
-            profile={profile}
-            form={form}
-            selectedEndpoint={mode === 'edit' ? selectedEndpoint : null}
-            creatingEndpoint={mode === 'create'}
-            formSaved={formSaved}
-          />
           <EndpointFormFields
             form={form}
             clusters={clusters}
@@ -477,7 +451,7 @@ function EndpointFormFields({ form, clusters, registeredClusterIds, clustersLoad
 }) {
   return (
     <>
-      <EndpointFormSection title="端点身份" meta="决定这个下游端点服务哪些采集路由">
+      <EndpointFormSection title="端点身份" description="名称、类型与作用域共同决定哪些采集路由可以使用该端点。">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="名称">
             <input className="console-input w-full" value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} placeholder="vl-test03" />
@@ -530,7 +504,7 @@ function EndpointFormFields({ form, clusters, registeredClusterIds, clustersLoad
         {endpointClusterBlockedReason ? <div className="mt-3"><InlineNotice tone="warning" message={endpointClusterBlockedReason} /></div> : null}
       </EndpointFormSection>
 
-      <EndpointFormSection title="地址配置" meta="写入地址用于采集链路投递；查询地址用于检索与验证">
+      <EndpointFormSection title="地址配置" description="写入地址用于采集链路投递，查询地址用于检索与验证。">
         <div className="grid gap-3">
           <Field label="写入地址" help={<EndpointExampleHelp kind="write" />}>
             <input className="console-input w-full font-mono" value={form.writeURL} onChange={(event) => onFormChange({ ...form, writeURL: event.target.value })} placeholder={endpointWritePlaceholder(form.sinkType)} />
@@ -557,7 +531,7 @@ function EndpointFormFields({ form, clusters, registeredClusterIds, clustersLoad
         </div>
       </EndpointFormSection>
 
-      <EndpointFormSection title="说明" meta="记录用途、覆盖范围或变更说明，方便审计回看">
+      <EndpointFormSection title="说明" description="可记录用途、覆盖范围或变更原因，便于审计回看。">
         <Field label="描述">
           <input className="console-input w-full" value={form.description} onChange={(event) => onFormChange({ ...form, description: event.target.value })} placeholder="例如：test03 集群日志写入 VictoriaLogs" />
         </Field>
@@ -587,7 +561,6 @@ function EndpointTableRow({ endpoint, selected, profile, onView, onEdit }: {
       <td>
         <div className="min-w-0">
           <div className="truncate font-semibold text-on-surface">{endpoint.name}</div>
-          <div className="mt-1 truncate font-mono text-[11px] text-muted">{endpoint.id}</div>
         </div>
       </td>
       <td>
@@ -626,43 +599,6 @@ function EndpointTableRow({ endpoint, selected, profile, onView, onEdit }: {
         </div>
       </td>
     </tr>
-  );
-}
-
-function EndpointProfileStrip({ profile, form, selectedEndpoint, creatingEndpoint, formSaved }: {
-  profile: ReturnType<typeof endpointOperationProfile>;
-  form: EndpointFormState;
-  selectedEndpoint: LogEndpoint | null;
-  creatingEndpoint: boolean;
-  formSaved: boolean;
-}) {
-  const draftState = formSaved ? '已保存' : selectedEndpoint ? '未保存变更' : creatingEndpoint ? '新增草稿' : '新增草稿';
-  return (
-    <section className="overflow-hidden rounded-md border border-outline bg-white">
-      <div className="grid divide-y divide-outline md:grid-cols-4 md:divide-x md:divide-y-0">
-        <EndpointSummaryItem icon={<Gauge className="h-4 w-4" />} label="配置完整度" value={profile.scoreLabel} meta={profile.blockers[0] || '关键字段完整'} tone={profile.tone} />
-        <EndpointSummaryItem icon={<Layers className="h-4 w-4" />} label="作用域" value={scopeLabel(form)} meta={form.clusterId || '按作用域路由'} />
-        <EndpointSummaryItem icon={<Database className="h-4 w-4" />} label="下游类型" value={logSinkLabel(form.sinkType)} meta={endpointQuerySummary(form)} />
-        <EndpointSummaryItem icon={<Save className="h-4 w-4" />} label="草稿状态" value={draftState} meta={selectedEndpoint?.updatedAt ? `updated ${formatTimestamp(selectedEndpoint.updatedAt)}` : '等待保存'} tone={formSaved ? 'success' : 'warning'} />
-      </div>
-    </section>
-  );
-}
-
-function EndpointSummaryItem({ icon, label, value, meta, tone = 'muted' }: { icon: ReactNode; label: string; value: string; meta: string; tone?: 'success' | 'warning' | 'danger' | 'muted' }) {
-  const toneClass = tone === 'success'
-    ? 'text-emerald-700'
-    : tone === 'warning'
-      ? 'text-warning'
-      : tone === 'danger'
-        ? 'text-danger'
-        : 'text-muted';
-  return (
-    <div className="min-w-0 px-3 py-3">
-      <div className={`flex items-center gap-1.5 text-[11px] font-semibold ${toneClass}`}>{icon}{label}</div>
-      <div className="mt-1 truncate text-sm font-semibold text-on-surface">{value}</div>
-      <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{meta}</div>
-    </div>
   );
 }
 
@@ -749,12 +685,12 @@ function formatMissing(items: string[]) {
   return items.join('、');
 }
 
-function EndpointFormSection({ title, meta, children }: { title: string; meta: string; children: ReactNode }) {
+function EndpointFormSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
   return (
     <section className="rounded-md border border-outline bg-surface-lowest p-3">
-      <div className="mb-3 flex items-baseline justify-between gap-3 border-b border-outline/70 pb-2">
+      <div className="mb-3 flex items-center gap-1.5 border-b border-outline/70 pb-2">
         <div className="text-sm font-semibold text-on-surface">{title}</div>
-        <div className="hidden text-[11px] leading-4 text-muted md:block">{meta}</div>
+        {description ? <HelpTip content={description} label={`${title}说明`} /> : null}
       </div>
       {children}
     </section>
@@ -788,11 +724,10 @@ function EndpointExampleHelp({ kind }: { kind: 'write' | 'query' }) {
       ['Kafka', '通常不配置 HTTP 查询地址，由消费端按 Topic 查询'],
     ];
   return (
-    <span className="group relative inline-flex">
-      <button type="button" className="flex h-4 w-4 items-center justify-center rounded-full border border-outline bg-surface text-muted transition hover:border-primary/40 hover:text-primary" aria-label={`${kind === 'write' ? '写入地址' : '查询地址'}示例路径`}>
-        <HelpCircle className="h-3 w-3" />
-      </button>
-      <div className="pointer-events-none invisible absolute left-0 top-6 z-30 w-80 translate-y-1 rounded-md border border-outline bg-surface-lowest p-3 opacity-0 shadow-[0_16px_36px_-18px_rgba(18,32,51,0.45)] transition duration-150 group-hover:pointer-events-auto group-hover:visible group-hover:translate-y-0 group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:visible group-focus-within:translate-y-0 group-focus-within:opacity-100">
+    <HelpTip
+      label={`${kind === 'write' ? '写入地址' : '查询地址'}示例路径`}
+      content={(
+        <div className="w-72">
         <div className="mb-2 text-xs font-semibold text-on-surface">{kind === 'write' ? '写入地址示例' : '查询地址示例'}</div>
         <div className="grid gap-2">
           {examples.map(([label, value]) => (
@@ -802,8 +737,9 @@ function EndpointExampleHelp({ kind }: { kind: 'write' | 'query' }) {
             </div>
           ))}
         </div>
-      </div>
-    </span>
+        </div>
+      )}
+    />
   );
 }
 

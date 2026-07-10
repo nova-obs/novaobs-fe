@@ -2,6 +2,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, RadioTower, RefreshCw, Rocket } from 'lucide-react';
 import { metricsApi, type MetricRoute } from './api';
+import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
 
 function statusTone(status: string) {
   if (['active', 'applied', 'ready', 'deployed'].includes(status)) return 'border-emerald-600/20 bg-emerald-50 text-emerald-700';
@@ -31,10 +32,7 @@ export function MetricsCollectionPage() {
   return (
     <section className="console-panel overflow-hidden">
       <div className="console-panel-header">
-        <div className="min-w-0">
-          <h2 className="console-section-title">采集路由</h2>
-          <p className="console-section-meta">K8s Service → vmagent → VictoriaMetrics</p>
-        </div>
+        <ServiceContextSelector className="w-full max-w-[420px]" />
         <div className="flex items-center gap-2">
           <Link className="console-button console-button-primary gap-1.5" to={`${base}/routes/new`}>
             <Plus className="h-3.5 w-3.5" />新建路由

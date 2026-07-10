@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Bell, Cpu, Edit3, Eye, GitBranch, Plus, RefreshCw, Search, Server, Trash2, X, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import { HelpTip } from '../../components/HelpTip';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
 import type { CreateServiceInput, Product, Service, ServiceObservabilityGraph, ServiceTargetType, UpdateServiceInput } from '../../services/types';
@@ -164,7 +165,7 @@ export function ServicesPage() {
   return (
     <div className="space-y-4">
       {error ? (
-        <DataPanel title="加载失败" meta="error">
+        <DataPanel title="加载失败">
           <div className="flex items-center gap-3 py-4">
             <XCircle className="h-5 w-5 text-danger" />
             <p className="text-sm text-muted">{(error as Error).message || '无法加载服务列表'}</p>
@@ -175,7 +176,8 @@ export function ServicesPage() {
         <>
           <DataPanel
             title="服务清单"
-            meta={isLoading ? '加载中' : '服务真值与观测关系入口'}
+            meta={isLoading ? '加载中' : undefined}
+            help="在这里维护服务基础信息，并进入对应的日志、指标和观测关系。"
           >
             {deleteMutation.error ? (
               <div className="console-notice console-notice-danger mb-3">
@@ -307,7 +309,6 @@ export function ServicesPage() {
           {showForm ? (
             <ServiceEditorDrawer
               editing={Boolean(editingId)}
-              editingId={editingId}
               form={form}
 			  products={products}
               setForm={setForm}
@@ -363,7 +364,6 @@ function ServiceDetailDrawer({
               <span className="rounded border border-outline bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">{service.environment || '-'}</span>
               <StatusBadge value={service.status || 'unknown'} />
             </div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{service.id}</div>
           </div>
           <div className="flex shrink-0 gap-2">
 			<Link className="console-button" to={`/products/${encodeURIComponent(service.productId)}/services/${encodeURIComponent(service.id)}/logs/explore`}>进入日志</Link>
@@ -398,9 +398,9 @@ function ServiceDetailDrawer({
 function ServiceProductionDetails({ service, product }: { service: Service; product?: Product }) {
   return (
     <section className="overflow-hidden rounded-md border border-outline bg-white">
-      <div className="flex items-center justify-between border-b border-outline px-4 py-3">
+      <div className="flex items-center gap-1.5 border-b border-outline px-4 py-3">
         <div className="text-sm font-semibold text-on-surface">生产配置</div>
-        <span className="text-[11px] font-semibold text-muted">服务真值</span>
+        <HelpTip content="这里展示当前已保存并实际生效的服务配置。" label="生产配置说明" />
       </div>
       <div className="grid gap-x-6 gap-y-3 px-4 py-3 md:grid-cols-3">
         <ServiceDetailCell label="名称" value={service.name} />
@@ -428,7 +428,6 @@ function ServiceDetailCell({ label, value, mono }: { label: string; value: strin
 
 function ServiceEditorDrawer({
   editing,
-  editingId,
   form,
 	products,
   setForm,
@@ -439,7 +438,6 @@ function ServiceEditorDrawer({
   onClose,
 }: {
   editing: boolean;
-  editingId: string | null;
   form: CreateServiceInput & { description?: string };
 	products: Product[];
   setForm: (value: CreateServiceInput & { description?: string }) => void;
@@ -455,10 +453,7 @@ function ServiceEditorDrawer({
       <button type="button" className="absolute inset-0 cursor-default border-0 bg-transparent" aria-label="关闭服务编辑遮罩" onClick={onClose} />
       <aside className="console-drawer-panel relative flex h-full w-full max-w-[760px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="service-editor-title">
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
-          <div className="min-w-0">
-            <div id="service-editor-title" className="truncate text-sm font-semibold text-on-surface">{editing ? '编辑服务' : '新增服务'}</div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{editingId ?? 'create draft'}</div>
-          </div>
+          <div id="service-editor-title" className="truncate text-sm font-semibold text-on-surface">{editing ? '编辑服务' : '新增服务'}</div>
           <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭服务编辑" title="关闭">
             <X className="h-4 w-4" />
           </button>
@@ -466,26 +461,19 @@ function ServiceEditorDrawer({
         <div className="min-h-0 flex-1 overflow-auto bg-surface px-4 py-4">
           <section className="rounded-md border border-outline bg-white px-4 py-3">
             <div className="grid gap-3 md:grid-cols-2">
-			  <label className="text-sm font-semibold">所属产品 *<select className="console-input mt-2 w-full" value={form.productId} disabled={editing} onChange={(e) => setForm({ ...form, productId: e.target.value })}><option value="">请选择产品</option>{products.map((product) => <option key={product.id} value={product.id}>{product.displayName || product.name} · ProjectID {product.projectId}</option>)}</select></label>
+			  <label className="text-sm font-semibold">所属产品 *<select className="console-input mt-2 w-full" value={form.productId} disabled={editing} onChange={(e) => setForm({ ...form, productId: e.target.value })}><option value="">请选择产品</option>{products.map((product) => <option key={product.id} value={product.id}>{product.displayName || product.name}</option>)}</select></label>
 			  <label className="text-sm font-semibold">服务名称 *<input className="console-input mt-2 w-full" value={form.name} disabled={editing} title={editing ? 'service.name 创建后不可修改' : undefined} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
               <label className="text-sm font-semibold">环境 *<select className="console-input mt-2 w-full" value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })}><option value="prod">prod</option><option value="staging">staging</option><option value="dev">dev</option></select></label>
               <label className="text-sm font-semibold">别名<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
               <label className="text-sm font-semibold">Owner Team<input className="console-input mt-2 w-full" value={form.ownerTeam ?? ''} onChange={(e) => setForm({ ...form, ownerTeam: e.target.value })} /></label>
               <label className="text-sm font-semibold">运行身份<select className="console-input mt-2 w-full" value={form.identityType ?? 'k8s_workload'} onChange={(e) => setForm({ ...form, identityType: e.target.value as typeof form.identityType })}><option value="k8s_workload">K8s Workload</option><option value="host_process">物理机 / VM 进程</option></select></label>
             </div>
-            <div className="mt-4 rounded-md border border-dashed border-outline bg-surface-lowest px-3 py-3">
-              <button type="button" className="console-button gap-1.5 text-xs" disabled title="CMDB 同步接口接入后启用">
-                <RefreshCw className="h-3 w-3" />
-                从 CMDB 同步
-              </button>
-              <p className="mt-2 text-[11px] leading-5 text-muted">接入后将自动填充集群、命名空间等部署元数据。</p>
-            </div>
             {createError ? <p className="console-notice console-notice-danger mt-3">{createError.message}</p> : null}
             {updateError ? <p className="console-notice console-notice-danger mt-3">{updateError.message}</p> : null}
           </section>
         </div>
         <div className="console-action-bar shrink-0">
-          <div className="min-w-0 text-xs text-muted">{disabledReason ?? (editing ? `正在编辑 ${editingId}` : '保存后创建新的服务真值')}</div>
+          <div className="min-w-0 text-xs text-muted">{disabledReason ?? (editing ? '修改将在保存后生效' : '填写完成后创建服务')}</div>
           <div className="flex gap-2">
             <button className="console-button" onClick={onClose}>取消</button>
             <button className="console-button console-button-primary" title={disabledReason} disabled={Boolean(disabledReason) || pending} onClick={onSave}>
@@ -511,7 +499,7 @@ function ProductEditorDrawer({ pending, error, onSave, onClose }: {
 		<div className="fixed inset-0 z-[100] flex justify-end bg-slate-900/28">
 			<button type="button" className="absolute inset-0 border-0 bg-transparent" aria-label="关闭产品创建遮罩" onClick={onClose} />
 			<aside className="console-drawer-panel relative flex h-full w-full max-w-[560px] flex-col border-l border-outline bg-white" role="dialog" aria-modal="true" aria-labelledby="product-editor-title">
-				<div className="flex items-center justify-between border-b border-outline px-4 py-3"><div><div id="product-editor-title" className="text-sm font-semibold text-on-surface">新增产品</div><div className="mt-1 text-[11px] text-muted">创建后自动生成不可修改的 ProjectID，AccountID 固定为 0</div></div><button className="console-icon-button" onClick={onClose} aria-label="关闭产品创建"><X className="h-4 w-4" /></button></div>
+				<div className="flex items-center justify-between border-b border-outline px-4 py-3"><div className="flex items-center gap-1.5"><div id="product-editor-title" className="text-sm font-semibold text-on-surface">新增产品</div><HelpTip content="系统会自动生成不可修改的 ProjectID；AccountID 固定为 0。" label="产品标识说明" /></div><button className="console-icon-button" onClick={onClose} aria-label="关闭产品创建"><X className="h-4 w-4" /></button></div>
 				<div className="min-h-0 flex-1 space-y-3 overflow-auto bg-surface p-4">
 					{error ? <div className="console-notice console-notice-danger">{error.message}</div> : null}
 					<label className="text-sm font-semibold">产品标识 *<input className="console-input mt-2 w-full" value={name} onChange={(event) => setName(event.target.value)} placeholder="commerce" /></label>
@@ -544,7 +532,7 @@ function ServiceGraphPanel({
 }) {
   const fields = targetAttributeFields[targetForm.targetType];
   return (
-    <DataPanel title="观测关系" meta={graph?.service.name ?? 'service'}>
+    <DataPanel title="观测关系">
       {loading ? (
         <div className="flex items-center gap-2 py-4 text-sm text-muted"><RefreshCw className="h-4 w-4 animate-spin" />加载中...</div>
       ) : error ? (

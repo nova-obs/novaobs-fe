@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const layoutSource = readFileSync(new URL('./PlatformLayout.tsx', import.meta.url), 'utf8');
 const observabilitySource = readFileSync(new URL('./ObservabilitySettingsPage.tsx', import.meta.url), 'utf8');
+const helpTipSource = readFileSync(new URL('../../components/HelpTip.tsx', import.meta.url), 'utf8');
 const platformSettingsSource = readFileSync(new URL('./PlatformSettingsPage.tsx', import.meta.url), 'utf8');
 const styleSource = readFileSync(new URL('../../styles/index.css', import.meta.url), 'utf8');
 
@@ -37,7 +38,7 @@ test('平台设置页面承载平台级镜像模板而非业务或项目配置',
   assert.equal(platformSettingsSource.includes('title="平台设置"'), false);
   assert.equal(platformSettingsSource.includes('镜像模板'), true);
   assert.equal(platformSettingsSource.includes('title="镜像模板"'), true);
-  assert.equal(platformSettingsSource.includes('平台级运行配置，部署清单渲染时使用'), true);
+  assert.equal(platformSettingsSource.includes('镜像模板会在部署清单渲染时作为平台级运行配置使用'), true);
   assert.equal(platformSettingsSource.includes('__NOVAAPM_IMAGE_OTEL_COLLECTOR__'), true);
   assert.equal(platformSettingsSource.includes('__NOVAAPM_IMAGE_VMALERT__'), true);
   assert.equal(platformSettingsSource.includes('日志采集 DaemonSet'), true);
@@ -99,8 +100,8 @@ test('观测接入配置先集中维护日志下游端点', () => {
   assert.equal(observabilitySource.includes('EndpointExampleHelp'), true);
   assert.equal(observabilitySource.includes('<details'), false);
   assert.equal(observabilitySource.includes('<summary'), false);
-  assert.equal(observabilitySource.includes('group-hover:visible'), true);
-  assert.equal(observabilitySource.includes('group-focus-within:visible'), true);
+  assert.equal(helpTipSource.includes('group-hover'), true);
+  assert.equal(helpTipSource.includes('group-focus-within'), true);
   assert.equal(observabilitySource.includes('写入地址示例'), true);
   assert.equal(observabilitySource.includes('查询地址示例'), true);
   assert.equal(observabilitySource.includes('OTel / OTLP'), true);

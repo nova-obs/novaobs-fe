@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { CircleSlash2, Play, ShieldCheck, SquareTerminal } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sResourceSummary, type K8sTerminalResult } from './api';
 import { useK8sOpsContext } from './context';
@@ -106,12 +106,6 @@ export function K8sTerminalPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr]">
-        <TerminalMetric icon={SquareTerminal} label="执行模式" value={result?.mode || 'kubectl'} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <TerminalMetric icon={ShieldCheck} label="权限域" value="namespace" meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
-        <TerminalMetric icon={CircleSlash2} label="策略" value="read-only" meta="danger verbs blocked" />
-      </div>
-
       <DataPanel title="受控终端" meta={result?.auditId ? `audit/${result.auditId}` : '等待执行'}>
         {permissionError ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
@@ -273,21 +267,6 @@ function TargetItem({ label, value }: { label: string; value: string }) {
       <div className="text-[11px] font-semibold uppercase text-muted">{label}</div>
       <div className="mt-1 truncate font-mono text-[11px] font-semibold text-on-surface">{value}</div>
     </div>
-  );
-}
-
-function TerminalMetric({ icon: Icon, label, value, meta }: { icon: typeof SquareTerminal; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-4 font-display text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
   );
 }
 
