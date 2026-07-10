@@ -938,7 +938,7 @@ function CredentialInput({ label, value, onChange }: { label: string; value: str
 }
 
 function errorMessage(error: unknown) {
-  return error instanceof Error && error.message ? error.message : '请检查 NovaObs 后端连接、平台 RBAC 与 Secret 服务状态。';
+  return error instanceof Error && error.message ? error.message : '请检查 NovaAPM 后端连接、平台 RBAC 与 Secret 服务状态。';
 }
 
 function optionalErrorMessage(error: unknown) {

@@ -1,17 +1,18 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Plus, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
 import type { AlertRule } from '../../services/types';
 
 export function MetricsAlertsPage() {
+	const { productId = '', serviceId = '' } = useParams();
   const rulesQuery = useQuery({
     queryKey: ['metrics-alert-rules'],
     queryFn: () => api.getMetricsAlertRules(),
     retry: false,
   });
-  const rules = useMemo(() => rulesQuery.data ?? [], [rulesQuery.data]);
+	const rules = useMemo(() => (rulesQuery.data ?? []).filter((rule) => rule.spec.scope.serviceId === serviceId), [rulesQuery.data, serviceId]);
   const enabledCount = rules.filter((rule) => rule.state === 'enabled').length;
 
   return (
@@ -23,7 +24,7 @@ export function MetricsAlertsPage() {
             <p className="console-section-meta">共 {rules.length} 条 · 启用 {enabledCount} 条</p>
           </div>
           <div className="flex items-center gap-2">
-            <Link className="console-button console-button-primary gap-1.5" to="/metrics/alerts/new">
+			<Link className="console-button console-button-primary gap-1.5" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/alerts/new`}>
               <Plus className="h-3.5 w-3.5" />
               创建告警
             </Link>

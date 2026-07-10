@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Activity, AlertTriangle, CheckCircle2, Database, Link2, RadioTower, RefreshCw } from 'lucide-react';
 import { api } from '../../services/api';
@@ -17,15 +17,19 @@ function HealthIcon({ status }: { status: string }) {
 }
 
 export function MetricsOverviewPage() {
+	const { productId = '', serviceId = '' } = useParams();
+	const base = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics`;
   const workspaceQuery = useQuery({
-    queryKey: ['metrics-workspace'],
-    queryFn: () => metricsApi.getWorkspace(),
+	queryKey: ['metrics-workspace', productId, serviceId],
+	queryFn: () => metricsApi.getWorkspace(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
     retry: false,
     refetchInterval: 30_000,
   });
   const bindingsQuery = useQuery({
-    queryKey: ['metrics-service-bindings'],
-    queryFn: () => metricsApi.listServiceBindings(),
+	queryKey: ['metrics-service-bindings', productId, serviceId],
+	queryFn: () => metricsApi.listServiceBindings(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
     retry: false,
     refetchInterval: 30_000,
   });
@@ -80,7 +84,7 @@ export function MetricsOverviewPage() {
               <OverviewCard
                 icon={Database}
                 title="接入端点"
-                link="/metrics/endpoints"
+				link={`${base}/endpoints`}
                 linkLabel="查看端点"
               >
                 <Stat label="总端点" value={endpoints.length} />
@@ -98,14 +102,14 @@ export function MetricsOverviewPage() {
                     ))}
                   </div>
                 ) : (
-                  <div className="mt-3 text-xs text-muted">暂无端点。<Link className="font-semibold text-primary" to="/metrics/endpoints">配置端点</Link></div>
+				  <div className="mt-3 text-xs text-muted">暂无端点。<Link className="font-semibold text-primary" to={`${base}/endpoints`}>配置端点</Link></div>
                 )}
               </OverviewCard>
 
               <OverviewCard
                 icon={RadioTower}
                 title="采集绑定"
-                link="/metrics/collection"
+				link={`${base}/collection`}
                 linkLabel="查看采集"
               >
                 <div className="grid grid-cols-2 gap-2">
@@ -123,14 +127,14 @@ export function MetricsOverviewPage() {
                     所有绑定探测正常。
                   </div>
                 ) : (
-                  <div className="mt-3 text-xs text-muted">暂无绑定。<Link className="font-semibold text-primary" to="/metrics/collection">创建绑定</Link></div>
+				  <div className="mt-3 text-xs text-muted">暂无绑定。<Link className="font-semibold text-primary" to={`${base}/collection`}>创建绑定</Link></div>
                 )}
               </OverviewCard>
 
               <OverviewCard
                 icon={Link2}
                 title="指标告警"
-                link="/metrics/alerts"
+				link={`${base}/alerts`}
                 linkLabel="查看告警"
               >
                 <div className="grid grid-cols-2 gap-2">
@@ -147,7 +151,7 @@ export function MetricsOverviewPage() {
                     所有告警规则状态正常。
                   </div>
                 ) : (
-                  <div className="mt-3 text-xs text-muted">暂无告警。<Link className="font-semibold text-primary" to="/metrics/alerts/new">创建告警</Link></div>
+				  <div className="mt-3 text-xs text-muted">暂无告警。<Link className="font-semibold text-primary" to={`${base}/alerts/new`}>创建告警</Link></div>
                 )}
               </OverviewCard>
             </div>

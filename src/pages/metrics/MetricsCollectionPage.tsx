@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Loader2, Plus, RadioTower, RefreshCw, Scan, X } from 'lucide-react';
 import { metricsApi, type CreateServiceBindingInput, type MetricEndpoint, type MetricServiceBinding, type MetricsServiceSummary, type UpdateServiceBindingInput } from './api';
@@ -21,22 +21,25 @@ type DrawerMode = { type: 'create' } | { type: 'edit'; binding: MetricServiceBin
 
 export function MetricsCollectionPage() {
   const queryClient = useQueryClient();
+	const { productId = '', serviceId = '' } = useParams();
   const [drawerMode, setDrawerMode] = useState<DrawerMode | null>(null);
   const { data: bindings = [], error, isLoading, refetch } = useQuery({
-    queryKey: ['metrics-service-bindings'],
-    queryFn: () => metricsApi.listServiceBindings(),
+	queryKey: ['metrics-service-bindings', productId, serviceId],
+	queryFn: () => metricsApi.listServiceBindings(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
     retry: false,
   });
   const workspaceQuery = useQuery({
-    queryKey: ['metrics-workspace'],
-    queryFn: () => metricsApi.getWorkspace(),
+	queryKey: ['metrics-workspace', productId, serviceId],
+	queryFn: () => metricsApi.getWorkspace(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
     retry: false,
   });
   const services = workspaceQuery.data?.services ?? [];
   const endpoints = workspaceQuery.data?.endpoints ?? [];
 
   const probeMutation = useMutation({
-    mutationFn: (id: string) => metricsApi.probeServiceBinding(id),
+	mutationFn: (id: string) => metricsApi.probeServiceBinding(productId, serviceId, id),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ['metrics-service-bindings'] });
       void queryClient.invalidateQueries({ queryKey: ['metrics-workspace'] });
@@ -91,7 +94,7 @@ export function MetricsCollectionPage() {
                         <div className="max-w-md text-xs leading-5 text-muted">先在接入端点确认 VictoriaMetrics 端点，再为服务建立 labelMatch 绑定。</div>
                         <div className="flex flex-wrap gap-2">
                           <button type="button" className="console-button console-button-primary" onClick={() => setDrawerMode({ type: 'create' })}>创建绑定</button>
-                          <Link className="console-button" to="/metrics/endpoints">查看接入端点</Link>
+						  <Link className="console-button" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/endpoints`}>查看接入端点</Link>
                         </div>
                       </div>
                     </td>
@@ -137,6 +140,8 @@ export function MetricsCollectionPage() {
 
       {drawerMode ? (
         <BindingDrawer
+		  productId={productId}
+		  scopeServiceId={serviceId}
           mode={drawerMode}
           services={services}
           endpoints={endpoints}
@@ -152,7 +157,9 @@ export function MetricsCollectionPage() {
   );
 }
 
-function BindingDrawer({ mode, services, endpoints, onClose, onSuccess }: {
+function BindingDrawer({ productId, scopeServiceId, mode, services, endpoints, onClose, onSuccess }: {
+	productId: string;
+  scopeServiceId: string;
   mode: DrawerMode;
   services: MetricsServiceSummary[];
   endpoints: MetricEndpoint[];
@@ -161,7 +168,7 @@ function BindingDrawer({ mode, services, endpoints, onClose, onSuccess }: {
 }) {
   const isEdit = mode.type === 'edit';
   const existing = isEdit ? mode.binding : null;
-  const [serviceId, setServiceId] = useState(existing?.serviceId ?? '');
+	const [serviceId, setServiceId] = useState(existing?.serviceId ?? scopeServiceId);
   const [endpointId, setEndpointId] = useState(existing?.endpointId ?? '');
   const [labelMatchRaw, setLabelMatchRaw] = useState(existing ? formatLabelMatchEditable(existing.labelMatch) : '');
   const [basePromQL, setBasePromQL] = useState(existing?.basePromQL ?? '');
@@ -172,7 +179,7 @@ function BindingDrawer({ mode, services, endpoints, onClose, onSuccess }: {
     onSuccess,
   });
   const updateMutation = useMutation({
-    mutationFn: ({ id, input }: { id: string; input: UpdateServiceBindingInput }) => metricsApi.updateServiceBinding(id, input),
+	mutationFn: ({ id, input }: { id: string; input: UpdateServiceBindingInput }) => metricsApi.updateServiceBinding(productId, scopeServiceId, id, input),
     onSuccess,
   });
 
@@ -185,7 +192,7 @@ function BindingDrawer({ mode, services, endpoints, onClose, onSuccess }: {
     if (isEdit && existing) {
       updateMutation.mutate({ id: existing.id, input: { endpointId, labelMatch, basePromQL, status } });
     } else {
-      createMutation.mutate({ serviceId, endpointId, labelMatch, basePromQL, status });
+	  createMutation.mutate({ productId, serviceId, endpointId, labelMatch, basePromQL, status });
     }
   }
 

@@ -45,7 +45,7 @@ test('顶层框架使用顶部业务域和按需展开的超级菜单', () => {
   assert.equal(source.includes('getNavigationDomains'), true);
   assert.equal(source.includes('getNavigationDomainByPath'), true);
   assert.equal(source.includes('openDomainId'), true);
-  assert.equal(source.includes('NovaObs 超级菜单'), true);
+  assert.equal(source.includes('NovaAPM 超级菜单'), true);
   assert.equal(source.includes('全部模块'), true);
   assert.equal(source.includes('快速访问'), true);
   assert.equal(source.includes('aria-expanded'), true);
@@ -100,6 +100,8 @@ test('应用内容使用带当前位置和右侧工具区的工作区外壳', ()
   assert.equal(source.includes('getWorkspaceModuleLabel'), true);
   assert.equal(source.includes('isLogsWorkspacePath'), true);
   assert.equal(source.includes("return 'Logs'"), true);
+  assert.equal(source.includes('isMetricsWorkspacePath'), true);
+  assert.equal(source.includes("return '监控'"), true);
   assert.equal(source.includes('getBackTarget'), true);
   assert.equal(source.includes('刷新当前页面'), true);
   assert.equal(source.includes('复制当前页面链接'), true);
@@ -111,7 +113,7 @@ test('应用内容使用带当前位置和右侧工具区的工作区外壳', ()
 test('顶层框架不再保留全局侧栏和 K8s 聚焦侧栏', () => {
   assert.equal(source.includes('sidebar-collapse-toggle'), false);
   assert.equal(source.includes('isSidebarCollapsed'), false);
-  assert.equal(source.includes('novaobs.sidebar.collapsed'), false);
+  assert.equal(source.includes('novaapm.sidebar.collapsed'), false);
   assert.equal(source.includes('K8sFocusRail'), false);
   assert.equal(source.includes('getK8sFocusClusterName'), false);
   assert.equal(source.includes('k8s-focus-mode'), false);
@@ -156,7 +158,7 @@ test('顶层框架使用柔和观测控制面视觉语言', () => {
   assert.equal(source.includes('Prod / CN-SHANGHAI-A'), false);
   assert.equal(source.includes('生产观测域'), false);
   assert.equal(source.includes('cn-sh-a'), false);
-  assert.equal(source.includes('NovaObs for UCloud'), false);
+  assert.equal(source.includes('NovaAPM for UCloud'), false);
   assert.equal(source.includes('UCloud Ops'), false);
   assert.equal(source.includes('mega-menu-panel'), true);
   assert.equal(source.includes('mega-menu-backdrop'), true);

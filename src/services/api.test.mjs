@@ -144,7 +144,7 @@ test('执行服务接入检查时调用 POST /services/:id/onboarding/check', as
 
 test('创建服务时传递必填字段并以字符串 ID 返回', async () => {
   const request = await captureRequest(
-    () => api.createService({ name: 'order-svc', environment: 'prod' }),
+	() => api.createService({ productId: 'product-commerce', name: 'order-svc', environment: 'prod' }),
     {
       id: '507f1f77bcf86cd799439020',
       name: 'order-svc',
@@ -155,10 +155,29 @@ test('创建服务时传递必填字段并以字符串 ID 返回', async () => {
     },
   );
 
-  assert.equal(request.path, '/api/v1/services');
+	assert.equal(request.path, '/api/v1/products/product-commerce/services');
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.name, 'order-svc');
   assert.equal(request.body.environment, 'prod');
+});
+
+test('创建产品后由后端生成产品级 projectId', async () => {
+	const originalFetch = globalThis.fetch;
+	const requests = [];
+	globalThis.fetch = async (path, init = {}) => {
+		requests.push({ path, init, body: init.body ? JSON.parse(init.body) : undefined });
+		return jsonResponse({ id: 'product-payments', name: 'payments', display_name: '支付产品', project_id: 9528, status: 'active' });
+	};
+
+	try {
+		const product = await api.createProduct({ name: 'payments', displayName: '支付产品' });
+		assert.equal(requests[0].path, '/api/v1/products');
+		assert.equal(requests[0].init.method, 'POST');
+		assert.equal(requests[0].body.project_id, undefined);
+		assert.equal(product.projectId, '9528');
+	} finally {
+		globalThis.fetch = originalFetch;
+	}
 });
 
 test('更新服务时使用 PATCH 方法', async () => {
@@ -324,10 +343,10 @@ test('Agent Detail runtime 映射采集域稳定运行身份字段', async () =>
       runtime_identity: 'k8s:test03:group-001:node-01',
       collector_group_id: 'group-001',
       cluster_id: 'test03',
-      namespace: 'novaobs-system',
-      agent_namespace: 'novaobs-system',
+      namespace: 'novaapm-system',
+      agent_namespace: 'novaapm-system',
       pod_uid: 'pod-uid-b',
-      pod_name: 'novaobs-logs-agent-b',
+      pod_name: 'novaapm-logs-agent-b',
       node_name: 'node-01',
       pod_ip: '10.0.0.12',
       ip: '10.0.0.99',
@@ -347,7 +366,7 @@ test('Agent Detail runtime 映射采集域稳定运行身份字段', async () =>
     const detail = await api.getAgentDetail('opamp-uid-b');
     assert.equal(detail.runtime.runtimeIdentity, 'k8s:test03:group-001:node-01');
     assert.equal(detail.runtime.clusterId, 'test03');
-    assert.equal(detail.runtime.agentNamespace, 'novaobs-system');
+    assert.equal(detail.runtime.agentNamespace, 'novaapm-system');
     assert.equal(detail.runtime.podUid, 'pod-uid-b');
     assert.equal(detail.runtime.podIp, '10.0.0.12');
     assert.equal(detail.runtime.opampInstanceUid, 'opamp-uid-b');
@@ -369,10 +388,10 @@ test('获取 Collector 实例时保留 runtime_identity 与 OpAMP 实例 UID', a
         runtime_identity: 'k8s:test03:group-001:node-01',
         collector_group_id: 'group-001',
         cluster_id: 'test03',
-        namespace: 'novaobs-system',
-        agent_namespace: 'novaobs-system',
+        namespace: 'novaapm-system',
+        agent_namespace: 'novaapm-system',
         pod_uid: 'pod-uid-b',
-        pod_name: 'novaobs-logs-agent-b',
+        pod_name: 'novaapm-logs-agent-b',
         node_name: 'node-01',
         pod_ip: '10.0.0.12',
         remote_config_status: 'applied',
@@ -386,8 +405,8 @@ test('获取 Collector 实例时保留 runtime_identity 与 OpAMP 实例 UID', a
     assert.equal(instances[0].instanceUid, 'opamp-uid-b');
     assert.equal(instances[0].runtimeIdentity, 'k8s:test03:group-001:node-01');
     assert.equal(instances[0].clusterId, 'test03');
-    assert.equal(instances[0].namespace, 'novaobs-system');
-    assert.equal(instances[0].agentNamespace, 'novaobs-system');
+    assert.equal(instances[0].namespace, 'novaapm-system');
+    assert.equal(instances[0].agentNamespace, 'novaapm-system');
     assert.equal(instances[0].podUid, 'pod-uid-b');
     assert.equal(instances[0].podIp, '10.0.0.12');
     assert.equal(instances[0].opampInstanceUid, 'opamp-uid-b');

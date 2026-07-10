@@ -1,40 +1,89 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Activity, AlertTriangle, CheckCircle2, FileCode2, RefreshCw, Rocket, ServerCog } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileCode2, Loader2, RefreshCw, Rocket, Server, ServerCog } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
+import { api } from '../../services/api';
 import { LogsPublishPreviewPanel } from '../logs/LogsPublishPreviewPanel';
-import { logsApi, type LogsCollectorRuntimePublishResult, type ObservabilityRuntime } from '../logs/api';
+import { defaultLogsCollectorNamespace, logsApi, normalizeLogsCollectorNamespace, type LogRouteView, type LogsCollectorRuntimePublishResult, type LogsCollectorRuntimeResourceStatus, type LogsCollectorRuntimeStatus, type LogsServiceSummary } from '../logs/api';
 import { useK8sOpsContext } from './context';
 
-const defaultRuntimeNamespace = 'novaobs-system';
+type PublishTaskType = 'base' | 'incremental';
+
+interface RuntimeRow {
+  id: string;
+  status: string;
+  namespace: string;
+}
 
 export function K8sObservabilityAccessPage() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeClusterId, activeCluster, clusters, isLoadingClusters, clusterError } = useK8sOpsContext();
   const requestedClusterId = activeClusterId || searchParams.get('cluster_id') || '';
+  const requestedNamespace = normalizeLogsCollectorNamespace(searchParams.get('namespace'));
+  const requestedTaskType = searchParams.get('task') === 'incremental' ? 'incremental' : searchParams.get('task') === 'base' ? 'base' : '';
   const [selectedClusterId, setSelectedClusterId] = useState(requestedClusterId);
-  const [namespace, setNamespace] = useState(defaultRuntimeNamespace);
+  const [namespace, setNamespace] = useState(requestedNamespace);
   const [pendingPublish, setPendingPublish] = useState<LogsCollectorRuntimePublishResult | null>(null);
   const [lastResult, setLastResult] = useState<LogsCollectorRuntimePublishResult | null>(null);
+  const [showResourceDetails, setShowResourceDetails] = useState(false);
+  const [publishingServiceId, setPublishingServiceId] = useState<string | null>(null);
   const effectiveClusterId = activeClusterId || selectedClusterId;
   const selectedCluster = activeClusterId
     ? activeCluster
     : clusters.find((cluster) => cluster.id === effectiveClusterId);
 
-  const runtimesQuery = useQuery({
-    queryKey: ['observability-runtimes'],
-    queryFn: () => logsApi.listObservabilityRuntimes(),
+  const runtimeStatusQuery = useQuery({
+    queryKey: ['logs-collector-runtime-status', effectiveClusterId, namespace],
+    queryFn: () => logsApi.getLogsCollectorRuntimeStatus({ clusterId: effectiveClusterId, namespace }),
+    enabled: Boolean(effectiveClusterId && namespace.trim() && selectedCluster),
     retry: false,
   });
+
+  const workspaceQuery = useQuery({
+	queryKey: ['logs-service-workspaces'],
+	queryFn: async () => {
+		const services = await api.getServices();
+		const workspaces = await Promise.all(services.filter((service) => service.productId).map((service) => logsApi.getWorkspace(service.productId, service.id)));
+		return { services: workspaces.flatMap((workspace) => workspace.services), routes: workspaces.flatMap((workspace) => workspace.routes) };
+	},
+    enabled: Boolean(runtimeStatusQuery.data?.ready),
+  });
+
+  const serviceRouteGroups = useMemo(() => {
+    const routes = workspaceQuery.data?.routes ?? [];
+    const services = workspaceQuery.data?.services ?? [];
+    const serviceById = new Map(services.map((s) => [s.id, s]));
+    const clusterRoutes = routes.filter((r) => r.source?.clusterId === effectiveClusterId || r.route.sourceType === 'vm_file');
+    const groups = new Map<string, { service: LogsServiceSummary | null; routes: LogRouteView[] }>();
+    for (const r of clusterRoutes) {
+      const sid = r.route.serviceId;
+      const existing = groups.get(sid);
+      if (existing) {
+        existing.routes.push(r);
+      } else {
+        groups.set(sid, { service: serviceById.get(sid) ?? null, routes: [r] });
+      }
+    }
+    return [...groups.entries()].map(([serviceId, group]) => {
+      const pendingRoutes = group.routes.filter((r) => r.route.lastPublishStatus !== 'published' && r.route.lastPublishStatus !== 'applied');
+      return { serviceId, ...group, pendingCount: pendingRoutes.length, pendingRouteIds: pendingRoutes.map((r) => r.route.id) };
+    });
+  }, [effectiveClusterId, workspaceQuery.data]);
 
   useEffect(() => {
     if (requestedClusterId && requestedClusterId !== selectedClusterId) {
       setSelectedClusterId(requestedClusterId);
     }
   }, [requestedClusterId, selectedClusterId]);
+
+  useEffect(() => {
+    if (requestedNamespace) {
+      setNamespace(requestedNamespace);
+    }
+  }, [requestedNamespace]);
 
   useEffect(() => {
     if (!selectedClusterId && clusters.length) {
@@ -47,30 +96,40 @@ export function K8sObservabilityAccessPage() {
     setLastResult(null);
   }, [effectiveClusterId]);
 
-  const clusterRuntimes = useMemo(
-    () => (runtimesQuery.data ?? []).filter((runtime) => runtime.clusterId === effectiveClusterId),
-    [effectiveClusterId, runtimesQuery.data],
+  const runtimeRows = useMemo(
+    () => [logsCollectorRuntimeRow(effectiveClusterId, namespace, runtimeStatusQuery.data)],
+    [effectiveClusterId, namespace, runtimeStatusQuery.data],
   );
-  const collectorRuntime = clusterRuntimes.find((runtime) => runtime.kind === 'logs_collector' && runtime.namespace === namespace);
-  const runtimeRows = collectorRuntime
-    ? [collectorRuntime, ...clusterRuntimes.filter((runtime) => runtime.id !== collectorRuntime.id)]
-    : [pendingCollectorRuntime(effectiveClusterId, namespace), ...clusterRuntimes];
+  const runtimeStatusMessage = runtimeStatusQuery.data?.message ?? '';
+  const runtimeStatus = runtimeStatusQuery.data;
+  const runtimeStatusTone = runtimeStatusQuery.data?.ready
+    ? 'success'
+    : runtimeStatusQuery.data?.status === 'unavailable'
+      ? 'danger'
+      : 'warning';
 
   const namespaceReady = Boolean(namespace.trim());
   const clusterReadOnly = Boolean(selectedCluster?.readOnly);
   const clusterUnknown = Boolean(effectiveClusterId && !selectedCluster && !isLoadingClusters);
-  const canPublish = Boolean(effectiveClusterId && selectedCluster && namespaceReady && !clusterReadOnly && !publishMutationPending(pendingPublish));
+  const hasPendingConfirmation = Boolean(pendingPublish?.requiresConfirmation);
+  const canPublish = Boolean(effectiveClusterId && selectedCluster && namespaceReady && !clusterReadOnly && !hasPendingConfirmation);
+  const canPreviewBase = canPublish && runtimeStatus?.status === 'missing_resources';
+  const canPreviewIncremental = canPublish && Boolean(runtimeStatus?.ready);
   const publishMutation = useMutation({
-    mutationFn: (confirmation?: { previewId?: string; confirmationToken?: string }) => logsApi.publishLogsCollectorRuntime({
+    mutationFn: (input: { taskType: PublishTaskType; routeIds?: string[]; previewId?: string; confirmationToken?: string }) => logsApi.publishLogsCollectorRuntime({
       clusterId: effectiveClusterId,
       namespace,
-      previewId: confirmation?.previewId,
-      confirmationToken: confirmation?.confirmationToken,
+      taskType: input.taskType,
+      routeIds: input.routeIds,
+      previewId: input.previewId,
+      confirmationToken: input.confirmationToken,
     }),
     onSuccess: async (result) => {
       setLastResult(result);
       setPendingPublish(result.requiresConfirmation ? result : null);
-      await queryClient.invalidateQueries({ queryKey: ['observability-runtimes'] });
+      if (!result.requiresConfirmation) setPublishingServiceId(null);
+      await queryClient.invalidateQueries({ queryKey: ['logs-collector-runtime-status', effectiveClusterId, namespace] });
+	  await queryClient.invalidateQueries({ queryKey: ['logs-service-workspaces'] });
       await queryClient.invalidateQueries({ queryKey: ['k8s-deployment-history', effectiveClusterId] });
       await queryClient.invalidateQueries({ queryKey: ['k8s-audit-events', effectiveClusterId] });
     },
@@ -92,17 +151,23 @@ export function K8sObservabilityAccessPage() {
     setSelectedClusterId(nextClusterId);
     setPendingPublish(null);
     setLastResult(null);
-    setSearchParams(nextClusterId ? { cluster_id: nextClusterId } : {});
+    setSearchParams(nextClusterId ? { cluster_id: nextClusterId, namespace: normalizeLogsCollectorNamespace(namespace) } : {});
   }
 
-  function previewRuntime() {
+  function previewRuntime(taskType: PublishTaskType, routeIds?: string[]) {
     setPendingPublish(null);
-    publishMutation.mutate(undefined);
+    publishMutation.mutate({ taskType, routeIds });
+  }
+
+  function previewServicePublish(serviceId: string, routeIds: string[]) {
+    setPublishingServiceId(serviceId);
+    previewRuntime('incremental', routeIds);
   }
 
   function applyRuntime() {
     if (!pendingPublish?.previewId || !pendingPublish.confirmationToken) return;
     publishMutation.mutate({
+      taskType: pendingPublish.taskType === 'base' ? 'base' : 'incremental',
       previewId: pendingPublish.previewId,
       confirmationToken: pendingPublish.confirmationToken,
     });
@@ -131,18 +196,9 @@ export function K8sObservabilityAccessPage() {
                 ))}
               </select>
             ) : null}
-            <button className="console-button" onClick={() => runtimesQuery.refetch()} disabled={runtimesQuery.isFetching} aria-label="刷新观测运行时">
-              {runtimesQuery.isFetching ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+            <button className="console-button" onClick={() => runtimeStatusQuery.refetch()} disabled={runtimeStatusQuery.isFetching || !effectiveClusterId || !namespaceReady || !selectedCluster} aria-label="刷新观测运行时">
+              {runtimeStatusQuery.isFetching ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
               刷新
-            </button>
-            <button
-              className="console-button console-button-primary"
-              disabled={!canPublish || publishMutation.isPending}
-              onClick={previewRuntime}
-              title={blocker}
-            >
-              <Rocket className="h-3.5 w-3.5" />
-              预览部署
             </button>
           </div>
         )}
@@ -150,6 +206,8 @@ export function K8sObservabilityAccessPage() {
         <div className="space-y-4">
           {clusterError ? <InlineNotice tone="danger" message={clusterError.message} /> : null}
           {blocker ? <InlineNotice tone={clusterReadOnly ? 'warning' : 'danger'} message={blocker} /> : null}
+          {runtimeStatusQuery.error ? <InlineNotice tone="danger" message={(runtimeStatusQuery.error as Error).message} /> : null}
+          {runtimeStatusMessage ? <InlineNotice tone={runtimeStatusTone} message={runtimeStatusMessage} /> : null}
           {publishMutation.error ? <InlineNotice tone="danger" message={(publishMutation.error as Error).message} /> : null}
           {lastResult && !lastResult.requiresConfirmation ? <InlineNotice tone="success" message={lastResult.message || '平台运行时已部署'} /> : null}
 
@@ -165,13 +223,13 @@ export function K8sObservabilityAccessPage() {
                 </thead>
                 <tbody>
                   {runtimeRows.map((runtime) => (
-                    <tr key={runtime.id || runtime.kind}>
+                    <tr key={runtime.id}>
                       <td>
                         <div className="flex items-center gap-2">
-                          <RuntimeIcon kind={runtime.kind} />
+                          <RuntimeIcon />
                           <div>
-                            <div className="text-sm font-semibold text-on-surface">{runtimeLabel(runtime.kind)}</div>
-                            <div className="font-mono text-[11px] text-muted">{runtime.id || runtime.kind}</div>
+                            <div className="text-sm font-semibold text-on-surface">日志采集运行时</div>
+                            <div className="font-mono text-[11px] text-muted">{runtime.id}</div>
                           </div>
                         </div>
                       </td>
@@ -194,8 +252,9 @@ export function K8sObservabilityAccessPage() {
                   className="console-input mt-1 h-9 w-full font-mono text-sm"
                   value={namespace}
                   onChange={(event) => {
-                    setNamespace(event.target.value);
+                    setNamespace(normalizeLogsCollectorNamespace(event.target.value));
                     setPendingPublish(null);
+                    setLastResult(null);
                   }}
                 />
               </label>
@@ -203,23 +262,120 @@ export function K8sObservabilityAccessPage() {
                 <RuntimeFact label="部署集群" value={effectiveClusterId || '-'} />
                 <RuntimeFact label="写入策略" value={clusterReadOnly ? '只读' : '允许写入'} />
                 <RuntimeFact label="采集器" value="logs_collector" />
-                <RuntimeFact label="配置来源" value="集群内日志路由合并配置" />
+                <RuntimeFact label="当前任务" value={requestedTaskType ? publishTaskLabel(requestedTaskType) : '按基础状态选择'} />
               </div>
             </div>
+          </div>
+
+          <div className="space-y-4">
+            <RuntimeStepperHeader
+              step1Complete={runtimeStatus?.ready ?? false}
+              activeStep={runtimeStatus?.ready ? 2 : 1}
+            />
+
+            <RuntimeStepPanel
+              stepNumber={1}
+              title="基础组件发布"
+              complete={runtimeStatus?.ready ?? false}
+              active={!runtimeStatus?.ready}
+              description={runtimeStatus?.ready
+                ? `基础资源已就绪 · 最后发布时间：${runtimeStatus.runtime?.lastPublishedAt || '-'}`
+                : '检测到基础资源缺失，预览将生成 Namespace、RBAC、ServiceAccount、基础 ConfigMap、Service 和 DaemonSet。'}
+              action={runtimeStatus?.ready ? (
+                <button
+                  className="console-button text-xs"
+                  disabled={publishMutation.isPending}
+                  onClick={() => previewRuntime('base')}
+                  title="重新发布基础组件（通常不需要）"
+                >
+                  <RefreshCw className="h-3.5 w-3.5" />
+                  重新发布
+                </button>
+              ) : (
+                <button
+                  className="console-button console-button-primary"
+                  disabled={!canPreviewBase || publishMutation.isPending}
+                  onClick={() => previewRuntime('base')}
+                  title={blocker || runtimeStatus?.message || ''}
+                >
+                  <Rocket className="h-3.5 w-3.5" />
+                  预览基础组件发布
+                </button>
+              )}
+            >
+              <button
+                type="button"
+                className="mt-3 flex w-full items-center gap-1.5 rounded border border-outline bg-white px-2 py-1.5 text-xs font-semibold text-muted hover:bg-surface-low hover:text-on-surface"
+                onClick={() => setShowResourceDetails(!showResourceDetails)}
+              >
+                {showResourceDetails ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
+                查看基础资源清单
+                <span className="ml-auto"><StatusBadge value={runtimeStatus?.ready ? 'ready' : runtimeStatus?.status || 'checking'} /></span>
+              </button>
+              {showResourceDetails ? (
+                <div className="mt-2 overflow-hidden rounded border border-outline">
+                  <RuntimeResourceStatusTable resources={runtimeStatus?.resources ?? []} />
+                </div>
+              ) : null}
+            </RuntimeStepPanel>
+
+            <RuntimeStepPanel
+              stepNumber={2}
+              title="服务配置增量发布"
+              complete={false}
+              active={runtimeStatus?.ready ?? false}
+              description={runtimeStatus?.ready
+                ? `按服务维度展示待发布配置变更 · 共 ${serviceRouteGroups.length} 个服务`
+                : '基础组件缺失时不能执行增量发布，请先完成 Step 1。'}
+              action={runtimeStatus?.ready ? (
+                <button
+                  className="console-button"
+                  disabled={!canPreviewIncremental || publishMutation.isPending}
+                  onClick={() => previewRuntime('incremental')}
+                  title="预览所有服务增量变更"
+                >
+                  <Rocket className="h-3.5 w-3.5" />
+                  全量预览
+                </button>
+              ) : (
+                <button className="console-button" disabled title="基础组件未就绪">
+                  <Rocket className="h-3.5 w-3.5" />
+                  预览增量发布
+                </button>
+              )}
+            >
+              {runtimeStatus?.ready && serviceRouteGroups.length > 0 ? (
+                <div className="mt-3 divide-y divide-outline overflow-hidden rounded border border-outline">
+                  {serviceRouteGroups.map((group) => (
+                    <ServicePublishRow
+                      key={group.serviceId}
+                      group={group}
+                      publishing={publishingServiceId === group.serviceId && publishMutation.isPending}
+                      disabled={!canPreviewIncremental || publishMutation.isPending}
+                      onPreview={() => previewServicePublish(group.serviceId, group.routes.map((r) => r.route.id))}
+                    />
+                  ))}
+                </div>
+              ) : runtimeStatus?.ready ? (
+                <div className="mt-3 rounded border border-outline bg-white px-3 py-4 text-center text-xs text-muted">
+                  当前集群暂无采集路由。在采集路由页创建路由后，此处将按服务展示待发布配置。
+                </div>
+              ) : null}
+            </RuntimeStepPanel>
           </div>
 
           {pendingPublish ? (
             <div className="space-y-3">
               <LogsPublishPreviewPanel preview={pendingPublish} />
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-outline bg-surface-lowest px-3 py-2">
-                <div className="text-xs font-semibold text-muted">{pendingPublish.diffs.length || pendingPublish.resources.length} 个资源待确认</div>
+                <div className="text-xs font-semibold text-muted">{publishTaskLabel(pendingPublish.taskType)} · {pendingPublish.diffs.length || pendingPublish.resources.length} 个资源待确认</div>
                 <button
                   className="console-button console-button-primary"
                   disabled={!pendingPublish.previewId || !pendingPublish.confirmationToken || publishMutation.isPending}
                   onClick={applyRuntime}
                 >
                   <CheckCircle2 className="h-3.5 w-3.5" />
-                  确认部署
+                  确认{publishTaskLabel(pendingPublish.taskType)}
                 </button>
               </div>
             </div>
@@ -230,46 +386,129 @@ export function K8sObservabilityAccessPage() {
   );
 }
 
-function pendingCollectorRuntime(clusterId: string, namespace: string): ObservabilityRuntime {
+function logsCollectorRuntimeRow(clusterId: string, namespace: string, status?: LogsCollectorRuntimeStatus): RuntimeRow {
   return {
-    id: clusterId ? `logs-collector:${clusterId}:${namespace || defaultRuntimeNamespace}` : '',
-    kind: 'logs_collector',
-    signalType: 'logs',
-    clusterId,
-    namespace: namespace || defaultRuntimeNamespace,
-    endpointId: '',
-    collectorConfigHash: '',
-    artifactHash: '',
-    manifestHash: '',
-    status: 'pending_publish',
-    lastPreviewId: '',
-    lastAuditId: '',
-    lastError: '',
-    lastPublishedAt: '',
-    resources: [],
+    id: status?.runtime?.id || (clusterId ? `logs-collector:${clusterId}:${namespace || defaultLogsCollectorNamespace}` : 'logs_collector'),
+    namespace: namespace || defaultLogsCollectorNamespace,
+    status: status?.ready ? 'ready' : status?.status || 'pending_publish',
   };
 }
 
-function publishMutationPending(value: LogsCollectorRuntimePublishResult | null) {
-  return Boolean(value?.requiresConfirmation);
-}
-
-function RuntimeIcon({ kind }: { kind: string }) {
-  if (kind.includes('vmalert')) return <Activity className="h-4 w-4 text-primary" />;
+function RuntimeIcon() {
   return <FileCode2 className="h-4 w-4 text-primary" />;
 }
 
-function runtimeLabel(kind: string) {
-  switch (kind) {
-    case 'logs_collector':
-      return '日志采集运行时';
-    case 'logs_vmalert':
-      return '日志告警运行时';
-    case 'metrics_vmalert':
-      return '指标告警运行时';
-    default:
-      return kind || '观测运行时';
+function publishTaskLabel(value: string) {
+  return value === 'base' ? '基础组件发布' : value === 'incremental' ? '服务配置增量发布' : '发布任务';
+}
+
+function RuntimeResourceStatusTable({ resources }: { resources: LogsCollectorRuntimeResourceStatus[] }) {
+  if (!resources.length) {
+    return <div className="px-3 py-6 text-center text-xs text-muted">等待读取集群基础组件状态</div>;
   }
+  return (
+    <div className="overflow-auto">
+      <table className="console-table w-full min-w-[760px]">
+        <thead>
+          <tr>
+            <th>资源</th>
+            <th>状态</th>
+            <th>Namespace</th>
+            <th>API</th>
+          </tr>
+        </thead>
+        <tbody>
+          {resources.map((item) => (
+            <tr key={`${item.apiVersion}/${item.kind}/${item.namespace}/${item.name}`}>
+              <td className="font-mono text-xs font-semibold text-on-surface">{item.kind}/{item.name}</td>
+              <td><StatusBadge value={item.exists ? 'ready' : 'missing_resources'} /></td>
+              <td className="font-mono text-xs text-muted">{item.namespace || 'cluster'}</td>
+              <td className="font-mono text-xs text-muted">{item.apiVersion}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RuntimeStepperHeader({ step1Complete, activeStep }: { step1Complete: boolean; activeStep: number }) {
+  return (
+    <div className="flex items-center gap-2 rounded-md border border-outline bg-surface-lowest px-3 py-2">
+      <div className={`flex items-center gap-1.5 text-xs font-semibold ${step1Complete ? 'text-emerald-600' : activeStep === 1 ? 'text-primary' : 'text-muted'}`}>
+        {step1Complete ? <CheckCircle2 className="h-3.5 w-3.5" /> : <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-current text-[9px]">1</span>}
+        基础组件
+      </div>
+      <ChevronRight className="h-3.5 w-3.5 text-muted" />
+      <div className={`flex items-center gap-1.5 text-xs font-semibold ${activeStep === 2 ? 'text-primary' : 'text-muted'}`}>
+        <span className="flex h-3.5 w-3.5 items-center justify-center rounded-full border-2 border-current text-[9px]">2</span>
+        服务配置
+      </div>
+    </div>
+  );
+}
+
+function RuntimeStepPanel({ stepNumber, title, complete, active, description, action, children }: { stepNumber: number; title: string; complete: boolean; active: boolean; description: string; action: ReactNode; children?: ReactNode }) {
+  const borderClass = complete
+    ? 'border-emerald-200/60'
+    : active
+      ? 'border-primary/45 shadow-[inset_3px_0_0_rgba(13,91,215,0.72)]'
+      : 'border-outline';
+  const iconClass = complete
+    ? 'text-emerald-600'
+    : active
+      ? 'text-primary'
+      : 'text-muted';
+  return (
+    <div className={`rounded-md border bg-surface-lowest p-3 ${borderClass}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex min-w-0 items-start gap-2">
+          <div className="shrink-0 pt-0.5">
+            {complete ? <CheckCircle2 className={`h-4 w-4 ${iconClass}`} /> : <span className={`flex h-4 w-4 items-center justify-center rounded-full border-2 text-[10px] font-bold ${iconClass}`} style={{ borderColor: 'currentColor' }}>{stepNumber}</span>}
+          </div>
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-on-surface">{title}</div>
+            <p className="mt-1 text-xs leading-5 text-muted">{description}</p>
+          </div>
+        </div>
+      </div>
+      <div className="mt-3 flex justify-end">{action}</div>
+      {children}
+    </div>
+  );
+}
+
+function ServicePublishRow({ group, publishing, disabled, onPreview }: {
+  group: { serviceId: string; service: LogsServiceSummary | null; routes: LogRouteView[]; pendingCount: number };
+  publishing: boolean;
+  disabled: boolean;
+  onPreview: () => void;
+}) {
+  const serviceName = group.service?.displayName || group.service?.name || group.serviceId;
+  const hasPending = group.pendingCount > 0;
+  return (
+    <div className="flex items-center gap-3 bg-white px-3 py-2.5">
+      <Server className={`h-4 w-4 shrink-0 ${hasPending ? 'text-primary' : 'text-muted'}`} />
+      <div className="min-w-0 flex-1">
+        <div className="truncate text-sm font-semibold text-on-surface">{serviceName}</div>
+        <div className="mt-0.5 text-[11px] text-muted">
+          {group.routes.length} 条路由
+          {hasPending ? ` · ${group.pendingCount} 条待发布` : ' · 已是最新'}
+        </div>
+      </div>
+      <StatusBadge value={hasPending ? 'pending_publish' : 'published'} />
+      {hasPending ? (
+        <button
+          className="console-button console-button-primary gap-1 text-xs"
+          disabled={disabled}
+          onClick={onPreview}
+        >
+          {publishing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />}
+          预览发布
+        </button>
+      ) : null}
+    </div>
+  );
 }
 
 function RuntimeFact({ label, value }: { label: string; value: string }) {

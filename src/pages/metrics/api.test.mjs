@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { metricsApi } from './api.ts';
+import { buildVictoriaMetricsVMUIURL, metricsApi } from './api.ts';
 
 const apiSource = readFileSync(new URL('./api.ts', import.meta.url), 'utf8');
 
@@ -35,6 +35,13 @@ async function captureRequest(callApi, responseData = {}) {
   }
 }
 
+test('VictoriaMetrics VMUI 默认加载当前服务的 basePromQL', () => {
+	assert.equal(
+		buildVictoriaMetricsVMUIURL('http://vmselect:8481/select/0:9528/vmui/', '{service_name="orders-api"}'),
+		'http://vmselect:8481/select/0:9528/vmui/#/?g0.expr=%7Bservice_name%3D%22orders-api%22%7D',
+	);
+});
+
 test('Metrics API 只通过统一 apiRequest 访问后端', () => {
   assert.match(apiSource, /import \{ apiRequest \} from '..\/..\/services\/api'/);
   assert.doesNotMatch(apiSource, /\bfetch\(/);
@@ -43,7 +50,7 @@ test('Metrics API 只通过统一 apiRequest 访问后端', () => {
 
 test('获取 Metrics 工作台时映射服务、端点和服务绑定', async () => {
   const { request, result } = await captureRequest(
-    () => metricsApi.getWorkspace(),
+	() => metricsApi.getWorkspace('product-001', 'svc-001'),
     {
       services: [{ id: 'svc-001', name: 'order-api', display_name: '订单 API', owner_team: 'payments', sync_status: 'synced' }],
       endpoints: [{
@@ -76,7 +83,7 @@ test('获取 Metrics 工作台时映射服务、端点和服务绑定', async ()
     },
   );
 
-  assert.equal(request.path, '/api/v1/metrics/workspace');
+	assert.equal(request.path, '/api/v1/products/product-001/services/svc-001/metrics/workspace');
   assert.equal(request.init.method, undefined);
   assert.equal(result.services[0].displayName, '订单 API');
   assert.equal(result.services[0].ownerTeam, 'payments');
@@ -93,7 +100,7 @@ test('获取 Metrics 工作台时映射服务、端点和服务绑定', async ()
 
 test('Metrics 工作台兼容后端服务作用域、单个 binding 视图和嵌套端点字段', async () => {
   const { request, result } = await captureRequest(
-    () => metricsApi.getWorkspace('svc-001'),
+	() => metricsApi.getWorkspace('product-001', 'svc-001'),
     {
       active_service_id: 'svc-001',
       services: [{ id: 'svc-001', name: 'order-api', display_name: '订单 API' }],
@@ -125,7 +132,7 @@ test('Metrics 工作台兼容后端服务作用域、单个 binding 视图和嵌
     },
   );
 
-  assert.equal(request.path, '/api/v1/metrics/workspace?service_id=svc-001');
+	assert.equal(request.path, '/api/v1/products/product-001/services/svc-001/metrics/workspace');
   assert.equal(result.activeServiceId, 'svc-001');
   assert.equal(result.endpoints[0].endpointType, 'victoriametrics');
   assert.equal(result.endpoints[0].queryURL, 'http://vm/select/0/prometheus');
@@ -141,7 +148,7 @@ test('Metrics 工作台兼容后端服务作用域、单个 binding 视图和嵌
 
 test('Metrics mapper 兼容 camelCase 响应字段', async () => {
   const { result } = await captureRequest(
-    () => metricsApi.getWorkspace(),
+	() => metricsApi.getWorkspace('product-002', 'svc-002'),
     {
       services: [{ id: 'svc-002', name: 'billing', displayName: '计费', ownerTeam: 'finance', syncStatus: 'local' }],
       endpoints: [{
@@ -191,12 +198,12 @@ test('Metrics 端点与服务绑定列表使用独立资源接口', async () => 
     [{ id: 'vm-001', name: 'vm-prod', endpoint_type: 'victoriametrics' }],
   );
   const bindings = await captureRequest(
-    () => metricsApi.listServiceBindings('svc-001'),
+	() => metricsApi.listServiceBindings('product-001', 'svc-001'),
     [{ id: 'binding-001', service_id: 'svc-001', endpoint_id: 'vm-001', label_match: { service: 'order-api' } }],
   );
 
   assert.equal(endpoints.request.path, '/api/v1/metrics/endpoints');
   assert.equal(endpoints.result[0].endpointType, 'victoriametrics');
-  assert.equal(bindings.request.path, '/api/v1/metrics/service-bindings?service_id=svc-001');
+	assert.equal(bindings.request.path, '/api/v1/products/product-001/services/svc-001/metrics/bindings');
   assert.equal(bindings.result[0].serviceId, 'svc-001');
 });

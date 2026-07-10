@@ -45,29 +45,31 @@ test('Logs 接入配置不再前端渲染 collector YAML', () => {
   assert.equal(onboardingSource.includes('LogsParseRuleDialog'), true);
   assert.equal(onboardingSource.includes('LogsPublishPreviewPanel'), false);
   assert.equal(onboardingSource.includes('publishLogsCollectorRuntime'), false);
-  assert.equal(onboardingSource.includes('listObservabilityRuntimes'), true);
+  assert.equal(onboardingSource.includes('getLogsCollectorRuntimeStatus'), true);
   assert.equal(onboardingSource.includes('/k8s/observability?cluster_id='), true);
   assert.equal(onboardingSource.includes('启用集群观测接入'), true);
   assert.equal(onboardingSource.includes('前往观测接入'), true);
 });
 
-test('Logs 接入配置以 route collector fragment 作为主要编辑对象', () => {
+test('Logs 接入配置以服务 ConfigMap 片段作为主要编辑对象', () => {
   assert.equal(onboardingSource.includes('renderK8sRouteFragmentDraft'), true);
   assert.equal(onboardingSource.includes('collectorFragmentYAML'), true);
   assert.equal(onboardingSource.includes('collector_fragment_yaml'), false);
-  assert.equal(onboardingSource.includes('route collector fragment'), true);
+  assert.equal(onboardingSource.includes('service config fragment'), true);
   assert.equal(onboardingSource.includes('重新生成示例'), true);
   assert.equal(onboardingSource.includes('表单占位已变更'), true);
-  assert.equal(onboardingSource.includes('发布时会与同集群其他业务片段合并成完整 collector.yaml'), true);
+  assert.equal(onboardingSource.includes('路由会作为业务片段由运行时统一合并发布'), false);
+  assert.equal(onboardingSource.includes('集群 logs_collector 基础组件已就绪，路由会生成当前服务独立 ConfigMap，并由 DaemonSet 按文件集合加载'), true);
+  assert.equal(onboardingSource.includes('发布后写入当前服务独立 ConfigMap，并由 DaemonSet 按文件集合加载'), true);
   assert.equal(onboardingSource.includes('logs-route-config-editor'), true);
   assert.equal(onboardingSource.includes('bodyClassName="min-h-0 flex-1 overflow-hidden bg-surface/35"'), true);
   assert.equal(onboardingSource.includes('logs-route-config-editor min-h-0 flex-1 resize-none overflow-auto'), true);
   assert.equal(onboardingSource.includes('logs-route-preview-code-grid'), true);
   assert.equal(onboardingSource.includes('RoutePreviewCodePanel'), true);
-  assert.equal(onboardingSource.includes('完整 collector.yaml'), true);
-  assert.equal(onboardingSource.includes('同集群业务片段合并结果'), true);
-  assert.equal(onboardingSource.includes('业务 Route 片段'), true);
-  assert.equal(onboardingSource.includes('由 K8s 观测接入统一合并发布'), true);
+  assert.equal(onboardingSource.includes('完整 collector.yaml'), false);
+  assert.equal(onboardingSource.includes('采集域合并视图'), true);
+  assert.equal(onboardingSource.includes('当前服务 ConfigMap 片段'), true);
+  assert.equal(onboardingSource.includes('只读校验视图，发布时按多 ConfigMap 文件集合加载'), true);
   assert.equal(publishPreviewSource.includes('logs-publish-preview-panel'), true);
   assert.equal(onboardingSource.includes('Runtime 日志目录'), false);
   assert.equal(onboardingSource.includes('runtimeLogPaths'), false);
@@ -75,6 +77,7 @@ test('Logs 接入配置以 route collector fragment 作为主要编辑对象', (
 
 test('观测接入发布预览展示完整资源部署 YAML', () => {
   assert.equal(publishPreviewSource.includes('完整资源部署 YAML'), true);
+  assert.equal(publishPreviewSource.includes('变更 ConfigMap'), true);
   assert.equal(publishPreviewSource.includes('preview.manifestYAML'), true);
   assert.equal(publishPreviewSource.includes('资源部署 YAML 为空'), true);
   assert.equal(publishPreviewSource.includes('navigator.clipboard?.writeText(preview.manifestYAML'), true);
@@ -86,11 +89,17 @@ test('观测接入发布预览展示完整资源部署 YAML', () => {
 });
 
 test('Logs 接入配置以三栏画布承载服务、目标、端点和发布动作', () => {
+  assert.equal(onboardingSource.includes('task=incremental'), true);
   assert.equal(onboardingSource.includes('logs-route-task-stack'), true);
   assert.equal(onboardingSource.includes('logs-route-canvas'), true);
+  assert.equal(onboardingSource.includes('logs-route-canvas mt-3 grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden'), true);
   assert.equal(onboardingSource.includes('logs-route-stepper'), true);
   assert.equal(onboardingSource.includes('logs-route-active-panel'), true);
-  assert.equal(onboardingSource.includes('logs-route-active-panel flex min-h-0 flex-1'), true);
+  assert.equal(onboardingSource.includes('logs-route-active-panel flex min-h-0 min-w-0 flex-1'), true);
+  assert.equal(onboardingSource.includes('logs-route-task-stack flex min-h-0 min-w-0 flex-col overflow-hidden'), true);
+  assert.equal(onboardingSource.includes("if (!runtimeTargetReady) return;"), true);
+  assert.equal(onboardingSource.includes('if (!active) return null;'), true);
+  assert.equal(onboardingSource.includes("const statusLabel = disabled ? '待前置'"), true);
   assert.equal(onboardingSource.includes('logs-route-task-card'), false);
   assert.equal(onboardingSource.includes('logs-route-service-card'), true);
   assert.equal(onboardingSource.includes('logs-route-target-card'), true);
@@ -166,7 +175,7 @@ test('Logs 接入配置按当前任务步骤渐进展示', () => {
 });
 
 test('采集路由任务页通过父模块子路径更新并保留只读集群过滤', () => {
-  assert.equal(onboardingSource.includes("const { id: onboardingRouteId = '' } = useParams()"), true);
+	assert.equal(onboardingSource.includes("const { productId = '', serviceId: pathServiceId = '', id: onboardingRouteId = '' } = useParams()"), true);
   assert.equal(onboardingSource.includes('const routeUpdateMode = Boolean(onboardingRouteId)'), true);
   assert.equal(onboardingSource.includes('loadRouteDraft'), true);
   assert.equal(onboardingSource.includes('routeScopedServices'), true);
@@ -194,15 +203,15 @@ test('Logs 采集路由页负责运行态和配置查看', () => {
   assert.equal(agentsSource.includes('Agent 实例'), true);
   assert.equal(agentsSource.includes('暂无 Agent 心跳数据'), true);
   assert.equal(agentsSource.includes('logsApi.getRouteCollectorConfig'), true);
-  assert.equal(agentsSource.includes('完整 collector.yaml'), true);
-  assert.equal(agentsSource.includes('非 K8s 部署清单'), true);
+  assert.equal(agentsSource.includes('服务 ConfigMap 片段'), true);
+  assert.equal(agentsSource.includes('采集域合并视图'), true);
   assert.equal(agentsSource.includes('部署清单 hash'), false);
   assert.equal(agentsSource.includes('部署清单状态'), false);
   assert.equal(agentsSource.includes('采集配置状态'), false);
   assert.equal(agentsSource.includes('采集配置已生成'), false);
   assert.equal(agentsSource.includes('<th>Hash</th>'), false);
   assert.equal(agentsSource.includes('shortHash'), false);
-  assert.equal(agentsSource.includes('/logs/agents/${contextRoute.route.id}/edit'), true);
+	assert.equal(agentsSource.includes('`${base}/agents/${contextRoute.route.id}/edit`'), true);
   assert.equal(agentsSource.includes('实例状态'), false);
   assert.equal(agentsSource.includes('<DomainMetric label="Audit"'), false);
   assert.equal(agentsSource.includes('<DomainMetric label="Preview"'), false);
@@ -219,6 +228,9 @@ test('Logs Explore 只展示真实下游查询入口', () => {
   assert.equal(exploreSource.includes('创建告警'), true);
   assert.equal(exploreSource.includes('查看采集路由'), true);
   assert.equal(exploreSource.includes('登记外部日志链路'), true);
+  assert.equal(exploreSource.includes('外部 AccountID'), true);
+  assert.equal(exploreSource.includes('外部 ProjectID'), true);
+  assert.equal(exploreSource.includes('留空时使用当前产品租户'), true);
   assert.equal(exploreSource.includes('/logs/targets'), false);
   assert.equal(exploreSource.includes('查看日志目标'), false);
   assert.equal(exploreSource.includes('Log query'), false);
@@ -229,15 +241,17 @@ test('Logs Explore 只展示真实下游查询入口', () => {
   assert.equal(exploreSource.includes('租户'), true);
 });
 
-test('Logs Explore 将服务日志链路收敛为顶部服务选择并突出检索主区域', () => {
+test('Logs Explore 固定使用路径服务上下文并突出检索主区域', () => {
   assert.equal(exploreSource.includes('<LogsSection title="日志路由"'), false);
   assert.equal(exploreSource.includes('title="日志分析"'), false);
   assert.equal(exploreSource.includes('xl:grid-cols-[minmax(0,1fr)_300px]'), true);
   assert.equal(exploreSource.includes('{routes.length} routes'), false);
-  assert.equal(exploreSource.includes('<LogsEntitySelector<ServiceLogLink>'), true);
+	assert.equal(exploreSource.includes('useParams'), true);
+	assert.equal(exploreSource.includes("const { productId = '', serviceId = '' } = useParams()"), true);
+	assert.equal(exploreSource.includes('<LogsEntitySelector<ServiceLogLink>'), false);
   assert.equal(exploreSource.includes('service-selector'), true);
-  assert.equal(exploreSource.includes('service-option-context'), true);
-  assert.equal(exploreSource.includes('service_id'), true);
+	assert.equal(exploreSource.includes('service-option-context'), false);
+	assert.equal(exploreSource.includes('service_id'), false);
   assert.equal(exploreSource.includes('采集配置 hash'), false);
   assert.equal(exploreSource.includes('采集配置状态'), false);
   assert.equal(exploreSource.includes('query-context-summary'), true);

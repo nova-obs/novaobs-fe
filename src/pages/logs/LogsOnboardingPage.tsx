@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
-import { logSinkLabel, logsApi, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogRouteInput, type LogRoutePreview, type LogRoutePublishResult, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload } from './api';
+import { defaultLogsCollectorNamespace, logSinkLabel, logsApi, normalizeLogsCollectorNamespace, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogRouteInput, type LogRoutePreview, type LogRoutePublishResult, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload } from './api';
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsErrorLine, LogsTaskPageHeader } from './LogsPrimitives';
@@ -48,6 +48,7 @@ function k8sLogIncludePath(namespace: string, workloadName: string) {
 export function renderK8sRouteFragmentDraft(input: {
   namespace: string;
   workloadName: string;
+	serviceId: string;
   serviceName: string;
   environment: string;
   endpointWriteURL: string;
@@ -83,7 +84,7 @@ ${enabledRules.map((rule) => {
     include:
       - "${include}"
     exclude:
-      - "/var/log/pods/*_novaobs-logs-agent-*_*/*/*.log"
+      - "/var/log/pods/*_novaapm-logs-agent-*_*/*/*.log"
       - "/var/log/pods/*/*/*.gz"
       - "/var/log/pods/*/*/*.tmp"
       - "/var/log/pods/*/*/*.log.*"
@@ -108,6 +109,9 @@ processors:
     attributes:
       - key: service.name
         value: "${input.serviceName || input.workloadName}"
+        action: upsert
+      - key: novaapm.service_id
+        value: "${input.serviceId}"
         action: upsert
       - key: deployment.environment
         value: "${input.environment || 'prod'}"
@@ -165,19 +169,20 @@ function resolveServiceWorkloadKey(service: LogsServiceSummary, workloads: LogsW
 
 export function LogsOnboardingPage() {
   const queryClient = useQueryClient();
-  const { id: onboardingRouteId = '' } = useParams();
+	const { productId = '', serviceId: pathServiceId = '', id: onboardingRouteId = '' } = useParams();
   const suspendDraftResetRef = useRef(false);
   const routeParamAppliedRef = useRef('');
   const { data: workspace, isLoading, error, refetch } = useQuery({
-    queryKey: ['logs-onboarding-workspace'],
-    queryFn: logsApi.getWorkspace,
+	queryKey: ['logs-onboarding-workspace', productId, pathServiceId],
+	queryFn: () => logsApi.getWorkspace(productId, pathServiceId),
+	enabled: Boolean(productId && pathServiceId),
   });
 
   const [currentStep, setCurrentStep] = useState<OnboardingStep>(1);
   const [setupTask, setSetupTask] = useState<SetupTask>('service');
   const [sourceMode, setSourceMode] = useState<LogAccessSource>('k8s');
   const [serviceQuery, setServiceQuery] = useState('');
-  const [serviceId, setServiceId] = useState('');
+  const [serviceId, setServiceId] = useState(pathServiceId);
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncClusterId, setSyncClusterId] = useState('');
   const [syncNamespace, setSyncNamespace] = useState('');
@@ -185,7 +190,7 @@ export function LogsOnboardingPage() {
   const [endpointId, setEndpointId] = useState('');
   const [clusterId, setClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
-  const [agentNamespace, setAgentNamespace] = useState('novaobs-system');
+  const [agentNamespace, setAgentNamespace] = useState(defaultLogsCollectorNamespace);
   const [workloadKey, setWorkloadKey] = useState('');
   const [workloadQuery, setWorkloadQuery] = useState('');
   const [hostGroup, setHostGroup] = useState('');
@@ -217,6 +222,7 @@ export function LogsOnboardingPage() {
     .filter((item) => item.target.status !== 'disabled')
     .map((item) => item.target.serviceId)), [workspace?.targets]);
   const sourceType: LogSourceType = sourceMode === 'vm' ? 'vm_file' : 'k8s_stdout';
+  const runtimeAgentNamespace = normalizeLogsCollectorNamespace(agentNamespace);
   const writableClusters = useMemo(() => clusters.filter((cluster) => !cluster.readOnly), [clusters]);
   const writableClusterIds = useMemo(() => new Set(writableClusters.map((cluster) => cluster.id)), [writableClusters]);
   const sourceServices = useMemo(() => services.filter((service) => {
@@ -315,10 +321,10 @@ export function LogsOnboardingPage() {
     enabled: sourceType !== 'vm_file' && Boolean(clusterId && namespace),
   });
   const workloads = workloadsQuery.data ?? [];
-  const observabilityRuntimesQuery = useQuery({
-    queryKey: ['observability-runtimes'],
-    queryFn: () => logsApi.listObservabilityRuntimes(),
-    enabled: sourceType !== 'vm_file',
+  const logsCollectorRuntimeStatusQuery = useQuery({
+    queryKey: ['logs-collector-runtime-status', clusterId, runtimeAgentNamespace],
+    queryFn: () => logsApi.getLogsCollectorRuntimeStatus({ clusterId, namespace: runtimeAgentNamespace }),
+    enabled: sourceType !== 'vm_file' && Boolean(clusterId),
     retry: false,
   });
 
@@ -357,33 +363,26 @@ export function LogsOnboardingPage() {
   const selectedEndpoint = availableEndpoints.find((item) => item.id === endpointId) ?? null;
   const effectiveEndpoint = selectedEndpoint ?? (sourceType !== 'vm_file' ? availableEndpoints[0] ?? null : null);
   const selectedCluster = clusters.find((item) => item.id === clusterId) ?? null;
-  const logsCollectorRuntime = useMemo(() => {
-    if (sourceType === 'vm_file' || !clusterId) return null;
-    const runtimeNamespace = agentNamespace || 'novaobs-system';
-    return (observabilityRuntimesQuery.data ?? []).find((runtime) => (
-      runtime.kind === 'logs_collector'
-      && runtime.clusterId === clusterId
-      && (runtime.namespace || 'novaobs-system') === runtimeNamespace
-      && runtime.status === 'ready'
-    )) ?? null;
-  }, [agentNamespace, clusterId, observabilityRuntimesQuery.data, sourceType]);
-  const observabilityAccessURL = clusterId ? `/k8s/observability?cluster_id=${encodeURIComponent(clusterId)}` : '/k8s/observability';
-  const observabilityAccessError = observabilityRuntimesQuery.error instanceof Error
-    ? observabilityRuntimesQuery.error.message
-    : observabilityRuntimesQuery.error
+  const logsCollectorRuntimeStatus = sourceType === 'vm_file' ? null : logsCollectorRuntimeStatusQuery.data ?? null;
+  const observabilityAccessURL = clusterId
+    ? `/k8s/observability?cluster_id=${encodeURIComponent(clusterId)}&namespace=${encodeURIComponent(runtimeAgentNamespace)}&task=incremental`
+    : '/k8s/observability';
+  const observabilityAccessError = logsCollectorRuntimeStatusQuery.error instanceof Error
+    ? logsCollectorRuntimeStatusQuery.error.message
+    : logsCollectorRuntimeStatusQuery.error
       ? '观测接入状态读取失败'
       : '';
-  const observabilityAccessReady = sourceType === 'vm_file' || Boolean(logsCollectorRuntime);
+  const observabilityAccessReady = sourceType === 'vm_file' || Boolean(logsCollectorRuntimeStatus?.ready);
   const observabilityAccessBlockedReason = sourceType === 'vm_file'
     ? ''
     : !clusterId
       ? '请先选择 K8s 集群'
-      : observabilityRuntimesQuery.isLoading
+      : logsCollectorRuntimeStatusQuery.isLoading
         ? '正在确认集群观测接入状态'
         : observabilityAccessError
           ? `观测接入状态读取失败：${observabilityAccessError}`
-          : !logsCollectorRuntime
-            ? '目标集群尚未启用 logs_collector 观测接入，请先到 K8s / 观测接入完成部署。'
+          : !logsCollectorRuntimeStatus?.ready
+            ? logsCollectorRuntimeStatus?.message || '目标集群 logs_collector 基础组件未就绪，请先到 K8s / 观测接入重新部署。'
             : '';
   const restoredWorkload = workloadFromRouteSource(restoredSource);
   const selectedWorkloadFromApi = workloads.find((item) => workloadIdentity(item) === workloadKey) ?? null;
@@ -418,14 +417,15 @@ export function LogsOnboardingPage() {
     return renderK8sRouteFragmentDraft({
       namespace,
       workloadName,
-      serviceName: selectedService?.displayName || selectedService?.name || workloadName,
+	  serviceId: selectedService?.id || serviceId,
+	  serviceName: selectedService?.name || workloadName,
       environment: selectedService?.environment || syncEnvironment,
       endpointWriteURL: effectiveEndpoint.writeURL,
       accountId: effectiveEndpoint.accountId,
       projectId: effectiveEndpoint.projectId,
       parseRules: buildParseRules(),
     });
-  }, [effectiveEndpoint?.accountId, effectiveEndpoint?.projectId, effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.displayName, selectedService?.environment, selectedService?.name, selectedWorkload?.name, sourceType]);
+	}, [effectiveEndpoint?.accountId, effectiveEndpoint?.projectId, effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.environment, selectedService?.id, selectedService?.name, selectedWorkload?.name, serviceId, sourceType]);
   const fragmentWarnings = useMemo(() => {
     if (sourceType === 'vm_file') return [];
     return fragmentPlaceholderWarnings(collectorConfigYaml, [
@@ -467,6 +467,7 @@ export function LogsOnboardingPage() {
 
   const syncK8sServicesMutation = useMutation({
     mutationFn: () => logsApi.syncK8sServices({
+	  productId,
       clusterId: syncClusterId,
       namespace: syncNamespace,
       environment: syncEnvironment,
@@ -553,7 +554,7 @@ export function LogsOnboardingPage() {
       k8s: {
         clusterId,
         namespace,
-        agentNamespace,
+        agentNamespace: runtimeAgentNamespace,
         workloadKind: selectedWorkload?.kind || restoredSource?.workloadKind,
         workloadName: selectedWorkload?.name || restoredSource?.workloadName,
         workloadSelector: selectedWorkload?.selector ?? {},
@@ -581,7 +582,7 @@ export function LogsOnboardingPage() {
       k8s: {
         clusterId,
         namespace: workload.namespace,
-        agentNamespace,
+        agentNamespace: runtimeAgentNamespace,
         workloadKind: workload.kind,
         workloadName: workload.name,
         workloadSelector: workload.selector ?? {},
@@ -657,7 +658,7 @@ export function LogsOnboardingPage() {
     }
     return source.clusterId === clusterId
       && source.namespace === namespace
-      && (source.agentNamespace || 'novaobs-system') === agentNamespace
+      && normalizeLogsCollectorNamespace(source.agentNamespace) === runtimeAgentNamespace
       && `${source.workloadKind}/${source.workloadName}` === workloadKey;
   }
 
@@ -699,7 +700,7 @@ export function LogsOnboardingPage() {
     }
     setClusterId(source.clusterId ?? '');
     setNamespace(source.namespace ?? '');
-    setAgentNamespace(source.agentNamespace || 'novaobs-system');
+    setAgentNamespace(normalizeLogsCollectorNamespace(source.agentNamespace));
     setWorkloadKey(source.workloadKind && source.workloadName ? `${source.workloadKind}/${source.workloadName}` : '');
     setCollectorConfigYaml(source.collectorFragmentYAML ?? '');
     setWorkloadQuery('');
@@ -795,6 +796,14 @@ export function LogsOnboardingPage() {
     ? hostGroup || hostSelectorText || 'VM target'
     : `${selectedCluster?.name || clusterId || '-'} / ${namespace || '-'} / ${selectedWorkload?.name || restoredSource?.workloadName || '-'}`;
   const summaryAuditLabel = pendingRoutePublish?.auditId || createdRoute?.route.lastAuditId || selectedRoute?.route.lastAuditId || '-';
+  const previewPrimaryConfigYAML = preview?.serviceConfigYAML || (sourceType === 'vm_file'
+    ? preview?.collectorYAML ?? ''
+    : preview?.source.collectorFragmentYAML || collectorConfigYaml);
+  const previewPrimaryConfigMeta = preview?.serviceConfigPath
+    ? [preview.serviceConfigPath, preview.serviceConfigMapName].filter(Boolean).join(' · ')
+    : sourceType === 'vm_file'
+      ? '发布后写入当前 VM 路由文件'
+      : '发布后写入当前服务独立 ConfigMap';
 
   const sourceModeSwitch = (
     <div className="logs-source-mode-switch inline-flex rounded-md border border-outline bg-surface-lowest p-0.5" aria-label="采集来源">
@@ -915,7 +924,7 @@ export function LogsOnboardingPage() {
   }
 
   return (
-    <div className="logs-task-page flex h-full min-h-[720px] flex-col overflow-hidden">
+    <div className="logs-task-page flex h-full min-h-[720px] min-w-0 flex-col overflow-hidden">
       <LogsTaskPageHeader
         title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
         description={sourceType === 'vm_file' ? '选择目标、校验配置并发布。' : '选择目标、校验配置并保存业务路由。'}
@@ -932,11 +941,11 @@ export function LogsOnboardingPage() {
               <Save className="h-3.5 w-3.5" />
               保存草稿
             </button>
-            <Link className="console-button h-8" to="/logs/agents">退出</Link>
+			<Link className="console-button h-8" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(pathServiceId)}/logs/agents`}>退出</Link>
           </>
         )}
       />
-      <div className="logs-route-canvas mt-3 grid min-h-0 flex-1 gap-3 xl:grid-cols-[220px_minmax(0,1fr)_340px] 2xl:grid-cols-[240px_minmax(0,1fr)_380px]">
+      <div className="logs-route-canvas mt-3 grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[220px_minmax(0,1fr)_340px] 2xl:grid-cols-[240px_minmax(0,1fr)_380px]">
         <RouteCanvasStepper
           currentStep={currentStep}
           setupTask={setupTask}
@@ -955,11 +964,12 @@ export function LogsOnboardingPage() {
             setSetupTask('target');
           }}
           onSelectEndpoint={() => {
+            if (!runtimeTargetReady) return;
             setCurrentStep(1);
             setSetupTask('endpoint');
           }}
         />
-        <div className="logs-route-task-stack flex min-h-0 flex-col" aria-label="采集路由步骤">
+        <div className="logs-route-task-stack flex min-h-0 min-w-0 flex-col overflow-hidden" aria-label="采集路由步骤">
           {routeUpdateMissing ? <WarnLine message="未找到待更新的采集路由，请从采集路由页重新进入。" /> : null}
           <RouteTaskCard
             className="logs-route-service-card"
@@ -1025,11 +1035,11 @@ export function LogsOnboardingPage() {
                           前往观测接入
                         </Link>
                       </div>
-                    ) : logsCollectorRuntime ? (
+                    ) : logsCollectorRuntimeStatus?.ready ? (
                       <div className="flex flex-col gap-2 rounded-lg border border-primary/20 bg-primary-soft px-3 py-2 text-sm text-primary lg:flex-row lg:items-center lg:justify-between">
                         <div className="flex min-w-0 items-center gap-2">
                           <CheckCircle className="h-4 w-4 shrink-0" />
-                          <span>集群已启用 logs_collector 观测接入，路由会作为业务片段由运行时统一合并发布。</span>
+                          <span>集群 logs_collector 基础组件已就绪，路由会生成当前服务独立 ConfigMap，并由 DaemonSet 按文件集合加载。</span>
                         </div>
                       </div>
                     ) : null}
@@ -1210,7 +1220,7 @@ export function LogsOnboardingPage() {
                 </div>
                 <Link
                   className="inline-flex h-7 w-fit items-center justify-center gap-1.5 rounded-md border border-outline bg-white px-2.5 text-[11px] font-semibold text-primary transition-all hover:bg-primary-soft active:translate-y-px"
-                  to="/logs/endpoints"
+				  to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(pathServiceId)}/logs/endpoints`}
                 >
                   <Settings2 className="h-3.5 w-3.5" />
                   管理端点
@@ -1272,7 +1282,7 @@ export function LogsOnboardingPage() {
             className="logs-route-config-card"
             index={4}
             title="业务采集配置"
-            summary={`${collectorConfigState} · ${sourceType === 'vm_file' ? 'collector.yaml' : 'route collector fragment'}`}
+            summary={`${collectorConfigState} · ${sourceType === 'vm_file' ? 'vm route config' : 'service config fragment'}`}
             active={currentStep === 2}
             done={Boolean(preview)}
             disabled={!targetStepReady}
@@ -1287,8 +1297,8 @@ export function LogsOnboardingPage() {
             <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest">
               <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-on-surface">{sourceType === 'vm_file' ? 'VM Collector 配置' : '业务 Route 采集片段'}</div>
-                  <div className="mt-0.5 font-mono text-[11px] text-muted">{sourceType === 'vm_file' ? '完整 VM collector.yaml，可留空由后端生成' : '发布时会与同集群其他业务片段合并成完整 collector.yaml'}</div>
+                  <div className="text-sm font-semibold text-on-surface">{sourceType === 'vm_file' ? 'VM 路由采集文件' : '服务 ConfigMap 片段'}</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-muted">{sourceType === 'vm_file' ? '发布后写入当前 VM 路由文件，可留空由后端生成' : '发布后写入当前服务独立 ConfigMap，并由 DaemonSet 按文件集合加载'}</div>
                 </div>
                 {sourceType !== 'vm_file' ? (
                   <button
@@ -1311,7 +1321,7 @@ export function LogsOnboardingPage() {
                   setCollectorConfigYaml(event.target.value);
                   setCollectorFragmentTouched(true);
                 }}
-                placeholder={sourceType === 'vm_file' ? '可粘贴完整 VM collector.yaml；留空时后端按表单生成。' : '选择服务、Workload 和端点后生成 route collector fragment 示例。'}
+                placeholder={sourceType === 'vm_file' ? '可粘贴 VM 路由采集 YAML；留空时后端按表单生成。' : '选择服务、Workload 和端点后生成服务 ConfigMap 片段示例。'}
                 spellCheck={false}
               />
             </div>
@@ -1321,7 +1331,7 @@ export function LogsOnboardingPage() {
                 <div className="mt-1 font-mono text-sm font-semibold text-on-surface">{collectorConfigState}</div>
                 <div className="mt-2 text-xs leading-5 text-muted">
                   {sourceType === 'vm_file'
-                    ? 'VM 场景允许直接维护完整 collector.yaml。'
+                    ? 'VM 场景维护当前路由的采集 YAML，发布产物为路由专属文件。'
                     : '表单只负责生成初稿；发布以编辑器内容为准。'}
                 </div>
               </div>
@@ -1384,18 +1394,18 @@ export function LogsOnboardingPage() {
           {preview ? (
             <div className="logs-route-preview-code-grid mt-3 grid gap-3 2xl:grid-cols-2">
               <RoutePreviewCodePanel
-                title={sourceType === 'vm_file' ? '部署清单预览' : '业务 Route 片段'}
-                meta={sourceType === 'vm_file' ? 'VM 采集器部署清单' : '由 K8s 观测接入统一合并发布'}
-                content={sourceType === 'vm_file' ? preview.agentYAML : preview.source.collectorFragmentYAML || collectorConfigYaml}
-                emptyLabel={sourceType === 'vm_file' ? '部署清单预览为空' : '业务 Route 片段为空'}
+                title={sourceType === 'vm_file' ? 'VM 路由配置文件' : '当前服务 ConfigMap 片段'}
+                meta={previewPrimaryConfigMeta}
+                content={previewPrimaryConfigYAML}
+                emptyLabel={sourceType === 'vm_file' ? 'VM 路由配置为空' : '服务 ConfigMap 片段为空'}
                 copyTitle="复制 YAML"
               />
               <RoutePreviewCodePanel
-                title="完整 collector.yaml"
-                meta="同集群业务片段合并结果"
-                content={preview.collectorYAML}
-                emptyLabel="collector.yaml 为空"
-                copyTitle="复制 collector.yaml"
+                title={sourceType === 'vm_file' ? '部署清单预览' : '采集域合并视图'}
+                meta={sourceType === 'vm_file' ? 'VM 采集器运行文件' : '只读校验视图，发布时按多 ConfigMap 文件集合加载'}
+                content={sourceType === 'vm_file' ? preview.agentYAML : preview.collectorYAML}
+                emptyLabel={sourceType === 'vm_file' ? '部署清单预览为空' : '采集域合并视图为空'}
+                copyTitle="复制 YAML"
               />
             </div>
           ) : <Empty label="部署清单预览为空" />}
@@ -1655,7 +1665,7 @@ function RouteCanvasStepper({
   ];
 
   return (
-    <aside className="logs-route-stepper rounded-lg border border-outline bg-surface-lowest p-3 xl:sticky xl:top-0 xl:h-fit" aria-label="创建采集路由步骤">
+    <aside className="logs-route-stepper min-w-0 rounded-lg border border-outline bg-surface-lowest p-3 xl:sticky xl:top-0 xl:h-fit" aria-label="创建采集路由步骤">
       <div className="border-b border-outline pb-3">
         <div className="text-xs font-semibold text-muted">创建步骤</div>
         <div className="mt-1 text-sm font-semibold text-on-surface">采集路由</div>
@@ -1731,11 +1741,10 @@ function RouteTaskCard({
   children: ReactNode;
   onSelect: () => void;
 }) {
-  const open = active && !disabled;
-  if (!open) return null;
-  const statusLabel = done ? '已完成' : '进行中';
+  if (!active) return null;
+  const statusLabel = disabled ? '待前置' : done ? '已完成' : '进行中';
   return (
-    <section className={`logs-route-active-panel flex min-h-0 flex-1 flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest ${className}`}>
+    <section className={`logs-route-active-panel flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest ${className}`}>
       <div className="flex flex-col gap-2 border-b border-outline bg-white px-3 py-3 md:flex-row md:items-center md:justify-between">
         <div className="flex min-w-0 items-center gap-2.5">
           <span className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border border-primary bg-white text-[11px] font-semibold text-primary">
@@ -1783,7 +1792,7 @@ function RouteTaskSummaryCard({
   actions: ReactNode;
 }) {
   return (
-    <aside className="logs-route-summary-card flex min-h-0 flex-col rounded-lg border border-outline bg-surface-lowest lg:sticky lg:top-0 lg:max-h-full">
+    <aside className="logs-route-summary-card flex min-h-0 min-w-0 flex-col rounded-lg border border-outline bg-surface-lowest lg:sticky lg:top-0 lg:max-h-full">
       <div className="shrink-0 border-b border-outline px-3 py-3">
         <div className="text-xs font-semibold text-muted">当前任务</div>
         <div className="mt-1 text-sm font-semibold text-on-surface">{taskLabel}</div>

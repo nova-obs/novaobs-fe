@@ -675,7 +675,7 @@ function CreateUserPanel(props: {
 }) {
   return (
     <section className="grid gap-3">
-      <PanelTitle icon={UserRoundCog} title="录入用户" meta="创建后可登录 NovaObs" />
+      <PanelTitle icon={UserRoundCog} title="录入用户" meta="创建后可登录 NovaAPM" />
       <div className="grid gap-3">
         <input className="console-input w-full" placeholder="username" value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
         <input className="console-input w-full" placeholder="显示名" value={props.displayName} onChange={(event) => props.setDisplayName(event.target.value)} />

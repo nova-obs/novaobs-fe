@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Bell, Database, ExternalLink, ListFilter, RefreshCw, Route, Save, Server, X } from 'lucide-react';
 import { buildVictoriaLogsVMUIURL, logSinkLabel, logsApi, type LogEndpoint, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
 import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsSection } from './LogsPrimitives';
-import { LogsEntitySelector } from './LogsEntitySelector';
 import { routeAccessPriority } from './ServicePickerPanel';
 
 type ServiceLogMode = 'external' | 'platform' | 'none';
@@ -28,6 +27,8 @@ interface ExternalLinkForm {
   name: string;
   endpointId: string;
   baseFilter: string;
+  accountId: string;
+  projectId: string;
 }
 
 function serviceLabel(service?: LogsServiceSummary | null, fallback = '') {
@@ -101,55 +102,28 @@ function buildServiceLogLinks(services: LogsServiceSummary[], routes: LogRouteVi
   });
 }
 
-function serviceIdFromParams(searchParams: URLSearchParams, routes: LogRouteView[], targets: LogTargetView[]) {
-  const direct = searchParams.get('service_id');
-  if (direct) return direct;
-  const targetId = searchParams.get('target_id');
-  if (targetId) return targets.find((item) => item.target.id === targetId)?.target.serviceId ?? '';
-  const routeId = searchParams.get('route_id');
-  if (routeId) return routes.find((item) => item.route.id === routeId)?.route.serviceId ?? '';
-  return '';
-}
-
 export function LogsExplorePage() {
   const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
+	const { productId = '', serviceId = '' } = useParams();
   const [editorOpen, setEditorOpen] = useState(false);
   const { data: workspace, error, refetch } = useQuery({
-    queryKey: ['logs-onboarding-workspace'],
-    queryFn: logsApi.getWorkspace,
+	queryKey: ['logs-onboarding-workspace', productId, serviceId],
+	queryFn: () => logsApi.getWorkspace(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
   });
   const routes = workspace?.routes ?? [];
   const targets = workspace?.targets ?? [];
   const services = workspace?.services ?? [];
   const endpoints = workspace?.endpoints ?? [];
   const serviceLinks = useMemo(() => buildServiceLogLinks(services, routes, targets), [routes, services, targets]);
-  const paramServiceId = useMemo(() => serviceIdFromParams(searchParams, routes, targets), [routes, searchParams, targets]);
-  const [serviceId, setServiceId] = useState(searchParams.get('service_id') ?? '');
-  const activeLink = useMemo(() => serviceLinks.find((item) => item.serviceId === serviceId) ?? serviceLinks[0] ?? null, [serviceId, serviceLinks]);
-  const vmuiURL = buildVictoriaLogsVMUIURL(activeLink?.endpoint);
+  const activeLink = useMemo(() => serviceLinks.find((item) => item.serviceId === serviceId) ?? null, [serviceId, serviceLinks]);
+	const serviceFilter = activeLink?.baseFilter || (activeLink?.service.name ? `"service.name":=${JSON.stringify(activeLink.service.name)}` : '');
+	const vmuiURL = buildVictoriaLogsVMUIURL(activeLink?.endpoint, serviceFilter);
   const activeSinkLabel = logSinkLabel(activeLink?.endpoint?.sinkType);
   const canCreateAlert = Boolean(activeLink && activeLink.mode !== 'none' && activeLink.endpoint);
 
-  useEffect(() => {
-    if (paramServiceId && serviceId !== paramServiceId) {
-      setServiceId(paramServiceId);
-    }
-  }, [paramServiceId, serviceId]);
-
-  useEffect(() => {
-    if (!activeLink) return;
-    if (serviceId === activeLink.serviceId) return;
-    setServiceId(activeLink.serviceId);
-  }, [activeLink, serviceId]);
-
-  function selectService(nextServiceId: string) {
-    setServiceId(nextServiceId);
-    setSearchParams({ service_id: nextServiceId });
-  }
-
   async function refreshWorkspace() {
-    await queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
+	await queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace', productId, serviceId] });
   }
 
   return (
@@ -163,28 +137,13 @@ export function LogsExplorePage() {
                 <span>服务</span>
               </div>
               <div className="service-selector p-2">
-                <LogsEntitySelector<ServiceLogLink>
-                  items={serviceLinks}
-                  activeItem={activeLink}
-                  onSelect={(link) => selectService(link.serviceId)}
-                  getId={(link) => link.serviceId}
-                  triggerIcon={activeLink?.mode === 'platform' ? Route : Server}
-                  triggerTitle={activeLink?.serviceName ?? ''}
-                  triggerMeta={activeLink ? `${activeLink.sourceLabel} · ${activeLink.endpoint?.name || '未绑定端点'}` : '服务 · 日志链路 · 端点'}
-                  placeholder="选择服务"
-                  ariaLabel="服务"
-                  triggerHeight="h-14"
-                  minWidth={0}
-                  rowHeight={68}
-                  emptyMessage="暂无服务"
-                  renderOption={(link, selected) => (
-                    <>
-                      <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{link.serviceName}</span>
-                      <div className="service-option-context mt-1 truncate text-[11px] font-medium text-muted">{link.sourceLabel} · {link.endpoint?.name || '未绑定端点'}</div>
-                      <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{link.scopeLabel}</div>
-                    </>
-                  )}
-                />
+                <div className="flex h-14 min-w-0 items-center gap-3 rounded-md border border-primary/15 bg-primary-soft/35 px-3 shadow-[inset_3px_0_0_#0d5bd7]">
+                  {activeLink?.mode === 'platform' ? <Route className="h-4 w-4 shrink-0 text-primary" /> : <Server className="h-4 w-4 shrink-0 text-primary" />}
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-semibold text-on-surface">{activeLink?.serviceName || '服务不存在'}</div>
+                    <div className="mt-1 truncate text-[11px] text-muted">{serviceId}</div>
+                  </div>
+                </div>
               </div>
             </div>
             <div className="logs-explore-context-panel min-w-0 overflow-hidden rounded-md border border-primary/25 bg-white shadow-[0_8px_18px_rgba(24,52,96,0.12)]">
@@ -245,19 +204,24 @@ export function LogsExplorePage() {
         <LogsInfoCell label="日志链路" value={activeLink?.sourceLabel || '-'} />
         <LogsInfoCell label="范围" value={activeLink?.scopeLabel || '-'} />
         <LogsInfoCell label="端点" value={activeLink?.endpoint?.name || '-'} />
-        <LogsInfoCell label="租户" value={activeLink?.endpoint?.accountId && activeLink?.endpoint?.projectId ? `${activeLink.endpoint.accountId}:${activeLink.endpoint.projectId}` : '0:0（默认）'} />
+        <LogsInfoCell
+          label="租户"
+          value={activeLink?.endpoint?.accountId && activeLink?.endpoint?.projectId
+            ? `${activeLink.endpoint.accountId}:${activeLink.endpoint.projectId}${activeLink.target?.target.accountId ? '（外部）' : '（产品）'}`
+            : '0:0（默认）'}
+        />
         {activeLink?.mode === 'external' ? <LogsInfoCell label="基础过滤条件" value={activeLink.baseFilter || '-'} /> : null}
         <LogsInfoCell label="状态" value={activeLink?.status || '-'} />
         <div className="border-t border-outline/70 p-3">
           <div className="mb-2 text-xs font-semibold text-on-surface">动作</div>
           <div className="grid gap-2">
             {canCreateAlert ? (
-              <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/alerts/new?service_id=${encodeURIComponent(activeLink?.serviceId || '')}`}>
+			  <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/alerts/new`}>
                 <Bell className="h-3.5 w-3.5" />创建告警
               </Link>
             ) : null}
             {activeLink?.mode === 'platform' ? (
-              <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/logs/agents?agent_group_id=${activeLink.route?.route.agentGroupId || ''}&route_id=${activeLink.route?.route.id || ''}`}>
+			  <Link className="inline-flex h-8 items-center justify-center gap-2 rounded-md border border-outline bg-white text-xs font-semibold text-muted hover:border-primary/40 hover:text-on-surface" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/agents?agent_group_id=${activeLink.route?.route.agentGroupId || ''}&route_id=${activeLink.route?.route.id || ''}`}>
                 <ListFilter className="h-3.5 w-3.5" />查看采集路由
               </Link>
             ) : null}
@@ -301,6 +265,8 @@ function ExternalLogLinkDrawer({ link, endpoints, onClose, onSaved }: {
         serviceId: link.serviceId,
         endpointId: form.endpointId,
         baseFilter: form.baseFilter,
+        accountId: form.accountId,
+        projectId: form.projectId,
       };
       if (existing) {
         return logsApi.updateTarget(existing.target.id, input);
@@ -345,6 +311,15 @@ function ExternalLogLinkDrawer({ link, endpoints, onClose, onSaved }: {
             </select>
             {queryableEndpoints.length === 0 ? <span className="mt-1 block text-[11px] text-amber-700">请先在接入配置中登记带查询地址的 VictoriaLogs 端点。</span> : null}
           </Field>
+          <div className="grid gap-3 md:grid-cols-2">
+            <Field label="外部 AccountID">
+              <input className="console-input mt-1.5 h-9 w-full font-mono text-sm" inputMode="numeric" value={form.accountId} onChange={(event) => setForm({ ...form, accountId: event.target.value })} placeholder="可选，例如 0" />
+            </Field>
+            <Field label="外部 ProjectID">
+              <input className="console-input mt-1.5 h-9 w-full font-mono text-sm" inputMode="numeric" value={form.projectId} onChange={(event) => setForm({ ...form, projectId: event.target.value })} placeholder="可选，例如 9528" />
+            </Field>
+          </div>
+          <div className="-mt-2 text-[11px] text-muted">留空时使用当前产品租户；填写时必须同时提供完整的 AccountID 和 ProjectID。</div>
           <Field label="服务日志过滤条件">
             <textarea className="mt-1.5 min-h-28 w-full resize-none rounded-md border border-outline bg-white p-3 font-mono text-sm text-on-surface outline-none focus:border-primary" value={form.baseFilter} onChange={(event) => setForm({ ...form, baseFilter: event.target.value })} placeholder={'"service.name":="orders-api" AND "deployment.environment":="prod"'} />
             <span className="mt-1 block text-[11px] text-muted">只填写过滤表达式；时间范围、统计和告警阈值由 Explore 或告警流程生成。</span>
@@ -371,6 +346,8 @@ function formFromLink(link: ServiceLogLink, endpoints: LogEndpoint[]): ExternalL
     name: link.target?.target.name || `${link.serviceName} 外部日志链路`,
     endpointId: link.target?.target.endpointId || endpoints[0]?.id || '',
     baseFilter: link.target?.target.baseFilter || `"service.name":=${JSON.stringify(link.service.name || link.serviceName)}`,
+    accountId: link.target?.target.accountId || '',
+    projectId: link.target?.target.projectId || '',
   };
 }
 
@@ -379,7 +356,14 @@ function validateExternalForm(form: ExternalLinkForm) {
   if (!form.endpointId) missing.push('查询端点');
   if (!form.baseFilter.trim()) missing.push('过滤条件');
   if (form.baseFilter.includes('|') || form.baseFilter.toLowerCase().includes('_time')) missing.push('纯过滤表达式');
+  if (Boolean(form.accountId.trim()) !== Boolean(form.projectId.trim())) missing.push('完整外部租户');
+  if (form.accountId.trim() && !isUint32(form.accountId)) missing.push('有效的 AccountID');
+  if (form.projectId.trim() && !isUint32(form.projectId)) missing.push('有效的 ProjectID');
   return missing;
+}
+
+function isUint32(value: string) {
+  return /^\d+$/.test(value.trim()) && BigInt(value.trim()) <= 4294967295n;
 }
 
 function Field({ label, children }: { label: string; children: ReactNode }) {

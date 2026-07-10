@@ -55,7 +55,7 @@ export function K8sAuditPage() {
         </div>
         {clusterError || namespaceError ? (
           <div className="console-notice console-notice-warning m-3">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError)}
           </div>
         ) : null}
       </section>

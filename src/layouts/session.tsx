@@ -15,8 +15,8 @@ export interface PlatformSession {
   expiresAt: string;
 }
 
-const signedOutStorageKey = 'novaobs_signed_out';
-const storageKeys = ['novaobs_session', 'novaobs_token', 'novaobs_subject', 'auth_token', 'access_token', 'refresh_token'];
+const signedOutStorageKey = 'novaapm_signed_out';
+const storageKeys = ['novaapm_session', 'novaapm_token', 'novaapm_subject', 'auth_token', 'access_token', 'refresh_token'];
 
 export function useLogoutAction(options: { onBeforeRedirect?: () => void; onLoggedOut?: () => void } = {}) {
   const navigate = useNavigate();

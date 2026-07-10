@@ -6,8 +6,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { platformApi, type PlatformImage } from './api';
 
 const imageLabels: Record<string, string> = {
-  __NOVAOBS_IMAGE_OTEL_COLLECTOR__: 'OTel Collector',
-  __NOVAOBS_IMAGE_VMALERT__: 'vmalert',
+  __NOVAAPM_IMAGE_OTEL_COLLECTOR__: 'OTel Collector',
+  __NOVAAPM_IMAGE_VMALERT__: 'vmalert',
 };
 
 export function PlatformSettingsPage() {
@@ -279,8 +279,8 @@ function imageDisplayName(item: PlatformImage) {
 }
 
 function imageScopeText(key: string) {
-  if (key === '__NOVAOBS_IMAGE_OTEL_COLLECTOR__') return '日志采集 DaemonSet';
-  if (key === '__NOVAOBS_IMAGE_VMALERT__') return '日志告警 vmalert Runtime';
+  if (key === '__NOVAAPM_IMAGE_OTEL_COLLECTOR__') return '日志采集 DaemonSet';
+  if (key === '__NOVAAPM_IMAGE_VMALERT__') return '日志告警 vmalert Runtime';
   return '平台部署清单';
 }
 

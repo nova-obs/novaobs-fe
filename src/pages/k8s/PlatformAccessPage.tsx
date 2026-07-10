@@ -389,7 +389,7 @@ export function K8sPlatformAccessPage() {
                 ) : null}
                 {clusterError || namespaceError ? (
                   <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-                    {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
+                    {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
                   </div>
                 ) : null}
               </GrantStep>

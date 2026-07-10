@@ -117,8 +117,8 @@ export function K8sTemplatePage() {
   const createMutation = useMutation({
     mutationFn: () => (
       editorMode === 'edit' && selected
-        ? k8sApi.updateTemplate({ id: selected.id, name, type: templateType, yamlContent, variables, description: 'NovaObs 发布模板' })
-        : k8sApi.createTemplate({ name, type: templateType, yamlContent, variables, description: 'NovaObs 发布模板' })
+        ? k8sApi.updateTemplate({ id: selected.id, name, type: templateType, yamlContent, variables, description: 'NovaAPM 发布模板' })
+        : k8sApi.createTemplate({ name, type: templateType, yamlContent, variables, description: 'NovaAPM 发布模板' })
     ),
     onSuccess: (result) => {
       setLastAuditId(result.auditId);
@@ -230,7 +230,7 @@ export function K8sTemplatePage() {
         </div>
         {clusterError || namespaceError || resourceError || baseTemplateError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError || baseTemplateError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError || resourceError || baseTemplateError)}
           </div>
         ) : null}
       </section>
@@ -293,7 +293,7 @@ export function K8sTemplatePage() {
                     </td>
                     <td>{item.type}</td>
                     <td className="max-w-[280px] truncate text-xs text-muted">{item.variables.map((variable) => variable.name).join(', ') || '-'}</td>
-                    <td className="text-xs text-muted">{item.source || 'novaobs'}</td>
+                    <td className="text-xs text-muted">{item.source || 'novaapm'}</td>
                     <td className="font-mono text-[11px] text-muted">{formatDate(item.updatedAt)}</td>
                     <td>
                       <div className="flex justify-end gap-1">
@@ -411,7 +411,7 @@ function TemplateEditorDrawer({
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
           <div className="min-w-0">
             <div id="template-editor-title" className="truncate text-sm font-semibold text-on-surface">{mode === 'edit' ? '编辑模板' : '新增模板'}</div>
-            <div className="mt-1 truncate font-mono text-[11px] text-muted">{baseTemplate?.source || 'novaobs-base'}</div>
+            <div className="mt-1 truncate font-mono text-[11px] text-muted">{baseTemplate?.source || 'novaapm-base'}</div>
           </div>
           <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭模板编辑" title="关闭">
             <X className="h-4 w-4" />

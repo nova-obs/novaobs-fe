@@ -151,7 +151,7 @@ export function K8sNamespacePage() {
           {!activeClusterId ? (
             <div className="m-3 console-empty-state">
               <div className="font-semibold text-on-surface">{clusterError ? '集群列表读取失败' : '请先从集群总览进入工作台'}</div>
-              <p className="mt-1 text-sm text-muted">{clusterError ? '请检查 NovaObs 后端连接后重试。' : '登记集群并录入凭据后，NovaObs 才会读取 Kubernetes 命名空间。'}</p>
+              <p className="mt-1 text-sm text-muted">{clusterError ? '请检查 NovaAPM 后端连接后重试。' : '登记集群并录入凭据后，NovaAPM 才会读取 Kubernetes 命名空间。'}</p>
             </div>
           ) : null}
           {activeClusterId && !isLoading && !error && !namespaces.length ? (

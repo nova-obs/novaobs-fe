@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Database, Loader2, RefreshCw, Scan } from 'lucide-react';
 import { metricsApi, type EndpointTestResult } from './api';
@@ -16,11 +16,14 @@ function statusClass(status: string) {
 }
 
 export function MetricsEndpointsPage() {
-  const { data: endpoints = [], error, isLoading, refetch } = useQuery({
-    queryKey: ['metrics-endpoints'],
-    queryFn: metricsApi.listEndpoints,
+	const { productId = '', serviceId = '' } = useParams();
+	const { data: workspace, error, isLoading, refetch } = useQuery({
+	queryKey: ['metrics-workspace', productId, serviceId],
+	queryFn: () => metricsApi.getWorkspace(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
     retry: false,
   });
+	const endpoints = workspace?.endpoints ?? [];
 
   return (
     <div className="space-y-3">
@@ -61,7 +64,7 @@ export function MetricsEndpointsPage() {
                         <Database className="h-5 w-5 text-muted/80" />
                         <div className="text-sm font-semibold text-on-surface">暂无指标接入端点</div>
                         <div className="max-w-md text-xs leading-5 text-muted">当前目录只展示支持 metrics 的统一观测端点；端点维护仍由后端统一接入配置收口。</div>
-                        <Link className="console-button" to="/metrics/collection">查看采集接入</Link>
+						<Link className="console-button" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/collection`}>查看采集接入</Link>
                       </div>
                     </td>
                   </tr>

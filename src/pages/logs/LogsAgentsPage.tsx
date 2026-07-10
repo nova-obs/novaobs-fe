@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, FileText, Loader2, PanelRightOpen, Plus, RefreshCw, Server, ShieldCheck, Trash2, WifiOff, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
@@ -11,6 +11,8 @@ import { LogsEntitySelector } from './LogsEntitySelector';
 
 export function LogsAgentsPage() {
   const queryClient = useQueryClient();
+	const { productId = '', serviceId = '' } = useParams();
+	const base = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs`;
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRouteId, setSelectedRouteId] = useState(searchParams.get('route_id') ?? '');
   const [collectorConfigRoute, setCollectorConfigRoute] = useState<LogRouteView | null>(null);
@@ -18,8 +20,9 @@ export function LogsAgentsPage() {
   const [routeView, setRouteView] = useState<'overview' | 'instances'>('overview');
   const [confirmDeleteRouteId, setConfirmDeleteRouteId] = useState<string | null>(null);
   const { data: workspace, error: workspaceError, refetch: refetchWorkspace } = useQuery({
-    queryKey: ['logs-onboarding-workspace'],
-    queryFn: logsApi.getWorkspace,
+	queryKey: ['logs-onboarding-workspace', productId, serviceId],
+	queryFn: () => logsApi.getWorkspace(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
   });
 
   const services = workspace?.services ?? [];
@@ -99,6 +102,12 @@ export function LogsAgentsPage() {
   const selectorMeta = activeRoute
     ? `${logSourceLabel(activeRoute.route.sourceType)} · ${activeRoute.endpoint ? logSinkLabel(activeRoute.endpoint.sinkType) : 'endpoint -'} · ${activeLifecycle?.label ?? '-'}`
     : '服务 · 采集来源 · 下游端点';
+  const collectorConfigData = collectorConfigMutation.data;
+  const primaryCollectorConfigYAML = collectorConfigData?.serviceConfigYAML || collectorConfigData?.collectorYAML || '';
+  const collectorConfigPath = collectorConfigData?.serviceConfigPath || (collectorConfigRoute?.route.sourceType === 'vm_file' ? 'VM 路由文件' : '服务 ConfigMap 片段');
+  const collectorConfigTitle = collectorConfigRoute?.route.sourceType === 'vm_file' ? 'VM 路由配置文件' : '服务 ConfigMap 片段';
+  const mergedCollectorYAML = collectorConfigData?.collectorYAML ?? '';
+  const showMergedCollectorYAML = Boolean(mergedCollectorYAML && mergedCollectorYAML !== primaryCollectorConfigYAML);
 
   return (
     <div className="console-workbench logs-routes-workbench flex min-h-[720px] flex-col xl:h-full xl:min-h-0 xl:overflow-hidden">
@@ -140,7 +149,7 @@ export function LogsAgentsPage() {
                 void refetchWorkspace();
                 if (activeGroupId) void refetchInstances();
               }}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>
-              <Link className="console-button console-button-primary" to="/logs/agents/new"><Plus className="h-3.5 w-3.5" />创建采集路由</Link>
+			  <Link className="console-button console-button-primary" to={`${base}/agents/new`}><Plus className="h-3.5 w-3.5" />创建采集路由</Link>
             </div>
           </div>
         </div>
@@ -150,8 +159,8 @@ export function LogsAgentsPage() {
             {routes.length === 0 ? (
               <LogsEmptyState
                 title="暂无采集路由"
-                description="创建路由后可在此查看发布状态、Agent 心跳和完整采集配置。"
-                action={<Link className="console-button console-button-primary" to="/logs/agents/new">创建采集路由</Link>}
+                description="创建路由后可在此查看发布状态、Agent 心跳和服务采集片段。"
+				action={<Link className="console-button console-button-primary" to={`${base}/agents/new`}>创建采集路由</Link>}
               />
             ) : !activeRoute ? (
               <LogsEmptyState title="未选择采集路由" />
@@ -179,7 +188,7 @@ export function LogsAgentsPage() {
                       <PanelRightOpen className="h-4 w-4" />
                     </button>
                     <button type="button" className="console-button" onClick={() => openCollectorConfig(activeRoute)}><FileText className="h-3.5 w-3.5" />查看配置</button>
-                    <Link className="console-button console-button-primary" to={`/logs/agents/${activeRoute.route.id}/edit`}>更新路由</Link>
+					<Link className="console-button console-button-primary" to={`${base}/agents/${activeRoute.route.id}/edit`}>更新路由</Link>
                     <button
                       type="button"
                       className={`console-button gap-1 text-xs ${confirmDeleteRouteId === activeRoute.route.id ? 'console-button-danger' : ''}`}
@@ -302,7 +311,7 @@ export function LogsAgentsPage() {
                   <FileText className="h-3.5 w-3.5" />
                   查看采集配置
                 </button>
-                <Link className="console-button console-button-primary" to={`/logs/agents/${contextRoute.route.id}/edit`}>
+				<Link className="console-button console-button-primary" to={`${base}/agents/${contextRoute.route.id}/edit`}>
                   更新采集路由
                 </Link>
               </div>
@@ -318,18 +327,18 @@ export function LogsAgentsPage() {
             <div className="relative z-10 flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
               <div className="min-w-0">
                 <div className="flex min-w-0 flex-wrap items-center gap-2">
-                  <div className="text-base font-semibold text-on-surface">完整 collector.yaml</div>
-                  <span className="rounded border border-outline bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted">非 K8s 部署清单</span>
+                  <div className="text-base font-semibold text-on-surface">{collectorConfigTitle}</div>
+                  <span className="rounded border border-outline bg-white px-2 py-0.5 font-mono text-[11px] font-semibold text-muted">{collectorConfigData?.serviceConfigMapName || collectorConfigPath}</span>
                 </div>
                 <div className="mt-1 break-all font-mono text-[11px] text-muted">
-                  {routeScope(collectorConfigRoute)} · {logSourceLabel(collectorConfigRoute.route.sourceType)}
+                  {routeScope(collectorConfigRoute)} · {logSourceLabel(collectorConfigRoute.route.sourceType)} · {collectorConfigPath}
                 </div>
               </div>
               <div className="flex shrink-0 items-center gap-2">
                 <button
                   className="rounded border border-outline bg-white p-1.5 text-muted hover:bg-surface-low hover:text-primary disabled:opacity-50"
-                  disabled={!collectorConfigMutation.data?.collectorYAML}
-                  onClick={() => navigator.clipboard?.writeText(collectorConfigMutation.data?.collectorYAML ?? '')}
+                  disabled={!primaryCollectorConfigYAML}
+                  onClick={() => navigator.clipboard?.writeText(primaryCollectorConfigYAML)}
                   title="复制 YAML"
                 >
                   <Copy className="h-4 w-4" />
@@ -343,16 +352,37 @@ export function LogsAgentsPage() {
             <div className="grid min-h-0 overflow-hidden bg-surface-lowest p-4">
               {collectorConfigMutation.isPending ? (
                 <div className="min-h-0 overflow-auto rounded border border-outline bg-white">
-                  <LogsEmptyState title="正在加载 collector.yaml" />
+                  <LogsEmptyState title="正在加载采集配置" />
                 </div>
               ) : collectorConfigMutation.error ? (
                 <div className="min-h-0 overflow-auto rounded border border-outline bg-white">
                   <LogsErrorLine message={(collectorConfigMutation.error as Error).message} />
                 </div>
               ) : (
-                <pre className="min-h-0 overflow-auto rounded border border-outline bg-white p-4 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">
-                  {collectorConfigMutation.data?.collectorYAML || 'collector.yaml 为空'}
-                </pre>
+                <div className={`grid min-h-0 gap-3 ${showMergedCollectorYAML ? 'xl:grid-cols-2' : ''}`}>
+                  <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded border border-outline bg-white">
+                    <div className="flex min-w-0 items-center justify-between gap-2 border-b border-outline bg-white px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="text-xs font-semibold text-on-surface">{collectorConfigTitle}</div>
+                        <div className="mt-0.5 truncate font-mono text-[11px] text-muted">{collectorConfigPath}</div>
+                      </div>
+                    </div>
+                    <pre className="min-h-0 overflow-auto p-4 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">
+                      {primaryCollectorConfigYAML || '采集配置为空'}
+                    </pre>
+                  </section>
+                  {showMergedCollectorYAML ? (
+                    <section className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded border border-outline bg-white">
+                      <div className="border-b border-outline bg-white px-3 py-2">
+                        <div className="text-xs font-semibold text-on-surface">采集域合并视图</div>
+                        <div className="mt-0.5 font-mono text-[11px] text-muted">只读校验视图</div>
+                      </div>
+                      <pre className="min-h-0 overflow-auto p-4 font-mono text-[11px] leading-5 text-on-surface whitespace-pre-wrap">
+                        {mergedCollectorYAML}
+                      </pre>
+                    </section>
+                  ) : null}
+                </div>
               )}
             </div>
           </div>

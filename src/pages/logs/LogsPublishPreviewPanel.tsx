@@ -22,6 +22,10 @@ function WarnLine({ message }: { message: string }) {
   );
 }
 
+function publishTaskLabel(value: string) {
+  return value === 'base' ? '基础组件发布' : value === 'incremental' ? '服务配置增量发布' : '发布预览';
+}
+
 export function LogsPublishPreviewPanel({ preview }: { preview: LogsCollectorRuntimePublishResult }) {
   const hasManifestYAML = Boolean(preview.manifestYAML.trim());
   const rows = preview.diffs.length > 0
@@ -48,12 +52,18 @@ export function LogsPublishPreviewPanel({ preview }: { preview: LogsCollectorRun
     <div className="logs-publish-preview-panel mt-3 overflow-hidden rounded-lg border border-outline bg-surface-lowest">
       <div className="flex flex-col gap-3 border-b border-outline bg-white px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
-          <div className="text-sm font-semibold text-on-surface">发布预览</div>
+          <div className="text-sm font-semibold text-on-surface">{publishTaskLabel(preview.taskType)}</div>
           <div className="mt-1 text-[11px] text-muted">{rows.length} 个资源待确认</div>
         </div>
         <span className="inline-flex w-fit rounded border border-primary/20 bg-white px-2 py-1 text-[11px] font-semibold text-primary">等待确认</span>
       </div>
       {preview.warnings.map((item) => <WarnLine key={item} message={item} />)}
+      {preview.taskType === 'incremental' ? (
+        <div className="border-b border-outline bg-surface-lowest px-3 py-2 text-xs text-muted">
+          <span className="font-semibold text-on-surface">变更 ConfigMap：</span>
+          {preview.changedConfigMaps.length ? preview.changedConfigMaps.join('、') : '无 ConfigMap 内容变化，仅检查 DaemonSet 配置状态'}
+        </div>
+      ) : null}
       <div className="overflow-auto bg-white">
         <table className="console-table min-w-[760px] w-full">
           <thead>

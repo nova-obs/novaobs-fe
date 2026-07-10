@@ -55,7 +55,7 @@ export function K8sDeploymentHistoryPage() {
 
         </div>
         {clusterError || namespaceError ? (
-          <Warning text={clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError)} />
+          <Warning text={clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError)} />
         ) : null}
       </section>
 

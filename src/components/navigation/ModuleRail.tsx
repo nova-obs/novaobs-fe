@@ -6,7 +6,7 @@ import type { LucideIcon } from 'lucide-react';
 export type ModuleRailModuleId = 'logs' | 'k8s' | 'platform' | 'metrics';
 
 export function moduleRailStorageKey(module: ModuleRailModuleId): string {
-  return `novaobs.module-rail.${module}`;
+  return `novaapm.module-rail.${module}`;
 }
 
 export interface ModuleRailItem {

@@ -93,22 +93,22 @@ function serviceIdFromParams(searchParams: URLSearchParams, routes: LogRouteView
 
 export function LogsAlertRulePage() {
   const navigate = useNavigate();
-  const { id: ruleId = '' } = useParams();
-  return <LogsAlertRuleEditorDrawer ruleId={ruleId} onClose={() => navigate('/logs/alerts')} />;
+	const { productId = '', serviceId = '', id: ruleId = '' } = useParams();
+	return <LogsAlertRuleEditorDrawer productId={productId} serviceId={serviceId} ruleId={ruleId} onClose={() => navigate(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/alerts`)} />;
 }
 
-export function LogsAlertRuleEditorDrawer({ ruleId = '', onClose }: { ruleId?: string; onClose: () => void }) {
+export function LogsAlertRuleEditorDrawer({ productId, serviceId: routeServiceId, ruleId = '', onClose }: { productId: string; serviceId: string; ruleId?: string; onClose: () => void }) {
   const queryClient = useQueryClient();
   const [searchParams] = useSearchParams();
-  const { data: workspace } = useQuery({ queryKey: ['logs-onboarding-workspace'], queryFn: logsApi.getWorkspace });
+	const { data: workspace } = useQuery({ queryKey: ['logs-onboarding-workspace', productId, routeServiceId], queryFn: () => logsApi.getWorkspace(productId, routeServiceId), enabled: Boolean(productId && routeServiceId) });
   const ruleQuery = useQuery({ queryKey: ['logs-alert-rule', ruleId], queryFn: () => api.getAlertRule(ruleId), enabled: Boolean(ruleId) });
   const updatesQuery = useQuery({ queryKey: ['logs-alert-rule-updates', ruleId], queryFn: () => api.getAlertRuleUpdates(ruleId), enabled: Boolean(ruleId) });
   const routes = workspace?.routes ?? [];
   const targets = workspace?.targets ?? [];
   const services = workspace?.services ?? [];
   const serviceLinks = useMemo(() => buildServiceLogLinks(services, routes, targets), [routes, services, targets]);
-  const paramServiceId = serviceIdFromParams(searchParams, routes, targets);
-  const initialServiceId = paramServiceId || serviceLinks[0]?.serviceId || '';
+	const paramServiceId = serviceIdFromParams(searchParams, routes, targets);
+	const initialServiceId = routeServiceId || paramServiceId;
   const [serviceId, setServiceId] = useState(initialServiceId);
   const selectedLink = serviceLinks.find((item) => item.serviceId === serviceId) ?? serviceLinks[0];
   const selectedService = selectedLink?.service;

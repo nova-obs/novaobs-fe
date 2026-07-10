@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useMemo, type ReactNode } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Bell, Database, RefreshCw, Server } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { metricsApi, type MetricsServiceSummary } from './api';
+import { buildVictoriaMetricsVMUIURL, metricsApi, type MetricsServiceSummary } from './api';
 
 function serviceDisplayName(service?: MetricsServiceSummary | null) {
   return service?.displayName || service?.name || service?.id || '-';
@@ -24,11 +24,12 @@ function statusTone(status: string) {
 
 export function MetricsExplorePage() {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
-  const [serviceId, setServiceId] = useState(searchParams.get('service_id') ?? '');
+	const { productId = '', serviceId = '' } = useParams();
+	const base = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics`;
   const { data: workspace, error, isLoading, refetch } = useQuery({
-    queryKey: ['metrics-workspace', serviceId],
-    queryFn: () => metricsApi.getWorkspace(serviceId || undefined),
+	queryKey: ['metrics-workspace', productId, serviceId],
+	queryFn: () => metricsApi.getWorkspace(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
     retry: false,
   });
   const services = workspace?.services ?? [];
@@ -36,26 +37,12 @@ export function MetricsExplorePage() {
   const bindings = workspace?.serviceBindings ?? [];
   const endpointById = useMemo(() => new Map(endpoints.map((endpoint) => [endpoint.id, endpoint])), [endpoints]);
   const bindingByServiceId = useMemo(() => new Map(bindings.map((binding) => [binding.serviceId, binding])), [bindings]);
-  const activeService = services.find((service) => service.id === serviceId) ?? services.find((service) => service.id === workspace?.activeServiceId) ?? services[0] ?? null;
+  const activeService = services.find((service) => service.id === serviceId) ?? null;
   const activeBinding = activeService ? bindingByServiceId.get(activeService.id) ?? null : null;
   const activeEndpoint = activeBinding ? endpointById.get(activeBinding.endpointId) ?? null : null;
   const selectedServiceId = activeService?.id ?? '';
-  const activeTenant = activeBinding ? `${activeBinding.accountId || activeEndpoint?.accountId || '0'}:${activeBinding.projectId || activeEndpoint?.projectId || '0'}` : '-';
-
-  useEffect(() => {
-    const nextServiceId = workspace?.activeServiceId || activeService?.id || '';
-    if (!nextServiceId || serviceId === nextServiceId) return;
-    setServiceId(nextServiceId);
-  }, [activeService, serviceId, workspace?.activeServiceId]);
-
-  function selectService(nextServiceId: string) {
-    setServiceId(nextServiceId);
-    if (nextServiceId) {
-      setSearchParams({ service_id: nextServiceId }, { replace: true });
-    } else {
-      setSearchParams({}, { replace: true });
-    }
-  }
+  const activeTenant = activeService?.accountId && activeService?.projectId ? `${activeService.accountId}:${activeService.projectId}` : '未初始化';
+	const activeVMUIURL = buildVictoriaMetricsVMUIURL(activeEndpoint?.vmuiURL ?? '', activeBinding?.basePromQL ?? '');
 
   return (
     <div className="metrics-explore-workbench grid min-h-[720px] gap-3 xl:h-full xl:min-h-0 xl:grid-cols-[minmax(0,1fr)_320px] xl:overflow-hidden">
@@ -75,21 +62,10 @@ export function MetricsExplorePage() {
         <div className="grid min-h-0 flex-1 grid-rows-[auto_minmax(0,1fr)]">
           <div className="border-b border-outline/70 bg-surface-low/70 px-3 py-3">
             <div className="grid gap-3 lg:grid-cols-[minmax(260px,360px)_minmax(0,1fr)]">
-              <label className="console-field">
-                <span className="console-field-label">服务</span>
-                <select
-                  className="console-input w-full"
-                  value={selectedServiceId}
-                  disabled={isLoading || services.length === 0}
-                  onChange={(event) => selectService(event.target.value)}
-                >
-                  {services.length === 0 ? <option value="">暂无服务</option> : null}
-                  {services.map((service) => (
-                    <option key={service.id} value={service.id}>{serviceDisplayName(service)}</option>
-                  ))}
-                </select>
-                <span className="console-field-help">按服务真值选择指标作用域，不在前端伪造服务。</span>
-              </label>
+              <div className="grid gap-2 sm:grid-cols-2">
+                <MetricFact label="服务" value={activeService ? serviceDisplayName(activeService) : '服务不存在'} tone={activeService ? 'primary' : undefined} />
+                <MetricFact label="租户" value={activeTenant} mono />
+              </div>
 
               <div className="grid gap-2 sm:grid-cols-3">
                 <MetricFact label="当前绑定" value={activeBinding?.id ?? '-'} tone={activeBinding ? 'primary' : undefined} />
@@ -111,7 +87,7 @@ export function MetricsExplorePage() {
               <EmptyMetricsState
                 title="尚未绑定指标端点"
                 description="下一步：进入指标采集，为当前服务绑定 VictoriaMetrics 端点并登记 labelMatch。"
-                action={<Link className="console-button console-button-primary" to="/metrics/collection">进入指标采集</Link>}
+				action={<Link className="console-button console-button-primary" to={`${base}/collection`}>进入指标采集</Link>}
               />
             ) : (
               <div className="grid gap-3">
@@ -156,15 +132,15 @@ export function MetricsExplorePage() {
                   </table>
                 </section>
 
-                {activeEndpoint?.vmuiURL ? (
+				{activeVMUIURL ? (
                   <section className="overflow-hidden rounded-md border border-outline bg-surface-lowest">
                     <div className="flex items-center justify-between border-b border-outline/70 px-3 py-2">
                       <span className="text-xs font-semibold text-on-surface">vmui 查询面板</span>
-                      <a className="text-xs font-semibold text-primary" href={activeEndpoint.vmuiURL} target="_blank" rel="noopener noreferrer">新窗口打开 ↗</a>
+					  <a className="text-xs font-semibold text-primary" href={activeVMUIURL} target="_blank" rel="noopener noreferrer">新窗口打开 ↗</a>
                     </div>
                     <iframe
                       className="h-[600px] w-full border-0"
-                      src={activeEndpoint.vmuiURL}
+					  src={activeVMUIURL}
                       title="VictoriaMetrics vmui"
                       sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
                     />
@@ -196,7 +172,7 @@ export function MetricsExplorePage() {
               className="console-button console-button-primary w-full"
               disabled={!activeBinding}
               title={activeBinding ? '从当前作用域创建指标告警' : '请先绑定指标端点'}
-              onClick={() => navigate(`/metrics/alerts/new?service_id=${encodeURIComponent(selectedServiceId)}`)}
+			  onClick={() => navigate(`${base}/alerts/new`)}
             >
               <Bell className="h-3.5 w-3.5" />
               创建指标告警

@@ -1,14 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Bell, Cpu, Edit3, Eye, GitBranch, Plus, RefreshCw, Search, Server, Trash2, X, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
-import type { CreateServiceInput, Service, ServiceObservabilityGraph, ServiceTargetType, UpdateServiceInput } from '../../services/types';
+import type { CreateServiceInput, Product, Service, ServiceObservabilityGraph, ServiceTargetType, UpdateServiceInput } from '../../services/types';
 import { graphStatItems, targetLocationSummary, targetTypeLabel } from './servicesViewModel';
 
 const emptyForm: CreateServiceInput & { description?: string } = {
+	productId: '',
   name: '',
   environment: 'prod',
   displayName: '',
@@ -50,6 +52,7 @@ export function ServicesPage() {
   const queryClient = useQueryClient();
   const [filters, setFilters] = useState({ q: '', environment: '', status: '', source: '' });
   const [showForm, setShowForm] = useState(false);
+	const [showProductForm, setShowProductForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   const [confirmDeleteServiceId, setConfirmDeleteServiceId] = useState<string | null>(null);
@@ -60,6 +63,8 @@ export function ServicesPage() {
     queryKey: ['services', filters],
     queryFn: () => api.getServices(filters),
   });
+	const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: api.getProducts });
+	const productById = new Map(products.map((product) => [product.id, product]));
 
   const selectedService = data.find((svc) => svc.id === selectedServiceId) ?? null;
   const activeServiceId = selectedService?.id ?? null;
@@ -70,19 +75,27 @@ export function ServicesPage() {
   });
 
   const createMutation = useMutation({
-    mutationFn: () => api.createService({ name: form.name, environment: form.environment, displayName: form.displayName || undefined, ownerTeam: form.ownerTeam || undefined, identityType: form.identityType }),
-    onSuccess: () => {
+	mutationFn: () => api.createService({ productId: form.productId, name: form.name, environment: form.environment, displayName: form.displayName || undefined, ownerTeam: form.ownerTeam || undefined, identityType: form.identityType }),
+	onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
+	  setSelectedServiceId(created.id);
       setShowForm(false);
       setForm({ ...emptyForm });
     },
   });
+	const createProductMutation = useMutation({
+		mutationFn: (input: { name: string; displayName?: string }) => api.createProduct(input),
+		onSuccess: (product) => {
+			void queryClient.invalidateQueries({ queryKey: ['products'] });
+			setForm((current) => ({ ...current, productId: product.id }));
+			setShowProductForm(false);
+		},
+	});
 
   const updateMutation = useMutation({
     mutationFn: () => {
       if (!editingId) throw new Error('缺少服务 ID');
       const patch: UpdateServiceInput = {};
-      if (form.name) patch.name = form.name;
       if (form.environment) patch.environment = form.environment;
       if (form.displayName !== undefined) patch.displayName = form.displayName;
       if (form.description !== undefined) patch.description = form.description;
@@ -133,11 +146,11 @@ export function ServicesPage() {
     },
   });
 
-  const openCreate = () => { setEditingId(null); setConfirmDeleteServiceId(null); setForm({ ...emptyForm }); setShowForm(true); };
+	const openCreate = () => { setEditingId(null); setConfirmDeleteServiceId(null); setForm({ ...emptyForm, productId: products[0]?.id ?? '' }); setShowForm(true); };
   const openEdit = (svc: Service) => {
     setConfirmDeleteServiceId(null);
     setEditingId(svc.id);
-    setForm({ name: svc.name, environment: svc.environment, displayName: svc.displayName, description: svc.description, ownerTeam: svc.ownerTeam, identityType: svc.identityType });
+	setForm({ productId: svc.productId, name: svc.name, environment: svc.environment, displayName: svc.displayName, description: svc.description, ownerTeam: svc.ownerTeam, identityType: svc.identityType });
     setShowForm(true);
   };
 
@@ -145,23 +158,11 @@ export function ServicesPage() {
   const closeEditor = () => {
     setShowForm(false);
     setEditingId(null);
-    setForm(selectedService ? { name: selectedService.name, environment: selectedService.environment, displayName: selectedService.displayName, description: selectedService.description, ownerTeam: selectedService.ownerTeam, identityType: selectedService.identityType } : { ...emptyForm });
+	setForm(selectedService ? { productId: selectedService.productId, name: selectedService.name, environment: selectedService.environment, displayName: selectedService.displayName, description: selectedService.description, ownerTeam: selectedService.ownerTeam, identityType: selectedService.identityType } : { ...emptyForm });
   };
 
   return (
     <div className="space-y-4">
-      <div className="page-header">
-        <div>
-          <h1 className="page-title">服务目录</h1>
-          <div className="mt-2 flex flex-wrap gap-1.5 text-[11px] font-semibold text-muted">
-            <span className="status-badge border-outline bg-surface-lowest">服务</span>
-            <span className="status-badge border-outline bg-surface-lowest">运行目标</span>
-            <span className="status-badge border-outline bg-surface-lowest">日志路由</span>
-            <span className="status-badge border-outline bg-surface-lowest">告警规则</span>
-          </div>
-        </div>
-      </div>
-
       {error ? (
         <DataPanel title="加载失败" meta="error">
           <div className="flex items-center gap-3 py-4">
@@ -187,6 +188,7 @@ export function ServicesPage() {
                   <Plus className="h-3.5 w-3.5" />
                   新增服务
                 </button>
+				<button className="console-button" onClick={() => setShowProductForm(true)}>新增产品</button>
                 <button className="console-button" onClick={() => refetch()} disabled={isLoading}>
                   <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                   刷新
@@ -243,7 +245,7 @@ export function ServicesPage() {
                       <tr key={svc.id} className={`cursor-pointer ${svc.id === activeServiceId ? 'console-selected-row' : ''}`} onClick={() => { setConfirmDeleteServiceId(null); setSelectedServiceId(svc.id); }}>
                         <td>
                           <div className="font-semibold text-primary">{svc.name}</div>
-                          <div className="text-[11px] text-muted">{svc.displayName}</div>
+						  <div className="text-[11px] text-muted">{productById.get(svc.productId)?.displayName || productById.get(svc.productId)?.name || '未归属产品'} · {svc.displayName}</div>
                         </td>
                         <td className="font-mono">{svc.environment}</td>
                         <td className="font-mono text-xs">{svc.cluster || '-'}{svc.namespace ? ` / ${svc.namespace}` : ''}</td>
@@ -288,7 +290,8 @@ export function ServicesPage() {
 
           {selectedService ? (
             <ServiceDetailDrawer
-              service={selectedService}
+			  service={selectedService}
+			  product={productById.get(selectedService.productId)}
               graph={graph}
               loading={graphLoading}
               error={graphError as Error | null}
@@ -306,6 +309,7 @@ export function ServicesPage() {
               editing={Boolean(editingId)}
               editingId={editingId}
               form={form}
+			  products={products}
               setForm={setForm}
               pending={isPending}
               createError={createMutation.error as Error | null}
@@ -314,6 +318,7 @@ export function ServicesPage() {
               onClose={closeEditor}
             />
           ) : null}
+		  {showProductForm ? <ProductEditorDrawer pending={createProductMutation.isPending} error={createProductMutation.error as Error | null} onSave={(input) => createProductMutation.mutate(input)} onClose={() => setShowProductForm(false)} /> : null}
         </>
       )}
     </div>
@@ -322,6 +327,7 @@ export function ServicesPage() {
 
 function ServiceDetailDrawer({
   service,
+	product,
   graph,
   loading,
   error,
@@ -334,6 +340,7 @@ function ServiceDetailDrawer({
   onClose,
 }: {
   service: Service;
+	product?: Product;
   graph?: ServiceObservabilityGraph;
   loading: boolean;
   error: Error | null;
@@ -359,6 +366,8 @@ function ServiceDetailDrawer({
             <div className="mt-1 truncate font-mono text-[11px] text-muted">{service.id}</div>
           </div>
           <div className="flex shrink-0 gap-2">
+			<Link className="console-button" to={`/products/${encodeURIComponent(service.productId)}/services/${encodeURIComponent(service.id)}/logs/explore`}>进入日志</Link>
+			<Link className="console-button" to={`/products/${encodeURIComponent(service.productId)}/services/${encodeURIComponent(service.id)}/metrics/explore`}>进入指标</Link>
             <button className="console-button" onClick={onEdit}>
               <Edit3 className="h-3.5 w-3.5" />
               编辑
@@ -369,7 +378,7 @@ function ServiceDetailDrawer({
           </div>
         </div>
         <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-surface px-4 py-4">
-          <ServiceProductionDetails service={service} />
+		  <ServiceProductionDetails service={service} product={product} />
           <ServiceGraphPanel
             graph={graph}
             loading={loading}
@@ -386,7 +395,7 @@ function ServiceDetailDrawer({
   );
 }
 
-function ServiceProductionDetails({ service }: { service: Service }) {
+function ServiceProductionDetails({ service, product }: { service: Service; product?: Product }) {
   return (
     <section className="overflow-hidden rounded-md border border-outline bg-white">
       <div className="flex items-center justify-between border-b border-outline px-4 py-3">
@@ -401,6 +410,8 @@ function ServiceProductionDetails({ service }: { service: Service }) {
         <ServiceDetailCell label="Owner" value={service.ownerTeam || service.owner ? `${service.ownerTeam || '-'}${service.owner ? ` / ${service.owner}` : ''}` : '-'} />
         <ServiceDetailCell label="来源" value={sourceLabel(service.source)} />
         <ServiceDetailCell label="运行身份" value={service.identityType || 'k8s_workload'} mono />
+		<ServiceDetailCell label="产品" value={product?.displayName || product?.name || service.productId || '未归属'} />
+		<ServiceDetailCell label="观测租户" value={service.projectId ? `0:${service.projectId}` : '未初始化'} mono />
       </div>
     </section>
   );
@@ -419,6 +430,7 @@ function ServiceEditorDrawer({
   editing,
   editingId,
   form,
+	products,
   setForm,
   pending,
   createError,
@@ -429,6 +441,7 @@ function ServiceEditorDrawer({
   editing: boolean;
   editingId: string | null;
   form: CreateServiceInput & { description?: string };
+	products: Product[];
   setForm: (value: CreateServiceInput & { description?: string }) => void;
   pending: boolean;
   createError: Error | null;
@@ -436,7 +449,7 @@ function ServiceEditorDrawer({
   onSave: () => void;
   onClose: () => void;
 }) {
-  const disabledReason = !form.name || !form.environment ? '请先填写服务名称和环境' : undefined;
+	const disabledReason = !form.productId ? '请先选择所属产品' : !form.name || !form.environment ? '请先填写服务名称和环境' : undefined;
   return (
     <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
       <button type="button" className="absolute inset-0 cursor-default border-0 bg-transparent" aria-label="关闭服务编辑遮罩" onClick={onClose} />
@@ -453,7 +466,8 @@ function ServiceEditorDrawer({
         <div className="min-h-0 flex-1 overflow-auto bg-surface px-4 py-4">
           <section className="rounded-md border border-outline bg-white px-4 py-3">
             <div className="grid gap-3 md:grid-cols-2">
-              <label className="text-sm font-semibold">服务名称 *<input className="console-input mt-2 w-full" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
+			  <label className="text-sm font-semibold">所属产品 *<select className="console-input mt-2 w-full" value={form.productId} disabled={editing} onChange={(e) => setForm({ ...form, productId: e.target.value })}><option value="">请选择产品</option>{products.map((product) => <option key={product.id} value={product.id}>{product.displayName || product.name} · ProjectID {product.projectId}</option>)}</select></label>
+			  <label className="text-sm font-semibold">服务名称 *<input className="console-input mt-2 w-full" value={form.name} disabled={editing} title={editing ? 'service.name 创建后不可修改' : undefined} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
               <label className="text-sm font-semibold">环境 *<select className="console-input mt-2 w-full" value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })}><option value="prod">prod</option><option value="staging">staging</option><option value="dev">dev</option></select></label>
               <label className="text-sm font-semibold">别名<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
               <label className="text-sm font-semibold">Owner Team<input className="console-input mt-2 w-full" value={form.ownerTeam ?? ''} onChange={(e) => setForm({ ...form, ownerTeam: e.target.value })} /></label>
@@ -483,6 +497,30 @@ function ServiceEditorDrawer({
       </aside>
     </div>
   );
+}
+
+function ProductEditorDrawer({ pending, error, onSave, onClose }: {
+	pending: boolean;
+	error: Error | null;
+	onSave: (input: { name: string; displayName?: string }) => void;
+	onClose: () => void;
+}) {
+	const [name, setName] = useState('');
+	const [displayName, setDisplayName] = useState('');
+	return (
+		<div className="fixed inset-0 z-[100] flex justify-end bg-slate-900/28">
+			<button type="button" className="absolute inset-0 border-0 bg-transparent" aria-label="关闭产品创建遮罩" onClick={onClose} />
+			<aside className="console-drawer-panel relative flex h-full w-full max-w-[560px] flex-col border-l border-outline bg-white" role="dialog" aria-modal="true" aria-labelledby="product-editor-title">
+				<div className="flex items-center justify-between border-b border-outline px-4 py-3"><div><div id="product-editor-title" className="text-sm font-semibold text-on-surface">新增产品</div><div className="mt-1 text-[11px] text-muted">创建后自动生成不可修改的 ProjectID，AccountID 固定为 0</div></div><button className="console-icon-button" onClick={onClose} aria-label="关闭产品创建"><X className="h-4 w-4" /></button></div>
+				<div className="min-h-0 flex-1 space-y-3 overflow-auto bg-surface p-4">
+					{error ? <div className="console-notice console-notice-danger">{error.message}</div> : null}
+					<label className="text-sm font-semibold">产品标识 *<input className="console-input mt-2 w-full" value={name} onChange={(event) => setName(event.target.value)} placeholder="commerce" /></label>
+					<label className="text-sm font-semibold">产品名称<input className="console-input mt-2 w-full" value={displayName} onChange={(event) => setDisplayName(event.target.value)} placeholder="交易平台" /></label>
+				</div>
+				<div className="flex justify-end gap-2 border-t border-outline px-4 py-3"><button className="console-button" onClick={onClose}>取消</button><button className="console-button console-button-primary" disabled={pending || !name.trim()} onClick={() => onSave({ name: name.trim(), displayName: displayName.trim() || undefined })}>{pending ? '创建中…' : '创建产品'}</button></div>
+			</aside>
+		</div>
+	);
 }
 
 function ServiceGraphPanel({

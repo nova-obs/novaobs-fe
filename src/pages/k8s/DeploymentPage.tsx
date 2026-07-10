@@ -211,7 +211,7 @@ export function K8sDeploymentPage() {
         </div>
         {clusterError || namespaceError || resourceError || historyError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError || historyError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError || resourceError || historyError)}
           </div>
         ) : null}
       </section>

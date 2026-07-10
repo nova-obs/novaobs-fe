@@ -27,6 +27,7 @@ import type {
   OnboardingWorkspace,
   OpAMPAgent,
   OverviewSummary,
+	Product,
   ReceiverProfile,
   Service,
   ServiceObservabilityGraph,
@@ -58,8 +59,8 @@ export class ApiRequestError<T = unknown> extends Error {
   }
 }
 
-const signedOutStorageKey = 'novaobs_signed_out';
-const clientSessionKeys = ['novaobs_session', 'novaobs_token', 'novaobs_subject', 'auth_token', 'access_token', 'refresh_token'];
+const signedOutStorageKey = 'novaapm_signed_out';
+const clientSessionKeys = ['novaapm_session', 'novaapm_token', 'novaapm_subject', 'auth_token', 'access_token', 'refresh_token'];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -172,8 +173,11 @@ function mapK8sDashboardSnapshot(raw: any): K8sDashboardSnapshot {
 }
 
 function mapService(raw: any): Service {
-  return {
-    id: String(raw.id),
+	return {
+		id: String(raw.id),
+		productId: String(raw.product_id ?? raw.productId ?? ''),
+    accountId: String(raw.account_id ?? raw.accountId ?? ''),
+    projectId: String(raw.project_id ?? raw.projectId ?? ''),
     cmdbServiceId: raw.cmdb_service_id ?? raw.cmdbServiceId ?? '',
     businessId: raw.business_id ?? raw.businessId ?? '',
     applicationId: raw.application_id ?? raw.applicationId ?? '',
@@ -196,6 +200,19 @@ function mapService(raw: any): Service {
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
+}
+
+function mapProduct(raw: any): Product {
+	return {
+		id: String(raw.id ?? ''),
+		name: raw.name ?? '',
+		displayName: raw.display_name ?? raw.displayName ?? '',
+		description: raw.description ?? '',
+		projectId: String(raw.project_id ?? raw.projectId ?? ''),
+		status: raw.status ?? '',
+		createdAt: raw.created_at ?? raw.createdAt ?? '',
+		updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+	};
 }
 
 function mapServiceTarget(raw: any): ServiceTarget {
@@ -748,6 +765,16 @@ function mapNotificationPolicy(raw: any): NotificationPolicy {
 }
 
 export const api = {
+	async getProducts(): Promise<Product[]> {
+		const raw = await request<any[]>('/products');
+		return Array.isArray(raw) ? raw.map(mapProduct) : [];
+	},
+	async createProduct(input: { name: string; displayName?: string; description?: string }): Promise<Product> {
+		return mapProduct(await request<any>('/products', {
+			method: 'POST',
+			body: JSON.stringify({ name: input.name, display_name: input.displayName, description: input.description }),
+		}));
+	},
   async getOverview(): Promise<OverviewSummary> {
     const raw = await request<any>('/overview');
     return mapOverview(raw);
@@ -763,10 +790,10 @@ export const api = {
     return Array.isArray(raw) ? raw.map(mapService) : [];
   },
   async createService(input: CreateServiceInput): Promise<Service> {
-    const raw = await request<any>('/services', {
+	const raw = await request<any>(`/products/${encodeURIComponent(input.productId)}/services`, {
       method: 'POST',
       body: JSON.stringify({
-        name: input.name,
+		name: input.name,
         environment: input.environment,
         display_name: input.displayName,
         cluster: input.cluster,

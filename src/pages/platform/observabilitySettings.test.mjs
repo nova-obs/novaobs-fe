@@ -48,7 +48,7 @@ test('日志下游端点列表优先展示配置完整且可操作的端点', ()
       writeURL: 'kafka-0:9092',
       queryURL: '',
       vmuiURL: '',
-      streamName: 'novaobs.logs',
+      streamName: 'novaapm.logs',
       clusterId: '',
       accountId: '',
       projectId: '',

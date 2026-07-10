@@ -14,9 +14,6 @@ const emptyEndpoint = {
   writeURL: '',
   queryURL: '',
   vmuiURL: '',
-  accountId: '',
-  projectId: '',
-  secretRef: '',
   scopeType: 'global',
   clusterId: '',
   status: 'active',
@@ -95,12 +92,6 @@ export function endpointOperationProfile(endpoint: Partial<LogEndpoint>, registe
   if (runtimeCapable) {
     score += 1;
     strengths.push('可作为 vmalert 数据源');
-  } else if (endpoint.secretRef) {
-    score += 1;
-    strengths.push('凭据引用已配置');
-  } else if (sinkType === 'vl' && endpoint.accountId && endpoint.projectId) {
-    score += 1;
-    strengths.push('租户已配置');
   } else if (sinkType === 'otel') {
     score += 1;
     strengths.push('OTLP 写入协议');
@@ -380,7 +371,6 @@ function EndpointDetailDrawer({ endpoint, profile, onClose, onEdit }: {
               <DetailCell label="类型" value={logSinkLabel(endpoint.sinkType)} />
               <DetailCell label="作用域" value={scopeLabel(endpoint)} />
               <DetailCell label="状态" value={endpoint.status || 'active'} />
-              <DetailCell label="Secret Ref" value={endpoint.secretRef || '-'} mono />
               <DetailCell label="描述" value={endpoint.description || '-'} />
             </div>
           </EndpointFormSection>
@@ -392,7 +382,6 @@ function EndpointDetailDrawer({ endpoint, profile, onClose, onEdit }: {
               {endpoint.sinkType === 'es' ? <DetailCell label="Index / Stream" value={endpoint.streamName || '-'} mono /> : null}
               {endpoint.queryURL ? <DetailCell label="查询地址" value={endpoint.queryURL} mono /> : null}
               {endpoint.vmuiURL ? <DetailCell label="VMUI URL" value={endpoint.vmuiURL} mono /> : null}
-              {endpoint.sinkType === 'vl' ? <DetailCell label="租户" value={endpoint.accountId && endpoint.projectId ? `${endpoint.accountId} / ${endpoint.projectId}` : '-'} mono /> : null}
             </div>
           </EndpointFormSection>
 
@@ -494,7 +483,7 @@ function EndpointFormFields({ form, clusters, registeredClusterIds, clustersLoad
             <input className="console-input w-full" value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} placeholder="vl-test03" />
           </Field>
           <Field label="类型">
-            <select className="console-input w-full" value={form.sinkType} onChange={(event) => onFormChange({ ...form, sinkType: event.target.value as LogSinkType, accountId: '', projectId: '' })}>
+            <select className="console-input w-full" value={form.sinkType} onChange={(event) => onFormChange({ ...form, sinkType: event.target.value as LogSinkType })}>
               {sinkOptions.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
           </Field>
@@ -531,6 +520,12 @@ function EndpointFormFields({ form, clusters, registeredClusterIds, clustersLoad
               ))}
             </select>
           </Field>
+          <Field label="状态">
+            <select className="console-input w-full" value={form.status} onChange={(event) => onFormChange({ ...form, status: event.target.value })}>
+              <option value="active">active</option>
+              <option value="disabled">disabled</option>
+            </select>
+          </Field>
         </div>
         {endpointClusterBlockedReason ? <div className="mt-3"><InlineNotice tone="warning" message={endpointClusterBlockedReason} /></div> : null}
       </EndpointFormSection>
@@ -546,12 +541,12 @@ function EndpointFormFields({ form, clusters, registeredClusterIds, clustersLoad
             </Field>
           ) : (
             <Field label="Topic">
-              <input className="console-input w-full font-mono" value={form.streamName} onChange={(event) => onFormChange({ ...form, streamName: event.target.value })} placeholder="novaobs.logs" />
+              <input className="console-input w-full font-mono" value={form.streamName} onChange={(event) => onFormChange({ ...form, streamName: event.target.value })} placeholder="novaapm.logs" />
             </Field>
           )}
           {form.sinkType === 'es' ? (
             <Field label="Index / Stream">
-              <input className="console-input w-full font-mono" value={form.streamName} onChange={(event) => onFormChange({ ...form, streamName: event.target.value })} placeholder="novaobs-logs" />
+              <input className="console-input w-full font-mono" value={form.streamName} onChange={(event) => onFormChange({ ...form, streamName: event.target.value })} placeholder="novaapm-logs" />
             </Field>
           ) : null}
           {form.sinkType === 'vl' ? (
@@ -562,38 +557,9 @@ function EndpointFormFields({ form, clusters, registeredClusterIds, clustersLoad
         </div>
       </EndpointFormSection>
 
-      <EndpointFormSection title="租户与凭据" meta="租户 ID 与 Secret Ref 只描述引用，不在前端保存明文密钥">
-        <div className="grid gap-3 md:grid-cols-2">
-          {form.sinkType === 'vl' ? (
-            <>
-              <Field label="AccountID">
-                <input className="console-input w-full font-mono" inputMode="numeric" value={form.accountId} onChange={(event) => onFormChange({ ...form, accountId: event.target.value })} placeholder="默认 0" />
-              </Field>
-              <Field label="ProjectID">
-                <input className="console-input w-full font-mono" inputMode="numeric" value={form.projectId} onChange={(event) => onFormChange({ ...form, projectId: event.target.value })} placeholder="默认 0" />
-              </Field>
-              <div className="flex items-end">
-                <button type="button" className="quiet-button h-9 px-3 text-xs" onClick={() => onFormChange({ ...form, ...generateVictoriaLogsTenant() })}>
-                  生成租户 ID
-                </button>
-              </div>
-            </>
-          ) : null}
-          <Field label="Secret Ref" className={form.sinkType === 'vl' ? '' : 'md:col-span-2'}>
-            <input className="console-input w-full font-mono" value={form.secretRef} onChange={(event) => onFormChange({ ...form, secretRef: event.target.value })} placeholder="secret://logs/vl-test03" />
-          </Field>
-          <Field label="状态">
-            <select className="console-input w-full" value={form.status} onChange={(event) => onFormChange({ ...form, status: event.target.value })}>
-              <option value="active">active</option>
-              <option value="disabled">disabled</option>
-            </select>
-          </Field>
-        </div>
-      </EndpointFormSection>
-
       <EndpointFormSection title="说明" meta="记录用途、覆盖范围或变更说明，方便审计回看">
         <Field label="描述">
-          <input className="console-input w-full" value={form.description} onChange={(event) => onFormChange({ ...form, description: event.target.value })} placeholder="例如：test03 集群日志写入 VictoriaLogs 租户" />
+          <input className="console-input w-full" value={form.description} onChange={(event) => onFormChange({ ...form, description: event.target.value })} placeholder="例如：test03 集群日志写入 VictoriaLogs" />
         </Field>
       </EndpointFormSection>
     </>
@@ -738,9 +704,6 @@ function endpointToForm(endpoint: LogEndpoint) {
     writeURL: endpoint.writeURL ?? '',
     queryURL: endpoint.queryURL ?? '',
     vmuiURL: endpoint.vmuiURL ?? '',
-    accountId: endpoint.accountId ?? '',
-    projectId: endpoint.projectId ?? '',
-    secretRef: endpoint.secretRef ?? '',
     scopeType: endpoint.scopeType || 'global',
     clusterId: endpoint.clusterId ?? '',
     status: endpoint.status || 'active',
@@ -755,9 +718,6 @@ function endpointFormMatchesEndpoint(form: typeof emptyEndpoint, endpoint: LogEn
     && form.writeURL === endpoint.writeURL
     && form.queryURL === endpoint.queryURL
     && form.vmuiURL === endpoint.vmuiURL
-    && form.accountId === endpoint.accountId
-    && form.projectId === endpoint.projectId
-    && form.secretRef === endpoint.secretRef
     && form.scopeType === endpoint.scopeType
     && form.clusterId === endpoint.clusterId
     && form.status === endpoint.status;
@@ -769,31 +729,18 @@ function endpointMissingFields(form: typeof emptyEndpoint) {
   if (!form.writeURL.trim()) missing.push('写入地址');
   if (form.scopeType === 'k8s_cluster' && !form.clusterId.trim()) missing.push('K8s 集群');
   if (form.sinkType === 'kafka' && !form.streamName.trim()) missing.push('Topic');
-  if (form.sinkType === 'vl' && Boolean(form.accountId.trim()) !== Boolean(form.projectId.trim())) missing.push('完整租户 ID');
-  if (form.sinkType === 'vl' && form.accountId && !isUint32(form.accountId)) missing.push('有效的 AccountID');
-  if (form.sinkType === 'vl' && form.projectId && !isUint32(form.projectId)) missing.push('有效的 ProjectID');
   return missing;
 }
 
-function isUint32(value: string) {
-  return /^\d+$/.test(value) && BigInt(value) <= 4294967295n;
-}
-
-function generateVictoriaLogsTenant() {
-  const ids = new Uint32Array(2);
-  crypto.getRandomValues(ids);
-  return { accountId: String(ids[0]), projectId: String(ids[1]) };
-}
-
 function endpointWritePlaceholder(sinkType: LogSinkType) {
-  if (sinkType === 'es') return 'http://elasticsearch:9200/novaobs-logs/_bulk';
+  if (sinkType === 'es') return 'http://elasticsearch:9200/novaapm-logs/_bulk';
   if (sinkType === 'kafka') return 'kafka-0:9092,kafka-1:9092';
   if (sinkType === 'otel') return 'http://otel-gateway:4318/v1/logs';
   return 'http://victorialogs:9428/insert/opentelemetry/v1/logs';
 }
 
 function endpointQueryPlaceholder(sinkType: LogSinkType) {
-  if (sinkType === 'es') return 'http://elasticsearch:9200/novaobs-logs/_search';
+  if (sinkType === 'es') return 'http://elasticsearch:9200/novaapm-logs/_search';
   if (sinkType === 'otel') return '';
   return 'http://victorialogs:9428/select/logsql/query';
 }
@@ -831,13 +778,13 @@ function EndpointExampleHelp({ kind }: { kind: 'write' | 'query' }) {
     ? [
       ['VictoriaLogs', 'http://victorialogs:9428/insert/opentelemetry/v1/logs'],
       ['OTel / OTLP', 'http://otel-gateway:4318/v1/logs'],
-      ['Elasticsearch', 'http://elasticsearch:9200/novaobs-logs/_bulk'],
-      ['Kafka', 'kafka-0:9092,kafka-1:9092，Topic 填 novaobs.logs'],
+      ['Elasticsearch', 'http://elasticsearch:9200/novaapm-logs/_bulk'],
+      ['Kafka', 'kafka-0:9092,kafka-1:9092，Topic 填 novaapm.logs'],
     ]
     : [
       ['VictoriaLogs', 'http://victorialogs:9428/select/logsql/query'],
       ['OTel / OTLP', '通常只配置写入地址；查询由最终存储后端提供'],
-      ['Elasticsearch', 'http://elasticsearch:9200/novaobs-logs/_search'],
+      ['Elasticsearch', 'http://elasticsearch:9200/novaapm-logs/_search'],
       ['Kafka', '通常不配置 HTTP 查询地址，由消费端按 Topic 查询'],
     ];
   return (

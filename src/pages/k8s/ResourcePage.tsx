@@ -337,7 +337,7 @@ export function K8sResourcePage() {
         {!canReadResources ? (
           <div className="rounded-lg bg-white/45 px-4 py-8 text-center shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
             <div className="font-semibold text-on-surface">{clusterError ? '集群列表读取失败' : '未选择集群或命名空间'}</div>
-            <p className="mt-2 text-sm text-muted">{clusterError ? 'NovaObs API unavailable' : 'namespace RBAC'}</p>
+            <p className="mt-2 text-sm text-muted">{clusterError ? 'NovaAPM API unavailable' : 'namespace RBAC'}</p>
           </div>
         ) : null}
         {canReadResources && !isLoading && !error && data.length ? (

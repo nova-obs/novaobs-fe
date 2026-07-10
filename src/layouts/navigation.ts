@@ -1,11 +1,11 @@
 import {
   Bell,
+  BarChart3,
   BookOpenCheck,
   Boxes,
   Activity,
-  BarChart3,
-  Database,
   FileText,
+  Database,
   Gauge,
   GitBranch,
   LayoutDashboard,
@@ -74,12 +74,12 @@ const navigationDomains: NavigationDomain[] = [
             description: '日志检索、采集路由与服务级告警',
             path: '/logs',
             icon: FileText,
-            children: [
-              { id: 'logs-explore', label: '日志分析', description: '检索与分析日志', path: '/logs/explore', icon: Search },
-              { id: 'logs-agents', label: '采集路由', description: '采集、发布与运行状态', path: '/logs/agents', icon: ServerCog },
-              { id: 'logs-alerts', label: '日志告警', description: '日志匹配与告警规则', path: '/logs/alerts', icon: Bell },
-              { id: 'logs-endpoints', label: '接入配置', description: '日志下游端点', path: '/logs/endpoints', icon: RadioTower },
-            ],
+			children: [
+			  { id: 'logs-explore', label: '日志分析', description: '选择服务并检索原始日志', path: '/logs/explore', icon: Search },
+			  { id: 'logs-agents', label: '采集路由', description: '管理服务日志采集与发布', path: '/logs/agents', icon: ServerCog },
+			  { id: 'logs-alerts', label: '日志告警', description: '管理服务级日志告警规则', path: '/logs/alerts', icon: Bell },
+			  { id: 'logs-endpoints', label: '接入配置', description: '维护平台日志下游端点', path: '/logs/endpoints', icon: RadioTower },
+			],
           },
           {
             id: 'metrics',
@@ -88,12 +88,12 @@ const navigationDomains: NavigationDomain[] = [
             path: '/metrics',
             icon: Monitor,
             children: [
-              { id: 'metrics-explore', label: '指标查询', description: '按服务作用域查看指标', path: '/metrics/explore', icon: Activity },
-              { id: 'metrics-alerts', label: '指标告警', description: '指标规则与告警入口', path: '/metrics/alerts', icon: Bell },
-              { id: 'metrics-dashboards', label: 'Dashboard', description: 'Grafana 目录与受控代理入口', path: '/metrics/dashboards', icon: BarChart3 },
-              { id: 'metrics-collection', label: '采集接入', description: 'Collector 接入与服务作用域绑定', path: '/metrics/collection', icon: RadioTower },
-              { id: 'metrics-overview', label: '监控总览', description: '服务指标健康与接入状态', path: '/metrics/overview', icon: Gauge },
-              { id: 'metrics-endpoints', label: '接入端点', description: '指标下游端点目录', path: '/metrics/endpoints', icon: Database },
+              { id: 'metrics-explore', label: '指标查询', description: '选择服务并查询指标', path: '/metrics/explore', icon: Activity },
+              { id: 'metrics-alerts', label: '指标告警', description: '管理服务级指标告警规则', path: '/metrics/alerts', icon: Bell },
+              { id: 'metrics-dashboards', label: 'Dashboard', description: '查看服务关联 Dashboard', path: '/metrics/dashboards', icon: BarChart3 },
+              { id: 'metrics-collection', label: '采集接入', description: '配置服务指标采集与绑定', path: '/metrics/collection', icon: RadioTower },
+              { id: 'metrics-overview', label: '监控总览', description: '查看服务指标健康与接入状态', path: '/metrics/overview', icon: Gauge },
+              { id: 'metrics-endpoints', label: '接入端点', description: '管理服务指标下游端点', path: '/metrics/endpoints', icon: Database },
             ],
           },
           { id: 'traces', label: 'Trace', description: '链路查询、Span 详情与日志反跳', path: '/traces', icon: GitBranch },
@@ -171,6 +171,16 @@ function cloneNavigationItem(item: NavigationItem): NavigationItem {
 
 export const getNavigationByPath = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
+	const logsServiceMatch = normalizedPath.match(/^\/products\/[^/]+\/services\/[^/]+\/logs(?:\/([^/]+))?/);
+	if (logsServiceMatch) {
+		const childID = logsNavigationChildID(logsServiceMatch[1] ?? '');
+		return allNavigationItems.find((item) => item.id === (childID || 'logs'));
+	}
+	const metricsServiceMatch = normalizedPath.match(/^\/products\/[^/]+\/services\/[^/]+\/metrics(?:\/([^/]+))?/);
+	if (metricsServiceMatch) {
+		const childID = metricsNavigationChildID(metricsServiceMatch[1] ?? '');
+		return allNavigationItems.find((item) => item.id === (childID || 'metrics'));
+	}
   if (normalizedPath === '/k8s/access') {
     return undefined;
   }
@@ -179,9 +189,6 @@ export const getNavigationByPath = (path: string) => {
   }
   if (normalizedPath === '/observability/endpoints') {
     return allNavigationItems.find((item) => item.id === 'logs-endpoints');
-  }
-  if (normalizedPath === '/monitoring') {
-    return allNavigationItems.find((item) => item.id === 'metrics');
   }
   return [...allNavigationItems]
     .sort((left, right) => {
@@ -196,6 +203,24 @@ export const getNavigationByPath = (path: string) => {
     ));
 };
 
+function logsNavigationChildID(segment: string): string | undefined {
+	if (segment === 'explore') return 'logs-explore';
+	if (segment === 'agents' || segment === 'onboarding') return 'logs-agents';
+	if (segment === 'alerts') return 'logs-alerts';
+	if (segment === 'endpoints') return 'logs-endpoints';
+	return undefined;
+}
+
+function metricsNavigationChildID(segment: string): string | undefined {
+	if (segment === 'explore') return 'metrics-explore';
+	if (segment === 'alerts') return 'metrics-alerts';
+	if (segment === 'dashboards') return 'metrics-dashboards';
+	if (segment === 'collection') return 'metrics-collection';
+	if (segment === 'overview') return 'metrics-overview';
+	if (segment === 'endpoints') return 'metrics-endpoints';
+	return undefined;
+}
+
 export const getNavigationDomainByPath = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
   if (
@@ -204,9 +229,9 @@ export const getNavigationDomainByPath = (path: string) => {
     || normalizedPath === '/onboarding'
     || normalizedPath.startsWith('/observability')
     || normalizedPath.startsWith('/metrics')
-    || normalizedPath.startsWith('/monitoring')
     || normalizedPath.startsWith('/traces')
     || normalizedPath.startsWith('/alerts')
+	|| /^\/products\/[^/]+\/services\/[^/]+\/(?:logs|metrics)(?:\/|$)/.test(normalizedPath)
   ) {
     return navigationDomains.find((domain) => domain.id === 'observability');
   }

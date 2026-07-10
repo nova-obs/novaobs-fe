@@ -63,10 +63,17 @@ test('K8s 观测接入页面承载集群级 runtime 发布入口', () => {
   assert.equal(routeSource.includes('K8sObservabilityRedirect'), true);
   assert.equal(layoutSource.includes('/k8s/observability'), true);
   assert.equal(navigationSource.includes("id: 'observability-entry'"), true);
-  assert.equal(observabilitySource.includes('listObservabilityRuntimes'), true);
+  assert.equal(observabilitySource.includes('getLogsCollectorRuntimeStatus'), true);
+  assert.equal(observabilitySource.includes('listObservabilityRuntimes'), false);
   assert.equal(observabilitySource.includes('publishLogsCollectorRuntime'), true);
   assert.equal(observabilitySource.includes('LogsPublishPreviewPanel'), true);
-  assert.equal(observabilitySource.includes("defaultRuntimeNamespace = 'novaobs-system'"), true);
+  assert.equal(observabilitySource.includes('查看基础资源清单'), true);
+  assert.equal(observabilitySource.includes('RuntimeStepperHeader'), true);
+  assert.equal(observabilitySource.includes('RuntimeStepPanel'), true);
+  assert.equal(observabilitySource.includes('预览基础组件发布'), true);
+  assert.equal(observabilitySource.includes('预览增量发布'), true);
+  assert.equal(observabilitySource.includes('defaultLogsCollectorNamespace'), true);
+  assert.equal(observabilitySource.includes('normalizeLogsCollectorNamespace'), true);
   assert.equal(observabilitySource.includes('useSearchParams'), true);
   assert.equal(observabilitySource.includes('selectedCluster?.readOnly'), true);
   assert.equal(observabilitySource.includes('选择观测接入集群'), true);
@@ -395,7 +402,7 @@ test('K8s 模板页面展示变量摘要、权限不足态和审计结果', () =
   assert.equal(templateSource.includes('sample'), false);
   assert.equal(templateSource.includes('模板 API 暂未连接'), false);
   assert.equal(templateSource.includes('变量摘要'), true);
-  assert.equal(templateSource.includes('novaobs-base'), true);
+  assert.equal(templateSource.includes('novaapm-base'), true);
   assert.equal(templateSource.includes('权限不足'), true);
   assert.equal(templateSource.includes('操作已落审计'), true);
   assert.equal(templateSource.includes('删除确认摘要'), true);

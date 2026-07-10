@@ -49,14 +49,14 @@ export function DashboardPage() {
           <CompactMetric label="运行工作负载" value={String(stats?.workloads ?? 0)} meta="Deployment" />
           <CompactMetric label="命名空间" value={String(stats?.namespaces ?? 0)} meta="Kubernetes API" />
           <CompactMetric label="Pod Ready" value={`${readyPods} / ${totalPods}`} meta={`${warningPods} warning`} />
-          <CompactMetric label="已登记集群" value={String(clusters.length)} meta="NovaObs metadata" />
+          <CompactMetric label="已登记集群" value={String(clusters.length)} meta="NovaAPM metadata" />
         </div>
       </section>
 
       {clusterError || error ? (
         <div className="console-notice console-notice-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : 'K8s Dashboard 真实快照读取失败，请检查集群凭据、RBAC 与 Kubernetes API 连通性。'}
+          {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : 'K8s Dashboard 真实快照读取失败，请检查集群凭据、RBAC 与 Kubernetes API 连通性。'}
         </div>
       ) : null}
 
@@ -76,7 +76,7 @@ export function DashboardPage() {
                 <ControlPlaneRow label="API Server" value={signalMeta(signals, 'api-server')} source="Kubernetes API" state={signalMeta(signals, 'api-server')} />
                 <ControlPlaneRow label="Workloads" value={`${stats?.workloads ?? 0} active`} source="Deployment" state={stats?.health ?? 'unknown'} />
                 <ControlPlaneRow label="Namespaces" value={`${stats?.namespaces ?? 0} domains`} source="Kubernetes API" state={sync?.status ?? 'unknown'} />
-                <ControlPlaneRow label="RBAC" value={activeCluster?.readOnly ? 'read-only' : 'write-enabled'} source="NovaObs policy" state={activeCluster?.readOnly ? 'warning' : 'healthy'} />
+                <ControlPlaneRow label="RBAC" value={activeCluster?.readOnly ? 'read-only' : 'write-enabled'} source="NovaAPM policy" state={activeCluster?.readOnly ? 'warning' : 'healthy'} />
               </tbody>
             </table>
           </div>

@@ -9,6 +9,9 @@ export type ServiceTargetType = 'cloud_native_workload' | 'host_process' | 'phys
 
 export interface Service {
   id: string;
+  productId: string;
+  accountId: string;
+  projectId: string;
   cmdbServiceId: string;
   businessId: string;
   applicationId: string;
@@ -28,6 +31,17 @@ export interface Service {
   syncStatus: SyncStatus;
   lastSyncedAt?: string;
   status: ServiceStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface Product {
+  id: string;
+  name: string;
+  displayName: string;
+  description: string;
+  projectId: string;
+  status: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -89,6 +103,7 @@ export interface ServiceObservabilityGraph {
 }
 
 export interface CreateServiceInput {
+  productId: string;
   name: string;
   environment: string;
   displayName?: string;

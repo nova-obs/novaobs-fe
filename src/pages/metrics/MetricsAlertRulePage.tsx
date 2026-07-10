@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Check, ChevronDown, FlaskConical, Loader2, X } from 'lucide-react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { api } from '../../services/api';
 import type { AlertRuleSpec, AlertRuleTestResult } from '../../services/types';
 import { metricsApi, type MetricServiceBinding, type MetricsServiceSummary } from './api';
@@ -13,17 +13,16 @@ type MetricsQueryMode = 'promql' | 'metricsql';
 
 export function MetricsAlertRulePage() {
   const navigate = useNavigate();
-  const { id: ruleId = '' } = useParams();
-  return <MetricsAlertRuleDrawer ruleId={ruleId} onClose={() => navigate('/metrics/alerts')} />;
+	const { productId = '', serviceId = '', id: ruleId = '' } = useParams();
+	return <MetricsAlertRuleDrawer productId={productId} routeServiceId={serviceId} ruleId={ruleId} onClose={() => navigate(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/alerts`)} />;
 }
 
-export function MetricsAlertRuleDrawer({ ruleId = '', onClose }: { ruleId?: string; onClose: () => void }) {
+export function MetricsAlertRuleDrawer({ productId, routeServiceId, ruleId = '', onClose }: { productId: string; routeServiceId: string; ruleId?: string; onClose: () => void }) {
   const queryClient = useQueryClient();
-  const [searchParams] = useSearchParams();
-
   const { data: workspace } = useQuery({
-    queryKey: ['metrics-workspace'],
-    queryFn: () => metricsApi.getWorkspace(),
+	queryKey: ['metrics-workspace', productId, routeServiceId],
+	queryFn: () => metricsApi.getWorkspace(productId, routeServiceId),
+	enabled: Boolean(productId && routeServiceId),
   });
   const ruleQuery = useQuery({
     queryKey: ['metrics-alert-rule', ruleId],
@@ -43,8 +42,7 @@ export function MetricsAlertRuleDrawer({ ruleId = '', onClose }: { ruleId?: stri
       .map((s) => ({ service: s, binding: bindingByServiceId.get(s.id)! }));
   }, [bindingByServiceId, services]);
 
-  const paramServiceId = searchParams.get('service_id') ?? searchParams.get('binding_id') ?? '';
-  const [serviceId, setServiceId] = useState(paramServiceId || serviceOptions[0]?.service.id || '');
+	const [serviceId, setServiceId] = useState(routeServiceId);
   const [name, setName] = useState('');
   const [mode, setMode] = useState<MetricsQueryMode>('promql');
   const [expression, setExpression] = useState('');
@@ -71,9 +69,8 @@ export function MetricsAlertRuleDrawer({ ruleId = '', onClose }: { ruleId?: stri
   });
 
   useEffect(() => {
-    if (paramServiceId && serviceId !== paramServiceId) setServiceId(paramServiceId);
-    else if (!serviceId && serviceOptions[0]) setServiceId(serviceOptions[0].service.id);
-  }, [paramServiceId, serviceId, serviceOptions]);
+	if (serviceId !== routeServiceId) setServiceId(routeServiceId);
+	}, [routeServiceId, serviceId]);
 
   useEffect(() => {
     if (policyId || !policiesQuery.data?.length) return;
@@ -84,7 +81,6 @@ export function MetricsAlertRuleDrawer({ ruleId = '', onClose }: { ruleId?: stri
   useEffect(() => {
     const rule = ruleQuery.data;
     if (!rule) return;
-    setServiceId(rule.spec.scope.serviceId);
     setName(rule.spec.name);
     setMode(rule.spec.query.mode === 'metricsql' ? 'metricsql' : 'promql');
     setExpression(rule.spec.query.expression);

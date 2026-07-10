@@ -18,12 +18,12 @@ test('Logs 保留四个子入口并把创建更新归入父模块子路径', () 
   assert.doesNotMatch(workspace, /日志目标/);
   assert.match(routes, /path: 'agents\/new'/);
   assert.match(routes, /path: 'agents\/:id\/edit'/);
-  assert.match(routes, /path: 'onboarding'.*Navigate to="\/logs\/agents\/new"/);
+	assert.match(routes, /path: 'onboarding'.*Navigate to="\.\.\/agents\/new"/);
   assert.match(routes, /path: 'alerts\/new'/);
   assert.match(routes, /path: 'alerts\/:id'/);
   assert.match(routes, /path: 'endpoints'/);
-  assert.match(routes, /path: '\/observability\/endpoints'.*Navigate to="\/logs\/endpoints"/);
-  assert.match(workspace, /to: '\/logs\/endpoints'/);
+	assert.match(routes, /path: '\/observability\/endpoints'.*ObservabilitySettingsPage/);
+	assert.match(workspace, /`\$\{base\}\/endpoints`/);
   assert.match(workspace, /label: '接入配置'/);
 });
 
@@ -46,14 +46,14 @@ test('采集路由保留任务页，日志告警新增编辑进入列表表单�
   assert.doesNotMatch(alertRule, /<LogsTaskPageHeader/);
 });
 
-test('日志告警以服务为维度选择并展示当前服务规则', () => {
-  assert.match(alerts, /LogsEntitySelector<AlertServiceRow>/);
+test('日志告警固定使用产品服务路径中的服务上下文', () => {
+	assert.match(alerts, /useParams/);
+	assert.match(alerts, /find\(\(item\) => item\.id === serviceId\)/);
   assert.match(alerts, /logs-alert-service-selector/);
-  assert.match(alerts, /useSearchParams/);
   assert.match(alerts, /selectedServiceRules/);
   assert.match(alerts, /alertServices/);
-  assert.match(alerts, /setSelectedServiceId/);
-  assert.match(alerts, /service_id=\$\{encodeURIComponent\(selectedServiceId\)\}/);
+	assert.doesNotMatch(alerts, /useSearchParams/);
+	assert.doesNotMatch(alerts, /setSelectedServiceId/);
   assert.doesNotMatch(alerts, /logs-alerts-service-list/);
   assert.doesNotMatch(alerts, /lg:grid-cols-\[280px_minmax\(0,1fr\)\]/);
   assert.doesNotMatch(alerts, /const logRules = rules;/);

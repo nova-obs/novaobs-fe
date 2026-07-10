@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { useMemo, useState } from 'react';
+import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Plus, RefreshCw, Route, Search, Server } from 'lucide-react';
+import { ExternalLink, Plus, RefreshCw, Search } from 'lucide-react';
 import { StatusBadge } from '../../components/StatusBadge';
 import type { AlertRule } from '../../services/types';
 import { api } from '../../services/api';
 import { LogsAlertRuleEditorDrawer } from './LogsAlertRulePage';
 import { LogsEmptyState, LogsErrorLine } from './LogsPrimitives';
-import { LogsEntitySelector } from './LogsEntitySelector';
 import { logsApi, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
 import { routeAccessPriority } from './ServicePickerPanel';
 
@@ -170,23 +169,23 @@ function serviceMetaLabel(service: AlertServiceRow | null) {
 export function LogsAlertsPage() {
   const location = useLocation();
   const navigate = useNavigate();
-  const { id: routeRuleId = '' } = useParams();
-  const [searchParams, setSearchParams] = useSearchParams();
+	const { productId = '', serviceId = '', id: routeRuleId = '' } = useParams();
+	const base = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs`;
   const [ruleQuery, setRuleQuery] = useState('');
-  const [selectedServiceId, setSelectedServiceId] = useState(searchParams.get('service_id') ?? '');
   const { data: rules = [], error, refetch } = useQuery({
     queryKey: ['logs-alert-rules'],
     queryFn: api.getAlertRules,
   });
   const { data: workspace } = useQuery({
-    queryKey: ['logs-onboarding-workspace'],
-    queryFn: logsApi.getWorkspace,
+	queryKey: ['logs-onboarding-workspace', productId, serviceId],
+	queryFn: () => logsApi.getWorkspace(productId, serviceId),
+	enabled: Boolean(productId && serviceId),
   });
   const services = workspace?.services ?? [];
   const routes = workspace?.routes ?? [];
   const targets = workspace?.targets ?? [];
   const alertServices = useMemo(() => buildAlertServices(services, rules, routes, targets), [routes, rules, services, targets]);
-  const selectedService = alertServices.find((item) => item.id === selectedServiceId) ?? alertServices[0] ?? null;
+  const selectedService = alertServices.find((item) => item.id === serviceId) ?? null;
   const selectedServiceRules = useMemo(() => {
     if (!selectedService) return [];
     return rules.filter((rule) => (rule.spec.scope.serviceId || 'unknown-service') === selectedService.id);
@@ -203,36 +202,11 @@ export function LogsAlertsPage() {
     ].filter(Boolean).join(' ').toLowerCase().includes(query));
   }, [ruleQuery, selectedServiceRules]);
 
-  useEffect(() => {
-    if (alertServices.length === 0) {
-      if (selectedServiceId) setSelectedServiceId('');
-      return;
-    }
-    const paramServiceId = searchParams.get('service_id') ?? '';
-    const paramService = alertServices.find((service) => service.id === paramServiceId);
-    if (paramService) {
-      if (selectedServiceId !== paramService.id) setSelectedServiceId(paramService.id);
-      return;
-    }
-    if (!selectedServiceId || !alertServices.some((service) => service.id === selectedServiceId)) {
-      setSelectedServiceId(alertServices[0].id);
-    }
-  }, [alertServices, searchParams, selectedServiceId]);
-
-  function selectService(serviceId: string) {
-    setSelectedServiceId(serviceId);
-    const next = new URLSearchParams(searchParams);
-    next.set('service_id', serviceId);
-    setSearchParams(next, { replace: true });
-  }
-
   const editorRuleId = location.pathname.endsWith('/new') ? '' : routeRuleId;
   const editorOpen = location.pathname.endsWith('/new') || Boolean(routeRuleId);
-  const createAlertTo = selectedServiceId ? `/logs/alerts/new?service_id=${encodeURIComponent(selectedServiceId)}` : '/logs/alerts/new';
-  const closeEditorTo = selectedServiceId ? `/logs/alerts?service_id=${encodeURIComponent(selectedServiceId)}` : '/logs/alerts';
+	const createAlertTo = `${base}/alerts/new`;
+	const closeEditorTo = `${base}/alerts`;
   const createDisabled = !selectedService?.canCreateAlert;
-
-  const selectorIcon = selectedService?.logLinkKind === 'platform' ? Route : Server;
 
   return (
     <div className="logs-alerts-workbench console-workbench flex min-h-0 flex-col">
@@ -241,27 +215,10 @@ export function LogsAlertsPage() {
         <div className="console-panel-header shrink-0">
           <div className="flex min-w-0 flex-1 flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
             <div className="logs-alert-service-selector w-full lg:max-w-[420px]">
-              <LogsEntitySelector<AlertServiceRow>
-                items={alertServices}
-                activeItem={selectedService}
-                onSelect={(service) => selectService(service.id)}
-                getId={(service) => service.id}
-                triggerIcon={selectorIcon}
-                triggerTitle={selectedService?.name ?? ''}
-                triggerMeta={serviceMetaLabel(selectedService)}
-                placeholder="选择服务"
-                ariaLabel="日志告警服务"
-                renderOption={(service, selected) => (
-                  <>
-                    <div className="flex items-center justify-between gap-3">
-                      <span className={`truncate text-sm font-semibold ${selected ? 'text-primary' : 'text-on-surface'}`}>{service.name}</span>
-                      <span className="font-mono text-[11px] text-muted">{service.enabledCount}/{service.ruleCount}</span>
-                    </div>
-                    <div className="mt-1 truncate text-[11px] font-medium text-muted">{service.environment || service.ownerTeam || '-'} · {service.logLinkLabel} · {service.logLinkStatus}</div>
-                    <div className="mt-1 truncate font-mono text-[10px] text-muted/80">{service.endpointName}</div>
-                  </>
-                )}
-              />
+			  <div className="rounded-md border border-outline bg-white px-3 py-2">
+				<div className="truncate text-sm font-semibold text-on-surface">{selectedService?.name || '服务不存在'}</div>
+				<div className="mt-1 truncate text-[11px] text-muted">{serviceMetaLabel(selectedService)}</div>
+			  </div>
             </div>
             <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
               <label className="relative w-full md:w-80">
@@ -324,7 +281,7 @@ export function LogsAlertsPage() {
                     <td className="max-w-[420px] truncate font-mono text-xs text-muted">{rule.spec.query.expression}</td>
                     <td>
                       <div className="flex items-center gap-2">
-                        <Link className="console-table-action" to={`/logs/alerts/${rule.id}?service_id=${encodeURIComponent(selectedService.id)}`}>编辑</Link>
+						<Link className="console-table-action" to={`${base}/alerts/${rule.id}`}>编辑</Link>
                         <Link className="console-table-action" to="/alerts"><ExternalLink className="h-3.5 w-3.5" />告警中心</Link>
                       </div>
                     </td>
@@ -336,9 +293,8 @@ export function LogsAlertsPage() {
         )}
       </section>
       {editorOpen ? (
-        <LogsAlertRuleEditorDrawer ruleId={editorRuleId} onClose={() => navigate(closeEditorTo)} />
+		<LogsAlertRuleEditorDrawer productId={productId} serviceId={serviceId} ruleId={editorRuleId} onClose={() => navigate(closeEditorTo)} />
       ) : null}
     </div>
   );
 }
-

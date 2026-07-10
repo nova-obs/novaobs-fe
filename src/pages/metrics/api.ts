@@ -1,7 +1,28 @@
 import { apiRequest } from '../../services/api';
 
+export function buildVictoriaMetricsVMUIURL(rawURL: string, expression: string): string {
+	const normalizedURL = rawURL.trim();
+	const normalizedExpression = expression.trim();
+	if (!normalizedURL || !normalizedExpression) return normalizedURL;
+	try {
+		const parsed = new URL(normalizedURL);
+		const hashValue = parsed.hash.replace(/^#/, '');
+		const separator = hashValue.indexOf('?');
+		const hashPath = separator >= 0 ? hashValue.slice(0, separator) || '/' : hashValue || '/';
+		const params = new URLSearchParams(separator >= 0 ? hashValue.slice(separator + 1) : '');
+		params.set('g0.expr', normalizedExpression);
+		parsed.hash = `${hashPath}?${params.toString()}`;
+		return parsed.toString();
+	} catch {
+		return normalizedURL;
+	}
+}
+
 export interface MetricsServiceSummary {
   id: string;
+	productId: string;
+  accountId: string;
+  projectId: string;
   name: string;
   displayName: string;
   environment: string;
@@ -58,6 +79,9 @@ export interface MetricsWorkspace {
 function mapService(raw: any): MetricsServiceSummary {
   return {
     id: String(raw.id ?? ''),
+	productId: String(raw.product_id ?? raw.productId ?? ''),
+    accountId: String(raw.account_id ?? raw.accountId ?? ''),
+    projectId: String(raw.project_id ?? raw.projectId ?? ''),
     name: raw.name ?? '',
     displayName: raw.display_name ?? raw.displayName ?? '',
     environment: raw.environment ?? '',
@@ -137,6 +161,7 @@ function mapWorkspace(raw: any): MetricsWorkspace {
 }
 
 export interface CreateServiceBindingInput {
+	productId: string;
   serviceId: string;
   endpointId: string;
   tenant?: { accountId?: string; projectId?: string };
@@ -160,42 +185,23 @@ export interface EndpointTestResult {
   checkedAt: string;
 }
 
-export interface GrafanaDashboardHit {
-  uid: string;
-  title: string;
-  uri: string;
-  url: string;
-  type: string;
-  tags: string[];
-  folderTitle: string;
-  folderUid: string;
-}
-
 export const metricsApi = {
-  async getWorkspace(serviceId?: string): Promise<MetricsWorkspace> {
-    const params = new URLSearchParams();
-    if (serviceId) params.set('service_id', serviceId);
-    const suffix = params.toString() ? `?${params.toString()}` : '';
-    return mapWorkspace(await apiRequest<any>(`/metrics/workspace${suffix}`));
+  async getWorkspace(productId: string, serviceId: string): Promise<MetricsWorkspace> {
+	return mapWorkspace(await apiRequest<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/workspace`));
   },
   async listEndpoints(): Promise<MetricEndpoint[]> {
     const raw = await apiRequest<any[]>('/metrics/endpoints');
     return Array.isArray(raw) ? raw.map(mapEndpoint) : [];
   },
-  async listServiceBindings(serviceId?: string): Promise<MetricServiceBinding[]> {
-    const params = new URLSearchParams();
-    if (serviceId) params.set('service_id', serviceId);
-    const suffix = params.toString() ? `?${params.toString()}` : '';
-    const raw = await apiRequest<any[]>(`/metrics/service-bindings${suffix}`);
+  async listServiceBindings(productId: string, serviceId: string): Promise<MetricServiceBinding[]> {
+	const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/bindings`);
     return Array.isArray(raw) ? raw.map(mapServiceBinding) : [];
   },
   async createServiceBinding(input: CreateServiceBindingInput): Promise<MetricServiceBinding> {
-    const raw = await apiRequest<any>('/metrics/service-bindings', {
+	const raw = await apiRequest<any>(`/products/${encodeURIComponent(input.productId)}/services/${encodeURIComponent(input.serviceId)}/metrics/bindings`, {
       method: 'POST',
       body: JSON.stringify({
-        service_id: input.serviceId,
         endpoint_id: input.endpointId,
-        tenant: input.tenant ? { account_id: input.tenant.accountId ?? '', project_id: input.tenant.projectId ?? '' } : undefined,
         label_match: input.labelMatch,
         base_promql: input.basePromQL ?? '',
         status: input.status ?? 'active',
@@ -203,38 +209,21 @@ export const metricsApi = {
     });
     return mapServiceBinding(raw);
   },
-  async updateServiceBinding(id: string, input: UpdateServiceBindingInput): Promise<MetricServiceBinding> {
+  async updateServiceBinding(productId: string, serviceId: string, id: string, input: UpdateServiceBindingInput): Promise<MetricServiceBinding> {
     const body: Record<string, unknown> = {};
     if (input.endpointId !== undefined) body.endpoint_id = input.endpointId;
-    if (input.tenant !== undefined) body.tenant = { account_id: input.tenant.accountId ?? '', project_id: input.tenant.projectId ?? '' };
     if (input.labelMatch !== undefined) body.label_match = input.labelMatch;
     if (input.basePromQL !== undefined) body.base_promql = input.basePromQL;
     if (input.status !== undefined) body.status = input.status;
-    const raw = await apiRequest<any>(`/metrics/service-bindings/${id}`, {
+	const raw = await apiRequest<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/bindings/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify(body),
     });
     return mapServiceBinding(raw);
   },
-  async probeServiceBinding(id: string): Promise<MetricServiceBinding> {
-    const raw = await apiRequest<any>(`/metrics/service-bindings/${id}/probe`, { method: 'POST' });
+  async probeServiceBinding(productId: string, serviceId: string, id: string): Promise<MetricServiceBinding> {
+	const raw = await apiRequest<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/bindings/${encodeURIComponent(id)}/probe`, { method: 'POST' });
     return mapServiceBinding(raw);
-  },
-  async searchGrafanaDashboards(grafanaBaseURL: string): Promise<GrafanaDashboardHit[]> {
-    const url = `${grafanaBaseURL.replace(/\/+$/, '')}/api/search?type=dash-db`;
-    const res = await fetch(url);
-    if (!res.ok) throw new Error(`Grafana API 请求失败: ${res.status}`);
-    const raw = await res.json() as any[];
-    return Array.isArray(raw) ? raw.map((d) => ({
-      uid: d.uid ?? '',
-      title: d.title ?? '',
-      uri: d.uri ?? '',
-      url: d.url ?? '',
-      type: d.type ?? '',
-      tags: Array.isArray(d.tags) ? d.tags : [],
-      folderTitle: d.folderTitle ?? '',
-      folderUid: d.folderUid ?? '',
-    })) : [];
   },
   async testEndpoint(id: string): Promise<EndpointTestResult> {
     const raw = await apiRequest<any>(`/observability/endpoints/${id}/test`, { method: 'POST' });

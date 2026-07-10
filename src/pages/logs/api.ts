@@ -1,5 +1,20 @@
 import { apiRequest } from '../../services/api';
 
+export const defaultLogsCollectorNamespace = 'novaapm-system';
+const legacyLogsCollectorNamespace = 'novaobs-system';
+
+export function normalizeLogsCollectorNamespace(namespace?: string | null): string {
+  const value = String(namespace ?? '').trim();
+  if (!value || value === legacyLogsCollectorNamespace) return defaultLogsCollectorNamespace;
+  return value;
+}
+
+function normalizeExistingLogsCollectorNamespace(namespace?: string | null): string {
+  const value = String(namespace ?? '').trim();
+  if (value === legacyLogsCollectorNamespace) return defaultLogsCollectorNamespace;
+  return value;
+}
+
 export type LogSourceType = 'k8s_stdout' | 'vm_file';
 export type LogAccessSource = 'k8s' | 'vm';
 export type LogSinkType = 'vl' | 'es' | 'kafka' | 'otel';
@@ -26,7 +41,6 @@ export interface LogEndpoint {
   vmuiURL: string;
   accountId: string;
   projectId: string;
-  secretRef: string;
   scopeType: string;
   clusterId: string;
   status: string;
@@ -34,7 +48,7 @@ export interface LogEndpoint {
   updatedAt: string;
 }
 
-export function buildVictoriaLogsVMUIURL(endpoint?: Pick<LogEndpoint, 'vmuiURL' | 'sinkType' | 'accountId' | 'projectId'> | null): string {
+export function buildVictoriaLogsVMUIURL(endpoint?: Pick<LogEndpoint, 'vmuiURL' | 'sinkType' | 'accountId' | 'projectId'> | null, baseFilter = ''): string {
   const rawURL = endpoint?.vmuiURL?.trim() ?? '';
   if (!rawURL || endpoint?.sinkType !== 'vl' || !endpoint.accountId || !endpoint.projectId) return rawURL;
   try {
@@ -44,6 +58,11 @@ export function buildVictoriaLogsVMUIURL(endpoint?: Pick<LogEndpoint, 'vmuiURL' 
     const separator = hashValue.indexOf('?');
     const hashPath = separator >= 0 ? hashValue.slice(0, separator) || '/' : hashValue || '/';
     const params = new URLSearchParams(separator >= 0 ? hashValue.slice(separator + 1) : '');
+	const normalizedFilter = baseFilter.trim();
+	if (normalizedFilter) {
+	  const existingQuery = params.get('query')?.trim() ?? '';
+	  params.set('query', existingQuery ? `${normalizedFilter} AND (${existingQuery})` : normalizedFilter);
+	}
     params.set('accountID', endpoint.accountId);
     params.set('projectID', endpoint.projectId);
     parsed.hash = `${hashPath}?${params.toString()}`;
@@ -120,6 +139,8 @@ export interface LogTarget {
   sourceKind: 'external_vlogs';
   logRouteId: string;
   baseFilter: string;
+  accountId: string;
+  projectId: string;
   status: 'pending_verification' | 'verified' | 'disabled' | string;
   lastProbeStatus: string;
   lastProbeMessage: string;
@@ -142,11 +163,16 @@ export interface LogTargetInput {
   serviceId: string;
   endpointId: string;
   baseFilter: string;
+  accountId?: string;
+  projectId?: string;
   status?: string;
 }
 
 export interface LogsServiceSummary {
   id: string;
+	productId: string;
+	accountId: string;
+	projectId: string;
   name: string;
   displayName: string;
   environment: string;
@@ -236,6 +262,7 @@ export interface LogRouteInput {
 }
 
 export interface SyncK8sServicesInput {
+	productId: string;
   clusterId: string;
   namespace: string;
   environment?: string;
@@ -260,6 +287,10 @@ export interface LogRoutePreview {
   endpoint: LogEndpoint;
   agentYAML: string;
   collectorYAML: string;
+  collectorConfigFiles: Record<string, string>;
+  serviceConfigPath: string;
+  serviceConfigMapName: string;
+  serviceConfigYAML: string;
   collectorConfigHash: string;
   deploymentManifestHash: string;
   mode: string;
@@ -274,6 +305,10 @@ export interface LogRouteCollectorConfig {
   deploymentManifestHash: string;
   sourceType: LogSourceType;
   collectorYAML: string;
+  collectorConfigFiles: Record<string, string>;
+  serviceConfigPath: string;
+  serviceConfigMapName: string;
+  serviceConfigYAML: string;
 }
 
 export interface LogRoutePublishResult {
@@ -334,12 +369,36 @@ export interface ObservabilityRuntime {
   resources: K8sPublishResource[];
 }
 
+export interface LogsCollectorRuntimeResourceStatus {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  kind: string;
+  name: string;
+  required: boolean;
+  exists: boolean;
+}
+
+export interface LogsCollectorRuntimeStatus {
+  clusterId: string;
+  namespace: string;
+  ready: boolean;
+  status: string;
+  message: string;
+  runtime?: ObservabilityRuntime;
+  resources: LogsCollectorRuntimeResourceStatus[];
+  missingResources: LogsCollectorRuntimeResourceStatus[];
+}
+
 export interface LogsCollectorRuntimePublishResult extends LogRoutePublishResult {
   runtime?: ObservabilityRuntime;
+  taskType: string;
   manifestYAML: string;
   collectorYAML: string;
+  collectorConfigFiles: Record<string, string>;
   collectorConfigHash: string;
   manifestHash: string;
+  changedConfigMaps: string[];
   resources: K8sPublishResource[];
   diffs: K8sPublishDiff[];
 }
@@ -393,7 +452,6 @@ function mapEndpoint(raw: any): LogEndpoint {
     vmuiURL: raw.vmui_url ?? raw.vmuiURL ?? '',
     accountId: String(raw.account_id ?? raw.accountId ?? ''),
     projectId: String(raw.project_id ?? raw.projectId ?? ''),
-    secretRef: raw.secret_ref ?? raw.secretRef ?? '',
     scopeType: raw.scope_type ?? raw.scopeType ?? '',
     clusterId: raw.cluster_id ?? raw.clusterId ?? '',
     status: raw.status ?? '',
@@ -403,12 +461,15 @@ function mapEndpoint(raw: any): LogEndpoint {
 }
 
 function mapSource(raw: any): LogSource {
+  const sourceType = raw.source_type ?? raw.sourceType ?? 'vm_file';
   return {
     id: String(raw.id ?? ''),
-    sourceType: raw.source_type ?? raw.sourceType ?? 'vm_file',
+    sourceType,
     clusterId: raw.cluster_id ?? raw.clusterId ?? '',
     namespace: raw.namespace ?? '',
-    agentNamespace: raw.agent_namespace ?? raw.agentNamespace ?? '',
+    agentNamespace: sourceType === 'k8s_stdout'
+      ? normalizeLogsCollectorNamespace(raw.agent_namespace ?? raw.agentNamespace)
+      : normalizeExistingLogsCollectorNamespace(raw.agent_namespace ?? raw.agentNamespace),
     workloadKind: raw.workload_kind ?? raw.workloadKind ?? '',
     workloadName: raw.workload_name ?? raw.workloadName ?? '',
     hostGroup: raw.host_group ?? raw.hostGroup ?? '',
@@ -469,6 +530,8 @@ function mapTarget(raw: any): LogTarget {
     sourceKind: raw.source_kind ?? raw.sourceKind ?? 'external_vlogs',
     logRouteId: raw.log_route_id ?? raw.logRouteId ?? '',
     baseFilter: raw.base_filter ?? raw.baseFilter ?? '',
+    accountId: String(raw.account_id ?? raw.accountId ?? ''),
+    projectId: String(raw.project_id ?? raw.projectId ?? ''),
     status: raw.status ?? '',
     lastProbeStatus: raw.last_probe_status ?? raw.lastProbeStatus ?? '',
     lastProbeMessage: raw.last_probe_message ?? raw.lastProbeMessage ?? '',
@@ -484,6 +547,9 @@ function mapTarget(raw: any): LogTarget {
 function mapServiceSummary(raw: any): LogsServiceSummary {
   return {
     id: String(raw.id ?? ''),
+	productId: String(raw.product_id ?? raw.productId ?? ''),
+	accountId: String(raw.account_id ?? raw.accountId ?? ''),
+	projectId: String(raw.project_id ?? raw.projectId ?? ''),
     name: raw.name ?? '',
     displayName: raw.display_name ?? raw.displayName ?? '',
     environment: raw.environment ?? '',
@@ -580,6 +646,9 @@ function mapSyncedService(raw: any): SyncedK8sService {
   return {
     service: {
       id: String(service.id ?? ''),
+	  productId: String(service.product_id ?? service.productId ?? ''),
+	  accountId: String(service.account_id ?? service.accountId ?? ''),
+	  projectId: String(service.project_id ?? service.projectId ?? ''),
       name: service.name ?? '',
       displayName: service.display_name ?? service.displayName ?? '',
       environment: service.environment ?? '',
@@ -597,12 +666,21 @@ function mapSyncedService(raw: any): SyncedK8sService {
   };
 }
 
+function mapConfigFiles(raw: any): Record<string, string> {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.fromEntries(Object.entries(raw).map(([path, content]) => [String(path), String(content ?? '')]));
+}
+
 function mapPreview(raw: any): LogRoutePreview {
   return {
     source: mapSource(raw.source ?? {}),
     endpoint: mapEndpoint(raw.endpoint ?? {}),
     agentYAML: raw.agent_yaml ?? raw.agentYAML ?? '',
     collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
+    collectorConfigFiles: mapConfigFiles(raw.collector_config_files),
+    serviceConfigPath: raw.service_config_path ?? '',
+    serviceConfigMapName: raw.service_config_map_name ?? '',
+    serviceConfigYAML: raw.service_config_yaml ?? '',
     collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
     mode: raw.mode ?? '',
@@ -619,6 +697,10 @@ function mapRouteCollectorConfig(raw: any): LogRouteCollectorConfig {
     deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
     sourceType: raw.source_type ?? raw.sourceType ?? 'k8s_stdout',
     collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
+    collectorConfigFiles: mapConfigFiles(raw.collector_config_files),
+    serviceConfigPath: raw.service_config_path ?? '',
+    serviceConfigMapName: raw.service_config_map_name ?? '',
+    serviceConfigYAML: raw.service_config_yaml ?? '',
   };
 }
 
@@ -645,12 +727,21 @@ function mapRoutePublish(raw: any): LogRoutePublishResult {
 
 function mapCollectorRuntimePublish(raw: any): LogsCollectorRuntimePublishResult {
   return {
-    ...mapRoutePublish(raw),
+    status: raw.status ?? '',
+    message: raw.message ?? '',
+    requiresConfirmation: Boolean(raw.requires_confirmation),
+    previewId: raw.preview_id ?? '',
+    confirmationToken: raw.confirmation_token ?? '',
+    auditId: raw.audit_id ?? '',
+    warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     runtime: raw.runtime ? mapObservabilityRuntime(raw.runtime) : undefined,
-    manifestYAML: raw.manifest_yaml ?? raw.manifestYAML ?? '',
-    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
-    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
-    manifestHash: raw.manifest_hash ?? raw.manifestHash ?? '',
+    taskType: raw.task_type ?? '',
+    manifestYAML: raw.manifest_yaml ?? '',
+    collectorYAML: raw.collector_yaml ?? '',
+    collectorConfigFiles: mapConfigFiles(raw.collector_config_files),
+    collectorConfigHash: raw.collector_config_hash ?? '',
+    manifestHash: raw.manifest_hash ?? '',
+    changedConfigMaps: Array.isArray(raw.changed_config_maps) ? raw.changed_config_maps.map(String) : [],
     resources: Array.isArray(raw.resources) ? raw.resources.map(mapPublishResource) : [],
     diffs: Array.isArray(raw.diffs) ? raw.diffs.map(mapPublishDiff) : [],
   };
@@ -660,19 +751,46 @@ function mapObservabilityRuntime(raw: any): ObservabilityRuntime {
   return {
     id: String(raw.id ?? ''),
     kind: raw.kind ?? '',
-    signalType: raw.signal_type ?? raw.signalType ?? '',
-    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+    signalType: raw.signal_type ?? '',
+    clusterId: raw.cluster_id ?? '',
     namespace: raw.namespace ?? '',
-    endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
-    collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
-    artifactHash: raw.artifact_hash ?? raw.artifactHash ?? '',
-    manifestHash: raw.manifest_hash ?? raw.manifestHash ?? '',
+    endpointId: raw.endpoint_id ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? '',
+    artifactHash: raw.artifact_hash ?? '',
+    manifestHash: raw.manifest_hash ?? '',
     status: raw.status ?? '',
-    lastPreviewId: raw.last_preview_id ?? raw.lastPreviewId ?? '',
-    lastAuditId: raw.last_audit_id ?? raw.lastAuditId ?? '',
-    lastError: raw.last_error ?? raw.lastError ?? '',
-    lastPublishedAt: raw.last_published_at ?? raw.lastPublishedAt ?? '',
+    lastPreviewId: raw.last_preview_id ?? '',
+    lastAuditId: raw.last_audit_id ?? '',
+    lastError: raw.last_error ?? '',
+    lastPublishedAt: raw.last_published_at ?? '',
     resources: Array.isArray(raw.resources) ? raw.resources.map(mapPublishResource) : [],
+  };
+}
+
+function mapCollectorRuntimeResourceStatus(raw: any): LogsCollectorRuntimeResourceStatus {
+  return {
+    clusterId: raw.cluster_id ?? '',
+    namespace: normalizeExistingLogsCollectorNamespace(raw.namespace),
+    apiVersion: raw.api_version ?? '',
+    kind: raw.kind ?? '',
+    name: raw.name ?? '',
+    required: Boolean(raw.required),
+    exists: Boolean(raw.exists),
+  };
+}
+
+function mapCollectorRuntimeStatus(raw: any): LogsCollectorRuntimeStatus {
+  return {
+    clusterId: raw.cluster_id ?? '',
+    namespace: normalizeLogsCollectorNamespace(raw.namespace),
+    ready: Boolean(raw.ready),
+    status: raw.status ?? '',
+    message: raw.message ?? '',
+    runtime: raw.runtime ? mapObservabilityRuntime(raw.runtime) : undefined,
+    resources: Array.isArray(raw.resources) ? raw.resources.map(mapCollectorRuntimeResourceStatus) : [],
+    missingResources: Array.isArray(raw.missing_resources)
+      ? raw.missing_resources.map(mapCollectorRuntimeResourceStatus)
+      : [],
   };
 }
 
@@ -712,7 +830,7 @@ function toRoutePayload(input: LogRouteInput) {
     k8s: isVM ? {} : {
       cluster_id: input.k8s?.clusterId,
       namespace: input.k8s?.namespace,
-      agent_namespace: input.k8s?.agentNamespace,
+      agent_namespace: normalizeLogsCollectorNamespace(input.k8s?.agentNamespace),
       workload_kind: input.k8s?.workloadKind,
       workload_name: input.k8s?.workloadName,
       workload_selector: input.k8s?.workloadSelector ?? {},
@@ -738,6 +856,8 @@ function toTargetPayload(input: Partial<LogTargetInput>) {
     endpoint_id: input.endpointId,
     source_kind: 'external_vlogs',
     base_filter: input.baseFilter,
+    account_id: input.accountId,
+    project_id: input.projectId,
     status: input.status,
   };
 }
@@ -767,8 +887,8 @@ function mapPublishDiff(raw: any): K8sPublishDiff {
 }
 
 export const logsApi = {
-  async getWorkspace(): Promise<LogOnboardingWorkspace> {
-    return mapWorkspace(await apiRequest<any>('/logs/onboarding/workspace'));
+  async getWorkspace(productId: string, serviceId: string): Promise<LogOnboardingWorkspace> {
+	return mapWorkspace(await apiRequest<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/workspace`));
   },
   async listK8sWorkloads(clusterId: string, namespace: string): Promise<LogsWorkload[]> {
     const params = new URLSearchParams({ cluster_id: clusterId, namespace });
@@ -776,7 +896,7 @@ export const logsApi = {
     return raw.map(mapWorkload);
   },
   async syncK8sServices(input: SyncK8sServicesInput): Promise<SyncK8sServicesResult> {
-    const raw = await apiRequest<any>('/logs/onboarding/k8s/sync-services', {
+	const raw = await apiRequest<any>(`/products/${encodeURIComponent(input.productId)}/logs/onboarding/k8s/sync-services`, {
       method: 'POST',
       body: JSON.stringify({
         cluster_id: input.clusterId,
@@ -800,9 +920,6 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
-        account_id: input.accountId,
-        project_id: input.projectId,
-        secret_ref: input.secretRef,
         scope_type: input.scopeType,
         cluster_id: input.clusterId,
         status: input.status,
@@ -821,9 +938,6 @@ export const logsApi = {
         write_url: input.writeURL,
         query_url: input.queryURL,
         vmui_url: input.vmuiURL,
-        account_id: input.accountId,
-        project_id: input.projectId,
-        secret_ref: input.secretRef,
         scope_type: input.scopeType,
         cluster_id: input.clusterId,
         status: input.status,
@@ -869,20 +983,23 @@ export const logsApi = {
       }),
     }));
   },
-  async publishLogsCollectorRuntime(input: { clusterId: string; namespace?: string; previewId?: string; confirmationToken?: string }): Promise<LogsCollectorRuntimePublishResult> {
+  async publishLogsCollectorRuntime(input: { clusterId: string; namespace?: string; taskType: 'base' | 'incremental'; routeIds?: string[]; previewId?: string; confirmationToken?: string }): Promise<LogsCollectorRuntimePublishResult> {
     return mapCollectorRuntimePublish(await apiRequest<any>('/observability/runtimes/logs-collector/publish', {
       method: 'POST',
       body: JSON.stringify({
         cluster_id: input.clusterId,
-        namespace: input.namespace,
+        namespace: normalizeLogsCollectorNamespace(input.namespace),
+        task_type: input.taskType,
+        route_ids: input.routeIds?.length ? input.routeIds : undefined,
         preview_id: input.previewId,
         confirmation_token: input.confirmationToken,
       }),
     }));
   },
-  async listObservabilityRuntimes(): Promise<ObservabilityRuntime[]> {
-    const raw = await apiRequest<any[] | null>('/observability/runtimes');
-    return Array.isArray(raw) ? raw.map(mapObservabilityRuntime) : [];
+  async getLogsCollectorRuntimeStatus(input: { clusterId: string; namespace?: string }): Promise<LogsCollectorRuntimeStatus> {
+    const params = new URLSearchParams({ cluster_id: input.clusterId });
+    params.set('namespace', normalizeLogsCollectorNamespace(input.namespace));
+    return mapCollectorRuntimeStatus(await apiRequest<any>(`/observability/runtimes/logs-collector/status?${params.toString()}`));
   },
   async previewRoute(input: LogRouteInput): Promise<LogRoutePreview> {
     return mapPreview(await apiRequest<any>('/logs/routes/preview', {

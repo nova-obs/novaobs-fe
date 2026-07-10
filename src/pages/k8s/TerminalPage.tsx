@@ -125,7 +125,7 @@ export function K8sTerminalPage() {
         ) : null}
         {clusterError || namespaceError || resourceError ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError || resourceError)}
           </div>
         ) : null}
 
@@ -247,7 +247,7 @@ export function K8sTerminalPage() {
             ) : null}
             {result?.outputTruncated ? (
               <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-warning">
-                output_truncated：输出已按 NovaObs 终端策略截断。
+                output_truncated：输出已按 NovaAPM 终端策略截断。
               </div>
             ) : null}
             <pre className={`mt-4 min-h-52 overflow-auto rounded-lg p-4 text-xs leading-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${statusTone === 'danger' ? 'bg-[#2b1117] text-[#fecdd3]' : 'bg-[#111827] text-[#d1fae5]'}`}>

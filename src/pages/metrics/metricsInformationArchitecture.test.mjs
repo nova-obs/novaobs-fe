@@ -13,11 +13,11 @@ const dashboards = readFileSync(new URL('./MetricsDashboardsPage.tsx', import.me
 const alerts = readFileSync(new URL('./MetricsAlertsPage.tsx', import.meta.url), 'utf8');
 const endpoints = readFileSync(new URL('./MetricsEndpointsPage.tsx', import.meta.url), 'utf8');
 
-test('Metrics 路由使用 app/routes.tsx 单一路由入口并保留 monitoring 兼容路径', () => {
+test('Metrics 路由使用 app/routes.tsx 单一路由入口且不保留 monitoring 兼容路径', () => {
   assert.equal(existsSync(new URL('../../routes.tsx', import.meta.url)), false);
-  assert.match(routes, /path: '\/metrics'.*element: <MetricsLayout \/>/s);
-  assert.match(routes, /index: true, title: '指标查询', element: <Navigate to="\/metrics\/explore" replace \/>/);
-  assert.match(routes, /path: '\/monitoring'.*Navigate to="\/metrics"/s);
+	assert.match(routes, /path: '\/products\/:productId\/services\/:serviceId\/metrics'.*element: <MetricsLayout \/>/s);
+	assert.match(routes, /index: true, title: '指标查询', element: <ServiceMetricsIndexRedirect \/>/);
+  assert.doesNotMatch(routes, /path: '\/monitoring'/);
   assert.doesNotMatch(routes, /<MonitoringPage \/>/);
 });
 
@@ -26,23 +26,27 @@ test('Metrics rail 顺序稳定并使用 ModuleWorkbench 非重挂载工作台',
   assert.match(layout, /ModuleWorkbench/);
   assert.match(layout, /module="metrics"/);
   assert.doesNotMatch(layout, /remountOnPathChange/);
+  assert.doesNotMatch(layout, /label: '指标告警'.*end: true/);
   assert.deepEqual(
     Array.from(layout.matchAll(/label: '([^']+)'/g)).map((match) => match[1]),
     ['指标查询', '指标告警', 'Dashboard', '采集接入', '监控总览', '接入端点'],
   );
 });
 
-test('Metrics Explore 以服务作用域为主任务且不嵌入未实现 iframe', () => {
+test('Metrics Explore 以路径中的产品与服务作为固定查询作用域', () => {
   assert.match(explore, /useQuery/);
   assert.match(explore, /metricsApi\.getWorkspace/);
-  assert.match(explore, /服务选择/);
+	assert.match(explore, /useParams/);
+	assert.match(explore, /productId/);
+	assert.match(explore, /serviceId/);
   assert.match(explore, /当前绑定/);
   assert.match(explore, /labelMatch/);
   assert.match(explore, /basePromQL/);
   assert.match(explore, /activeTenant/);
   assert.match(explore, /尚未绑定指标端点/);
   assert.match(explore, /创建指标告警/);
-  assert.match(explore, /\/metrics\/alerts\/new/);
+	assert.match(explore, /const base = `\/products\/\$\{encodeURIComponent\(productId\)\}\/services\/\$\{encodeURIComponent\(serviceId\)\}\/metrics`/);
+	assert.match(explore, /navigate\(`\$\{base\}\/alerts\/new`/);
   assert.match(explore, /vmuiURL/);
   assert.match(explore, /vmui 查询面板/);
   assert.doesNotMatch(explore, /mock/i);
@@ -57,7 +61,7 @@ test('Metrics API 只保留真实资源契约，不在前端伪造数据', () =>
   assert.match(api, /binding\.tenant/);
   assert.match(api, /base_promql/);
   assert.match(api, /urls\.query_url/);
-  assert.match(api, /apiRequest<any>\(`\/metrics\/workspace/);
+	assert.match(api, /apiRequest<any>\(`\/products\/\$\{encodeURIComponent\(productId\)\}\/services\/\$\{encodeURIComponent\(serviceId\)\}\/metrics\/workspace/);
   assert.doesNotMatch(api, /mock/i);
 });
 
@@ -72,10 +76,11 @@ test('Metrics 待接入页面使用控制台面板、表格或真实空态', () 
   assert.match(overview, /refetchInterval/);
   assert.match(collection, /metricsApi\.listServiceBindings/);
   assert.match(collection, /metricsApi\.createServiceBinding/);
-  assert.match(dashboards, /searchGrafanaDashboards/);
+  assert.doesNotMatch(dashboards, /searchGrafanaDashboards/);
+  assert.doesNotMatch(api, /\bfetch\(/);
   assert.match(dashboards, /grafanaEndpoint/);
   assert.match(alerts, /api\.getMetricsAlertRules/);
   assert.match(alerts, /暂无指标告警规则/);
-  assert.match(endpoints, /metricsApi\.listEndpoints/);
+	assert.match(endpoints, /metricsApi\.getWorkspace/);
   assert.match(endpoints, /metricsApi\.testEndpoint/);
 });
