@@ -12,31 +12,24 @@ const workbenchSource = readFileSync(new URL('./ServiceScopedModuleWorkbench.tsx
 const selectorSource = readFileSync(new URL('./ServiceContextSelector.tsx', import.meta.url), 'utf8');
 const logsExploreSource = readFileSync(new URL('../../pages/logs/LogsExplorePage.tsx', import.meta.url), 'utf8');
 
-test('服务作用域路径保留产品、服务和当前模块入口', () => {
+test('日志服务作用域路径保留产品、服务和当前入口', () => {
   assert.equal(
     buildServiceModulePath('logs', 'product/a', 'service b', 'agents'),
     '/products/product%2Fa/services/service%20b/logs/agents',
-  );
-  assert.equal(
-    buildServiceModulePath('metrics', 'product-1', 'service-1', 'explore'),
-    '/products/product-1/services/service-1/metrics/explore',
   );
 });
 
 test('平台级端点不进入服务嵌套路径', () => {
   assert.equal(buildServiceModulePath('logs', 'product-1', 'service-1', 'endpoints'), '/logs/endpoints');
-  assert.equal(buildServiceModulePath('metrics', 'product-1', 'service-1', 'endpoints'), '/metrics/endpoints');
 });
 
 test('从入口和嵌套 URL 中解析当前模块功能', () => {
   assert.equal(serviceModuleEntryFromPath('/logs/alerts', 'logs'), 'alerts');
-  assert.equal(serviceModuleEntryFromPath('/products/p/services/s/metrics/routes/route-1/edit', 'metrics'), 'routes');
   assert.equal(serviceModuleEntryFromPath('/products/p/services/s/logs', 'logs'), 'explore');
 });
 
-test('Logs 与 Metrics 分别保存最近服务偏好且页面不再渲染服务表格', () => {
+test('Logs 保存最近服务偏好且页面不再渲染服务表格', () => {
   assert.equal(serviceScopePreferenceKey('logs'), 'novaapm.service-scope.logs');
-  assert.equal(serviceScopePreferenceKey('metrics'), 'novaapm.service-scope.metrics');
   assert.match(workbenchSource, /api\.getProducts/);
   assert.match(workbenchSource, /api\.getServices/);
   assert.match(selectorSource, /LogsEntitySelector<Service>/);

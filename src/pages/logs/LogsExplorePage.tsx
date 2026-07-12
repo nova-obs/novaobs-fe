@@ -39,7 +39,7 @@ function serviceLabel(service?: LogsServiceSummary | null, fallback = '') {
 function routeScope(route?: LogRouteView | null) {
   const source = route?.source;
   if (!source) return '-';
-  if (source.sourceType === 'vm_file') return `${source.hostGroup || 'VM'} · ${source.pathPattern || '-'}`;
+  if (source.sourceType === 'vm_file') return `VM · ${source.pathPattern || '-'}`;
   return `${source.clusterId}/${source.namespace}/${source.workloadKind || 'Workload'}/${source.workloadName || '-'}`;
 }
 

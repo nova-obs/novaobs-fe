@@ -18,7 +18,7 @@ export interface Service {
   name: string;
   displayName: string;
   description: string;
-  environment: string;
+  environmentId: string;
   cluster: string;
   namespace: string;
   ownerTeam: string;
@@ -50,7 +50,7 @@ export interface ServiceTarget {
   id: string;
   serviceId: string;
   targetType: ServiceTargetType;
-  environment: string;
+  environmentId: string;
   displayName: string;
   identityAttributes: Record<string, string>;
   matchRules: Record<string, string>;
@@ -63,7 +63,6 @@ export interface ServiceTarget {
 
 export interface CreateServiceTargetInput {
   targetType: ServiceTargetType;
-  environment?: string;
   displayName?: string;
   identityAttributes: Record<string, string>;
   matchRules?: Record<string, string>;
@@ -105,7 +104,7 @@ export interface ServiceObservabilityGraph {
 export interface CreateServiceInput {
   productId: string;
   name: string;
-  environment: string;
+  environmentId: string;
   displayName?: string;
   cluster?: string;
   namespace?: string;
@@ -124,7 +123,7 @@ export interface UpdateServiceInput {
   name?: string;
   displayName?: string;
   description?: string;
-  environment?: string;
+  environmentId?: string;
   cluster?: string;
   namespace?: string;
   ownerTeam?: string;
@@ -242,7 +241,7 @@ export interface ServiceSummary {
   name: string;
   displayName: string;
   identityType: ServiceIdentityType;
-  environment: string;
+  environmentId: string;
   cluster: string;
   namespace: string;
   ownerTeam: string;
@@ -256,7 +255,7 @@ export interface IdentitySummary {
   identityType: string;
   enabled: boolean;
   tenantId: string;
-  environment: string;
+  environmentId: string;
   k8sNamespace: string;
   k8sWorkload: string;
   expiresAt: string;
@@ -269,7 +268,7 @@ export interface CollectorTarget {
   groupId: string;
   name: string;
   mode: string;
-  environment: string;
+  environmentId: string;
   cluster: string;
   namespace: string;
   status: string;
@@ -319,7 +318,7 @@ export interface CollectorGroup {
   displayName: string;
   description: string;
   mode: CollectorGroupMode;
-  environment: string;
+  environmentId: string;
   cluster: string;
   namespace: string;
   tenantId: string;
@@ -500,14 +499,15 @@ export interface AlertRuleSpec {
   scope: {
     serviceId: string;
     serviceName: string;
+		environmentId?: string;
+		environmentName?: string;
+		scopeLabels?: Record<string, string>;
     logRouteId: string;
     logTargetId?: string;
-    metricsBindingId?: string;
     endpointId: string;
     accountId: string;
     projectId: string;
     baseFilter?: string;
-    basePromQL?: string;
   };
   query: { mode: 'contains' | 'exact' | 'logsql' | 'promql' | 'metricsql'; expression: string };
   trigger: {

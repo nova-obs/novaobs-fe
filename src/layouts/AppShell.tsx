@@ -552,7 +552,7 @@ function MegaMenuNavigationItem({
       ].join(' ')}
     >
       <Link
-        className={['group flex items-center gap-3', hasChildren ? 'min-h-12' : 'min-h-16'].join(' ')}
+        className="group flex min-h-10 items-center gap-3"
         to={item.path}
       >
         <span className={['flex h-8 w-8 shrink-0 items-center justify-center rounded-md', selected ? 'bg-primary text-white' : 'bg-surface text-muted group-hover:bg-primary-soft group-hover:text-primary'].join(' ')}>
@@ -560,7 +560,7 @@ function MegaMenuNavigationItem({
         </span>
         <span className="min-w-0 flex-1">
           <span className={['block text-sm font-semibold', selected ? 'text-primary' : 'text-on-surface'].join(' ')}>{item.label}</span>
-          <span className="mt-0.5 block text-[11px] leading-4 text-muted">{item.description}</span>
+          <span className="mt-0.5 block truncate whitespace-nowrap text-[11px] leading-4 text-muted" title={item.description}>{item.description}</span>
         </span>
         <ArrowRight className={['h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5', selected ? 'text-primary' : 'text-muted/60'].join(' ')} />
       </Link>
@@ -689,7 +689,7 @@ function getWorkspaceBreadcrumbSegments(
 
 function getWorkspaceModuleLabel(pathname: string, activeItem: NavigationItem | undefined) {
   if (isLogsWorkspacePath(pathname, activeItem)) return 'Logs';
-  if (isMetricsWorkspacePath(pathname, activeItem)) return '监控';
+	if (isMetricsPath(pathname, activeItem)) return '监控';
   return '';
 }
 
@@ -698,12 +698,11 @@ function isLogsWorkspacePath(pathname: string, activeItem: NavigationItem | unde
   return normalizedPath.startsWith('/logs')
     || normalizedPath.startsWith('/agents/')
     || normalizedPath === '/onboarding'
-    || normalizedPath === '/observability/endpoints'
     || activeItem?.id === 'logs'
     || Boolean(activeItem?.id.startsWith('logs-'));
 }
 
-function isMetricsWorkspacePath(pathname: string, activeItem: NavigationItem | undefined) {
+function isMetricsPath(pathname: string, activeItem: NavigationItem | undefined) {
   const normalizedPath = pathname.split('?')[0] || '/';
   return normalizedPath.startsWith('/metrics')
     || /^\/products\/[^/]+\/services\/[^/]+\/metrics(?:\/|$)/.test(normalizedPath)

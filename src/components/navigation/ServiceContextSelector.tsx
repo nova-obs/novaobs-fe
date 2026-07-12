@@ -28,7 +28,7 @@ export function ServiceContextSelector({ className = '', icon: Icon = Server }: 
         triggerIcon={Icon}
         triggerTitle={activeService?.displayName || activeService?.name || ''}
         triggerMeta={activeService
-          ? `${activeProductName} · ${activeService.environment || '未标注环境'}`
+          ? `${activeProductName} · ${activeService.environmentId || '未标注环境'}`
           : '按产品选择服务'}
         placeholder="选择当前服务"
         ariaLabel="选择当前服务"
@@ -43,7 +43,7 @@ export function ServiceContextSelector({ className = '', icon: Icon = Server }: 
               {productNames.get(service.productId) || '未归属产品'} / {service.displayName || service.name}
             </div>
             <div className="service-context-option mt-1 truncate font-mono text-[10px] text-muted/80">
-              {service.environment || '未标注环境'}
+              {service.environmentId || '未标注环境'}
             </div>
           </>
         )}

@@ -80,9 +80,11 @@ test('观测接入配置使用列表、详情抽屉和表单抽屉承载端点�
   assert.equal(source.includes('部署 Runtime'), false);
 });
 
-test('观测接入配置列表不展示冗余标题描述，只保留右侧工具栏', () => {
+test('观测接入配置列表不展示冗余标题描述，并按领域提供精简工具栏', () => {
   assert.equal(source.includes('title="接入端点"'), false);
   assert.equal(source.includes('日志写入地址、作用域和查询能力'), false);
   assert.match(source, /<DataPanel\s+action=\{\(/);
-  assert.match(source, /搜索端点、URL、集群或 Topic[\s\S]*刷新[\s\S]*新增端点/);
+  assert.equal(source.includes('搜索 Logs 端点、URL、集群或 Topic'), true);
+  assert.equal(source.includes('搜索指标端点、URL 或集群'), true);
+  assert.match(source, /刷新[\s\S]*新增指标端点[\s\S]*新增 Logs 端点/);
 });

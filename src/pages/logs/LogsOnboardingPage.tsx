@@ -5,10 +5,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
-import { defaultLogsCollectorNamespace, logSinkLabel, logsApi, normalizeLogsCollectorNamespace, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogRouteInput, type LogRoutePreview, type LogRoutePublishResult, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload } from './api';
+import { defaultLogsCollectorNamespace, logSinkLabel, logsApi, normalizeLogsCollectorNamespace, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload, type VMAgentEndpoint, type VMInstallation } from './api';
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsErrorLine, LogsTaskPageHeader } from './LogsPrimitives';
+import { platformApi } from '../platform/api';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
   { value: 'k8s', label: 'K8s' },
@@ -50,7 +51,7 @@ export function renderK8sRouteFragmentDraft(input: {
   workloadName: string;
 	serviceId: string;
   serviceName: string;
-  environment: string;
+  environmentId: string;
   endpointWriteURL: string;
   accountId: string;
   projectId: string;
@@ -114,7 +115,7 @@ processors:
         value: "${input.serviceId}"
         action: upsert
       - key: deployment.environment
-        value: "${input.environment || 'prod'}"
+        value: "${input.environmentId}"
         action: upsert
 ${transformProcessor}
 exporters:
@@ -134,10 +135,6 @@ function fragmentPlaceholderWarnings(fragment: string, expected: Array<{ label: 
   return expected
     .filter((item) => item.value && !text.includes(item.value))
     .map((item) => `${item.label} 已不同于表单生成值`);
-}
-
-function selectorToText(selector?: Record<string, string>) {
-  return Object.entries(selector ?? {}).map(([key, value]) => `${key}=${value}`).join(',');
 }
 
 function buildParserRules(mode: ParserMode, name: string, pattern: string): LogParseRule[] {
@@ -186,6 +183,7 @@ export function LogsOnboardingPage() {
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncClusterId, setSyncClusterId] = useState('');
   const [syncNamespace, setSyncNamespace] = useState('');
+	const [syncEnvironmentId, setSyncEnvironmentId] = useState('');
   const [endpointQuery, setEndpointQuery] = useState('');
   const [endpointId, setEndpointId] = useState('');
   const [clusterId, setClusterId] = useState('');
@@ -193,10 +191,9 @@ export function LogsOnboardingPage() {
   const [agentNamespace, setAgentNamespace] = useState(defaultLogsCollectorNamespace);
   const [workloadKey, setWorkloadKey] = useState('');
   const [workloadQuery, setWorkloadQuery] = useState('');
-  const [hostGroup, setHostGroup] = useState('');
-  const [hostSelectorText, setHostSelectorText] = useState('');
   const [vmPath, setVmPath] = useState('');
-  const syncEnvironment = 'prod';
+  const [vmEndpointDraft, setVMEndpointDraft] = useState('');
+  const [vmEndpointDraftError, setVMEndpointDraftError] = useState('');
   const [collectorConfigYaml, setCollectorConfigYaml] = useState('');
   const [collectorFragmentTouched, setCollectorFragmentTouched] = useState(false);
   const [parserMode, setParserMode] = useState<ParserMode>('none');
@@ -211,7 +208,6 @@ export function LogsOnboardingPage() {
   const [routeEditMode, setRouteEditMode] = useState(false);
   const [preview, setPreview] = useState<LogRoutePreview | null>(null);
   const [createdRoute, setCreatedRoute] = useState<LogRouteView | null>(null);
-  const [pendingRoutePublish, setPendingRoutePublish] = useState<LogRoutePublishResult | null>(null);
   const routeUpdateMode = Boolean(onboardingRouteId);
 
   const services = workspace?.services ?? [];
@@ -273,8 +269,7 @@ export function LogsOnboardingPage() {
     }
     setPreview(null);
     setCreatedRoute(null);
-    setPendingRoutePublish(null);
-  }, [sourceType, serviceId, endpointId, clusterId, namespace, workloadKey, hostGroup, hostSelectorText, vmPath, collectorConfigYaml, parserMode, parserRuleName, parserPattern]);
+  }, [sourceType, serviceId, endpointId, clusterId, namespace, workloadKey, vmPath, collectorConfigYaml, parserMode, parserRuleName, parserPattern]);
 
   useEffect(() => {
     if (!onboardingRouteId) {
@@ -287,6 +282,9 @@ export function LogsOnboardingPage() {
     routeParamAppliedRef.current = onboardingRouteId;
     loadRouteDraft(route, { edit: routeUpdateMode || isCollectingRoute(route) });
   }, [onboardingRouteId, routeUpdateMode, routes]);
+
+	const platformEnvironmentsQuery = useQuery({ queryKey: ['platform-environments'], queryFn: platformApi.listEnvironments });
+	const platformEnvironments = (platformEnvironmentsQuery.data ?? []).filter((item) => item.status === 'active');
 
   const namespacesQuery = useQuery({
     queryKey: ['logs-k8s-namespaces', clusterId],
@@ -325,6 +323,19 @@ export function LogsOnboardingPage() {
     queryKey: ['logs-collector-runtime-status', clusterId, runtimeAgentNamespace],
     queryFn: () => logsApi.getLogsCollectorRuntimeStatus({ clusterId, namespace: runtimeAgentNamespace }),
     enabled: sourceType !== 'vm_file' && Boolean(clusterId),
+    retry: false,
+  });
+  const vmRouteId = sourceType === 'vm_file' ? createdRoute?.route.id || selectedRouteId : '';
+  const vmInstallationQuery = useQuery({
+    queryKey: ['logs-vm-installation', vmRouteId],
+    queryFn: () => logsApi.getVMInstallation(vmRouteId),
+    enabled: Boolean(vmRouteId),
+    retry: false,
+  });
+  const vmAgentEndpointsQuery = useQuery({
+    queryKey: ['logs-vm-agent-endpoints', vmRouteId],
+    queryFn: () => logsApi.listVMAgentEndpoints(vmRouteId),
+    enabled: Boolean(vmRouteId),
     retry: false,
   });
 
@@ -419,13 +430,13 @@ export function LogsOnboardingPage() {
       workloadName,
 	  serviceId: selectedService?.id || serviceId,
 	  serviceName: selectedService?.name || workloadName,
-      environment: selectedService?.environment || syncEnvironment,
+		environmentId: selectedService?.environmentId || syncEnvironmentId,
       endpointWriteURL: effectiveEndpoint.writeURL,
       accountId: effectiveEndpoint.accountId,
       projectId: effectiveEndpoint.projectId,
       parseRules: buildParseRules(),
     });
-	}, [effectiveEndpoint?.accountId, effectiveEndpoint?.projectId, effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.environment, selectedService?.id, selectedService?.name, selectedWorkload?.name, serviceId, sourceType]);
+	}, [effectiveEndpoint?.accountId, effectiveEndpoint?.projectId, effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.environmentId, selectedService?.id, selectedService?.name, selectedWorkload?.name, serviceId, sourceType, syncEnvironmentId]);
   const fragmentWarnings = useMemo(() => {
     if (sourceType === 'vm_file') return [];
     return fragmentPlaceholderWarnings(collectorConfigYaml, [
@@ -470,7 +481,7 @@ export function LogsOnboardingPage() {
 	  productId,
       clusterId: syncClusterId,
       namespace: syncNamespace,
-      environment: syncEnvironment,
+	  environmentId: syncEnvironmentId,
       ownerTeam: '',
       workloadKind: 'Deployment',
     }),
@@ -525,25 +536,49 @@ export function LogsOnboardingPage() {
     },
   });
 
-  const publishMutation = useMutation({
-    mutationFn: (confirmation?: { previewId?: string; confirmationToken?: string }) => {
-      if (!createdRoute) throw new Error('请先保存路由');
-      if (createdRoute.route.sourceType === 'k8s_stdout') {
-        throw new Error('K8s 路由只保存业务采集片段，logs_collector 运行时请在 K8s / 观测接入统一预览和部署。');
-      }
-      return logsApi.publishRoute(createdRoute.route.id, confirmation);
+  const createVMEndpointsMutation = useMutation({
+    mutationFn: async (items: Array<{ name: string; address: string }>) => {
+      if (!vmRouteId) throw new Error('请先保存 VM 路由');
+      const settled = await Promise.allSettled(items.map((item) => logsApi.createVMAgentEndpoint(vmRouteId, item)));
+      return {
+        succeeded: settled.filter((result) => result.status === 'fulfilled').length,
+        failed: settled.flatMap((result, index) => result.status === 'rejected' ? [{ item: items[index], reason: result.reason }] : []),
+      };
     },
     onSuccess: async (result) => {
-      setPendingRoutePublish(result.requiresConfirmation ? result : null);
-      await queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
+      await queryClient.invalidateQueries({ queryKey: ['logs-vm-agent-endpoints', vmRouteId] });
+      if (result.failed.length === 0) {
+        setVMEndpointDraft('');
+        setVMEndpointDraftError('');
+        return;
+      }
+      setVMEndpointDraft(result.failed.map(({ item }) => item.name === item.address ? item.address : `${item.name},${item.address}`).join('\n'));
+      const firstReason = result.failed[0]?.reason;
+      const message = firstReason instanceof Error ? firstReason.message : '节点登记失败';
+      setVMEndpointDraftError(`已登记 ${result.succeeded} 个节点，${result.failed.length} 个失败：${message}`);
     },
+  });
+
+  const probeVMEndpointMutation = useMutation({
+    mutationFn: (endpointId: string) => {
+      if (!vmRouteId) throw new Error('请先保存 VM 路由');
+      return logsApi.probeVMAgentEndpoint(vmRouteId, endpointId);
+    },
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['logs-vm-agent-endpoints', vmRouteId] }),
+  });
+
+  const deleteVMEndpointMutation = useMutation({
+    mutationFn: (endpointId: string) => {
+      if (!vmRouteId) throw new Error('请先保存 VM 路由');
+      return logsApi.deleteVMAgentEndpoint(vmRouteId, endpointId);
+    },
+    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['logs-vm-agent-endpoints', vmRouteId] }),
   });
 
   function buildRouteInput(): LogRouteInput {
     if (sourceType !== 'vm_file' && selectedWorkload) {
       return buildK8sRouteInput(selectedWorkload, selectedService);
     }
-    const hostSelector = parseSelector(hostSelectorText);
     return {
       name: selectedService?.displayName || selectedService?.name,
       routeId: selectedRouteId,
@@ -562,11 +597,8 @@ export function LogsOnboardingPage() {
         collectorFragmentYAML: collectorConfigYaml,
       },
       vm: sourceType === 'vm_file' ? {
-        hostGroup,
-        hostSelector,
         pathPattern: vmPath,
         parseRules: buildParseRules(),
-        collectorYAML: collectorConfigYaml,
       } : {},
     };
   }
@@ -603,6 +635,16 @@ export function LogsOnboardingPage() {
     setParserDraftRuleName(parserRuleName);
     setParserDraftPattern(parserPattern);
     setParseDialogOpen(true);
+  }
+
+  function submitVMEndpointDraft() {
+    const parsed = parseVMEndpointDraft(vmEndpointDraft);
+    if (parsed.error) {
+      setVMEndpointDraftError(parsed.error);
+      return;
+    }
+    setVMEndpointDraftError('');
+    createVMEndpointsMutation.mutate(parsed.items);
   }
 
   function applyServiceRuntimeScope(service: LogsServiceSummary) {
@@ -652,9 +694,7 @@ export function LogsOnboardingPage() {
       return false;
     }
     if (sourceType === 'vm_file') {
-      return (source.hostGroup ?? '') === hostGroup
-        && selectorToText(source.hostSelector) === hostSelectorText.trim()
-        && (source.pathPattern ?? '') === vmPath;
+      return (source.pathPattern ?? '') === vmPath;
     }
     return source.clusterId === clusterId
       && source.namespace === namespace
@@ -689,12 +729,9 @@ export function LogsOnboardingPage() {
     setParserPattern(parserForm.pattern);
     setPreview(null);
     setCreatedRoute(route);
-    setPendingRoutePublish(null);
     setServiceQuery('');
     setEndpointQuery('');
     if (source.sourceType === 'vm_file') {
-      setHostGroup(source.hostGroup ?? '');
-      setHostSelectorText(selectorToText(source.hostSelector));
       setVmPath(source.pathPattern ?? '');
       return;
     }
@@ -718,7 +755,6 @@ export function LogsOnboardingPage() {
     { key: 'parser', label: '修正解析规则', done: parseValid },
     ...(sourceType === 'vm_file'
       ? [
-        { key: 'vm-scope', label: '填写主机组或主机标签', done: Boolean(hostGroup || hostSelectorText.trim()) },
         { key: 'vm-path', label: '填写日志路径', done: Boolean(vmPath) },
       ]
       : [
@@ -743,14 +779,14 @@ export function LogsOnboardingPage() {
   const selectedServiceLabel = selectedService?.displayName || selectedService?.name || '-';
   const selectedEndpointLabel = effectiveEndpoint ? `${effectiveEndpoint.name} · ${logSinkLabel(effectiveEndpoint.sinkType)}` : '未选择下游端点';
   const selectedScopeLabel = sourceType === 'vm_file'
-    ? `${hostGroup || 'VM'} · ${vmPath || '-'}`
+    ? vmPath || '未填写日志路径'
     : `${selectedCluster?.name || clusterId || restoredSource?.clusterId || '-'} / ${namespace || restoredSource?.namespace || '-'} / ${selectedWorkload ? `${selectedWorkload.kind}/${selectedWorkload.name}` : restoredSource?.workloadName ? `${restoredSource.workloadKind}/${restoredSource.workloadName}` : '-'}`;
   const k8sIncludePath = k8sLogIncludePath(
     namespace || restoredSource?.namespace || '',
     selectedWorkload?.name || restoredSource?.workloadName || '',
   );
   const runtimeTargetBound = sourceType === 'vm_file'
-    ? Boolean(serviceId && (hostGroup || hostSelectorText.trim()) && vmPath)
+    ? Boolean(serviceId && vmPath)
     : Boolean(serviceId && selectedWorkload);
   const runtimeTargetReady = runtimeTargetBound && observabilityAccessReady;
   useEffect(() => {
@@ -770,13 +806,15 @@ export function LogsOnboardingPage() {
       ? preview.publishBlockedReason || '当前配置被后端策略阻断'
       : '';
   const lockedDisabledReason = collectingConfigLocked ? '当前采集配置处于查看态，请点击更新配置进入编辑。' : '';
-  const serviceSyncDisabledReason = sourceMode !== 'k8s'
+	const serviceSyncDisabledReason = sourceMode !== 'k8s'
     ? 'VM 来源不需要同步 K8s 服务'
     : !syncClusterId
       ? '请选择同步集群'
-      : !syncNamespace
-        ? '请选择同步 Namespace'
-        : '';
+		: !syncNamespace
+		  ? '请选择同步 Namespace'
+		  : !syncEnvironmentId
+			? '请选择所属环境'
+		  : '';
   const actionHint = currentStep === 1
     ? targetDisabledReason
     : currentStep === 2
@@ -785,24 +823,26 @@ export function LogsOnboardingPage() {
         ? '当前服务已有运行路由，请从采集路由页查看配置或进入更新。'
         : previewMissing.length
           ? previewDisabledReason
-          : publishDisabledReason
-            ? `发布阻断：${publishDisabledReason}`
+          : sourceType === 'vm_file' && !createdRoute
+            ? '保存路由后获取安装材料'
+            : publishDisabledReason
+              ? `发布阻断：${publishDisabledReason}`
             : '';
   const activeTaskLabel = currentStep === 1
-    ? setupTask === 'service' ? '选择服务' : setupTask === 'target' ? '绑定运行目标' : '选择下游端点'
-    : currentStep === 2 ? '业务采集配置' : sourceType === 'vm_file' ? '发布预览' : '配置预览';
+    ? setupTask === 'service' ? '选择服务' : setupTask === 'target' ? sourceType === 'vm_file' ? '设置日志路径' : '绑定运行目标' : '选择下游端点'
+    : currentStep === 2 ? '业务采集配置' : '配置预览';
   const sourceModeLabel = sourceMode === 'k8s' ? 'K8s' : 'VM';
   const summaryImpactLabel = sourceType === 'vm_file'
-    ? hostGroup || hostSelectorText || 'VM target'
+    ? vmPath || 'VM 日志路径'
     : `${selectedCluster?.name || clusterId || '-'} / ${namespace || '-'} / ${selectedWorkload?.name || restoredSource?.workloadName || '-'}`;
-  const summaryAuditLabel = pendingRoutePublish?.auditId || createdRoute?.route.lastAuditId || selectedRoute?.route.lastAuditId || '-';
+  const summaryAuditLabel = createdRoute?.route.lastAuditId || selectedRoute?.route.lastAuditId || '-';
   const previewPrimaryConfigYAML = preview?.serviceConfigYAML || (sourceType === 'vm_file'
     ? preview?.collectorYAML ?? ''
     : preview?.source.collectorFragmentYAML || collectorConfigYaml);
   const previewPrimaryConfigMeta = preview?.serviceConfigPath
     ? [preview.serviceConfigPath, preview.serviceConfigMapName].filter(Boolean).join(' · ')
     : sourceType === 'vm_file'
-      ? '发布后写入当前 VM 路由文件'
+      ? '安装脚本写入每台 VM 的 Collector 配置'
       : '发布后写入当前服务独立 ConfigMap';
 
   const sourceModeSwitch = (
@@ -866,13 +906,13 @@ export function LogsOnboardingPage() {
           下一步：采集配置
         </button>
       ) : currentStep === 2 ? (
-        <button className="console-button console-button-primary h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || (sourceType === 'vm_file' ? '生成部署清单预览' : '生成路由配置预览')}>
+        <button className="console-button console-button-primary h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '生成路由配置预览'}>
           {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
           生成预览
         </button>
       ) : (
         <>
-          <button className="console-button h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || (sourceType === 'vm_file' ? '重新生成部署清单预览' : '重新生成路由配置预览')}>
+          <button className="console-button h-9 w-full" disabled={collectingConfigLocked || !canPreview || previewMutation.isPending} onClick={() => previewMutation.mutate()} title={lockedDisabledReason || previewDisabledReason || '重新生成路由配置预览'}>
             {previewMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             重新预览
           </button>
@@ -881,17 +921,9 @@ export function LogsOnboardingPage() {
             {selectedRouteId ? '更新路由' : '保存草稿'}
           </button>
           {sourceType === 'vm_file' ? (
-            <>
-              <button className="console-button console-button-primary h-9 w-full" disabled={collectingConfigLocked || !createdRoute || publishMutation.isPending || Boolean(preview?.publishBlocked)} onClick={() => publishMutation.mutate(undefined)} title={lockedDisabledReason || publishDisabledReason || '生成发布预览'}>
-                {publishMutation.isPending ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                发布预览
-              </button>
-              {pendingRoutePublish ? (
-                <button className="console-button console-button-primary h-9 w-full" disabled={publishMutation.isPending} onClick={() => publishMutation.mutate({ previewId: pendingRoutePublish.previewId, confirmationToken: pendingRoutePublish.confirmationToken })}>
-                  确认发布
-                </button>
-              ) : null}
-            </>
+            <div className="rounded border border-outline bg-surface px-2.5 py-2 text-xs leading-5 text-muted">
+              {createdRoute ? '路由已保存，可在预览区获取手工安装材料并登记 VM 节点。' : '保存路由后获取手工安装材料。'}
+            </div>
           ) : (
             <Link
               className={`console-button console-button-primary h-9 w-full ${!createdRoute ? 'pointer-events-none opacity-60' : ''}`}
@@ -1001,7 +1033,7 @@ export function LogsOnboardingPage() {
           <RouteTaskCard
             className="logs-route-target-card"
             index={2}
-            title="绑定运行目标"
+            title={sourceType === 'vm_file' ? '设置日志路径' : '绑定运行目标'}
             summary={runtimeTargetReady ? selectedScopeLabel : serviceId ? '等待绑定运行范围' : '先选择服务'}
             active={currentStep === 1 && setupTask === 'target'}
             done={runtimeTargetReady}
@@ -1014,10 +1046,9 @@ export function LogsOnboardingPage() {
           >
             <div className="relative p-3">
                 {sourceType === 'vm_file' ? (
-                  <div className="grid gap-3 lg:grid-cols-3">
-                    <label className="text-sm font-semibold">主机组<input className="console-input mt-2 w-full" value={hostGroup} onChange={(event) => setHostGroup(event.target.value)} placeholder="prod-app-vms" /></label>
-                    <label className="text-sm font-semibold">主机标签<input className="console-input mt-2 w-full" value={hostSelectorText} onChange={(event) => setHostSelectorText(event.target.value)} placeholder="env=prod,role=api" /></label>
-                    <label className="text-sm font-semibold">日志路径<input className="console-input mt-2 w-full" value={vmPath} onChange={(event) => setVmPath(event.target.value)} placeholder="/data/logs/*.log" /></label>
+                  <div className="max-w-2xl">
+                    <label className="text-sm font-semibold">日志路径<input className="console-input mt-2 w-full font-mono" value={vmPath} onChange={(event) => setVmPath(event.target.value)} placeholder="/data/logs/*.log" /></label>
+                    <p className="mt-2 text-xs leading-5 text-muted">平台不会登录或修改 VM。保存路由后，由运维人员在每台机器执行安装脚本，再回填 Agent 健康检查地址。</p>
                   </div>
                 ) : (
                   <div className="grid gap-3">
@@ -1265,15 +1296,30 @@ export function LogsOnboardingPage() {
               setCurrentStep(2);
             }}
           >
+          {sourceType === 'vm_file' ? (
+            <div className="flex h-full min-h-[260px] flex-col justify-between gap-4 p-4">
+              <div>
+                <div className="text-sm font-semibold text-on-surface">解析规则</div>
+                <p className="mt-1 text-xs leading-5 text-muted">采集配置由平台根据日志路径、解析规则和下游端点生成，保存后作为手工安装材料提供。</p>
+                <dl className="mt-4 grid gap-3 rounded border border-outline bg-white p-3 text-xs sm:grid-cols-2">
+                  <div><dt className="font-semibold text-muted">日志路径</dt><dd className="mt-1 break-all font-mono text-on-surface">{vmPath || '-'}</dd></div>
+                  <div><dt className="font-semibold text-muted">解析方式</dt><dd className="mt-1 text-on-surface">{parserMode === 'none' ? '不解析' : parserMode === 'json' ? 'JSON' : 'Regex'}</dd></div>
+                </dl>
+              </div>
+              <button className="inline-flex h-8 w-fit items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" onClick={openParseDialog}>
+                <Settings2 className="h-3.5 w-3.5" />
+                配置解析规则
+              </button>
+            </div>
+          ) : (
           <div className="grid h-full min-h-0 gap-3 xl:grid-cols-[minmax(0,1fr)_280px]">
             <div className="flex min-h-0 flex-col overflow-hidden rounded-lg border border-outline bg-surface-lowest">
               <div className="flex flex-col gap-2 border-b border-outline bg-white/72 px-3 py-2.5 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <div className="text-sm font-semibold text-on-surface">{sourceType === 'vm_file' ? 'VM 路由采集文件' : '服务 ConfigMap 片段'}</div>
-                  <div className="mt-0.5 font-mono text-[11px] text-muted">{sourceType === 'vm_file' ? '发布后写入当前 VM 路由文件，可留空由后端生成' : '发布后写入当前服务独立 ConfigMap，并由 DaemonSet 按文件集合加载'}</div>
+                  <div className="text-sm font-semibold text-on-surface">服务 ConfigMap 片段</div>
+                  <div className="mt-0.5 font-mono text-[11px] text-muted">发布后写入当前服务独立 ConfigMap，并由 DaemonSet 按文件集合加载</div>
                 </div>
-                {sourceType !== 'vm_file' ? (
-                  <button
+                <button
                     className="inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-xs font-semibold text-primary transition-all active:translate-y-px disabled:opacity-60"
                     disabled={!generatedK8sFragment}
                     onClick={() => {
@@ -1283,17 +1329,16 @@ export function LogsOnboardingPage() {
                   >
                     <RefreshCw className="h-3.5 w-3.5" />
                     重新生成示例
-                  </button>
-                ) : null}
+                </button>
               </div>
               <textarea
-                className={`logs-route-config-editor min-h-0 flex-1 resize-none overflow-auto border-0 bg-white p-3 font-mono text-[12px] leading-5 text-on-surface outline-none ${sourceType !== 'vm_file' && fragmentWarnings.length > 0 ? 'shadow-[inset_4px_0_0_rgba(180,35,47,0.72)]' : ''}`}
+                className={`logs-route-config-editor min-h-0 flex-1 resize-none overflow-auto border-0 bg-white p-3 font-mono text-[12px] leading-5 text-on-surface outline-none ${fragmentWarnings.length > 0 ? 'shadow-[inset_4px_0_0_rgba(180,35,47,0.72)]' : ''}`}
                 value={collectorConfigYaml}
                 onChange={(event) => {
                   setCollectorConfigYaml(event.target.value);
                   setCollectorFragmentTouched(true);
                 }}
-                placeholder={sourceType === 'vm_file' ? '可粘贴 VM 路由采集 YAML；留空时后端按表单生成。' : '选择服务、Workload 和端点后生成服务 ConfigMap 片段示例。'}
+                placeholder="选择服务、Workload 和端点后生成服务 ConfigMap 片段示例。"
                 spellCheck={false}
               />
             </div>
@@ -1302,38 +1347,35 @@ export function LogsOnboardingPage() {
                 <div className="text-xs font-semibold text-muted">编辑状态</div>
                 <div className="mt-1 font-mono text-sm font-semibold text-on-surface">{collectorConfigState}</div>
                 <div className="mt-2 text-xs leading-5 text-muted">
-                  {sourceType === 'vm_file'
-                    ? 'VM 场景维护当前路由的采集 YAML，发布产物为路由专属文件。'
-                    : '表单只负责生成初稿；发布以编辑器内容为准。'}
+                  表单只负责生成初稿；发布以编辑器内容为准。
                 </div>
               </div>
-              {sourceType !== 'vm_file' ? (
-                <div className={`rounded-lg border px-3 py-3 ${fragmentWarnings.length > 0 ? 'border-danger/30 bg-red-50 text-danger' : 'border-primary/20 bg-primary-soft text-primary'}`}>
+              <div className={`rounded-lg border px-3 py-3 ${fragmentWarnings.length > 0 ? 'border-danger/30 bg-red-50 text-danger' : 'border-primary/20 bg-primary-soft text-primary'}`}>
                   <div className="text-xs font-semibold">{fragmentWarnings.length > 0 ? '表单占位已变更' : '表单占位一致'}</div>
                   <div className="mt-2 space-y-1 text-xs leading-5">
                     {fragmentWarnings.length > 0
                       ? fragmentWarnings.map((item) => <div key={item}>{item}</div>)
                       : <div>当前片段仍包含服务、Workload、日志路径和下游端点生成值。</div>}
                   </div>
-                </div>
-              ) : null}
+              </div>
               <button className="inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" onClick={openParseDialog}>
                 <Settings2 className="h-3.5 w-3.5" />
                 表单生成解析片段
               </button>
             </aside>
           </div>
+          )}
           </RouteTaskCard>
 
           <RouteTaskCard
             className="logs-route-preview-card"
             index={5}
-            title={sourceType === 'vm_file' ? '发布预览' : '配置预览'}
+            title="配置预览"
             summary={preview ? '已预览' : '等待预览'}
             active={currentStep === 3}
             done={Boolean(createdRoute)}
             disabled={!preview}
-            disabledReason={sourceType === 'vm_file' ? '先生成部署清单预览' : '先生成路由配置预览'}
+            disabledReason="先生成路由配置预览"
             onSelect={() => {
               if (!preview) return;
               setCurrentStep(3);
@@ -1359,10 +1401,9 @@ export function LogsOnboardingPage() {
             </button>
           </div>
           {!parseValid ? <WarnLine message="Regex 需要使用命名捕获组，例如 (?P<level>INFO)。" /> : null}
-          <MutationErrors errors={[previewMutation.error, createRouteMutation.error, publishMutation.error]} />
+          <MutationErrors errors={[previewMutation.error, createRouteMutation.error]} />
           {preview?.publishBlocked ? <WarnLine message={preview.publishBlockedReason} /> : null}
           {preview?.warnings.map((item) => <WarnLine key={item} message={item} />)}
-          {publishMutation.data && !pendingRoutePublish ? <SuccessLine message={publishMutation.data.message || publishMutation.data.status} /> : null}
           {preview ? (
             <div className="logs-route-preview-code-grid mt-3 grid gap-3 2xl:grid-cols-2">
               <RoutePreviewCodePanel
@@ -1372,15 +1413,44 @@ export function LogsOnboardingPage() {
                 emptyLabel={sourceType === 'vm_file' ? 'VM 路由配置为空' : '服务 ConfigMap 片段为空'}
                 copyTitle="复制 YAML"
               />
-              <RoutePreviewCodePanel
-                title={sourceType === 'vm_file' ? '部署清单预览' : '采集域合并视图'}
-                meta={sourceType === 'vm_file' ? 'VM 采集器运行文件' : '只读校验视图，发布时按多 ConfigMap 文件集合加载'}
-                content={sourceType === 'vm_file' ? preview.agentYAML : preview.collectorYAML}
-                emptyLabel={sourceType === 'vm_file' ? '部署清单预览为空' : '采集域合并视图为空'}
-                copyTitle="复制 YAML"
-              />
+              {sourceType !== 'vm_file' ? (
+                <RoutePreviewCodePanel
+                  title="采集域合并视图"
+                  meta="只读校验视图，发布时按多 ConfigMap 文件集合加载"
+                  content={preview.collectorYAML}
+                  emptyLabel="采集域合并视图为空"
+                  copyTitle="复制 YAML"
+                />
+              ) : null}
             </div>
-          ) : <Empty label="部署清单预览为空" />}
+          ) : <Empty label="配置预览为空" />}
+          {sourceType === 'vm_file' && vmRouteId ? (
+            <VMManualInstallationPanel
+              installation={vmInstallationQuery.data ?? null}
+              installationLoading={vmInstallationQuery.isLoading}
+              installationError={vmInstallationQuery.error}
+              endpoints={vmAgentEndpointsQuery.data ?? []}
+              endpointsLoading={vmAgentEndpointsQuery.isLoading}
+              endpointsError={vmAgentEndpointsQuery.error}
+              draft={vmEndpointDraft}
+              draftError={vmEndpointDraftError}
+              mutationErrors={[createVMEndpointsMutation.error, probeVMEndpointMutation.error, deleteVMEndpointMutation.error]}
+              adding={createVMEndpointsMutation.isPending}
+              probingId={probeVMEndpointMutation.isPending ? probeVMEndpointMutation.variables : ''}
+              deletingId={deleteVMEndpointMutation.isPending ? deleteVMEndpointMutation.variables : ''}
+              onDraftChange={(value) => {
+                setVMEndpointDraft(value);
+                setVMEndpointDraftError('');
+              }}
+              onAdd={submitVMEndpointDraft}
+              onProbe={(endpointId) => probeVMEndpointMutation.mutate(endpointId)}
+              onDelete={(endpoint) => {
+                if (window.confirm(`确认删除 VM 节点“${endpoint.name || endpoint.address}”？`)) {
+                  deleteVMEndpointMutation.mutate(endpoint.id);
+                }
+              }}
+            />
+          ) : null}
           {collectingConfigLocked ? (
             <RunningConfigVeil />
           ) : null}
@@ -1410,6 +1480,8 @@ export function LogsOnboardingPage() {
         namespacesLoading={syncNamespacesQuery.isLoading}
         clusterId={syncClusterId}
         namespace={syncNamespace}
+		environments={platformEnvironments}
+		environmentId={syncEnvironmentId}
         disabledReason={serviceSyncDisabledReason}
         pending={syncK8sServicesMutation.isPending}
         error={syncK8sServicesMutation.error}
@@ -1418,6 +1490,7 @@ export function LogsOnboardingPage() {
           setSyncNamespace('');
         }}
         onNamespaceChange={setSyncNamespace}
+		onEnvironmentChange={setSyncEnvironmentId}
         onClose={() => {
           if (!syncK8sServicesMutation.isPending) setSyncDialogOpen(false);
         }}
@@ -1468,11 +1541,149 @@ function workloadFromRouteSource(source: LogSource | null): LogsWorkload | null 
   };
 }
 
-function parseSelector(text: string) {
-  return Object.fromEntries(text.split(',').map((item) => item.trim()).filter(Boolean).map((item) => {
-    const [key, ...rest] = item.split('=');
-    return [key.trim(), rest.join('=').trim()];
-  }).filter(([key, value]) => key && value));
+export function parseVMEndpointDraft(text: string): { items: Array<{ name: string; address: string }>; error: string } {
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+  if (lines.length === 0) return { items: [], error: '请至少填写一个 VM 节点地址' };
+  const items: Array<{ name: string; address: string }> = [];
+  for (const [index, line] of lines.entries()) {
+    const parts = line.split(',').map((part) => part.trim());
+    if (parts.length > 2 || parts.some((part) => !part)) {
+      return { items: [], error: `第 ${index + 1} 行格式错误，请使用“名称,host:port”或仅填写 host:port` };
+    }
+    const address = parts.length === 2 ? parts[1] : parts[0];
+    if (!/^(?:\[[^\]]+\]|[^:\s]+):\d+$/.test(address)) {
+      return { items: [], error: `第 ${index + 1} 行地址格式错误，请填写 host:port` };
+    }
+    items.push({ name: parts.length === 2 ? parts[0] : address, address });
+  }
+  return { items, error: '' };
+}
+
+function VMManualInstallationPanel({
+  installation,
+  installationLoading,
+  installationError,
+  endpoints,
+  endpointsLoading,
+  endpointsError,
+  draft,
+  draftError,
+  mutationErrors,
+  adding,
+  probingId,
+  deletingId,
+  onDraftChange,
+  onAdd,
+  onProbe,
+  onDelete,
+}: {
+  installation: VMInstallation | null;
+  installationLoading: boolean;
+  installationError: unknown;
+  endpoints: VMAgentEndpoint[];
+  endpointsLoading: boolean;
+  endpointsError: unknown;
+  draft: string;
+  draftError: string;
+  mutationErrors: unknown[];
+  adding: boolean;
+  probingId?: string;
+  deletingId?: string;
+  onDraftChange: (value: string) => void;
+  onAdd: () => void;
+  onProbe: (endpointId: string) => void;
+  onDelete: (endpoint: VMAgentEndpoint) => void;
+}) {
+  return (
+    <section className="mt-4 space-y-4 border-t border-outline pt-4" aria-label="VM 手工接入">
+      <div>
+        <h3 className="text-sm font-semibold text-on-surface">手工安装</h3>
+        <p className="mt-1 text-xs leading-5 text-muted">在每台 VM 上执行同一服务的安装脚本。平台只生成材料并校验回填地址，不会远程登录机器。</p>
+      </div>
+      {installationLoading ? <div className="h-32 animate-pulse rounded border border-outline bg-surface" /> : installationError ? (
+        <LogsErrorLine message={(installationError as Error).message || '安装材料加载失败'} />
+      ) : installation ? (
+        <>
+          {installation.prerequisites.length ? (
+            <div className="rounded border border-outline bg-surface px-3 py-2 text-xs leading-5 text-muted">执行前确认：{installation.prerequisites.join('；')}</div>
+          ) : null}
+          <div className="grid gap-3 2xl:grid-cols-2">
+            <CompactCopyPanel title="安装脚本" meta={installation.collectorConfigHash || installation.routeId} content={installation.installScript} copyTitle="复制安装脚本" />
+            <CompactCopyPanel title="Collector 配置" meta="平台生成，只读" content={installation.collectorYAML} copyTitle="复制 Collector 配置" />
+          </div>
+        </>
+      ) : null}
+
+      <div className="border-t border-outline pt-4">
+        <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <h3 className="text-sm font-semibold text-on-surface">VM 节点</h3>
+            <p className="mt-1 text-xs leading-5 text-muted">地址可达不代表采集中；这里只校验 Agent 健康检查地址的网络连通性。</p>
+          </div>
+          {installation?.healthAddressExample ? <span className="font-mono text-[11px] text-muted">示例 {installation.healthAddressExample}</span> : null}
+        </div>
+        <div className="mt-3 grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
+          <label className="text-xs font-semibold text-muted">
+            批量录入
+            <textarea className="console-input mt-1.5 min-h-20 w-full resize-y font-mono text-xs" value={draft} onChange={(event) => onDraftChange(event.target.value)} placeholder={'名称,host:port\n10.0.0.9:13133'} />
+          </label>
+          <button className="console-button console-button-primary h-9" disabled={adding || !draft.trim()} onClick={onAdd}>
+            {adding ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}登记节点
+          </button>
+        </div>
+        {draftError ? <div className="mt-2 text-xs font-semibold text-danger">{draftError}</div> : null}
+        <MutationErrors errors={mutationErrors} />
+        <div className="mt-3 overflow-hidden rounded border border-outline bg-white">
+          {endpointsLoading ? <div className="h-24 animate-pulse bg-surface" /> : endpointsError ? (
+            <div className="p-3"><LogsErrorLine message={(endpointsError as Error).message || 'VM 节点加载失败'} /></div>
+          ) : endpoints.length === 0 ? <Empty label="尚未登记 VM 节点" /> : (
+            <div className="overflow-x-auto">
+              <table className="console-table min-w-[760px] w-full">
+                <thead><tr><th>节点</th><th>健康检查地址</th><th>连通状态</th><th>最近校验</th><th>结果</th><th className="w-24">操作</th></tr></thead>
+                <tbody>{endpoints.map((endpoint) => {
+                  const status = vmEndpointStatus(endpoint);
+                  return <tr key={endpoint.id}>
+                    <td className="font-semibold">{endpoint.name || '-'}</td>
+                    <td className="font-mono text-xs">{endpoint.address}</td>
+                    <td><span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${status.className}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{status.label}</span></td>
+                    <td className="font-mono text-[11px] text-muted">{formatVMProbeTime(endpoint.lastProbeAt)}</td>
+                    <td className="max-w-[260px] truncate text-xs text-muted" title={endpoint.lastProbeMessage}>{endpoint.lastProbeMessage || (endpoint.lastProbeLatencyMs ? `${endpoint.lastProbeLatencyMs} ms` : '-')}</td>
+                    <td><div className="flex items-center gap-1">
+                      <button className="console-button h-7 px-2 text-xs" disabled={probingId === endpoint.id} onClick={() => onProbe(endpoint.id)} title="校验地址连通性">{probingId === endpoint.id ? '校验中' : '校验'}</button>
+                      <button className="console-button h-7 px-2 text-xs text-danger" disabled={deletingId === endpoint.id} onClick={() => onDelete(endpoint)} title="删除节点">删除</button>
+                    </div></td>
+                  </tr>;
+                })}</tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function CompactCopyPanel({ title, meta, content, copyTitle }: { title: string; meta: string; content: string; copyTitle: string }) {
+  return <section className="overflow-hidden rounded border border-outline bg-white">
+    <div className="flex items-center justify-between gap-3 border-b border-outline bg-surface px-3 py-2">
+      <div className="min-w-0"><div className="text-xs font-semibold">{title}</div><div className="mt-0.5 truncate font-mono text-[11px] text-muted">{meta}</div></div>
+      <button className="console-icon-button" onClick={() => navigator.clipboard?.writeText(content)} aria-label={copyTitle} title={copyTitle}><Copy className="h-4 w-4" /></button>
+    </div>
+    <pre className="max-h-64 min-h-32 overflow-auto p-3 font-mono text-[11px] leading-5 whitespace-pre-wrap">{content || '暂无内容'}</pre>
+  </section>;
+}
+
+function vmEndpointStatus(endpoint: VMAgentEndpoint) {
+  const value = (endpoint.lastProbeStatus || endpoint.status).toLowerCase();
+  if (['reachable', 'healthy', 'success', 'ok'].includes(value)) return { label: '可达', className: 'text-emerald-700' };
+  if (['unreachable', 'failed', 'failure', 'error'].includes(value)) return { label: '不可达', className: 'text-danger' };
+  return { label: '待校验', className: 'text-muted' };
+}
+
+function formatVMProbeTime(value: string) {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('zh-CN', { hour12: false });
 }
 
 function RunningConfigVeil() {
@@ -1488,11 +1699,14 @@ function SyncK8sServicesDialog({
   namespacesLoading,
   clusterId,
   namespace,
+	environments,
+	environmentId,
   disabledReason,
   pending,
   error,
   onClusterChange,
   onNamespaceChange,
+	onEnvironmentChange,
   onClose,
   onConfirm,
 }: {
@@ -1502,11 +1716,14 @@ function SyncK8sServicesDialog({
   namespacesLoading: boolean;
   clusterId: string;
   namespace: string;
+	environments: Array<{ id: string; name: string; stage: string }>;
+	environmentId: string;
   disabledReason: string;
   pending: boolean;
   error: unknown;
   onClusterChange: (value: string) => void;
   onNamespaceChange: (value: string) => void;
+	onEnvironmentChange: (value: string) => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -1545,6 +1762,10 @@ function SyncK8sServicesDialog({
             </select>
           </label>
           <label className="text-xs font-semibold text-muted">
+			所属环境
+			<select className="console-input mt-1.5 h-9 w-full text-sm" value={environmentId} disabled={pending} onChange={(event) => onEnvironmentChange(event.target.value)}><option value="">选择环境</option>{environments.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.stage}</option>)}</select>
+		  </label>
+		  <label className="text-xs font-semibold text-muted">
             Namespace
             <select
               className="console-input mt-1.5 h-9 w-full text-sm"

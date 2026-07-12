@@ -6,6 +6,8 @@ export interface ServiceScopeContextValue {
   services: Service[];
   activeService: Service | null;
   loading: boolean;
+  error: unknown;
+  retry: () => void;
   selectService: (serviceId: string) => void;
 }
 

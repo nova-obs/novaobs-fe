@@ -88,7 +88,7 @@ test('服务接入保存时以字符串 collector_group_id 传递 MongoDB ID', a
       collectorGroupId: '507f1f77bcf86cd799439013',
     }),
     {
-      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc', environment: 'prod' },
+      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc', environmentId: 'prod' },
       onboarding: {
         id: '507f1f77bcf86cd799439014',
         service_id: '507f1f77bcf86cd799439011',
@@ -111,7 +111,7 @@ test('获取服务接入工作台时调用 GET /services/:id/onboarding', async 
   const request = await captureRequest(
     () => api.getServiceOnboarding('507f1f77bcf86cd799439011'),
     {
-      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc', environment: 'prod' },
+      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc', environmentId: 'prod' },
       onboarding: { id: '507f1f77bcf86cd799439014', service_id: '507f1f77bcf86cd799439011', status: 'not_started' },
       generated_config: {},
       checklist: [],
@@ -144,11 +144,11 @@ test('执行服务接入检查时调用 POST /services/:id/onboarding/check', as
 
 test('创建服务时传递必填字段并以字符串 ID 返回', async () => {
   const request = await captureRequest(
-	() => api.createService({ productId: 'product-commerce', name: 'order-svc', environment: 'prod' }),
+	() => api.createService({ productId: 'product-commerce', name: 'order-svc', environmentId: 'prod' }),
     {
       id: '507f1f77bcf86cd799439020',
       name: 'order-svc',
-      environment: 'prod',
+			  environment_id: 'prod',
       source: 'manual',
       sync_status: 'local',
       status: 'pending',
@@ -158,7 +158,7 @@ test('创建服务时传递必填字段并以字符串 ID 返回', async () => {
 	assert.equal(request.path, '/api/v1/products/product-commerce/services');
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.name, 'order-svc');
-  assert.equal(request.body.environment, 'prod');
+	assert.equal(request.body.environment_id, 'prod');
 });
 
 test('创建产品后由后端生成产品级 projectId', async () => {
@@ -202,11 +202,11 @@ test('删除服务时调用 DELETE /services/:id', async () => {
 
 test('getServices 支持查询参数', async () => {
   const request = await captureRequest(
-    () => api.getServices({ environment: 'prod', status: 'active' }),
+    () => api.getServices({ environmentId: 'prod', status: 'active' }),
     [],
   );
 
-  assert.ok(request.path.includes('environment=prod'));
+	assert.ok(request.path.includes('environment_id=prod'));
   assert.ok(request.path.includes('status=active'));
 });
 
@@ -433,8 +433,8 @@ test('发布 Collector Group 配置时调用 config/publish', async () => {
 
 test('创建 Collector Group 时使用 POST 方法', async () => {
   const request = await captureRequest(
-    () => api.createCollectorGroup({ name: 'shared-gw-prod', mode: 'shared_gateway', environment: 'prod' }),
-    { id: '507f1f77bcf86cd799439030', name: 'shared-gw-prod', mode: 'shared_gateway', environment: 'prod', status: 'draft' },
+    () => api.createCollectorGroup({ name: 'shared-gw-prod', mode: 'shared_gateway', environmentId: 'prod' }),
+    { id: '507f1f77bcf86cd799439030', name: 'shared-gw-prod', mode: 'shared_gateway', environmentId: 'prod', status: 'draft' },
   );
 
   assert.equal(request.path, '/api/v1/collector-groups');
@@ -466,11 +466,11 @@ test('启用 Collector Group 时调用 activate 接口', async () => {
 
 test('getCollectorGroups 支持查询参数', async () => {
   const request = await captureRequest(
-    () => api.getCollectorGroups({ environment: 'prod', status: 'active' }),
+    () => api.getCollectorGroups({ environmentId: 'prod', status: 'active' }),
     [],
   );
 
-  assert.ok(request.path.includes('environment=prod'));
+	assert.ok(request.path.includes('environment_id=prod'));
   assert.ok(request.path.includes('status=active'));
 });
 
@@ -528,7 +528,7 @@ test('日志告警测试和启用使用结构化规则契约', async () => {
     scope: { serviceId: 'svc-a', serviceName: 'payment', logRouteId: 'route-a', endpointId: 'vl-a', accountId: '1', projectId: '2' },
     query: { mode: 'contains', expression: 'payment failed' },
     trigger: { mode: 'window', aggregation: 'count', operator: 'gte', threshold: 3, window: '1m', evaluationInterval: '30s', evaluationDelay: '5s', pendingFor: '0s', keepFiringFor: '0s' },
-    grouping: { fields: ['deployment.environment'], maxInstances: 100 },
+    grouping: { fields: ['deployment.environmentId'], maxInstances: 100 },
     notification: { policyId: 'default-webhook', severity: 'warning', ownerTeam: 'pay', runbookUrl: '' },
   };
   const request = await captureRequest(
@@ -541,7 +541,7 @@ test('日志告警测试和启用使用结构化规则契约', async () => {
   assert.equal(request.body.test_token, 'test-token');
   assert.equal(request.body.spec.scope.service_id, 'svc-a');
   assert.equal(request.body.spec.trigger.evaluation_interval, '30s');
-  assert.deepEqual(request.body.spec.grouping.fields, ['deployment.environment']);
+  assert.deepEqual(request.body.spec.grouping.fields, ['deployment.environmentId']);
   assert.equal('draft' in request.body, false);
 });
 
@@ -564,7 +564,7 @@ test('日志告警支持绑定服务外部日志链路', async () => {
   assert.equal(request.body.spec.scope.base_filter, '"stream":"payment"');
 });
 
-test('指标告警列表使用 metrics 专用接口并映射服务绑定作用域', async () => {
+test('统一告警 API 映射指标环境作用域', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -575,11 +575,10 @@ test('指标告警列表使用 metrics 专用接口并映射服务绑定作用�
         signal_type: 'metrics',
         name: '订单 5xx',
         scope: {
-          service_id: 'svc-orders',
-          service_name: 'orders-api',
-          endpoint_id: 'vm-prod',
-          metrics_binding_id: 'binding-orders',
-          base_promql: '{service_name="orders-api"}',
+			environment_id: 'env-prod',
+			environment_name: '生产环境',
+			endpoint_id: 'vm-prod',
+			scope_labels: { cluster: 'prod-a' },
         },
         query: { mode: 'promql', expression: 'sum(rate(http_requests_total{status=~"5.."}[5m]))' },
         trigger: { operator: 'gte', threshold: 10 },
@@ -593,38 +592,38 @@ test('指标告警列表使用 metrics 专用接口并映射服务绑定作用�
   };
 
   try {
-    const rules = await api.getMetricsAlertRules('svc-orders');
-    assert.equal(requests[0].path, '/api/v1/metrics/alert-rules?service_id=svc-orders');
-    assert.equal(rules[0].spec.signalType, 'metrics');
-    assert.equal(rules[0].spec.scope.metricsBindingId, 'binding-orders');
-    assert.equal(rules[0].spec.scope.basePromQL, '{service_name="orders-api"}');
+		const rules = await api.getAlertRules();
+		assert.equal(requests[0].path, '/api/v1/alerts/rules');
+		assert.equal(rules[0].spec.signalType, 'metrics');
+		assert.equal(rules[0].spec.scope.environmentId, 'env-prod');
+		assert.deepEqual(rules[0].spec.scope.scopeLabels, { cluster: 'prod-a' });
     assert.equal(rules[0].spec.query.mode, 'promql');
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('指标告警创建强制 metrics signal 并提交 PromQL 作用域', async () => {
+test('统一告警创建提交指标环境作用域', async () => {
   const spec = {
-    signalType: 'logs',
+		signalType: 'metrics',
     name: '订单 5xx', description: '',
-    scope: { serviceId: 'svc-orders', serviceName: 'orders-api', logRouteId: '', metricsBindingId: 'binding-orders', endpointId: 'vm-prod', accountId: '', projectId: '', basePromQL: '{service_name="orders-api"}' },
+		scope: { serviceId: '', serviceName: '', environmentId: 'env-prod', environmentName: '生产环境', scopeLabels: { cluster: 'prod-a' }, logRouteId: '', endpointId: 'vm-prod', accountId: '', projectId: '' },
     query: { mode: 'promql', expression: 'sum(rate(http_requests_total{status=~"5.."}[5m]))' },
     trigger: { mode: 'window', aggregation: 'count', operator: 'gte', threshold: 10, window: '5m', evaluationInterval: '1m', evaluationDelay: '0s', pendingFor: '0s', keepFiringFor: '0s' },
     grouping: { fields: [], maxInstances: 20 },
     notification: { policyId: 'orders-oncall', severity: 'warning', ownerTeam: 'orders', runbookUrl: '' },
   };
   const request = await captureRequest(
-    () => api.createMetricsAlertRule(spec, 'test-token'),
+		() => api.createAlertRule(spec, 'test-token'),
     { rule: { id: 'rule-metric', spec: { signal_type: 'metrics', name: '订单 5xx' }, state: 'enabled', apply_status: 'pending' } },
   );
 
-  assert.equal(request.path, '/api/v1/metrics/alert-rules');
+	assert.equal(request.path, '/api/v1/alerts/rules');
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.test_token, 'test-token');
   assert.equal(request.body.spec.signal_type, 'metrics');
-  assert.equal(request.body.spec.scope.metrics_binding_id, 'binding-orders');
-  assert.equal(request.body.spec.scope.base_promql, '{service_name="orders-api"}');
+	assert.equal(request.body.spec.scope.environment_id, 'env-prod');
+	assert.deepEqual(request.body.spec.scope.scope_labels, { cluster: 'prod-a' });
   assert.equal(request.body.spec.query.mode, 'promql');
 });
 

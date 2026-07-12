@@ -1,4 +1,4 @@
-export type ServiceScopedModule = 'logs' | 'metrics';
+export type ServiceScopedModule = 'logs';
 
 export function serviceScopePreferenceKey(module: ServiceScopedModule): string {
   return `novaapm.service-scope.${module}`;

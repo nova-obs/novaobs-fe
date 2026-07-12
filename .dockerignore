@@ -1,0 +1,11 @@
+.git
+.gitignore
+.env
+.env.*
+*.log
+coverage/
+dist/
+node_modules/
+playwright-report/
+test-results/
+tmp/

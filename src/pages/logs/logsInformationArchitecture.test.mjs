@@ -12,7 +12,7 @@ const alerts = readFileSync(new URL('./LogsAlertsPage.tsx', import.meta.url), 'u
 const explore = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 'utf8');
 const servicePicker = readFileSync(new URL('./ServicePickerPanel.tsx', import.meta.url), 'utf8');
 
-test('Logs 保留四个子入口并把创建更新归入父模块子路径', () => {
+test('Logs 保留服务级入口并把下游端点迁移到可观测性领域入口', () => {
   assert.doesNotMatch(routes, /path: 'targets'/);
   assert.doesNotMatch(workspace, /\/logs\/targets/);
   assert.doesNotMatch(workspace, /日志目标/);
@@ -20,11 +20,12 @@ test('Logs 保留四个子入口并把创建更新归入父模块子路径', () 
   assert.match(routes, /path: 'agents\/:id\/edit'/);
 	assert.match(routes, /path: 'onboarding'.*Navigate to="\.\.\/agents\/new"/);
   assert.match(routes, /path: 'alerts\/new'/);
-  assert.match(routes, /path: 'alerts\/:id'/);
+	assert.match(routes, /path: 'alerts\/:id'/);
   assert.match(routes, /path: 'endpoints'/);
-	assert.match(routes, /path: '\/observability\/endpoints'.*ObservabilitySettingsPage/);
-  assert.match(workspace, /entry: 'endpoints'.*serviceScoped: false/);
-  assert.match(workspace, /label: '接入配置'/);
+	assert.match(routes, /path: '\/observability\/endpoints\/logs'.*ObservabilitySettingsPage key="logs-endpoints" domain="logs"/);
+	assert.match(routes, /path: '\/observability\/endpoints\/metrics'.*ObservabilitySettingsPage key="metrics-endpoints" domain="metrics"/);
+	assert.match(routes, /path: '\/observability\/endpoints'.*Navigate to="\/observability\/endpoints\/logs"/);
+  assert.doesNotMatch(workspace, /entry: 'endpoints'/);
 });
 
 test('采集路由保留任务页，日志告警新增编辑进入列表表单抽屉', () => {
@@ -62,13 +63,23 @@ test('日志告警固定使用产品服务路径中的服务上下文', () => {
 test('采集路由使用单一工作面突出列表选择和当前路由功能', () => {
   assert.match(agents, /const \[routeView, setRouteView\] = useState<'overview' \| 'instances'>\('overview'\)/);
   assert.match(agents, />运行概览</);
-  assert.match(agents, />Agent 实例</);
+	assert.match(agents, /activeRouteIsVM \? 'VM 节点' : 'Agent 实例'/);
   assert.match(agents, /routeView === 'overview'/);
   assert.match(agents, /routeView === 'instances'/);
   assert.match(agents, /aria-label="采集路由工作区"/);
   assert.doesNotMatch(agents, /<LogsSection/);
   assert.doesNotMatch(agents, /采集路由列表/);
   assert.doesNotMatch(agents, /路由运行状态/);
+});
+
+test('VM 采集路由运行页展示回填节点而不是托管 Agent 实例', () => {
+	assert.match(agents, /logsApi\.listVMAgentEndpoints/);
+	assert.match(agents, /activeRouteIsVM \? 'VM 节点' : 'Agent 实例'/);
+	assert.match(agents, /地址可达不代表采集中/);
+	assert.match(agents, /vmEndpointsLoading/);
+	assert.match(agents, /vmEndpointsError/);
+	assert.match(agents, /route\.route\.id === activeRoute\?\.route\.id \? activeLifecycle/);
+	assert.doesNotMatch(agents, /source\.hostGroup \|\| 'VM'/);
 });
 
 test('Logs 模块层只保留统一导航和服务作用域，不在业务页面重复实现入口', () => {

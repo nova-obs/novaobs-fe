@@ -10,6 +10,12 @@ export function serviceDisplayName(service: LogsServiceSummary) {
 
 export function routeLifecycle(route: LogRouteView): { label: string; tone: StatusTone; detail: string } {
   const status = route.route.lastPublishStatus || route.route.status;
+  if (route.route.sourceType === 'vm_file') {
+    if (status === 'failed' || status === 'error') {
+      return { label: '配置失败', tone: 'danger', detail: route.route.lastPublishMessage || '采集配置生成失败' };
+    }
+    return { label: '手工接入', tone: 'muted', detail: '通过安装材料和节点回填完成接入' };
+  }
   if (status === 'applied' || status === 'ready_for_agent_sync') {
     return { label: '已发布', tone: 'success', detail: route.route.lastPublishMessage || '采集配置已下发' };
   }
@@ -40,7 +46,7 @@ export function routeAccessPriority(route: LogRouteView) {
 export function isCollectingRoute(route: LogRouteView | null | undefined) {
   if (!route) return false;
   const status = route.route.lastPublishStatus || route.route.status;
-  return status === 'applied' || status === 'ready_for_agent_sync';
+  return route.route.sourceType !== 'vm_file' && (status === 'applied' || status === 'ready_for_agent_sync');
 }
 
 export function statusPillClass(tone: StatusTone) {
@@ -199,7 +205,7 @@ export function ServicePickerPanel({
                     </td>
                     <td className="font-mono text-xs text-muted">
                       <div className="truncate">{service.namespace || '-'}</div>
-                      <div className="mt-0.5 truncate text-[11px]">{service.cluster || service.environment || '-'}</div>
+                      <div className="mt-0.5 truncate text-[11px]">{service.cluster || service.environmentId || '-'}</div>
                     </td>
                     <td>
                       <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(accessState.tone)}`}>

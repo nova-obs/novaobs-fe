@@ -41,19 +41,22 @@ export function ServiceScopedModuleWorkbench({
   const location = useLocation();
   const navigate = useNavigate();
   const entry = serviceModuleEntryFromPath(location.pathname, module);
-  const serviceRequired = entry !== 'endpoints';
+  const currentItem = items.find((item) => item.entry === entry);
+  const serviceContextEnabled = entry !== 'endpoints';
+  const serviceRequired = currentItem?.serviceScoped !== false;
   const productsQuery = useQuery({
     queryKey: ['products'],
     queryFn: api.getProducts,
-    enabled: serviceRequired,
+    enabled: serviceContextEnabled,
   });
   const servicesQuery = useQuery({
     queryKey: ['services'],
     queryFn: () => api.getServices(),
-    enabled: serviceRequired,
+    enabled: serviceContextEnabled,
   });
   const products = productsQuery.data ?? [];
   const services = servicesQuery.data ?? [];
+  const serviceScopeError = productsQuery.error ?? servicesQuery.error;
   const activeService = services.find((service) => service.id === serviceId && service.productId === productId) ?? null;
   useEffect(() => {
     if (!serviceRequired || servicesQuery.isLoading || servicesQuery.error) return;
@@ -80,13 +83,15 @@ export function ServiceScopedModuleWorkbench({
     services,
     activeService,
     loading: productsQuery.isLoading || servicesQuery.isLoading,
+    error: serviceScopeError,
+    retry: () => void Promise.all([productsQuery.refetch(), servicesQuery.refetch()]),
     selectService: (nextServiceId: string) => {
       const nextService = services.find((service) => service.id === nextServiceId);
       if (!nextService) return;
       writeServicePreference(module, nextService.id);
       navigate(buildServiceModulePath(module, nextService.productId, nextService.id, entry));
     },
-  }), [activeService, entry, module, navigate, products, productsQuery.isLoading, services, servicesQuery.isLoading]);
+  }), [activeService, entry, module, navigate, products, productsQuery.isLoading, productsQuery.refetch, serviceScopeError, services, servicesQuery.isLoading, servicesQuery.refetch]);
 
   return (
     <ServiceScopeContext.Provider value={contextValue}>
@@ -101,7 +106,7 @@ export function ServiceScopedModuleWorkbench({
           <ServiceScopeContent
             activeService={activeService}
             loading={productsQuery.isLoading || servicesQuery.isLoading}
-            error={productsQuery.error ?? servicesQuery.error}
+            error={serviceScopeError}
             hasServices={services.length > 0}
             onRetry={() => void Promise.all([productsQuery.refetch(), servicesQuery.refetch()])}
           >

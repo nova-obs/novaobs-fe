@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, Plus, RefreshCw, Search } from 'lucide-react';
+import { Plus, RefreshCw, Search } from 'lucide-react';
 import { StatusBadge } from '../../components/StatusBadge';
 import type { AlertRule } from '../../services/types';
 import { api } from '../../services/api';
@@ -16,7 +16,7 @@ type AlertServiceLogKind = 'external' | 'platform' | 'none';
 interface AlertServiceRow {
   id: string;
   name: string;
-  environment: string;
+  environmentId: string;
   ownerTeam: string;
   ruleCount: number;
   enabledCount: number;
@@ -56,7 +56,7 @@ function buildAlertServices(services: LogsServiceSummary[], rules: AlertRule[], 
     rows.set(service.id, {
       id: service.id,
       name: serviceDisplayName(service),
-      environment: service.environment,
+      environmentId: service.environmentId,
       ownerTeam: service.ownerTeam,
       ruleCount: 0,
       enabledCount: 0,
@@ -69,7 +69,7 @@ function buildAlertServices(services: LogsServiceSummary[], rules: AlertRule[], 
     const current = rows.get(serviceId) ?? {
       id: serviceId,
       name: rule.spec.scope.serviceName || serviceId,
-      environment: '',
+      environmentId: '',
       ownerTeam: rule.spec.notification.ownerTeam,
       ruleCount: 0,
       enabledCount: 0,
@@ -273,7 +273,6 @@ export function LogsAlertsPage() {
                     <td>
                       <div className="flex items-center gap-2">
 						<Link className="console-table-action" to={`${base}/alerts/${rule.id}`}>编辑</Link>
-                        <Link className="console-table-action" to="/alerts"><ExternalLink className="h-3.5 w-3.5" />告警中心</Link>
                       </div>
                     </td>
                   </tr>

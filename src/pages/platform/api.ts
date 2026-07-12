@@ -4,7 +4,7 @@ export interface PlatformScope {
   global: boolean;
   clusterId: string;
   namespace: string;
-  environment: string;
+	environmentId: string;
   serviceId: string;
 }
 
@@ -111,6 +111,33 @@ export interface PlatformImage {
   updatedAt: string;
 }
 
+export type EnvironmentStage = 'production' | 'staging' | 'test' | 'development';
+export type EnvironmentStatus = 'active' | 'archived';
+export type EnvironmentResourceKind = 'k8s_cluster' | 'host_group';
+
+export interface PlatformEnvironment {
+  id: string;
+  name: string;
+  stage: EnvironmentStage;
+  description: string;
+  status: EnvironmentStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface EnvironmentResourceBinding {
+  id: string;
+  environmentId: string;
+  resourceKind: EnvironmentResourceKind;
+  resourceRef: string;
+  createdAt: string;
+}
+
+export interface PlatformEnvironmentDetail {
+  environment: PlatformEnvironment;
+  resourceBindings: EnvironmentResourceBinding[];
+}
+
 export interface PlatformWriteResult<T> {
   item?: T;
   status: string;
@@ -121,7 +148,7 @@ function mapScope(raw: any): PlatformScope {
     global: Boolean(raw?.global),
     clusterId: raw?.cluster_id ?? raw?.clusterId ?? '',
     namespace: raw?.namespace ?? '',
-    environment: raw?.environment ?? '',
+		environmentId: raw?.environment_id ?? raw?.environmentId ?? '',
     serviceId: raw?.service_id ?? raw?.serviceId ?? '',
   };
 }
@@ -249,6 +276,28 @@ function mapImage(raw: any): PlatformImage {
   };
 }
 
+function mapEnvironment(raw: any): PlatformEnvironment {
+  return {
+    id: String(raw.id ?? ''),
+    name: raw.name ?? '',
+    stage: raw.stage ?? 'development',
+    description: raw.description ?? '',
+    status: raw.status ?? 'active',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function mapEnvironmentResourceBinding(raw: any): EnvironmentResourceBinding {
+  return {
+    id: String(raw.id ?? ''),
+    environmentId: raw.environment_id ?? raw.environmentId ?? '',
+    resourceKind: raw.resource_kind ?? raw.resourceKind ?? 'k8s_cluster',
+    resourceRef: raw.resource_ref ?? raw.resourceRef ?? '',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+  };
+}
+
 function mapWriteResult<T>(raw: any, mapper: (value: any) => T): PlatformWriteResult<T> {
   return {
     item: raw.item ? mapper(raw.item) : undefined,
@@ -257,6 +306,41 @@ function mapWriteResult<T>(raw: any, mapper: (value: any) => T): PlatformWriteRe
 }
 
 export const platformApi = {
+	async listEnvironments(): Promise<PlatformEnvironment[]> {
+		const raw = await apiRequest<any[]>('/platform/environments');
+		return raw.map(mapEnvironment);
+	},
+	async getEnvironment(id: string): Promise<PlatformEnvironmentDetail> {
+		const raw = await apiRequest<any>(`/platform/environments/${encodeURIComponent(id)}`);
+		return {
+			environment: mapEnvironment(raw.environment ?? {}),
+			resourceBindings: Array.isArray(raw.resource_bindings) ? raw.resource_bindings.map(mapEnvironmentResourceBinding) : [],
+		};
+	},
+	async createEnvironment(input: { name: string; stage: EnvironmentStage; description?: string }): Promise<PlatformEnvironment> {
+		const raw = await apiRequest<any>('/platform/environments', {
+			method: 'POST',
+			body: JSON.stringify({ name: input.name, stage: input.stage, description: input.description ?? '' }),
+		});
+		return mapEnvironment(raw);
+	},
+	async updateEnvironment(id: string, input: Partial<{ name: string; stage: EnvironmentStage; description: string; status: EnvironmentStatus }>): Promise<PlatformEnvironment> {
+		const raw = await apiRequest<any>(`/platform/environments/${encodeURIComponent(id)}`, {
+			method: 'PATCH',
+			body: JSON.stringify(input),
+		});
+		return mapEnvironment(raw);
+	},
+	async bindEnvironmentResource(environmentId: string, input: { resourceKind: EnvironmentResourceKind; resourceRef: string }): Promise<EnvironmentResourceBinding> {
+		const raw = await apiRequest<any>(`/platform/environments/${encodeURIComponent(environmentId)}/resource-bindings`, {
+			method: 'POST',
+			body: JSON.stringify({ resource_kind: input.resourceKind, resource_ref: input.resourceRef }),
+		});
+		return mapEnvironmentResourceBinding(raw);
+	},
+	async unbindEnvironmentResource(environmentId: string, bindingId: string): Promise<void> {
+		await apiRequest(`/platform/environments/${encodeURIComponent(environmentId)}/resource-bindings/${encodeURIComponent(bindingId)}`, { method: 'DELETE' });
+	},
   async me(): Promise<PlatformSubject> {
     const raw = await apiRequest<any>('/platform/me');
     return mapSubject(raw);
@@ -364,7 +448,7 @@ export const platformApi = {
           global: Boolean(input.scope.global),
           cluster_id: input.scope.clusterId ?? '',
           namespace: input.scope.namespace ?? '',
-          environment: input.scope.environment ?? '',
+			environment_id: input.scope.environmentId ?? '',
           service_id: input.scope.serviceId ?? '',
         },
       }),

@@ -5,6 +5,10 @@ import { readFileSync } from 'node:fs';
 const source = readFileSync(new URL('./AppShell.tsx', import.meta.url), 'utf8');
 const sessionSource = readFileSync(new URL('./session.tsx', import.meta.url), 'utf8');
 const styleSource = readFileSync(new URL('../styles/index.css', import.meta.url), 'utf8');
+const megaMenuNavigationItemSource = source.slice(
+  source.indexOf('function MegaMenuNavigationItem'),
+  source.indexOf('function flattenNavigationItems'),
+);
 
 test('顶层框架展示专业指挥中心状态条', () => {
   assert.equal(source.includes('搜索服务、指标、日志、告警'), true);
@@ -65,6 +69,13 @@ test('超级菜单明确区分模块身份、主功能菜单和辅助入口', ()
   assert.equal(source.includes('overflow-y-auto'), true);
 });
 
+test('超级菜单功能卡使用不换行的单行短摘要', () => {
+  assert.match(megaMenuNavigationItemSource, /item\.description/);
+  assert.match(megaMenuNavigationItemSource, /whitespace-nowrap/);
+  assert.match(megaMenuNavigationItemSource, /truncate/);
+  assert.match(megaMenuNavigationItemSource, /title=\{item\.description\}/);
+});
+
 test('K8s 超级菜单提供集群上下文后再进入工作台', () => {
   assert.equal(source.includes('K8sMegaMenuClusterWork'), true);
   assert.equal(source.includes('K8s 工作台上下文'), true);
@@ -100,7 +111,7 @@ test('应用内容使用带当前位置和右侧工具区的工作区外壳', ()
   assert.equal(source.includes('getWorkspaceModuleLabel'), true);
   assert.equal(source.includes('isLogsWorkspacePath'), true);
   assert.equal(source.includes("return 'Logs'"), true);
-  assert.equal(source.includes('isMetricsWorkspacePath'), true);
+	assert.equal(source.includes('isMetricsPath'), true);
   assert.equal(source.includes("return '监控'"), true);
   assert.equal(source.includes('getBackTarget'), true);
   assert.equal(source.includes('刷新当前页面'), true);

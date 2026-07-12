@@ -9,11 +9,12 @@ import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
 import type { CreateServiceInput, Product, Service, ServiceObservabilityGraph, ServiceTargetType, UpdateServiceInput } from '../../services/types';
 import { graphStatItems, targetLocationSummary, targetTypeLabel } from './servicesViewModel';
+import { platformApi, type PlatformEnvironment } from '../platform/api';
 
 const emptyForm: CreateServiceInput & { description?: string } = {
 	productId: '',
   name: '',
-  environment: 'prod',
+  environmentId: '',
   displayName: '',
   ownerTeam: '',
   identityType: 'k8s_workload',
@@ -40,7 +41,6 @@ const targetAttributeFields: Record<ServiceTargetType, Array<{ key: string; labe
 const emptyTargetForm = {
   targetType: 'cloud_native_workload' as ServiceTargetType,
   displayName: '',
-  environment: '',
   identityAttributes: {} as Record<string, string>,
 };
 
@@ -51,7 +51,7 @@ function sourceLabel(source: string) {
 
 export function ServicesPage() {
   const queryClient = useQueryClient();
-  const [filters, setFilters] = useState({ q: '', environment: '', status: '', source: '' });
+  const [filters, setFilters] = useState({ q: '', environmentId: '', status: '', source: '' });
   const [showForm, setShowForm] = useState(false);
 	const [showProductForm, setShowProductForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -65,6 +65,7 @@ export function ServicesPage() {
     queryFn: () => api.getServices(filters),
   });
 	const { data: products = [] } = useQuery({ queryKey: ['products'], queryFn: api.getProducts });
+	const { data: environments = [] } = useQuery({ queryKey: ['platform-environments'], queryFn: platformApi.listEnvironments });
 	const productById = new Map(products.map((product) => [product.id, product]));
 
   const selectedService = data.find((svc) => svc.id === selectedServiceId) ?? null;
@@ -76,7 +77,7 @@ export function ServicesPage() {
   });
 
   const createMutation = useMutation({
-	mutationFn: () => api.createService({ productId: form.productId, name: form.name, environment: form.environment, displayName: form.displayName || undefined, ownerTeam: form.ownerTeam || undefined, identityType: form.identityType }),
+	mutationFn: () => api.createService({ productId: form.productId, name: form.name, environmentId: form.environmentId, displayName: form.displayName || undefined, ownerTeam: form.ownerTeam || undefined, identityType: form.identityType }),
 	onSuccess: (created) => {
       queryClient.invalidateQueries({ queryKey: ['services'] });
 	  setSelectedServiceId(created.id);
@@ -97,7 +98,7 @@ export function ServicesPage() {
     mutationFn: () => {
       if (!editingId) throw new Error('缺少服务 ID');
       const patch: UpdateServiceInput = {};
-      if (form.environment) patch.environment = form.environment;
+      if (form.environmentId) patch.environmentId = form.environmentId;
       if (form.displayName !== undefined) patch.displayName = form.displayName;
       if (form.description !== undefined) patch.description = form.description;
       if (form.ownerTeam !== undefined) patch.ownerTeam = form.ownerTeam;
@@ -118,7 +119,6 @@ export function ServicesPage() {
       const attrs = Object.fromEntries(Object.entries(targetForm.identityAttributes).filter(([, value]) => value.trim() !== ''));
       return api.createServiceTarget(activeServiceId, {
         targetType: targetForm.targetType,
-        environment: targetForm.environment || selectedService?.environment,
         displayName: targetForm.displayName || undefined,
         identityAttributes: attrs,
         matchRules: attrs,
@@ -151,7 +151,7 @@ export function ServicesPage() {
   const openEdit = (svc: Service) => {
     setConfirmDeleteServiceId(null);
     setEditingId(svc.id);
-	setForm({ productId: svc.productId, name: svc.name, environment: svc.environment, displayName: svc.displayName, description: svc.description, ownerTeam: svc.ownerTeam, identityType: svc.identityType });
+	setForm({ productId: svc.productId, name: svc.name, environmentId: svc.environmentId, displayName: svc.displayName, description: svc.description, ownerTeam: svc.ownerTeam, identityType: svc.identityType });
     setShowForm(true);
   };
 
@@ -159,7 +159,7 @@ export function ServicesPage() {
   const closeEditor = () => {
     setShowForm(false);
     setEditingId(null);
-	setForm(selectedService ? { productId: selectedService.productId, name: selectedService.name, environment: selectedService.environment, displayName: selectedService.displayName, description: selectedService.description, ownerTeam: selectedService.ownerTeam, identityType: selectedService.identityType } : { ...emptyForm });
+	setForm(selectedService ? { productId: selectedService.productId, name: selectedService.name, environmentId: selectedService.environmentId, displayName: selectedService.displayName, description: selectedService.description, ownerTeam: selectedService.ownerTeam, identityType: selectedService.identityType } : { ...emptyForm });
   };
 
   return (
@@ -195,11 +195,9 @@ export function ServicesPage() {
                   <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? 'animate-spin' : ''}`} />
                   刷新
                 </button>
-                <select className="console-input h-8 w-28 text-xs" value={filters.environment} onChange={(e) => setFilters({ ...filters, environment: e.target.value })} aria-label="按环境筛选服务">
-                  <option value="">全部环境</option>
-                  <option value="prod">prod</option>
-                  <option value="staging">staging</option>
-                  <option value="dev">dev</option>
+                <select className="console-input h-8 w-28 text-xs" value={filters.environmentId} onChange={(e) => setFilters({ ...filters, environmentId: e.target.value })} aria-label="按环境筛选服务">
+				  <option value="">全部环境</option>
+				  {environments.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
                 </select>
                 <select className="console-input h-8 w-28 text-xs" value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })} aria-label="按状态筛选服务">
                   <option value="">全部状态</option>
@@ -249,7 +247,7 @@ export function ServicesPage() {
                           <div className="font-semibold text-primary">{svc.name}</div>
 						  <div className="text-[11px] text-muted">{productById.get(svc.productId)?.displayName || productById.get(svc.productId)?.name || '未归属产品'} · {svc.displayName}</div>
                         </td>
-                        <td className="font-mono">{svc.environment}</td>
+                        <td className="font-mono">{svc.environmentId}</td>
                         <td className="font-mono text-xs">{svc.cluster || '-'}{svc.namespace ? ` / ${svc.namespace}` : ''}</td>
                         <td className="text-sm">{svc.ownerTeam}{svc.owner ? ` · ${svc.owner}` : ''}</td>
                         <td><span className={`text-xs ${svc.source === 'cmdb' ? 'text-info' : 'text-muted'}`}>{sourceLabel(svc.source)}</span></td>
@@ -311,6 +309,7 @@ export function ServicesPage() {
               editing={Boolean(editingId)}
               form={form}
 			  products={products}
+			  environments={environments}
               setForm={setForm}
               pending={isPending}
               createError={createMutation.error as Error | null}
@@ -361,13 +360,13 @@ function ServiceDetailDrawer({
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <div id="service-detail-title" className="truncate text-sm font-semibold text-on-surface">{service.displayName || service.name}</div>
-              <span className="rounded border border-outline bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">{service.environment || '-'}</span>
+              <span className="rounded border border-outline bg-white px-1.5 py-0.5 font-mono text-[10px] font-semibold text-muted">{service.environmentId || '-'}</span>
               <StatusBadge value={service.status || 'unknown'} />
             </div>
           </div>
           <div className="flex shrink-0 gap-2">
 			<Link className="console-button" to={`/products/${encodeURIComponent(service.productId)}/services/${encodeURIComponent(service.id)}/logs/explore`}>进入日志</Link>
-			<Link className="console-button" to={`/products/${encodeURIComponent(service.productId)}/services/${encodeURIComponent(service.id)}/metrics/explore`}>进入指标</Link>
+			<Link className="console-button" to="/metrics/environments">环境指标</Link>
             <button className="console-button" onClick={onEdit}>
               <Edit3 className="h-3.5 w-3.5" />
               编辑
@@ -405,7 +404,7 @@ function ServiceProductionDetails({ service, product }: { service: Service; prod
       <div className="grid gap-x-6 gap-y-3 px-4 py-3 md:grid-cols-3">
         <ServiceDetailCell label="名称" value={service.name} />
         <ServiceDetailCell label="别名" value={service.displayName || '-'} />
-        <ServiceDetailCell label="环境" value={service.environment || '-'} mono />
+        <ServiceDetailCell label="环境" value={service.environmentId || '-'} mono />
         <ServiceDetailCell label="定位" value={service.cluster ? `${service.cluster}${service.namespace ? ` / ${service.namespace}` : ''}` : '-'} mono />
         <ServiceDetailCell label="Owner" value={service.ownerTeam || service.owner ? `${service.ownerTeam || '-'}${service.owner ? ` / ${service.owner}` : ''}` : '-'} />
         <ServiceDetailCell label="来源" value={sourceLabel(service.source)} />
@@ -430,6 +429,7 @@ function ServiceEditorDrawer({
   editing,
   form,
 	products,
+	environments,
   setForm,
   pending,
   createError,
@@ -440,6 +440,7 @@ function ServiceEditorDrawer({
   editing: boolean;
   form: CreateServiceInput & { description?: string };
 	products: Product[];
+	environments: PlatformEnvironment[];
   setForm: (value: CreateServiceInput & { description?: string }) => void;
   pending: boolean;
   createError: Error | null;
@@ -447,7 +448,7 @@ function ServiceEditorDrawer({
   onSave: () => void;
   onClose: () => void;
 }) {
-	const disabledReason = !form.productId ? '请先选择所属产品' : !form.name || !form.environment ? '请先填写服务名称和环境' : undefined;
+	const disabledReason = !form.productId ? '请先选择所属产品' : !form.name || !form.environmentId ? '请先填写服务名称和环境' : undefined;
   return (
     <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
       <button type="button" className="absolute inset-0 cursor-default border-0 bg-transparent" aria-label="关闭服务编辑遮罩" onClick={onClose} />
@@ -463,7 +464,7 @@ function ServiceEditorDrawer({
             <div className="grid gap-3 md:grid-cols-2">
 			  <label className="text-sm font-semibold">所属产品 *<select className="console-input mt-2 w-full" value={form.productId} disabled={editing} onChange={(e) => setForm({ ...form, productId: e.target.value })}><option value="">请选择产品</option>{products.map((product) => <option key={product.id} value={product.id}>{product.displayName || product.name}</option>)}</select></label>
 			  <label className="text-sm font-semibold">服务名称 *<input className="console-input mt-2 w-full" value={form.name} disabled={editing} title={editing ? 'service.name 创建后不可修改' : undefined} onChange={(e) => setForm({ ...form, name: e.target.value })} /></label>
-              <label className="text-sm font-semibold">环境 *<select className="console-input mt-2 w-full" value={form.environment} onChange={(e) => setForm({ ...form, environment: e.target.value })}><option value="prod">prod</option><option value="staging">staging</option><option value="dev">dev</option></select></label>
+              <label className="text-sm font-semibold">环境 *<select className="console-input mt-2 w-full" value={form.environmentId} onChange={(e) => setForm({ ...form, environmentId: e.target.value })}><option value="">请选择环境</option>{environments.filter((item) => item.status === 'active').map((item) => <option key={item.id} value={item.id}>{item.name} · {item.stage}</option>)}</select></label>
               <label className="text-sm font-semibold">别名<input className="console-input mt-2 w-full" value={form.displayName ?? ''} onChange={(e) => setForm({ ...form, displayName: e.target.value })} /></label>
               <label className="text-sm font-semibold">Owner Team<input className="console-input mt-2 w-full" value={form.ownerTeam ?? ''} onChange={(e) => setForm({ ...form, ownerTeam: e.target.value })} /></label>
               <label className="text-sm font-semibold">运行身份<select className="console-input mt-2 w-full" value={form.identityType ?? 'k8s_workload'} onChange={(e) => setForm({ ...form, identityType: e.target.value as typeof form.identityType })}><option value="k8s_workload">K8s Workload</option><option value="host_process">物理机 / VM 进程</option></select></label>
@@ -576,7 +577,6 @@ function ServiceGraphPanel({
                   <option value="physical_or_network_device">物理设备 / 网络设备</option>
                 </select>
                 <input className="console-input w-full" placeholder="别名" value={targetForm.displayName} onChange={(e) => setTargetForm({ ...targetForm, displayName: e.target.value })} />
-                <input className="console-input w-full" placeholder="环境" value={targetForm.environment} onChange={(e) => setTargetForm({ ...targetForm, environment: e.target.value })} />
                 {fields.map((field) => (
                   <input
                     key={field.key}

@@ -6,9 +6,6 @@ const helpTipSource = readFileSync(new URL('./HelpTip.tsx', import.meta.url), 'u
 const endpointSource = readFileSync(new URL('../pages/platform/ObservabilitySettingsPage.tsx', import.meta.url), 'utf8');
 const serviceSource = readFileSync(new URL('../pages/services/ServicesPage.tsx', import.meta.url), 'utf8');
 const servicePickerSource = readFileSync(new URL('../pages/logs/ServicePickerPanel.tsx', import.meta.url), 'utf8');
-const metricsEndpointSource = readFileSync(new URL('../pages/metrics/MetricsEndpointsPage.tsx', import.meta.url), 'utf8');
-const metricsAlertSource = readFileSync(new URL('../pages/metrics/MetricsAlertsPage.tsx', import.meta.url), 'utf8');
-const metricsDashboardSource = readFileSync(new URL('../pages/metrics/MetricsDashboardsPage.tsx', import.meta.url), 'utf8');
 const alertsSource = readFileSync(new URL('../pages/alerts/AlertsPage.tsx', import.meta.url), 'utf8');
 
 test('帮助提示使用圆形问号并支持悬浮和键盘焦点', () => {
@@ -43,7 +40,4 @@ test('服务与观测入口不把内部 ID 当作列表或抽屉副标题', () =
   assert.doesNotMatch(serviceSource, />\{service\.id\}<\/div>/);
   assert.doesNotMatch(serviceSource, />\{editingId \?\? 'create draft'\}<\/div>/);
   assert.doesNotMatch(servicePickerSource, />\{service\.id\}<\/div>/);
-  assert.doesNotMatch(metricsEndpointSource, />\{endpoint\.id\}<\/div>/);
-  assert.doesNotMatch(metricsAlertSource, />\{rule\.id\}<\/div>/);
-  assert.doesNotMatch(metricsDashboardSource, />\{grafanaEndpoint\.id\}<\/div>/);
 });

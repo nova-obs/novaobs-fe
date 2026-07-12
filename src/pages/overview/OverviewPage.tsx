@@ -63,7 +63,7 @@ export function OverviewPage() {
                         <div className="font-semibold text-primary">{service.name}</div>
                         <div className="text-[11px] text-muted">{service.displayName || service.serviceType || '-'}</div>
                       </td>
-                      <td className="font-mono text-xs">{service.environment || '-'}</td>
+                      <td className="font-mono text-xs">{service.environmentId || '-'}</td>
                       <td className="font-mono text-xs">{serviceLocation(service)}</td>
                       <td className="text-xs text-muted">{serviceOwner(service)}</td>
                       <td className="text-xs text-muted">{sourceLabel(service.source)}</td>

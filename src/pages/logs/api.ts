@@ -175,7 +175,7 @@ export interface LogsServiceSummary {
 	projectId: string;
   name: string;
   displayName: string;
-  environment: string;
+  environmentId: string;
   cluster: string;
   namespace: string;
   ownerTeam: string;
@@ -190,7 +190,7 @@ export interface LogsAgentGroupSummary {
   name: string;
   displayName: string;
   mode: string;
-  environment: string;
+  environmentId: string;
   cluster: string;
   namespace: string;
   status: string;
@@ -253,8 +253,6 @@ export interface LogRouteInput {
     collectorFragmentYAML?: string;
   };
   vm?: {
-    hostGroup?: string;
-    hostSelector?: Record<string, string>;
     pathPattern?: string;
     parseRules?: LogParseRule[];
     collectorYAML?: string;
@@ -265,7 +263,7 @@ export interface SyncK8sServicesInput {
 	productId: string;
   clusterId: string;
   namespace: string;
-  environment?: string;
+  environmentId?: string;
   ownerTeam?: string;
   workloadKind?: string;
 }
@@ -319,6 +317,29 @@ export interface LogRoutePublishResult {
   confirmationToken: string;
   auditId: string;
   warnings: string[];
+}
+
+export interface VMInstallation {
+  routeId: string;
+  serviceId: string;
+  collectorConfigHash: string;
+  collectorYAML: string;
+  installScript: string;
+  healthAddressExample: string;
+  prerequisites: string[];
+}
+
+export interface VMAgentEndpoint {
+  id: string;
+  routeId: string;
+  serviceId: string;
+  name: string;
+  address: string;
+  status: string;
+  lastProbeStatus: string;
+  lastProbeMessage: string;
+  lastProbeLatencyMs: number;
+  lastProbeAt: string;
 }
 
 export interface LogRuntimePublishInput {
@@ -552,7 +573,7 @@ function mapServiceSummary(raw: any): LogsServiceSummary {
 	projectId: String(raw.project_id ?? raw.projectId ?? ''),
     name: raw.name ?? '',
     displayName: raw.display_name ?? raw.displayName ?? '',
-    environment: raw.environment ?? '',
+    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     ownerTeam: raw.owner_team ?? raw.ownerTeam ?? '',
@@ -579,7 +600,7 @@ function mapWorkspace(raw: any): LogOnboardingWorkspace {
       name: item.name ?? '',
       displayName: item.display_name ?? item.displayName ?? '',
       mode: item.mode ?? '',
-      environment: item.environment ?? '',
+      environmentId: item.environment_id ?? '',
       cluster: item.cluster ?? '',
       namespace: item.namespace ?? '',
       status: item.status ?? '',
@@ -651,7 +672,7 @@ function mapSyncedService(raw: any): SyncedK8sService {
 	  projectId: String(service.project_id ?? service.projectId ?? ''),
       name: service.name ?? '',
       displayName: service.display_name ?? service.displayName ?? '',
-      environment: service.environment ?? '',
+      environmentId: service.environment_id ?? '',
       cluster: service.cluster ?? '',
       namespace: service.namespace ?? '',
       ownerTeam: service.owner_team ?? service.ownerTeam ?? '',
@@ -722,6 +743,33 @@ function mapRoutePublish(raw: any): LogRoutePublishResult {
     confirmationToken: raw.confirmation_token ?? raw.confirmationToken ?? '',
     auditId: raw.audit_id ?? raw.auditId ?? '',
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
+  };
+}
+
+function mapVMInstallation(raw: any): VMInstallation {
+  return {
+    routeId: raw.route_id ?? raw.routeId ?? '',
+    serviceId: raw.service_id ?? raw.serviceId ?? '',
+    collectorConfigHash: raw.collector_config_hash ?? raw.config_hash ?? raw.collectorConfigHash ?? '',
+    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
+    installScript: raw.install_script ?? raw.installScript ?? '',
+    healthAddressExample: raw.health_address_example ?? raw.healthAddressExample ?? '',
+    prerequisites: Array.isArray(raw.prerequisites) ? raw.prerequisites.map(String) : [],
+  };
+}
+
+function mapVMAgentEndpoint(raw: any): VMAgentEndpoint {
+  return {
+    id: raw.id ?? '',
+    routeId: raw.route_id ?? raw.routeId ?? '',
+    serviceId: raw.service_id ?? raw.serviceId ?? '',
+    name: raw.name ?? '',
+    address: raw.address ?? '',
+    status: raw.status ?? '',
+    lastProbeStatus: raw.last_probe_status ?? raw.lastProbeStatus ?? '',
+    lastProbeMessage: raw.last_probe_message ?? raw.lastProbeMessage ?? '',
+    lastProbeLatencyMs: raw.last_probe_latency_ms ?? raw.latency_ms ?? raw.lastProbeLatencyMs ?? 0,
+    lastProbeAt: raw.last_probe_at ?? raw.lastProbeAt ?? '',
   };
 }
 
@@ -840,8 +888,6 @@ function toRoutePayload(input: LogRouteInput) {
       collector_fragment_yaml: input.k8s?.collectorFragmentYAML ?? '',
     },
     vm: isVM ? {
-      host_group: input.vm?.hostGroup,
-      host_selector: input.vm?.hostSelector ?? {},
       path_pattern: input.vm?.pathPattern,
       parse_rules: toParseRulesPayload(input.vm?.parseRules),
       collector_yaml: input.vm?.collectorYAML,
@@ -901,7 +947,7 @@ export const logsApi = {
       body: JSON.stringify({
         cluster_id: input.clusterId,
         namespace: input.namespace,
-        environment: input.environment,
+		environment_id: input.environmentId,
         owner_team: input.ownerTeam,
         workload_kind: input.workloadKind,
       }),
@@ -1049,6 +1095,25 @@ export const logsApi = {
         confirmation_token: confirmation?.confirmationToken,
       }),
     }));
+  },
+  async getVMInstallation(routeId: string): Promise<VMInstallation> {
+    return mapVMInstallation(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-installation`));
+  },
+  async listVMAgentEndpoints(routeId: string): Promise<VMAgentEndpoint[]> {
+    const raw = await apiRequest<any[] | null>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints`);
+    return Array.isArray(raw) ? raw.map(mapVMAgentEndpoint) : [];
+  },
+  async createVMAgentEndpoint(routeId: string, input: { name: string; address: string }): Promise<VMAgentEndpoint> {
+    return mapVMAgentEndpoint(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints`, {
+      method: 'POST',
+      body: JSON.stringify({ name: input.name, address: input.address }),
+    }));
+  },
+  async probeVMAgentEndpoint(routeId: string, endpointId: string): Promise<VMAgentEndpoint> {
+    return mapVMAgentEndpoint(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints/${encodeURIComponent(endpointId)}/probe`, { method: 'POST' }));
+  },
+  async deleteVMAgentEndpoint(routeId: string, endpointId: string): Promise<void> {
+    await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints/${encodeURIComponent(endpointId)}`, { method: 'DELETE' });
   },
   async deleteRoute(routeId: string): Promise<void> {
     await apiRequest<any>(`/logs/routes/${routeId}`, { method: 'DELETE' });

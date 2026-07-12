@@ -24,18 +24,14 @@ import { LogsAlertsPage } from '../pages/logs/LogsAlertsPage';
 import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
 import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
-import { MetricsAlertsPage } from '../pages/metrics/MetricsAlertsPage';
-import { MetricsAlertRulePage } from '../pages/metrics/MetricsAlertRulePage';
-import { MetricsCollectionPage } from '../pages/metrics/MetricsCollectionPage';
-import { MetricsRouteEditorPage } from '../pages/metrics/MetricsRouteEditorPage';
-import { MetricsDashboardsPage } from '../pages/metrics/MetricsDashboardsPage';
-import { MetricsEndpointsPage } from '../pages/metrics/MetricsEndpointsPage';
-import { MetricsExplorePage } from '../pages/metrics/MetricsExplorePage';
+import { MetricsEnvironmentsPage } from '../pages/metrics/MetricsEnvironmentsPage';
 import { MetricsLayout } from '../pages/metrics/MetricsLayout';
+import { MetricsMonitoringPage } from '../pages/metrics/MetricsMonitoringPage';
 import { MetricsOverviewPage } from '../pages/metrics/MetricsOverviewPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
 import { ObservabilitySettingsPage } from '../pages/platform/ObservabilitySettingsPage';
 import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPage';
+import { PlatformEnvironmentsPage } from '../pages/platform/PlatformEnvironmentsPage';
 import { PlatformLayout } from '../pages/platform/PlatformLayout';
 import { PlatformSettingsPage } from '../pages/platform/PlatformSettingsPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
@@ -87,53 +83,38 @@ const k8sChildRoutes: RouteDefinition[] = [
 const logsChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <ServiceLogsIndexRedirect /> },
   { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
-  { path: 'onboarding', title: '创建采集路由', element: <Navigate to="../agents/new" replace /> },
-  { path: 'agents/new', title: '创建采集路由', element: <LogsOnboardingPage /> },
-  { path: 'agents/:id/edit', title: '更新采集路由', element: <LogsOnboardingPage /> },
-  { path: 'agents', title: 'Logs 采集路由', element: <LogsAgentsPage /> },
+  { path: 'onboarding', title: '创建日志采集路由', element: <Navigate to="../agents/new" replace /> },
+  { path: 'agents/new', title: '创建日志采集路由', element: <LogsOnboardingPage /> },
+  { path: 'agents/:id/edit', title: '更新日志采集路由', element: <LogsOnboardingPage /> },
+  { path: 'agents', title: 'Logs 日志采集', element: <LogsAgentsPage /> },
   { path: 'alerts/new', title: '创建日志告警', element: <LogsAlertsPage /> },
   { path: 'alerts/:id', title: '更新日志告警', element: <LogsAlertsPage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
-  { path: 'endpoints', title: '观测接入配置', element: <Navigate to="/logs/endpoints" replace /> },
+  { path: 'endpoints', title: 'Logs 下游端点', element: <Navigate to="/observability/endpoints/logs" replace /> },
 ];
 
 const logsEntryChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <Navigate to="/logs/explore" replace /> },
   { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
-  { path: 'agents', title: 'Logs 采集路由', element: <LogsAgentsPage /> },
+  { path: 'agents', title: 'Logs 日志采集', element: <LogsAgentsPage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
-  { path: 'endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
+  { path: 'endpoints', title: 'Logs 下游端点', element: <Navigate to="/observability/endpoints/logs" replace /> },
 ];
 
 const platformChildRoutes: RouteDefinition[] = [
-  { index: true, title: '平台管理', element: <Navigate to="/platform/settings" replace /> },
+  { index: true, title: '平台管理', element: <Navigate to="/platform/environments" replace /> },
+  { path: 'environments', title: '环境管理', element: <PlatformEnvironmentsPage /> },
   { path: 'settings', title: '平台设置', element: <PlatformSettingsPage /> },
   { path: 'access', title: '平台管理', element: <PlatformAccessAdminPage /> },
-  { path: 'observability', title: '观测接入配置', element: <Navigate to="/observability/endpoints" replace /> },
-];
-
-const metricsChildRoutes: RouteDefinition[] = [
-  { index: true, title: '指标查询', element: <ServiceMetricsIndexRedirect /> },
-  { path: 'explore', title: '指标查询', element: <MetricsExplorePage /> },
-  { path: 'alerts/new', title: '创建指标告警', element: <MetricsAlertRulePage /> },
-  { path: 'alerts/:id', title: '编辑指标告警', element: <MetricsAlertRulePage /> },
-  { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
-  { path: 'dashboards', title: 'Dashboard', element: <MetricsDashboardsPage /> },
-  { path: 'routes/new', title: '创建指标采集路由', element: <MetricsRouteEditorPage /> },
-  { path: 'routes/:id/edit', title: '更新指标采集路由', element: <MetricsRouteEditorPage /> },
-  { path: 'routes', title: '采集路由', element: <MetricsCollectionPage /> },
-  { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
-  { path: 'endpoints', title: '接入端点', element: <Navigate to="/metrics/endpoints" replace /> },
+  { path: 'observability', title: 'Logs 下游端点', element: <Navigate to="/observability/endpoints/logs" replace /> },
 ];
 
 const metricsEntryChildRoutes: RouteDefinition[] = [
-  { index: true, title: '指标查询', element: <Navigate to="/metrics/explore" replace /> },
-  { path: 'explore', title: '指标查询', element: <MetricsExplorePage /> },
-  { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
-  { path: 'dashboards', title: 'Dashboard', element: <MetricsDashboardsPage /> },
-  { path: 'routes', title: '采集路由', element: <MetricsCollectionPage /> },
+  { index: true, title: '监控总览', element: <Navigate to="/metrics/overview" replace /> },
   { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
-  { path: 'endpoints', title: '接入端点', element: <MetricsEndpointsPage /> },
+  { path: 'monitoring', title: '指标监控', element: <MetricsMonitoringPage /> },
+  { path: 'environments', title: '环境接入', element: <MetricsEnvironmentsPage /> },
+  { path: 'endpoints', title: '指标下游端点', element: <Navigate to="/observability/endpoints/metrics" replace /> },
 ];
 
 export const routeDefinitions: RouteDefinition[] = [
@@ -142,9 +123,11 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/services" replace /> },
 	{ path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsEntryChildRoutes },
   { path: '/products/:productId/services/:serviceId/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
-  { path: '/observability/endpoints', title: '观测接入配置', element: <ObservabilitySettingsPage /> },
-  { path: '/metrics', title: '指标查询', element: <MetricsLayout />, children: metricsEntryChildRoutes },
-	{ path: '/products/:productId/services/:serviceId/metrics', title: '监控', element: <MetricsLayout />, children: metricsChildRoutes },
+  { path: '/products/:productId/services/:serviceId/metrics/endpoints', title: '指标下游端点', element: <Navigate to="/observability/endpoints/metrics" replace /> },
+  { path: '/observability/endpoints', title: 'Logs 下游端点', element: <Navigate to="/observability/endpoints/logs" replace /> },
+  { path: '/observability/endpoints/logs', title: 'Logs 下游端点', element: <ObservabilitySettingsPage key="logs-endpoints" domain="logs" /> },
+  { path: '/observability/endpoints/metrics', title: '指标下游端点', element: <ObservabilitySettingsPage key="metrics-endpoints" domain="metrics" /> },
+  { path: '/metrics', title: '监控总览', element: <MetricsLayout />, children: metricsEntryChildRoutes },
   { path: '/traces', title: 'Trace', element: <TracesPage /> },
   { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },
   { path: '/k8s', title: 'K8s 运维', element: <K8sOpsLayout />, children: k8sChildRoutes },
@@ -195,9 +178,4 @@ function K8sObservabilityRedirect() {
 function ServiceLogsIndexRedirect() {
 	const { productId = '', serviceId = '' } = useParams();
 	return <Navigate to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/explore`} replace />;
-}
-
-function ServiceMetricsIndexRedirect() {
-	const { productId = '', serviceId = '' } = useParams();
-	return <Navigate to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/metrics/explore`} replace />;
 }

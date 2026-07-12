@@ -1,14 +1,13 @@
 import {
   Bell,
-  BarChart3,
   BookOpenCheck,
   Boxes,
   Activity,
   FileText,
-  Database,
   Gauge,
   GitBranch,
   LayoutDashboard,
+  Layers3,
   Monitor,
   RadioTower,
   Search,
@@ -61,7 +60,7 @@ const navigationDomains: NavigationDomain[] = [
   {
     id: 'observability',
     label: '可观测性',
-    description: 'Logs、监控、Trace 与告警',
+    description: 'Logs、监控与 Trace',
     icon: BookOpenCheck,
     groups: [
       {
@@ -71,33 +70,39 @@ const navigationDomains: NavigationDomain[] = [
           {
             id: 'logs',
             label: 'Logs',
-            description: '日志检索、采集路由与服务级告警',
+            description: '检索、采集与日志告警',
             path: '/logs',
             icon: FileText,
 			children: [
 			  { id: 'logs-explore', label: '日志分析', description: '选择服务并检索原始日志', path: '/logs/explore', icon: Search },
-			  { id: 'logs-agents', label: '采集路由', description: '管理服务日志采集与发布', path: '/logs/agents', icon: ServerCog },
+			  { id: 'logs-agents', label: '日志采集', description: '管理服务日志采集与发布', path: '/logs/agents', icon: ServerCog },
 			  { id: 'logs-alerts', label: '日志告警', description: '管理服务级日志告警规则', path: '/logs/alerts', icon: Bell },
-			  { id: 'logs-endpoints', label: '接入配置', description: '维护平台日志下游端点', path: '/logs/endpoints', icon: RadioTower },
 			],
           },
           {
             id: 'metrics',
             label: '监控',
-            description: '指标查询、服务作用域和指标告警',
+            description: '指标观测与环境接入',
             path: '/metrics',
             icon: Monitor,
             children: [
-              { id: 'metrics-explore', label: '指标查询', description: '选择服务并查询指标', path: '/metrics/explore', icon: Activity },
-              { id: 'metrics-alerts', label: '指标告警', description: '管理服务级指标告警规则', path: '/metrics/alerts', icon: Bell },
-              { id: 'metrics-dashboards', label: 'Dashboard', description: '查看服务关联 Dashboard', path: '/metrics/dashboards', icon: BarChart3 },
-              { id: 'metrics-routes', label: '采集路由', description: '配置 K8s 服务指标采集与发布', path: '/metrics/routes', icon: RadioTower },
-              { id: 'metrics-overview', label: '监控总览', description: '查看服务指标健康与接入状态', path: '/metrics/overview', icon: Gauge },
-              { id: 'metrics-endpoints', label: '接入端点', description: '管理服务指标下游端点', path: '/metrics/endpoints', icon: Database },
+              { id: 'metrics-overview', label: '监控总览', description: '查看环境接入健康与关键信号', path: '/metrics/overview', icon: Gauge },
+              { id: 'metrics-monitoring', label: '指标监控', description: '查看指标监控视图', path: '/metrics/monitoring', icon: Activity },
+              { id: 'metrics-environments', label: '环境接入', description: '管理环境指标来源和写入目标', path: '/metrics/environments', icon: RadioTower },
             ],
           },
-          { id: 'traces', label: 'Trace', description: '链路查询、Span 详情与日志反跳', path: '/traces', icon: GitBranch },
-          { id: 'alerts', label: '告警', description: '告警实例、通知策略与处置记录', path: '/alerts', icon: Bell },
+          { id: 'traces', label: 'Trace', description: '链路查询与 Span 分析', path: '/traces', icon: GitBranch },
+          {
+            id: 'observability-endpoints',
+            label: '接入配置',
+            description: '管理日志与指标下游',
+            path: '/observability/endpoints/logs',
+            icon: RadioTower,
+            children: [
+              { id: 'observability-logs-endpoints', label: 'Logs 下游端点', description: '管理日志写入与查询端点', path: '/observability/endpoints/logs', icon: FileText },
+              { id: 'observability-metrics-endpoints', label: '指标下游端点', description: '管理指标写入与查询端点', path: '/observability/endpoints/metrics', icon: Activity },
+            ],
+          },
         ],
       },
     ],
@@ -137,6 +142,7 @@ const navigationDomains: NavigationDomain[] = [
         id: 'platform-settings',
         label: '平台设置',
         items: [
+          { id: 'platform-environments', label: '环境管理', description: '统一环境身份与运行资源归属', path: '/platform/environments', icon: Layers3 },
           { id: 'platform-settings', label: '平台设置', description: '平台级模板与运行配置', path: '/platform/settings', icon: Settings },
           { id: 'platform-access', label: '访问控制', description: '用户、组、角色与授权', path: '/platform/access', icon: ShieldCheck },
         ],
@@ -187,8 +193,8 @@ export const getNavigationByPath = (path: string) => {
   if (normalizedPath.startsWith('/agents/') || normalizedPath === '/onboarding') {
     return allNavigationItems.find((item) => item.id === 'logs-agents');
   }
-  if (normalizedPath === '/observability/endpoints') {
-    return allNavigationItems.find((item) => item.id === 'logs-endpoints');
+  if (normalizedPath === '/observability/endpoints' || normalizedPath === '/logs/endpoints') {
+    return allNavigationItems.find((item) => item.id === 'observability-logs-endpoints');
   }
   return [...allNavigationItems]
     .sort((left, right) => {
@@ -207,17 +213,14 @@ function logsNavigationChildID(segment: string): string | undefined {
 	if (segment === 'explore') return 'logs-explore';
 	if (segment === 'agents' || segment === 'onboarding') return 'logs-agents';
 	if (segment === 'alerts') return 'logs-alerts';
-	if (segment === 'endpoints') return 'logs-endpoints';
+	if (segment === 'endpoints') return 'observability-logs-endpoints';
 	return undefined;
 }
 
 function metricsNavigationChildID(segment: string): string | undefined {
-	if (segment === 'explore') return 'metrics-explore';
-	if (segment === 'alerts') return 'metrics-alerts';
-	if (segment === 'dashboards') return 'metrics-dashboards';
-	if (segment === 'routes') return 'metrics-routes';
 	if (segment === 'overview') return 'metrics-overview';
-	if (segment === 'endpoints') return 'metrics-endpoints';
+	if (segment === 'monitoring') return 'metrics-monitoring';
+	if (segment === 'environments') return 'metrics-environments';
 	return undefined;
 }
 

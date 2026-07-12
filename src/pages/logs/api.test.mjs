@@ -36,14 +36,14 @@ test('获取 Logs 接入工作台时调用统一 onboarding workspace 接口', a
   const { request, result } = await captureRequest(
 	() => logsApi.getWorkspace('product-001', 'svc-001'),
     {
-      services: [{ id: 'svc-001', name: 'order-api', environment: 'prod' }],
+      services: [{ id: 'svc-001', name: 'order-api', environmentId: 'prod' }],
       collector_groups: [{ id: 'ag-001', name: 'prod-ds', mode: 'daemonset', online_instances: 2 }],
       clusters: [{ id: 'test03', name: 'test03', version: 'v1.28.3', access_mode: 'direct/ro', read_only: true }],
       endpoints: [{ id: 'vl-001', name: 'vl-prod', sink_type: 'vl', stream_name: '', write_url: 'http://vl/insert', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527', scope_type: 'k8s_cluster', cluster_id: 'test03' }],
       routes: [],
       targets: [{
         target: { id: 'target-001', name: 'orders 自建 VL', service_id: 'svc-001', endpoint_id: 'vl-001', source_kind: 'external_vlogs', base_filter: '"stream":"orders"', status: 'verified' },
-        service: { id: 'svc-001', name: 'order-api', environment: 'prod' },
+        service: { id: 'svc-001', name: 'order-api', environmentId: 'prod' },
         endpoint: { id: 'vl-001', name: 'vl-prod', sink_type: 'vl', query_url: 'http://vl/select/logsql/query', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527' },
       }],
     },
@@ -107,7 +107,7 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
   const { result } = await captureRequest(
 	() => logsApi.getWorkspace('product-001', 'svc-001'),
     {
-      services: [{ id: 'svc-001', name: 'order-api', environment: 'prod', identity_type: 'k8s_workload' }],
+      services: [{ id: 'svc-001', name: 'order-api', environmentId: 'prod', identity_type: 'k8s_workload' }],
       collector_groups: [],
       clusters: [],
       endpoints: [{ id: 'sink-001', name: 'vl-prod', sink_type: 'vl', write_url: 'http://vl/insert' }],
@@ -414,7 +414,7 @@ test('同步 K8s namespace 服务时使用专用 logs onboarding 接口', async 
 	  productId: 'product-orders',
       clusterId: 'test03',
       namespace: 'logplatform',
-      environment: 'prod',
+      environmentId: 'prod',
       ownerTeam: 'sre',
       workloadKind: 'Deployment',
     }),
@@ -580,7 +580,6 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
         namespace: 'logplatform',
       },
       vm: {
-        hostGroup: 'billing-vms',
         pathPattern: '/data/logs/*.log',
         collectorYAML: 'receivers:\n  file_log/vm:\n',
       },
@@ -598,7 +597,8 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
 
   assert.equal(request.body.source_type, 'vm_file');
   assert.equal(request.body.vm.collector_yaml, 'receivers:\n  file_log/vm:\n');
-  assert.equal(request.body.vm.host_group, 'billing-vms');
+  assert.equal('host_group' in request.body.vm, false);
+  assert.equal('host_selector' in request.body.vm, false);
   assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(request.body.k8s.cluster_id, undefined);
 });
@@ -644,4 +644,83 @@ test('发布 VM Logs route 时传递 preview confirmation token', async () => {
   assert.equal('plan' in result, false);
   assert.equal('resources' in result, false);
   assert.equal('diffs' in result, false);
+});
+
+test('读取 VM 手工安装材料并映射 snake_case 字段', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.getVMInstallation('route-vm-001'),
+    {
+      route_id: 'route-vm-001',
+      service_id: 'svc-001',
+      collector_config_hash: 'sha256:abc',
+      collector_yaml: 'receivers: {}',
+      install_script: '#!/bin/sh\necho install',
+      health_address_example: '10.0.0.8:13133',
+      prerequisites: ['Linux', 'root 权限'],
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/logs/routes/route-vm-001/vm-installation');
+  assert.equal(request.init.method, undefined);
+  assert.deepEqual(result, {
+    routeId: 'route-vm-001',
+    serviceId: 'svc-001',
+    collectorConfigHash: 'sha256:abc',
+    collectorYAML: 'receivers: {}',
+    installScript: '#!/bin/sh\necho install',
+    healthAddressExample: '10.0.0.8:13133',
+    prerequisites: ['Linux', 'root 权限'],
+  });
+});
+
+test('VM Agent 节点支持列表、登记、校验和删除', async () => {
+  const listed = await captureRequest(
+    () => logsApi.listVMAgentEndpoints('route-vm-001'),
+    [{
+      id: 'node-001',
+      route_id: 'route-vm-001',
+      service_id: 'svc-001',
+      name: 'vm-a',
+      address: '10.0.0.8:13133',
+      status: 'pending_probe',
+      last_probe_status: 'unreachable',
+      last_probe_message: 'connection refused',
+      last_probe_latency_ms: 24,
+      last_probe_at: '2026-07-12T08:00:00Z',
+    }],
+  );
+  assert.equal(listed.request.path, '/api/v1/logs/routes/route-vm-001/vm-agent-endpoints');
+  assert.deepEqual(listed.result[0], {
+    id: 'node-001',
+    routeId: 'route-vm-001',
+    serviceId: 'svc-001',
+    name: 'vm-a',
+    address: '10.0.0.8:13133',
+    status: 'pending_probe',
+    lastProbeStatus: 'unreachable',
+    lastProbeMessage: 'connection refused',
+    lastProbeLatencyMs: 24,
+    lastProbeAt: '2026-07-12T08:00:00Z',
+  });
+
+  const created = await captureRequest(
+    () => logsApi.createVMAgentEndpoint('route-vm-001', { name: 'vm-b', address: '10.0.0.9:13133' }),
+    { id: 'node-002', route_id: 'route-vm-001', service_id: 'svc-001', name: 'vm-b', address: '10.0.0.9:13133', status: 'pending_probe' },
+  );
+  assert.equal(created.request.init.method, 'POST');
+  assert.deepEqual(created.request.body, { name: 'vm-b', address: '10.0.0.9:13133' });
+
+  const probed = await captureRequest(
+    () => logsApi.probeVMAgentEndpoint('route-vm-001', 'node-002'),
+    { id: 'node-002', route_id: 'route-vm-001', service_id: 'svc-001', name: 'vm-b', address: '10.0.0.9:13133', status: 'reachable', last_probe_status: 'reachable' },
+  );
+  assert.equal(probed.request.path, '/api/v1/logs/routes/route-vm-001/vm-agent-endpoints/node-002/probe');
+  assert.equal(probed.request.init.method, 'POST');
+  assert.equal(probed.result.lastProbeStatus, 'reachable');
+
+  const removed = await captureRequest(
+    () => logsApi.deleteVMAgentEndpoint('route-vm-001', 'node-002'),
+  );
+  assert.equal(removed.request.path, '/api/v1/logs/routes/route-vm-001/vm-agent-endpoints/node-002');
+  assert.equal(removed.request.init.method, 'DELETE');
 });

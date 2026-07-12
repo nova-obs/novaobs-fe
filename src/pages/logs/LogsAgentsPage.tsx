@@ -4,7 +4,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Copy, FileText, Loader2, PanelRightOpen, Plus, RefreshCw, Server, ShieldCheck, Trash2, WifiOff, XCircle } from 'lucide-react';
 import { api } from '../../services/api';
-import { logSinkLabel, logSourceLabel, logsApi, type LogRouteView } from './api';
+import { logSinkLabel, logSourceLabel, logsApi, type LogRouteView, type VMAgentEndpoint } from './api';
 import { routeLifecycle, serviceDisplayName, statusPillClass } from './ServicePickerPanel';
 import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsToolbarButton } from './LogsPrimitives';
 import { LogsEntitySelector } from './LogsEntitySelector';
@@ -31,6 +31,7 @@ export function LogsAgentsPage() {
   const routes = workspace?.routes ?? [];
   const serviceById = useMemo(() => new Map(services.map((service) => [service.id, service])), [services]);
   const activeRoute = routes.find((route) => route.route.id === selectedRouteId) ?? routes[0] ?? null;
+  const activeRouteIsVM = activeRoute?.route.sourceType === 'vm_file';
   const activeGroupId = activeRoute?.route.agentGroupId ?? '';
   const activeGroup = groups.find((group) => group.id === activeGroupId) ?? null;
   const activeService = activeRoute ? serviceById.get(activeRoute.route.serviceId) ?? null : null;
@@ -58,6 +59,12 @@ export function LogsAgentsPage() {
     refetchInterval: 10000,
   });
   const onlineCount = instances.filter((item) => item.healthy).length;
+  const { data: vmEndpoints = [], isLoading: vmEndpointsLoading, error: vmEndpointsError, refetch: refetchVMEndpoints } = useQuery({
+    queryKey: ['logs-vm-agent-endpoints', activeRoute?.route.id],
+    queryFn: () => logsApi.listVMAgentEndpoints(activeRoute?.route.id ?? ''),
+    enabled: Boolean(activeRouteIsVM && activeRoute?.route.id),
+    refetchInterval: 10000,
+  });
 
   const collectorConfigMutation = useMutation({
     mutationFn: (routeId: string) => logsApi.getRouteCollectorConfig(routeId),
@@ -91,7 +98,15 @@ export function LogsAgentsPage() {
     setSearchParams(next, { replace: true });
   }
 
-  const activeLifecycle = activeRoute ? routeLifecycle(activeRoute) : null;
+  const activeLifecycle = activeRoute
+    ? activeRouteIsVM
+      ? vmEndpointsLoading
+        ? { label: '读取中', tone: 'primary' as const, detail: '正在读取 VM 节点状态' }
+        : vmEndpointsError
+          ? { label: '状态未知', tone: 'warning' as const, detail: 'VM 节点状态读取失败' }
+          : vmRouteLifecycle(vmEndpoints)
+      : routeLifecycle(activeRoute)
+    : null;
   const activeServiceName = activeService ? serviceDisplayName(activeService) : activeRoute?.route.serviceId ?? '-';
   const contextService = contextRoute ? serviceById.get(contextRoute.route.serviceId) ?? null : null;
   const contextGroup = contextRoute ? groups.find((group) => group.id === contextRoute.route.agentGroupId) ?? null : null;
@@ -133,7 +148,7 @@ export function LogsAgentsPage() {
                 renderOption={(route, selected) => {
                   const service = serviceById.get(route.route.serviceId) ?? null;
                   const name = service ? serviceDisplayName(service) : route.route.serviceId;
-                  const lifecycle = routeLifecycle(route);
+                  const lifecycle = route.route.id === activeRoute?.route.id ? activeLifecycle ?? routeLifecycle(route) : routeLifecycle(route);
                   const endpoint = route.endpoint ? logSinkLabel(route.endpoint.sinkType) : 'endpoint -';
                   return (
                     <>
@@ -151,7 +166,8 @@ export function LogsAgentsPage() {
             <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
               <LogsToolbarButton onClick={() => {
                 void refetchWorkspace();
-                if (activeGroupId) void refetchInstances();
+                if (activeRouteIsVM) void refetchVMEndpoints();
+                else if (activeGroupId) void refetchInstances();
               }}><RefreshCw className="h-3.5 w-3.5" />刷新</LogsToolbarButton>
 			  <Link className="console-button console-button-primary" to={`${base}/agents/new`}><Plus className="h-3.5 w-3.5" />创建采集路由</Link>
             </div>
@@ -179,7 +195,7 @@ export function LogsAgentsPage() {
                   </div>
                   <div className="flex items-center gap-5">
                     <button type="button" className={`h-8 border-b-2 text-xs font-semibold ${routeView === 'overview' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'}`} onClick={() => setRouteView('overview')}>运行概览</button>
-                    <button type="button" className={`h-8 border-b-2 text-xs font-semibold ${routeView === 'instances' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'}`} onClick={() => setRouteView('instances')}>Agent 实例</button>
+                    <button type="button" className={`h-8 border-b-2 text-xs font-semibold ${routeView === 'instances' ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-on-surface'}`} onClick={() => setRouteView('instances')}>{activeRouteIsVM ? 'VM 节点' : 'Agent 实例'}</button>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -214,13 +230,34 @@ export function LogsAgentsPage() {
                 <div className="min-h-0 flex-1 overflow-y-auto">
                   {routeView === 'overview' ? (
                     <div className="p-4">
-                      <dl className="grid border-y border-outline md:grid-cols-3 md:divide-x md:divide-outline">
-                        <RuntimeFact label="发布状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
-                        <RuntimeFact label="Agent 健康" value={`${onlineCount} / ${instances.length}`} tone={instances.length > 0 && onlineCount === instances.length ? 'primary' : undefined} />
-                        <RuntimeFact label="最近发布时间" value={activeRoute.route.lastPublishedAt || '-'} />
-                      </dl>
-                      <button type="button" className="mt-4 text-xs font-semibold text-primary hover:underline" onClick={() => setRouteView('instances')}>查看 Agent 实例 →</button>
+                      {activeRouteIsVM ? (
+                        vmEndpointsLoading ? <LogsEmptyState title="正在读取 VM 节点状态" /> : vmEndpointsError ? (
+                          <div className="space-y-3">
+                            <LogsErrorLine message={(vmEndpointsError as Error).message || 'VM 节点状态读取失败'} />
+                            <button type="button" className="console-button" onClick={() => void refetchVMEndpoints()}>重试</button>
+                          </div>
+                        ) : <>
+                          <dl className="grid border-y border-outline md:grid-cols-3 md:divide-x md:divide-outline">
+                            <RuntimeFact label="接入状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
+                            <RuntimeFact label="地址可达" value={`${vmEndpoints.filter((item) => item.status === 'reachable').length} / ${vmEndpoints.length}`} />
+                            <RuntimeFact label="最近校验" value={latestVMProbeAt(vmEndpoints)} />
+                          </dl>
+                          <p className="mt-3 text-xs text-muted">地址可达不代表采集中；这里只展示平台到 Agent 健康检查端口的连通性。</p>
+                          <button type="button" className="mt-3 text-xs font-semibold text-primary hover:underline" onClick={() => setRouteView('instances')}>查看 VM 节点 →</button>
+                        </>
+                      ) : (
+                        <>
+                          <dl className="grid border-y border-outline md:grid-cols-3 md:divide-x md:divide-outline">
+                            <RuntimeFact label="发布状态" value={activeLifecycle?.label || '-'} tone={activeLifecycle?.tone === 'success' ? 'primary' : undefined} />
+                            <RuntimeFact label="Agent 健康" value={`${onlineCount} / ${instances.length}`} tone={instances.length > 0 && onlineCount === instances.length ? 'primary' : undefined} />
+                            <RuntimeFact label="最近发布时间" value={activeRoute.route.lastPublishedAt || '-'} />
+                          </dl>
+                          <button type="button" className="mt-4 text-xs font-semibold text-primary hover:underline" onClick={() => setRouteView('instances')}>查看 Agent 实例 →</button>
+                        </>
+                      )}
                     </div>
+                  ) : activeRouteIsVM ? (
+                    <VMEndpointTable endpoints={vmEndpoints} loading={vmEndpointsLoading} error={vmEndpointsError} />
                   ) : !activeGroupId ? (
                     <LogsEmptyState title="路由尚未绑定采集域" description="完成预览并发布后，这里将展示 Agent 实例和运行状态。" />
                   ) : (
@@ -284,7 +321,7 @@ export function LogsAgentsPage() {
             <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
               <div className="min-w-0">
                 <div id="route-context-title" className="text-base font-semibold text-on-surface">路由详情</div>
-                <div className="mt-1 truncate text-[11px] text-muted">{logSourceLabel(contextRoute.route.sourceType)} · {routeLifecycle(contextRoute).label}</div>
+                <div className="mt-1 truncate text-[11px] text-muted">{logSourceLabel(contextRoute.route.sourceType)} · {contextRoute.route.id === activeRoute?.route.id ? activeLifecycle?.label ?? routeLifecycle(contextRoute).label : routeLifecycle(contextRoute).label}</div>
               </div>
               <button type="button" className="console-icon-button border-outline bg-white" aria-label="关闭路由详情" title="关闭" onClick={() => setContextRoute(null)}>
                 <XCircle className="h-4 w-4" />
@@ -295,10 +332,19 @@ export function LogsAgentsPage() {
               <LogsInfoCell label="范围" value={routeScope(contextRoute)} />
               <LogsInfoCell label="来源" value={logSourceLabel(contextRoute.route.sourceType)} />
               <LogsInfoCell label="下游" value={contextRoute.endpoint ? `${contextRoute.endpoint.name} · ${logSinkLabel(contextRoute.endpoint.sinkType)}` : '-'} />
-              <LogsInfoCell label="采集域" value={contextGroup?.displayName || contextGroup?.name || '-'} />
-              <LogsInfoCell label="采集域模式" value={contextGroup?.mode || '-'} />
-              <LogsInfoCell label="采集域范围" value={contextGroup ? contextAgentScope : '-'} />
-              <LogsInfoCell label="Agent Namespace" value={instances[0]?.agentNamespace || contextGroup?.namespace || '-'} />
+              {contextRoute.route.sourceType === 'vm_file' ? (
+                <>
+                  <LogsInfoCell label="VM 节点" value={contextRoute.route.id === activeRoute?.route.id ? String(vmEndpoints.length) : '-'} />
+                  <LogsInfoCell label="节点接入" value="运维手工安装并回填健康检查地址" />
+                </>
+              ) : (
+                <>
+                  <LogsInfoCell label="采集域" value={contextGroup?.displayName || contextGroup?.name || '-'} />
+                  <LogsInfoCell label="采集域模式" value={contextGroup?.mode || '-'} />
+                  <LogsInfoCell label="采集域范围" value={contextGroup ? contextAgentScope : '-'} />
+                  <LogsInfoCell label="Agent Namespace" value={instances[0]?.agentNamespace || contextGroup?.namespace || '-'} />
+                </>
+              )}
             </div>
             <div className="shrink-0 border-t border-outline bg-surface-lowest p-3">
               <div className="grid gap-2">
@@ -395,10 +441,60 @@ export function LogsAgentsPage() {
   );
 }
 
+function VMEndpointTable({ endpoints, loading, error }: { endpoints: VMAgentEndpoint[]; loading: boolean; error: unknown }) {
+  if (error) return <div className="p-4"><LogsErrorLine message={(error as Error).message || 'VM 节点加载失败'} /></div>;
+  if (loading) return <LogsEmptyState title="正在加载 VM 节点" />;
+  if (endpoints.length === 0) return <LogsEmptyState title="尚未回填 VM 节点" description="进入更新路由，复制安装脚本并登记每台 VM 的健康检查地址。" />;
+  return (
+    <div className="overflow-auto">
+      <table className="console-table min-w-[760px] w-full">
+        <thead><tr><th>节点</th><th>健康检查地址</th><th>连通状态</th><th>最近校验</th><th>结果</th></tr></thead>
+        <tbody>{endpoints.map((endpoint) => {
+          const status = vmEndpointDisplayStatus(endpoint);
+          return <tr key={endpoint.id}>
+            <td className="font-semibold">{endpoint.name || '-'}</td>
+            <td className="font-mono text-xs">{endpoint.address}</td>
+            <td><span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${status.className}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{status.label}</span></td>
+            <td className="font-mono text-[11px] text-muted">{formatVMTime(endpoint.lastProbeAt)}</td>
+            <td className="max-w-[300px] truncate text-xs text-muted" title={endpoint.lastProbeMessage}>{endpoint.lastProbeMessage || '-'}</td>
+          </tr>;
+        })}</tbody>
+      </table>
+    </div>
+  );
+}
+
+function vmRouteLifecycle(endpoints: VMAgentEndpoint[]): { label: string; tone: 'success' | 'warning' | 'danger' | 'muted'; detail: string } {
+  if (endpoints.length === 0) return { label: '等待回填', tone: 'muted', detail: '尚未登记 VM 节点' };
+  const reachable = endpoints.filter((item) => item.status === 'reachable').length;
+  const unreachable = endpoints.filter((item) => item.status === 'unreachable').length;
+  if (reachable === endpoints.length) return { label: '地址可达', tone: 'success', detail: '所有节点地址可达' };
+  if (reachable > 0) return { label: '部分可达', tone: 'warning', detail: '部分节点地址不可达或待校验' };
+  if (unreachable === endpoints.length) return { label: '地址不可达', tone: 'danger', detail: '所有节点地址均不可达' };
+  return { label: '待校验', tone: 'muted', detail: '节点地址尚未完成校验' };
+}
+
+function vmEndpointDisplayStatus(endpoint: VMAgentEndpoint) {
+  if (endpoint.status === 'reachable') return { label: '可达', className: 'text-emerald-700' };
+  if (endpoint.status === 'unreachable') return { label: '不可达', className: 'text-danger' };
+  return { label: '待校验', className: 'text-muted' };
+}
+
+function latestVMProbeAt(endpoints: VMAgentEndpoint[]) {
+  const latest = endpoints.map((item) => item.lastProbeAt).filter(Boolean).sort().at(-1) ?? '';
+  return formatVMTime(latest);
+}
+
+function formatVMTime(value: string) {
+  if (!value) return '-';
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('zh-CN', { hour12: false });
+}
+
 function routeScope(route?: LogRouteView | null) {
   const source = route?.source;
   if (!source) return '-';
-  if (source.sourceType === 'vm_file') return `${source.hostGroup || 'VM'} · ${source.pathPattern || '-'}`;
+  if (source.sourceType === 'vm_file') return `VM · ${source.pathPattern || '-'}`;
   return `${source.clusterId || '-'} / ${source.namespace || '-'} / ${source.workloadKind || '-'}/${source.workloadName || '-'}`;
 }
 
@@ -411,10 +507,10 @@ function RuntimeFact({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
-function collectorDomainScope(group?: { mode?: string; cluster?: string; namespace?: string; environment?: string } | null, instance?: { clusterId?: string; agentNamespace?: string } | null) {
+function collectorDomainScope(group?: { mode?: string; cluster?: string; namespace?: string; environmentId?: string } | null, instance?: { clusterId?: string; agentNamespace?: string } | null) {
   if (!group) return '-';
   if (group.mode === 'dedicated_collector' || group.mode === 'daemonset' || group.cluster) {
     return `${instance?.clusterId || group.cluster || '-'} / ${instance?.agentNamespace || group.namespace || '-'}`;
   }
-  return group.environment || '-';
+  return group.environmentId || '-';
 }

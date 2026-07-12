@@ -8,6 +8,7 @@ const workspaceSource = readFileSync(new URL('./LogsWorkspace.tsx', import.meta.
 const exploreSource = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 'utf8');
 const agentsSource = readFileSync(new URL('./LogsAgentsPage.tsx', import.meta.url), 'utf8');
 const alertsSource = readFileSync(new URL('./LogsAlertsPage.tsx', import.meta.url), 'utf8');
+const alertRuleSource = readFileSync(new URL('./LogsAlertRulePage.tsx', import.meta.url), 'utf8');
 const publishPreviewSource = readFileSync(new URL('./LogsPublishPreviewPanel.tsx', import.meta.url), 'utf8');
 
 test('Logs 接入配置收敛为接入和发布路径', () => {
@@ -17,11 +18,30 @@ test('Logs 接入配置收敛为接入和发布路径', () => {
   assert.equal(onboardingSource.includes('运行目标'), true);
   assert.equal(onboardingSource.includes('日志下游端点'), true);
   assert.equal(onboardingSource.includes('业务采集配置'), true);
-  assert.equal(onboardingSource.includes('发布预览'), true);
+  assert.equal(onboardingSource.includes('发布预览'), false);
+  assert.equal(onboardingSource.includes('配置预览'), true);
   assert.equal(onboardingSource.includes('生成预览'), true);
   assert.equal(onboardingSource.includes('保存草稿'), true);
-  assert.equal(onboardingSource.includes('确认发布'), true);
+  assert.equal(onboardingSource.includes('确认发布'), false);
   assert.equal(onboardingSource.includes('连通性检查'), false);
+});
+
+test('VM 日志接入使用手工安装与节点回填，不再表达平台自动发布', () => {
+  assert.equal(onboardingSource.includes('主机组<input'), false);
+  assert.equal(onboardingSource.includes('主机标签<input'), false);
+  assert.equal(onboardingSource.includes('logsApi.publishRoute'), false);
+  assert.equal(onboardingSource.includes('部署清单预览'), false);
+  assert.equal(onboardingSource.includes('手工安装'), true);
+  assert.equal(onboardingSource.includes('VM 节点'), true);
+  assert.equal(onboardingSource.includes('名称,host:port'), true);
+  assert.equal(onboardingSource.includes('地址可达不代表采集中'), true);
+  assert.equal(onboardingSource.includes('安装脚本写入每台 VM 的 Collector 配置'), true);
+  assert.equal(onboardingSource.includes('保存路由后获取安装材料'), true);
+  assert.equal(onboardingSource.includes('logsApi.getVMInstallation'), true);
+  assert.equal(onboardingSource.includes('logsApi.listVMAgentEndpoints'), true);
+  assert.equal(onboardingSource.includes('logsApi.createVMAgentEndpoint'), true);
+  assert.equal(onboardingSource.includes('logsApi.probeVMAgentEndpoint'), true);
+  assert.equal(onboardingSource.includes('logsApi.deleteVMAgentEndpoint'), true);
 });
 
 test('Logs 接入配置不再前端渲染 collector YAML', () => {
@@ -282,15 +302,16 @@ test('Logs 工作台将可用高度传递给采集路由和日志分析内容区
   assert.equal(exploreSource.includes('h-[650px]'), false);
 });
 
-test('Logs 告警和模块导航保留已闭环入口', () => {
+test('Logs 模块导航只保留服务级闭环入口', () => {
   assert.equal(workspaceSource.includes('日志分析'), true);
-  assert.equal(workspaceSource.includes('接入配置'), true);
-  assert.equal(workspaceSource.includes('采集路由'), true);
+  assert.equal(workspaceSource.includes('接入配置'), false);
+  assert.equal(workspaceSource.includes('日志采集'), true);
   assert.equal(workspaceSource.includes('日志告警'), true);
   assert.equal(alertsSource.includes('日志告警规则'), false);
   assert.equal(alertsSource.includes('`${filteredRules.length}/${logRules.length} rules · ${enabledCount} enabled`'), false);
   assert.equal(alertsSource.includes('暂无日志告警'), true);
-  assert.equal(alertsSource.includes('告警中心'), true);
+  assert.equal(alertsSource.includes('告警中心'), false);
+  assert.equal(alertRuleSource.includes('告警中心'), false);
   assert.equal(alertsSource.includes('规则上下文'), false);
   assert.equal(alertsSource.includes('规则字段'), false);
 });

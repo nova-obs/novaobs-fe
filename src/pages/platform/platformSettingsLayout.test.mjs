@@ -82,17 +82,24 @@ test('平台设置页面承载平台级镜像模板而非业务或项目配置',
   assert.equal(platformSettingsSource.includes('项目'), false);
 });
 
-test('观测接入配置先集中维护日志下游端点', () => {
-  assert.equal(observabilitySource.includes("queryKey: ['logs-endpoints']"), true);
+test('观测接入配置按领域维护日志和指标写入端点', () => {
+  assert.equal(observabilitySource.includes("queryKey: ['observability-endpoints', domain]"), true);
+  assert.equal(observabilitySource.includes('listEndpointsByDomain(domain)'), true);
   assert.equal(observabilitySource.includes('logsApi.listEndpoints'), true);
+  assert.equal(observabilitySource.includes('observabilityEndpointsApi.listVictoriaMetrics'), true);
   assert.equal(observabilitySource.includes('logsApi.createEndpoint'), true);
   assert.equal(observabilitySource.includes('logsApi.updateEndpoint'), true);
-  assert.equal(observabilitySource.includes('日志下游端点'), true);
+  assert.equal(observabilitySource.includes('observabilityEndpointsApi.createVictoriaMetrics'), true);
+  assert.equal(observabilitySource.includes('observabilityEndpointsApi.updateVictoriaMetrics'), true);
+  assert.equal(observabilitySource.includes("if (domain === 'metrics')"), true);
+  assert.equal(observabilitySource.includes("if (form.sinkType !== 'vm')"), true);
+  assert.equal(observabilitySource.includes("if (form.sinkType === 'vm')"), true);
+  assert.match(observabilitySource, /useEffect\(\(\) => \{[\s\S]*setQuery\(''\)[\s\S]*setForm\(createEmptyEndpoint\(domain\)\)[\s\S]*\}, \[domain\]\)/);
   assert.equal(observabilitySource.includes('console-table'), true);
   assert.equal(observabilitySource.includes('EndpointTableRow'), true);
   assert.equal(observabilitySource.includes('EndpointDetailDrawer'), true);
-  assert.equal(observabilitySource.includes('新增日志下游端点'), true);
-  assert.equal(observabilitySource.includes('编辑日志下游端点'), true);
+  assert.equal(observabilitySource.includes('新增${domainLabel}'), true);
+  assert.equal(observabilitySource.includes('编辑${domainLabel}'), true);
   assert.equal(observabilitySource.includes('EndpointFormSection'), true);
   assert.equal(observabilitySource.includes('端点身份'), true);
   assert.equal(observabilitySource.includes('地址配置'), true);
@@ -118,7 +125,7 @@ test('观测接入配置先集中维护日志下游端点', () => {
   assert.equal(observabilitySource.includes('生成租户 ID'), false);
   assert.equal(observabilitySource.includes('K8s 集群'), true);
   assert.equal(observabilitySource.includes('请选择已登记集群'), true);
-  assert.equal(observabilitySource.includes('日志端点只能绑定已登记的 K8s 集群'), true);
+  assert.equal(observabilitySource.includes('端点只能绑定已登记的 K8s 集群'), true);
   assert.equal(observabilitySource.includes('placeholder="test03"'), false);
   assert.equal(observabilitySource.includes('默认 Alertmanager URL'), false);
   assert.equal(observabilitySource.includes('Alertmanager notify URL'), false);
@@ -138,4 +145,11 @@ test('观测接入配置先集中维护日志下游端点', () => {
   assert.equal(observabilitySource.includes('集群 Collector 基础配置'), false);
   assert.equal(observabilitySource.includes('logsApi.getClusterConfig'), false);
   assert.equal(observabilitySource.includes('logsApi.upsertClusterConfig'), false);
+});
+
+test('观测接入配置提供 VictoriaMetrics 写入目标表单', () => {
+  assert.match(observabilitySource, /VictoriaMetrics/);
+  assert.match(observabilitySource, /Remote Write 地址/);
+  assert.match(observabilitySource, /observabilityEndpointsApi\.createVictoriaMetrics/);
+  assert.match(observabilitySource, /observabilityEndpointsApi\.test/);
 });

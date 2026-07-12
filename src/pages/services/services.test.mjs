@@ -11,7 +11,7 @@ function syncLabel(status) {
 }
 
 function hasActiveFilters(filters) {
-  return !!(filters.q || filters.environment || filters.status || filters.source);
+  return !!(filters.q || filters.environmentId || filters.status || filters.source);
 }
 
 test('source=manual 显示为本地录入', () => {
@@ -35,13 +35,13 @@ test('sync_status=synced 显示为已同步', () => {
 });
 
 test('空 filter 对象无激活筛选', () => {
-  assert.equal(hasActiveFilters({ q: '', environment: '', status: '', source: '' }), false);
+  assert.equal(hasActiveFilters({ q: '', environmentId: '', status: '', source: '' }), false);
 });
 
 test('有 q 时判定为激活筛选', () => {
-  assert.equal(hasActiveFilters({ q: 'payment', environment: '', status: '', source: '' }), true);
+  assert.equal(hasActiveFilters({ q: 'payment', environmentId: '', status: '', source: '' }), true);
 });
 
-test('有 environment 时判定为激活筛选', () => {
-  assert.equal(hasActiveFilters({ q: '', environment: 'prod', status: '', source: '' }), true);
+test('有 environmentId 时判定为激活筛选', () => {
+  assert.equal(hasActiveFilters({ q: '', environmentId: 'prod', status: '', source: '' }), true);
 });
