@@ -25,6 +25,7 @@ import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
 import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MetricsEnvironmentsPage } from '../pages/metrics/MetricsEnvironmentsPage';
+import { MetricsAlertsPage } from '../pages/metrics/MetricsAlertsPage';
 import { MetricsLayout } from '../pages/metrics/MetricsLayout';
 import { MetricsMonitoringPage } from '../pages/metrics/MetricsMonitoringPage';
 import { MetricsOverviewPage } from '../pages/metrics/MetricsOverviewPage';
@@ -113,6 +114,9 @@ const metricsEntryChildRoutes: RouteDefinition[] = [
   { index: true, title: '监控总览', element: <Navigate to="/metrics/overview" replace /> },
   { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
   { path: 'monitoring', title: '指标监控', element: <MetricsMonitoringPage /> },
+  { path: 'alerts/new', title: '创建指标告警', element: <MetricsAlertsPage /> },
+  { path: 'alerts/:id', title: '编辑指标告警', element: <MetricsAlertsPage /> },
+  { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
   { path: 'environments', title: '环境接入', element: <MetricsEnvironmentsPage /> },
   { path: 'endpoints', title: '指标下游端点', element: <Navigate to="/observability/endpoints/metrics" replace /> },
 ];
@@ -124,6 +128,9 @@ export const routeDefinitions: RouteDefinition[] = [
 	{ path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsEntryChildRoutes },
   { path: '/products/:productId/services/:serviceId/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
   { path: '/products/:productId/services/:serviceId/metrics/endpoints', title: '指标下游端点', element: <Navigate to="/observability/endpoints/metrics" replace /> },
+  { path: '/products/:productId/services/:serviceId/metrics/alerts/new', title: '创建指标告警', element: <Navigate to="/metrics/alerts/new" replace /> },
+  { path: '/products/:productId/services/:serviceId/metrics/alerts/:id', title: '编辑指标告警', element: <LegacyMetricsAlertRedirect /> },
+  { path: '/products/:productId/services/:serviceId/metrics/alerts', title: '指标告警', element: <Navigate to="/metrics/alerts" replace /> },
   { path: '/observability/endpoints', title: 'Logs 下游端点', element: <Navigate to="/observability/endpoints/logs" replace /> },
   { path: '/observability/endpoints/logs', title: 'Logs 下游端点', element: <ObservabilitySettingsPage key="logs-endpoints" domain="logs" /> },
   { path: '/observability/endpoints/metrics', title: '指标下游端点', element: <ObservabilitySettingsPage key="metrics-endpoints" domain="metrics" /> },
@@ -178,4 +185,9 @@ function K8sObservabilityRedirect() {
 function ServiceLogsIndexRedirect() {
 	const { productId = '', serviceId = '' } = useParams();
 	return <Navigate to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/explore`} replace />;
+}
+
+function LegacyMetricsAlertRedirect() {
+  const { id = '' } = useParams();
+  return <Navigate to={id ? `/metrics/alerts/${encodeURIComponent(id)}` : '/metrics/alerts'} replace />;
 }

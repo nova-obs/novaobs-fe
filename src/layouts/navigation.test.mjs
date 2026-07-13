@@ -24,6 +24,7 @@ test('超级菜单按业务域组织现有叶子入口且路径唯一', () => {
 	'/logs/alerts',
 	'/metrics/overview',
 	'/metrics/monitoring',
+	'/metrics/alerts',
 	'/metrics/environments',
     '/traces',
 	'/observability/endpoints/logs',
@@ -49,8 +50,8 @@ test('可观测性导航包含统一接入配置，Logs 只保留服务级功能
 	assert.deepEqual(logs?.children?.map((item) => item.label), ['日志分析', '日志采集', '日志告警']);
 	assert.deepEqual(logs?.children?.map((item) => item.path), ['/logs/explore', '/logs/agents', '/logs/alerts']);
   assert.equal(metrics?.path, '/metrics');
-	assert.deepEqual(metrics?.children?.map((item) => item.label), ['监控总览', '指标监控', '环境接入']);
-	assert.deepEqual(metrics?.children?.map((item) => item.path), ['/metrics/overview', '/metrics/monitoring', '/metrics/environments']);
+	assert.deepEqual(metrics?.children?.map((item) => item.label), ['监控总览', '指标监控', '指标告警', '环境接入']);
+	assert.deepEqual(metrics?.children?.map((item) => item.path), ['/metrics/overview', '/metrics/monitoring', '/metrics/alerts', '/metrics/environments']);
 	assert.equal(endpoints?.path, '/observability/endpoints/logs');
 	assert.deepEqual(endpoints?.children?.map((item) => item.label), ['Logs 下游端点', '指标下游端点']);
 	assert.deepEqual(endpoints?.children?.map((item) => item.path), ['/observability/endpoints/logs', '/observability/endpoints/metrics']);
@@ -83,6 +84,8 @@ test('根据路径解析当前导航项', () => {
   assert.equal(getNavigationByPath('/metrics')?.id, 'metrics');
 	assert.equal(getNavigationByPath('/metrics/overview')?.id, 'metrics-overview');
 	assert.equal(getNavigationByPath('/metrics/monitoring')?.id, 'metrics-monitoring');
+	assert.equal(getNavigationByPath('/metrics/alerts')?.id, 'metrics-alerts');
+	assert.equal(getNavigationByPath('/metrics/alerts/new')?.id, 'metrics-alerts');
 	assert.equal(getNavigationByPath('/metrics/environments')?.id, 'metrics-environments');
 	assert.equal(getNavigationByPath('/metrics/explore')?.id, 'metrics');
   assert.equal(getNavigationByPath('/monitoring'), undefined);

@@ -17,7 +17,7 @@ const alertViews: { key: AlertView; label: string }[] = [
 
 export function AlertsPage() {
   const queryClient = useQueryClient();
-  const rulesQuery = useQuery({ queryKey: ['alerts', 'rules'], queryFn: api.getAlertRules });
+  const rulesQuery = useQuery({ queryKey: ['alerts', 'rules'], queryFn: () => api.getAlertRules() });
   const instancesQuery = useQuery({ queryKey: ['alerts', 'instances'], queryFn: () => api.getAlertInstances() });
   const policiesQuery = useQuery({ queryKey: ['alerts', 'notification-policies'], queryFn: () => api.getNotificationPolicies() });
   const servicesQuery = useQuery({ queryKey: ['services', 'alert-policy-scope'], queryFn: () => api.getServices() });

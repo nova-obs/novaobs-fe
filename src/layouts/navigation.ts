@@ -88,6 +88,7 @@ const navigationDomains: NavigationDomain[] = [
             children: [
               { id: 'metrics-overview', label: '监控总览', description: '查看环境接入健康与关键信号', path: '/metrics/overview', icon: Gauge },
               { id: 'metrics-monitoring', label: '指标监控', description: '查看指标监控视图', path: '/metrics/monitoring', icon: Activity },
+              { id: 'metrics-alerts', label: '指标告警', description: '管理环境级指标告警规则', path: '/metrics/alerts', icon: Bell },
               { id: 'metrics-environments', label: '环境接入', description: '管理环境指标来源和写入目标', path: '/metrics/environments', icon: RadioTower },
             ],
           },
@@ -220,6 +221,7 @@ function logsNavigationChildID(segment: string): string | undefined {
 function metricsNavigationChildID(segment: string): string | undefined {
 	if (segment === 'overview') return 'metrics-overview';
 	if (segment === 'monitoring') return 'metrics-monitoring';
+	if (segment === 'alerts') return 'metrics-alerts';
 	if (segment === 'environments') return 'metrics-environments';
 	return undefined;
 }

@@ -7,7 +7,7 @@ import type { AlertRule, Service } from '../../services/types';
 export function OverviewPage() {
   const overviewQuery = useQuery({ queryKey: ['overview'], queryFn: api.getOverview });
   const servicesQuery = useQuery({ queryKey: ['overview-services'], queryFn: () => api.getServices() });
-  const alertRulesQuery = useQuery({ queryKey: ['overview-alert-rules'], queryFn: api.getAlertRules });
+  const alertRulesQuery = useQuery({ queryKey: ['overview-alert-rules'], queryFn: () => api.getAlertRules() });
   const services = servicesQuery.data ?? [];
   const alertRules = alertRulesQuery.data ?? [];
   const overview = overviewQuery.data;

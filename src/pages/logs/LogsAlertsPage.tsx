@@ -169,7 +169,7 @@ export function LogsAlertsPage() {
   const [ruleQuery, setRuleQuery] = useState('');
   const { data: rules = [], error, refetch } = useQuery({
     queryKey: ['logs-alert-rules'],
-    queryFn: api.getAlertRules,
+    queryFn: () => api.getAlertRules(),
   });
   const { data: workspace } = useQuery({
 	queryKey: ['logs-onboarding-workspace', productId, serviceId],

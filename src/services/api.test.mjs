@@ -592,8 +592,8 @@ test('统一告警 API 映射指标环境作用域', async () => {
   };
 
   try {
-		const rules = await api.getAlertRules();
-		assert.equal(requests[0].path, '/api/v1/alerts/rules');
+		const rules = await api.getAlertRules({ signalType: 'metrics' });
+		assert.equal(requests[0].path, '/api/v1/alerts/rules?signal_type=metrics');
 		assert.equal(rules[0].spec.signalType, 'metrics');
 		assert.equal(rules[0].spec.scope.environmentId, 'env-prod');
 		assert.deepEqual(rules[0].spec.scope.scopeLabels, { cluster: 'prod-a' });
@@ -624,7 +624,20 @@ test('统一告警创建提交指标环境作用域', async () => {
   assert.equal(request.body.spec.signal_type, 'metrics');
 	assert.equal(request.body.spec.scope.environment_id, 'env-prod');
 	assert.deepEqual(request.body.spec.scope.scope_labels, { cluster: 'prod-a' });
-  assert.equal(request.body.spec.query.mode, 'promql');
+	assert.equal(request.body.spec.query.mode, 'promql');
+	assert.equal(request.body.change_summary, '创建并启用指标告警');
+});
+
+test('停用指标告警使用正确的审计摘要', async () => {
+  const request = await captureRequest(
+    () => api.disableAlertRule('rule-metric', 'metrics'),
+    { rule: { id: 'rule-metric', spec: { signal_type: 'metrics', name: '订单 5xx' }, state: 'disabled', apply_status: 'pending' } },
+  );
+
+  assert.equal(request.path, '/api/v1/alerts/rules/rule-metric/disable');
+  assert.equal(request.init.method, 'POST');
+  assert.equal(request.body.change_summary, '停用指标告警');
+  assert.equal(request.body.expected_signal_type, 'metrics');
 });
 
 test('日志告警实例和更新记录使用统一 alerts API', async () => {

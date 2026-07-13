@@ -1,6 +1,7 @@
 import type {
   AgentDetail,
   AlertRule,
+  AlertSignalType,
   AlertRuleSpec,
   AlertRuleTestResult,
   AlertRuleUpdateRecord,
@@ -1042,8 +1043,10 @@ export const api = {
     const raw = await request<any>(`/services/${serviceId}/onboarding/check`, { method: 'POST' });
     return mapWorkspace(raw);
   },
-  async getAlertRules(): Promise<AlertRule[]> {
-    const raw = await request<any[]>('/alerts/rules');
+  async getAlertRules(params?: { signalType?: AlertSignalType }): Promise<AlertRule[]> {
+    const search = new URLSearchParams();
+    if (params?.signalType) search.set('signal_type', params.signalType);
+    const raw = await request<any[]>(`/alerts/rules${search.size ? `?${search}` : ''}`);
     return Array.isArray(raw) ? raw.map(mapAlertRule) : [];
   },
   async getAlertRule(id: string): Promise<AlertRule> {
@@ -1072,19 +1075,20 @@ export const api = {
   async createAlertRule(spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
     const raw = await request<any>('/alerts/rules', {
       method: 'POST',
-      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: '创建并启用日志告警' }),
+      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: spec.signalType === 'metrics' ? '创建并启用指标告警' : '创建并启用日志告警' }),
     });
     return mapAlertRule(raw.rule);
   },
   async updateAlertRule(id: string, spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
     const raw = await request<any>(`/alerts/rules/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: '更新日志告警' }),
+      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: spec.signalType === 'metrics' ? '更新指标告警' : '更新日志告警' }),
     });
     return mapAlertRule(raw.rule);
   },
-  async disableAlertRule(id: string): Promise<AlertRule> {
-    const raw = await request<any>(`/alerts/rules/${id}/disable`, { method: 'POST', body: JSON.stringify({ change_summary: '停用日志告警' }) });
+  async disableAlertRule(id: string, signalType: AlertSignalType = 'logs'): Promise<AlertRule> {
+    const changeSummary = signalType === 'metrics' ? '停用指标告警' : '停用日志告警';
+    const raw = await request<any>(`/alerts/rules/${id}/disable`, { method: 'POST', body: JSON.stringify({ expected_signal_type: signalType, change_summary: changeSummary }) });
     return mapAlertRule(raw.rule);
   },
   async getAlertRuleUpdates(id: string): Promise<AlertRuleUpdateRecord[]> {
