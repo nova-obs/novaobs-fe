@@ -24,3 +24,12 @@ test('Nginx 支持 SPA 回退、健康检查和后端同源代理', async () => 
   assert.match(config, /proxy_set_header Upgrade \$http_upgrade/);
   assert.match(config, /proxy_set_header Connection \$connection_upgrade/);
 });
+
+test('Makefile 默认构建 linux amd64 前端镜像并支持直接推送', async () => {
+  const makefile = await readFile('Makefile', 'utf8');
+
+  assert.match(makefile, /PLATFORM \?= linux\/amd64/);
+  assert.match(makefile, /IMAGE_NAME \?= novaapm-frontend/);
+  assert.match(makefile, /docker-build:[\s\S]*buildx build[\s\S]*--platform \$\(PLATFORM\)[\s\S]*--load/);
+  assert.match(makefile, /docker-build-push:[\s\S]*buildx build[\s\S]*--platform \$\(PLATFORM\)[\s\S]*--push/);
+});
