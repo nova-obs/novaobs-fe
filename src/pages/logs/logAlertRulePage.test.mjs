@@ -48,6 +48,12 @@ test('规则变化后必须重新测试才能创建或更新', () => {
   assert.equal(source.includes('disabled={!testCurrent'), true);
 });
 
+test('日志告警编辑器只接收日志 query mode 并强制 logs signal', () => {
+  assert.equal(source.includes('type LogAlertQueryMode'), true);
+  assert.equal(source.includes('asLogAlertQueryMode(rule.spec.query.mode)'), true);
+  assert.equal(source.includes("signalType: 'logs'"), true);
+});
+
 test('通知策略来自受管资源下拉而不是自由文本', () => {
   assert.equal(source.includes('api.getNotificationPolicies'), true);
   assert.equal(source.includes('请选择通知策略'), true);

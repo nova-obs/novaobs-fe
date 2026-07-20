@@ -57,7 +57,7 @@ test('Agent 与 Logs 运行页面展示连续上下文和按需详情', () => {
   assert.match(agentDetailPage, /console-detail-rail/);
   assert.match(agentDetailPage, /console-audit-meta/);
   assert.match(logsAgentsPage, /console-workbench/);
-  assert.match(logsAgentsPage, /console-selected-row/);
+  assert.match(logsAgentsPage, /logs-route-selector/);
   assert.match(logsAgentsPage, /路由详情/);
   assert.match(logsAgentsPage, /route-context-drawer/);
   assert.match(css, /\.console-drawer-panel/);

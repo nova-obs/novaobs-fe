@@ -31,12 +31,6 @@ export function K8sAuditPage() {
 
   return (
     <div className="space-y-4">
-      <div className="console-panel grid divide-y divide-outline md:grid-cols-3 md:divide-x md:divide-y-0">
-        <AuditMetric label="审计事件" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <AuditMetric label="追踪字段" value="trace_id" meta="request lineage" />
-        <AuditMetric label="权限上下文" value="RBAC" meta={namespace ? `namespace/${namespace}` : 'cluster scope'} />
-      </div>
-
       <section className="console-panel">
         <div className="console-toolbar">
           <div>
@@ -55,12 +49,12 @@ export function K8sAuditPage() {
         </div>
         {clusterError || namespaceError ? (
           <div className="console-notice console-notice-warning m-3">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError)}
           </div>
         ) : null}
       </section>
 
-      <DataPanel title="操作审计" meta={isLoading ? '加载中' : `${data.length} 条事件`}>
+      <DataPanel title="操作审计" meta={isLoading ? '加载中' : undefined}>
         {error ? (
           <div className="console-notice console-notice-warning mb-3">
             操作审计读取失败：{errorMessage(error)}
@@ -110,16 +104,6 @@ export function K8sAuditPage() {
         ) : null}
       </DataPanel>
     </div>
-  );
-}
-
-function AuditMetric({ label, value, meta }: { label: string; value: string; meta: string }) {
-  return (
-    <section className="px-4 py-3">
-      <div className="text-[11px] font-semibold text-muted">{label}</div>
-      <div className="mt-1 font-mono text-xl font-semibold text-on-surface">{value}</div>
-      <div className="mt-0.5 text-[11px] text-muted">{meta}</div>
-    </section>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CheckCircle2, KeyRound, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCog } from 'lucide-react';
+import { CheckCircle2, Plus, ShieldAlert, Trash2 } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sNamespace, type K8sPlatformAccessBinding, type K8sPlatformAccessPermission, type K8sPlatformAccessProfile } from './api';
 import { useK8sOpsContext } from './context';
@@ -200,13 +200,7 @@ export function K8sPlatformAccessPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <AccessMetric icon={UserRoundCog} label="授权绑定" value={String(bindings.length)} meta="platform RBAC" />
-        <AccessMetric icon={ShieldCheck} label="权限包" value={String(profiles.length)} meta={selectedProfile?.label || '自定义权限'} />
-        <AccessMetric icon={KeyRound} label="操作审计" value={lastAuditId ? 'ready' : 'pending'} meta={lastAuditId || '等待操作'} />
-      </div>
-
-      <DataPanel title="平台授权" meta={isLoading ? '加载中' : `${bindings.length} 条绑定 · ${permissionIds.length} 项待授予`} action={<AccessTabNav activeTab={activeTab} onChange={setActiveTab} />}>
+      <DataPanel title="平台授权" meta={isLoading ? '加载中' : undefined} action={<AccessTabNav activeTab={activeTab} onChange={setActiveTab} />}>
         {permissionError ? (
           <div className="mb-3 flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
             <ShieldAlert className="h-4 w-4" />
@@ -389,7 +383,7 @@ export function K8sPlatformAccessPage() {
                 ) : null}
                 {clusterError || namespaceError ? (
                   <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-                    {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
+                    {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
                   </div>
                 ) : null}
               </GrantStep>
@@ -454,7 +448,6 @@ export function K8sPlatformAccessPage() {
                     <th>Scope</th>
                     <th>权限</th>
                     <th>Role</th>
-                    <th>Binding ID</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -471,7 +464,6 @@ export function K8sPlatformAccessPage() {
                       <td className="font-mono text-xs">{formatScope(item.scope)}</td>
                       <td className="text-xs text-muted">{permissionSummary(item.permissionIds)}</td>
                       <td className="text-xs text-muted">{item.roleName || item.roleId}</td>
-                      <td className="font-mono text-[11px] text-muted">{item.id}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -616,7 +608,6 @@ function SelectedBindingPanel({ target, pending, onDelete }: { target?: K8sPlatf
             <SummaryLine label="Scope" value={formatScope(target.scope)} />
             <SummaryLine label="命名空间范围" value={scopeNamespaceDetail(target.scope)} />
             <SummaryLine label="Role" value={target.roleName || target.roleId} />
-            <SummaryLine label="Binding ID" value={target.id} />
           </div>
           <button
             className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-white/70 px-3 py-2 text-sm font-semibold text-danger shadow-[inset_0_1px_0_rgba(255,255,255,0.7)] transition active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
@@ -631,21 +622,6 @@ function SelectedBindingPanel({ target, pending, onDelete }: { target?: K8sPlatf
         <div className="mt-3 rounded-lg bg-white/45 px-3 py-4 text-sm text-muted">请选择一条绑定。</div>
       )}
     </aside>
-  );
-}
-
-function AccessMetric({ icon: Icon, label, value, meta }: { icon: typeof ShieldCheck; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 break-all text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
   );
 }
 

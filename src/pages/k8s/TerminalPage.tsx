@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { CircleSlash2, Play, ShieldCheck, SquareTerminal } from 'lucide-react';
+import { Play } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sResourceSummary, type K8sTerminalResult } from './api';
 import { useK8sOpsContext } from './context';
@@ -106,12 +106,6 @@ export function K8sTerminalPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_1fr]">
-        <TerminalMetric icon={SquareTerminal} label="执行模式" value={result?.mode || 'kubectl'} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <TerminalMetric icon={ShieldCheck} label="权限域" value="namespace" meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
-        <TerminalMetric icon={CircleSlash2} label="策略" value="read-only" meta="danger verbs blocked" />
-      </div>
-
       <DataPanel title="受控终端" meta={result?.auditId ? `audit/${result.auditId}` : '等待执行'}>
         {permissionError ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
@@ -125,7 +119,7 @@ export function K8sTerminalPage() {
         ) : null}
         {clusterError || namespaceError || resourceError ? (
           <div className="mb-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError || resourceError)}
           </div>
         ) : null}
 
@@ -247,7 +241,7 @@ export function K8sTerminalPage() {
             ) : null}
             {result?.outputTruncated ? (
               <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-xs font-semibold text-warning">
-                output_truncated：输出已按 NovaObs 终端策略截断。
+                output_truncated：输出已按 NovaAPM 终端策略截断。
               </div>
             ) : null}
             <pre className={`mt-4 min-h-52 overflow-auto rounded-lg p-4 text-xs leading-6 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)] ${statusTone === 'danger' ? 'bg-[#2b1117] text-[#fecdd3]' : 'bg-[#111827] text-[#d1fae5]'}`}>
@@ -273,21 +267,6 @@ function TargetItem({ label, value }: { label: string; value: string }) {
       <div className="text-[11px] font-semibold uppercase text-muted">{label}</div>
       <div className="mt-1 truncate font-mono text-[11px] font-semibold text-on-surface">{value}</div>
     </div>
-  );
-}
-
-function TerminalMetric({ icon: Icon, label, value, meta }: { icon: typeof SquareTerminal; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-4 font-display text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
   );
 }
 

@@ -1,4 +1,5 @@
 import {
+  Activity,
   Boxes,
   FileClock,
   FileKey2,
@@ -9,7 +10,6 @@ import {
   History,
   KeyRound,
   Layers3,
-  Network,
   ScrollText,
   ShieldCheck,
   ShieldUser,
@@ -43,7 +43,7 @@ export const k8sNavigationGroups: K8sNavigationGroup[] = [
 
 export const k8sNavigationItems: K8sNavigationItem[] = [
   { id: 'fleet', label: '集群总览', path: '/k8s', segment: '', group: 'overview', icon: Boxes },
-  { id: 'access-entry', label: '集群接入', path: '/k8s/access', segment: 'access', group: 'overview', icon: Network },
+  { id: 'observability-entry', label: '观测接入', path: '/k8s/observability', segment: 'observability', group: 'overview', icon: Activity },
   { id: 'dashboard', label: 'Dashboard', path: '/k8s/clusters/:clusterId', segment: '', group: 'overview', icon: Gauge, requiresCluster: true },
   { id: 'namespaces', label: '命名空间', path: '/k8s/clusters/:clusterId/namespaces', segment: 'namespaces', group: 'resources', icon: Folder, requiresCluster: true },
   { id: 'runtime-topology', label: '运行时拓扑', path: '/k8s/clusters/:clusterId/runtime-topology', segment: 'runtime-topology', group: 'resources', icon: GitBranch, requiresCluster: true },
@@ -66,15 +66,13 @@ export const getK8sNavigationByPath = (path: string) => {
   if (normalizedPath === '/k8s' || normalizedPath === '/k8s/clusters') {
     return k8sNavigationItems.find((item) => item.id === 'fleet');
   }
-  if (normalizedPath === '/k8s/access') {
-    return k8sNavigationItems.find((item) => item.id === 'access-entry');
-  }
   const clusterMatch = /^\/k8s\/clusters\/[^/]+(?:\/([^/]+))?/.exec(normalizedPath);
   if (clusterMatch) {
     const segment = clusterMatch[1] ?? '';
     return k8sNavigationItems.find((item) => item.requiresCluster && item.segment === segment);
   }
   return [...k8sNavigationItems]
+    .filter((item) => item.path !== '/k8s')
     .sort((left, right) => right.path.length - left.path.length)
     .find((item) => normalizedPath === item.path || normalizedPath.startsWith(`${item.path}/`));
 };

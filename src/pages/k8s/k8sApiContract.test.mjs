@@ -7,11 +7,11 @@ function jsonResponse(data) {
     ok: true,
     status: 200,
     headers: { get: () => null },
-    json: async () => ({ success: true, data, error: null, meta: { total: data.length } }),
+    json: async () => ({ success: true, data, error: null, meta: { total: Array.isArray(data) ? data.length : 0 } }),
   };
 }
 
-function jsonErrorResponse(data, code = 'k8s_terminal_command_blocked', message = '命令不符合 NovaObs 终端安全策略') {
+function jsonErrorResponse(data, code = 'k8s_terminal_command_blocked', message = '命令不符合 NovaAPM 终端安全策略') {
   return {
     ok: false,
     status: 400,
@@ -20,7 +20,7 @@ function jsonErrorResponse(data, code = 'k8s_terminal_command_blocked', message 
   };
 }
 
-test('K8s 集群列表调用统一 NovaObs API', async () => {
+test('K8s 集群列表调用统一 NovaAPM API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -42,7 +42,7 @@ test('K8s 集群列表调用统一 NovaObs API', async () => {
   }
 });
 
-test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async () => {
+test('K8s 集群登记调用统一 NovaAPM API 并刷新真实数据源', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -80,6 +80,23 @@ test('K8s 集群登记调用统一 NovaObs API 并刷新真实数据源', async 
   }
 });
 
+test('K8s 集群列表返回 null 时按空列表处理', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse(null);
+  };
+
+  try {
+    const clusters = await k8sApi.listClusters();
+    assert.equal(requests[0].path, '/api/v1/k8s/clusters');
+    assert.deepEqual(clusters, []);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('K8s 集群连接探测调用只读 probe API 并映射策略状态', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
@@ -111,7 +128,7 @@ test('K8s 集群连接探测调用只读 probe API 并映射策略状态', async
   }
 });
 
-test('K8s 集群删除只调用 NovaObs 元数据 API', async () => {
+test('K8s 集群删除只调用 NovaAPM 元数据 API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -130,7 +147,7 @@ test('K8s 集群删除只调用 NovaObs 元数据 API', async () => {
   }
 });
 
-test('K8s 命名空间列表调用统一 NovaObs API', async () => {
+test('K8s 命名空间列表调用统一 NovaAPM API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -169,7 +186,7 @@ test('K8s 命名空间和 ServiceAccount API 不内置演示集群默认值', as
   }
 });
 
-test('K8s 集群凭据调用统一 NovaObs API 且只映射元数据', async () => {
+test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -225,7 +242,7 @@ test('K8s 集群凭据调用统一 NovaObs API 且只映射元数据', async () 
   }
 });
 
-test('K8s 资源列表调用统一 NovaObs API 并映射完整身份', async () => {
+test('K8s 资源列表调用统一 NovaAPM API 并映射完整身份', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -249,7 +266,7 @@ test('K8s 资源列表调用统一 NovaObs API 并映射完整身份', async () 
   }
 });
 
-test('K8s 资源详情、YAML 和 Pod 日志调用统一 NovaObs API', async () => {
+test('K8s 资源详情、YAML 和 Pod 日志调用统一 NovaAPM API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   const identity = { clusterId: 'prod', namespace: 'orders', apiVersion: 'v1', kind: 'Pod', name: 'orders-api-7d9', uid: 'uid-pod' };
@@ -292,7 +309,7 @@ test('K8s 资源详情、YAML 和 Pod 日志调用统一 NovaObs API', async () 
   }
 });
 
-test('K8s 部署历史和审计事件调用统一 NovaObs API', async () => {
+test('K8s 部署历史和审计事件调用统一 NovaAPM API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -315,7 +332,7 @@ test('K8s 部署历史和审计事件调用统一 NovaObs API', async () => {
   }
 });
 
-test('K8s 证书中心调用统一 NovaObs API 且只映射元数据', async () => {
+test('K8s 证书中心调用统一 NovaAPM API 且只映射元数据', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -349,7 +366,7 @@ test('K8s 证书中心调用统一 NovaObs API 且只映射元数据', async () 
   }
 });
 
-test('K8s 证书写操作调用统一 NovaObs API 且私钥只在提交体中出现', async () => {
+test('K8s 证书写操作调用统一 NovaAPM API 且私钥只在提交体中出现', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -386,7 +403,7 @@ test('K8s 证书写操作调用统一 NovaObs API 且私钥只在提交体中出
   }
 });
 
-test('K8s ServiceAccount 写操作调用统一 NovaObs API 并传递审计上下文', async () => {
+test('K8s ServiceAccount 写操作调用统一 NovaAPM API 并传递审计上下文', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -408,11 +425,11 @@ test('K8s ServiceAccount 写操作调用统一 NovaObs API 并传递审计上下
     assert.equal(requests[0].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders');
     assert.equal(requests[1].path, '/api/v1/k8s/service-accounts');
     assert.equal(requests[1].init.method, 'POST');
-    assert.equal('X-NovaObs-User' in requests[1].init.headers, false);
+    assert.equal('X-NovaAPM-User' in requests[1].init.headers, false);
     assert.equal(JSON.parse(requests[1].init.body).name, 'orders-reader');
     assert.equal(requests[2].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders&name=orders-reader&uid=uid-1');
     assert.equal(requests[2].init.method, 'DELETE');
-    assert.equal('X-NovaObs-User' in requests[2].init.headers, false);
+    assert.equal('X-NovaAPM-User' in requests[2].init.headers, false);
     assert.equal(accounts[0].uid, 'uid-1');
     assert.equal(created.auditId, 'audit-create-1');
     assert.equal(created.item.uid, 'uid-1');
@@ -422,7 +439,7 @@ test('K8s ServiceAccount 写操作调用统一 NovaObs API 并传递审计上下
   }
 });
 
-test('K8s RBAC Role 和 Binding 调用统一 NovaObs API', async () => {
+test('K8s RBAC Role 和 Binding 调用统一 NovaAPM API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -496,7 +513,7 @@ test('K8s Kubeconfig 生成只返回元数据，导出单独调用', async () =>
   }
 });
 
-test('K8s 平台授权权限包调用统一 NovaObs API 并映射风险与推荐主体', async () => {
+test('K8s 平台授权权限包调用统一 NovaAPM API 并映射风险与推荐主体', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -584,13 +601,13 @@ test('K8s 平台授权创建支持多命名空间、全命名空间和风险确�
   }
 });
 
-test('K8s 模板管理调用统一 NovaObs API 并单独渲染', async () => {
+test('K8s 模板管理调用统一 NovaAPM API 并单独渲染', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
     if (String(path).includes('/base')) {
-      return jsonResponse({ type: 'Deployment', yaml_content: 'apiVersion: apps/v1\nkind: Deployment', variables: [{ name: 'name', required: true }], source: 'novaobs-base' });
+      return jsonResponse({ type: 'Deployment', yaml_content: 'apiVersion: apps/v1\nkind: Deployment', variables: [{ name: 'name', required: true }], source: 'novaapm-base' });
     }
     if (init.method === 'POST' && String(path).endsWith('/render')) {
       return jsonResponse({ rendered_yaml: 'kind: Deployment\nmetadata:\n  name: orders-api', audit_id: 'audit-render-1' });
@@ -629,7 +646,7 @@ test('K8s 模板管理调用统一 NovaObs API 并单独渲染', async () => {
   }
 });
 
-test('K8s 发布部署调用统一 NovaObs API 并传递预览确认与完整资源身份', async () => {
+test('K8s 发布部署调用统一 NovaAPM API 并传递预览确认与完整资源身份', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   const result = {
@@ -681,7 +698,7 @@ test('K8s 发布部署调用统一 NovaObs API 并传递预览确认与完整资
   }
 });
 
-test('K8s 受控终端调用统一 NovaObs API 并映射审计结果', async () => {
+test('K8s 受控终端调用统一 NovaAPM API 并映射审计结果', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -693,7 +710,7 @@ test('K8s 受控终端调用统一 NovaObs API 并映射审计结果', async () 
       command: 'get pods -n orders',
       verb: 'get',
       args: ['pods', '-n', 'orders'],
-      output: 'NovaObs 已校验只读命令',
+      output: 'NovaAPM 已校验只读命令',
       exit_code: 0,
       audit_id: 'audit-terminal-1',
       mode: 'dry_run',

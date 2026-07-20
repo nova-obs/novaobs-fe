@@ -1,6 +1,7 @@
 import type {
   AgentDetail,
   AlertRule,
+  AlertSignalType,
   AlertRuleSpec,
   AlertRuleTestResult,
   AlertRuleUpdateRecord,
@@ -27,6 +28,7 @@ import type {
   OnboardingWorkspace,
   OpAMPAgent,
   OverviewSummary,
+	Product,
   ReceiverProfile,
   Service,
   ServiceObservabilityGraph,
@@ -58,8 +60,8 @@ export class ApiRequestError<T = unknown> extends Error {
   }
 }
 
-const signedOutStorageKey = 'novaobs_signed_out';
-const clientSessionKeys = ['novaobs_session', 'novaobs_token', 'novaobs_subject', 'auth_token', 'access_token', 'refresh_token'];
+const signedOutStorageKey = 'novaapm_signed_out';
+const clientSessionKeys = ['novaapm_session', 'novaapm_token', 'novaapm_subject', 'auth_token', 'access_token', 'refresh_token'];
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(`/api/v1${path}`, {
@@ -172,15 +174,18 @@ function mapK8sDashboardSnapshot(raw: any): K8sDashboardSnapshot {
 }
 
 function mapService(raw: any): Service {
-  return {
-    id: String(raw.id),
+	return {
+		id: String(raw.id),
+		productId: String(raw.product_id ?? raw.productId ?? ''),
+    accountId: String(raw.account_id ?? raw.accountId ?? ''),
+    projectId: String(raw.project_id ?? raw.projectId ?? ''),
     cmdbServiceId: raw.cmdb_service_id ?? raw.cmdbServiceId ?? '',
     businessId: raw.business_id ?? raw.businessId ?? '',
     applicationId: raw.application_id ?? raw.applicationId ?? '',
     name: raw.name,
     displayName: raw.display_name ?? raw.displayName ?? '',
     description: raw.description ?? '',
-    environment: raw.environment ?? '',
+    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     ownerTeam: raw.owner_team ?? raw.ownerTeam ?? '',
@@ -198,12 +203,25 @@ function mapService(raw: any): Service {
   };
 }
 
+function mapProduct(raw: any): Product {
+	return {
+		id: String(raw.id ?? ''),
+		name: raw.name ?? '',
+		displayName: raw.display_name ?? raw.displayName ?? '',
+		description: raw.description ?? '',
+		projectId: String(raw.project_id ?? raw.projectId ?? ''),
+		status: raw.status ?? '',
+		createdAt: raw.created_at ?? raw.createdAt ?? '',
+		updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+	};
+}
+
 function mapServiceTarget(raw: any): ServiceTarget {
   return {
     id: String(raw.id ?? ''),
     serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
     targetType: raw.target_type ?? raw.targetType ?? 'cloud_native_workload',
-    environment: raw.environment ?? '',
+    environmentId: raw.environment_id ?? '',
     displayName: raw.display_name ?? raw.displayName ?? '',
     identityAttributes: raw.identity_attributes ?? raw.identityAttributes ?? {},
     matchRules: raw.match_rules ?? raw.matchRules ?? {},
@@ -310,7 +328,7 @@ function mapServiceSummary(raw: any): ServiceSummary {
     name: raw.name,
     displayName: raw.display_name ?? '',
     identityType: raw.identity_type ?? 'k8s_workload',
-    environment: raw.environment ?? '',
+    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     ownerTeam: raw.owner_team ?? '',
@@ -326,7 +344,7 @@ function mapIdentitySummary(raw: any): IdentitySummary {
     identityType: raw.identity_type ?? '',
     enabled: raw.enabled ?? false,
     tenantId: raw.tenant_id ?? '',
-    environment: raw.environment ?? '',
+    environmentId: raw.environment_id ?? '',
     k8sNamespace: raw.k8s_namespace ?? '',
     k8sWorkload: raw.k8s_workload ?? '',
     expiresAt: raw.expires_at ?? '',
@@ -341,7 +359,7 @@ function mapCollectorTarget(raw: any): CollectorTarget {
     groupId: String(raw.group_id),
     name: raw.name,
     mode: raw.mode,
-    environment: raw.environment ?? '',
+    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     status: raw.status ?? 'active',
@@ -399,7 +417,7 @@ function mapCollectorGroup(raw: any): CollectorGroup {
     displayName: raw.display_name ?? '',
     description: raw.description ?? '',
     mode: raw.mode,
-    environment: raw.environment ?? '',
+    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     tenantId: raw.tenant_id ?? '',
@@ -650,16 +668,24 @@ function mapAlertRule(raw: any): AlertRule {
 }
 
 function mapAlertRuleSpec(raw: any): AlertRuleSpec {
+  const scope = raw.scope ?? {};
+  const notification = raw.notification ?? {};
   return {
+    signalType: raw.signal_type ?? raw.signalType ?? 'logs',
     name: raw.name ?? '',
     description: raw.description ?? '',
     scope: {
-      serviceId: raw.scope?.service_id ?? '',
-      serviceName: raw.scope?.service_name ?? '',
-      logRouteId: raw.scope?.log_route_id ?? '',
-      endpointId: raw.scope?.endpoint_id ?? '',
-      accountId: raw.scope?.account_id ?? '',
-      projectId: raw.scope?.project_id ?? '',
+      serviceId: scope.service_id ?? scope.serviceId ?? '',
+      serviceName: scope.service_name ?? scope.serviceName ?? '',
+		environmentId: scope.environment_id ?? scope.environmentId ?? '',
+		environmentName: scope.environment_name ?? scope.environmentName ?? '',
+		scopeLabels: scope.scope_labels ?? scope.scopeLabels ?? {},
+      logRouteId: scope.log_route_id ?? scope.logRouteId ?? '',
+      logTargetId: scope.log_target_id ?? scope.logTargetId ?? '',
+      endpointId: scope.endpoint_id ?? scope.endpointId ?? '',
+      accountId: scope.account_id ?? scope.accountId ?? '',
+      projectId: scope.project_id ?? scope.projectId ?? '',
+      baseFilter: scope.base_filter ?? scope.baseFilter ?? '',
     },
     query: { mode: raw.query?.mode ?? 'contains', expression: raw.query?.expression ?? '' },
     trigger: {
@@ -675,10 +701,10 @@ function mapAlertRuleSpec(raw: any): AlertRuleSpec {
     },
     grouping: { fields: parseStringList(raw.grouping?.fields), maxInstances: Number(raw.grouping?.max_instances ?? 100) },
     notification: {
-      policyId: raw.notification?.policy_id ?? '',
-      severity: raw.notification?.severity ?? 'warning',
-      ownerTeam: raw.notification?.owner_team ?? '',
-      runbookUrl: raw.notification?.runbook_url ?? '',
+      policyId: notification.policy_id ?? notification.policyId ?? '',
+      severity: notification.severity ?? 'warning',
+      ownerTeam: notification.owner_team ?? notification.ownerTeam ?? '',
+      runbookUrl: notification.runbook_url ?? notification.runbookUrl ?? '',
     },
     derivedMetric: raw.derived_metric ? {
       enabled: Boolean(raw.derived_metric.enabled),
@@ -690,15 +716,21 @@ function mapAlertRuleSpec(raw: any): AlertRuleSpec {
 
 function alertRuleSpecBody(spec: AlertRuleSpec) {
   return {
+    signal_type: spec.signalType,
     name: spec.name,
     description: spec.description,
     scope: {
       service_id: spec.scope.serviceId,
       service_name: spec.scope.serviceName,
+		environment_id: spec.scope.environmentId,
+		environment_name: spec.scope.environmentName,
+		scope_labels: spec.scope.scopeLabels,
       log_route_id: spec.scope.logRouteId,
+      log_target_id: spec.scope.logTargetId,
       endpoint_id: spec.scope.endpointId,
       account_id: spec.scope.accountId,
       project_id: spec.scope.projectId,
+      base_filter: spec.scope.baseFilter,
     },
     query: spec.query,
     trigger: {
@@ -736,14 +768,24 @@ function mapNotificationPolicy(raw: any): NotificationPolicy {
 }
 
 export const api = {
+	async getProducts(): Promise<Product[]> {
+		const raw = await request<any[]>('/products');
+		return Array.isArray(raw) ? raw.map(mapProduct) : [];
+	},
+	async createProduct(input: { name: string; displayName?: string; description?: string }): Promise<Product> {
+		return mapProduct(await request<any>('/products', {
+			method: 'POST',
+			body: JSON.stringify({ name: input.name, display_name: input.displayName, description: input.description }),
+		}));
+	},
   async getOverview(): Promise<OverviewSummary> {
     const raw = await request<any>('/overview');
     return mapOverview(raw);
   },
-  async getServices(params?: { q?: string; environment?: string; status?: string; source?: string }): Promise<Service[]> {
+  async getServices(params?: { q?: string; environmentId?: string; status?: string; source?: string }): Promise<Service[]> {
     const search = new URLSearchParams();
     if (params?.q) search.set('q', params.q);
-    if (params?.environment) search.set('environment', params.environment);
+    if (params?.environmentId) search.set('environment_id', params.environmentId);
     if (params?.status) search.set('status', params.status);
     if (params?.source) search.set('source', params.source);
     const qs = search.toString();
@@ -751,11 +793,11 @@ export const api = {
     return Array.isArray(raw) ? raw.map(mapService) : [];
   },
   async createService(input: CreateServiceInput): Promise<Service> {
-    const raw = await request<any>('/services', {
+	const raw = await request<any>(`/products/${encodeURIComponent(input.productId)}/services`, {
       method: 'POST',
       body: JSON.stringify({
-        name: input.name,
-        environment: input.environment,
+		name: input.name,
+		environment_id: input.environmentId,
         display_name: input.displayName,
         cluster: input.cluster,
         namespace: input.namespace,
@@ -779,7 +821,7 @@ export const api = {
         name: patch.name,
         display_name: patch.displayName,
         description: patch.description,
-        environment: patch.environment,
+		environment_id: patch.environmentId,
         cluster: patch.cluster,
         namespace: patch.namespace,
         owner_team: patch.ownerTeam,
@@ -805,7 +847,6 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({
         target_type: input.targetType,
-        environment: input.environment,
         display_name: input.displayName,
         identity_attributes: input.identityAttributes,
         match_rules: input.matchRules ?? {},
@@ -836,7 +877,7 @@ export const api = {
         name: input.name,
         display_name: input.displayName,
         mode: input.mode,
-        environment: input.environment,
+		environment_id: input.environmentId,
         cluster: input.cluster,
         namespace: input.namespace,
         owner_team: input.ownerTeam,
@@ -849,9 +890,9 @@ export const api = {
     });
     return mapCollectorGroup(raw);
   },
-  async getCollectorGroups(params?: { environment?: string; cluster?: string; namespace?: string; mode?: string; status?: CollectorGroupStatus | 'deleted'; receiver_profile?: ReceiverProfile; q?: string }): Promise<CollectorGroup[]> {
+  async getCollectorGroups(params?: { environmentId?: string; cluster?: string; namespace?: string; mode?: string; status?: CollectorGroupStatus | 'deleted'; receiver_profile?: ReceiverProfile; q?: string }): Promise<CollectorGroup[]> {
     const search = new URLSearchParams();
-    if (params?.environment) search.set('environment', params.environment);
+    if (params?.environmentId) search.set('environment_id', params.environmentId);
     if (params?.cluster) search.set('cluster', params.cluster);
     if (params?.namespace) search.set('namespace', params.namespace);
     if (params?.mode) search.set('mode', params.mode);
@@ -874,7 +915,7 @@ export const api = {
         display_name: patch.displayName,
         description: patch.description,
         mode: patch.mode,
-        environment: patch.environment,
+		environment_id: patch.environmentId,
         cluster: patch.cluster,
         namespace: patch.namespace,
         owner_team: patch.ownerTeam,
@@ -1002,8 +1043,10 @@ export const api = {
     const raw = await request<any>(`/services/${serviceId}/onboarding/check`, { method: 'POST' });
     return mapWorkspace(raw);
   },
-  async getAlertRules(): Promise<AlertRule[]> {
-    const raw = await request<any[]>('/alerts/rules');
+  async getAlertRules(params?: { signalType?: AlertSignalType }): Promise<AlertRule[]> {
+    const search = new URLSearchParams();
+    if (params?.signalType) search.set('signal_type', params.signalType);
+    const raw = await request<any[]>(`/alerts/rules${search.size ? `?${search}` : ''}`);
     return Array.isArray(raw) ? raw.map(mapAlertRule) : [];
   },
   async getAlertRule(id: string): Promise<AlertRule> {
@@ -1032,19 +1075,20 @@ export const api = {
   async createAlertRule(spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
     const raw = await request<any>('/alerts/rules', {
       method: 'POST',
-      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: '创建并启用日志告警' }),
+      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: spec.signalType === 'metrics' ? '创建并启用指标告警' : '创建并启用日志告警' }),
     });
     return mapAlertRule(raw.rule);
   },
   async updateAlertRule(id: string, spec: AlertRuleSpec, testToken: string): Promise<AlertRule> {
     const raw = await request<any>(`/alerts/rules/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: '更新日志告警' }),
+      body: JSON.stringify({ spec: alertRuleSpecBody(spec), test_token: testToken, change_summary: spec.signalType === 'metrics' ? '更新指标告警' : '更新日志告警' }),
     });
     return mapAlertRule(raw.rule);
   },
-  async disableAlertRule(id: string): Promise<AlertRule> {
-    const raw = await request<any>(`/alerts/rules/${id}/disable`, { method: 'POST', body: JSON.stringify({ change_summary: '停用日志告警' }) });
+  async disableAlertRule(id: string, signalType: AlertSignalType = 'logs'): Promise<AlertRule> {
+    const changeSummary = signalType === 'metrics' ? '停用指标告警' : '停用日志告警';
+    const raw = await request<any>(`/alerts/rules/${id}/disable`, { method: 'POST', body: JSON.stringify({ expected_signal_type: signalType, change_summary: changeSummary }) });
     return mapAlertRule(raw.rule);
   },
   async getAlertRuleUpdates(id: string): Promise<AlertRuleUpdateRecord[]> {

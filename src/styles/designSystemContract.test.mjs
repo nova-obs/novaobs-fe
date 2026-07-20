@@ -10,6 +10,7 @@ const emptyState = readFileSync(new URL('../components/EmptyState.tsx', import.m
 const statusBadge = readFileSync(new URL('../components/StatusBadge.tsx', import.meta.url), 'utf8');
 const k8sLayout = readFileSync(new URL('../pages/k8s/K8sOpsLayout.tsx', import.meta.url), 'utf8');
 const platformLayout = readFileSync(new URL('../pages/platform/PlatformLayout.tsx', import.meta.url), 'utf8');
+const metricsLayout = readFileSync(new URL('../pages/metrics/MetricsLayout.tsx', import.meta.url), 'utf8');
 
 test('全站提供统一的页面、按钮、提示和空态视觉语义', () => {
   assert.equal(styles.includes('.app-workspace'), true);
@@ -53,20 +54,27 @@ test('全局排版标尺与 prototype 控制台层级一致', () => {
   assert.match(styles, /\.console-field-label\s*\{[\s\S]*font-size:\s*13px/);
   assert.match(styles, /\.console-table th\s*\{[\s\S]*font-size:\s*13px/);
   assert.match(styles, /\.console-table td\s*\{[\s\S]*font-size:\s*13px/);
-  assert.match(logsWorkspace, /px-3 text-sm font-semibold transition-colors/);
 });
 
-test('模块导航统一标题边界、文字基线和激活位置', () => {
-  for (const source of [logsWorkspace, k8sLayout, platformLayout]) {
-    assert.match(source, /module-navigation-bar/);
-    assert.match(source, /module-navigation-title/);
-    assert.match(source, /module-navigation-tabs/);
-    assert.match(source, /module-navigation-link/);
-  }
-  assert.match(styles, /\.module-navigation-title\s*\{[\s\S]*border-right/);
-  assert.match(styles, /\.module-navigation-link\s*\{[\s\S]*min-height:\s*40px/);
+test('K8s 集群上下文导航沿用统一横幅样式', () => {
+  assert.match(k8sLayout, /k8s-context-navigation module-navigation-bar/);
   assert.match(styles, /\.module-navigation-bar\s*\{[\s\S]*background:\s*linear-gradient/);
-  assert.match(styles, /\.module-navigation-title\s*\{[\s\S]*font-size:\s*16px/);
-  assert.match(styles, /\.module-navigation-link,[\s\S]*\.k8s-context-navigation \.console-input\s*\{[\s\S]*font-size:\s*13px/);
   assert.match(styles, /\.k8s-context-navigation\s*\{[\s\S]*overflow:\s*visible/);
+});
+
+test('Logs、K8s、平台管理和 Metrics 模块导航统一采用可折叠垂直 Rail', () => {
+  for (const source of [logsWorkspace, k8sLayout, platformLayout, metricsLayout]) {
+    assert.match(source, /ModuleWorkbench/);
+    assert.match(source, /module="(logs|k8s|platform|metrics)"/);
+  }
+  assert.match(logsWorkspace, /module="logs"/);
+  assert.match(k8sLayout, /module="k8s"/);
+  assert.match(platformLayout, /module="platform"/);
+  assert.match(metricsLayout, /module="metrics"/);
+  assert.doesNotMatch(metricsLayout, /remountOnPathChange/);
+  assert.match(styles, /\.module-rail\s*\{[\s\S]*position:\s*absolute/);
+  assert.match(styles, /\.module-rail-collapsed\s*\{[\s\S]*width:\s*44px/);
+  assert.match(styles, /\.module-rail-expanded\s*\{[\s\S]*width:\s*216px/);
+  assert.match(styles, /\.module-rail-link\s*\{[\s\S]*min-height:\s*36px/);
+  assert.match(styles, /\.module-workbench\[data-rail='true'\]\s*\{[\s\S]*padding-left:\s*60px/);
 });

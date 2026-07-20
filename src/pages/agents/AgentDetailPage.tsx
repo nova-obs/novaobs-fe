@@ -5,11 +5,6 @@ import { DataPanel } from '../../components/DataPanel';
 import { api } from '../../services/api';
 import type { AgentDetail } from '../../services/types';
 
-function shortHash(value?: string) {
-  if (!value) return '-';
-  return value.length > 12 ? value.slice(0, 12) : value;
-}
-
 function sourceTypeLabel(value: string) {
   const labels: Record<string, string> = {
     platform_template: '平台模板',
@@ -107,13 +102,13 @@ export function AgentDetailPage() {
       </div>
 
       {!runtime.remoteConfigCapable ? (
-        <Notice tone="amber" title="Remote Config 不可用" message="AcceptsRemoteConfig=false" />
+        <Notice tone="amber" title="Remote Config 不可用" message="Agent 未声明可接收远程配置，平台暂不能向它下发采集配置。" />
       ) : null}
       {configuration.expectedConfigHash && inSync ? (
-        <Notice tone="green" title="配置已对齐" message={`发布目标与 Agent effective config 一致，hash ${shortHash(configuration.effectiveConfigHash)}`} />
+        <Notice tone="green" title="配置已对齐" message="发布目标与 Agent 当前生效配置一致。" />
       ) : null}
       {configuration.expectedConfigHash && !inSync ? (
-        <Notice tone="amber" title="配置存在差异" message={`target ${shortHash(configuration.expectedConfigHash)} / effective ${shortHash(configuration.effectiveConfigHash)}`} />
+        <Notice tone="amber" title="配置存在差异" message="Agent 尚未应用最新发布目标，请查看最近下发状态与错误信息。" />
       ) : null}
 
       <div className="console-workbench grid items-start gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
@@ -121,7 +116,7 @@ export function AgentDetailPage() {
           <DataPanel title="运行态" meta={runtimeStatusLabel(runtime.runtimeStatus)}>
             <InfoGrid items={[
               ['服务', service ? service.displayName || service.name : runtime.serviceId || '-'],
-              ['环境', service?.environment || '-'],
+              ['环境', service?.environmentId || '-'],
               ['Service ID', runtime.serviceId || '-'],
               ['Remote Config', runtime.remoteConfigStatus || 'unset'],
               ['支持下发', String(runtime.remoteConfigCapable)],
@@ -148,7 +143,7 @@ export function AgentDetailPage() {
                 {services.map((item) => (
                   <div key={item.id} className="rounded border border-outline bg-surface-lowest p-3">
                     <div className="font-semibold text-primary">{item.displayName || item.name}</div>
-                    <div className="mt-1 text-xs text-muted">{item.environment || '-'} · {item.cluster || '-'} · {item.namespace || '-'}</div>
+                    <div className="mt-1 text-xs text-muted">{item.environmentId || '-'} · {item.cluster || '-'} · {item.namespace || '-'}</div>
                     <div className="mt-1 text-xs text-muted">owner: {item.ownerTeam || item.owner || '-'}</div>
                   </div>
                 ))}
@@ -164,12 +159,7 @@ export function AgentDetailPage() {
 
         <div className="space-y-4">
           <DataPanel title="配置状态" meta={configuration.applyStatus || runtime.remoteConfigStatus || 'unset'}>
-            <div className="grid gap-2 md:grid-cols-3">
-              <HashCard label="发布目标" value={configuration.expectedConfigHash} />
-              <HashCard label="当前生效" value={configuration.effectiveConfigHash} />
-              <HashCard label="最近下发" value={configuration.lastRemoteConfigHash} />
-            </div>
-            <div className="mt-4 grid gap-3 xl:grid-cols-2">
+            <div className="grid gap-3 xl:grid-cols-2">
               <ConfigBlock title="当前生效配置" body={configuration.effectiveConfig} />
               <ConfigBlock title="最近下发配置" body={configuration.lastRemoteConfig} />
             </div>
@@ -178,7 +168,7 @@ export function AgentDetailPage() {
           <DataPanel title="配置来源" meta={`${configuration.configSources?.sourceBreakdown.length ?? 0} 个来源`}>
             <SourceBreakdown detail={detail} />
             <div className="console-audit-meta mt-3 border-t border-outline pt-3">
-              <span>instance {shortHash(detail.instanceUid)}</span>
+              <span>运行实例 {runtime.hostname || runtime.podName || runtime.runtimeIdentity || '未上报'}</span>
               <span>last seen {formatTime(runtime.lastSeenAt)}</span>
               <span>apply {configuration.applyStatus || 'unset'}</span>
             </div>
@@ -198,15 +188,6 @@ function InfoGrid({ items }: { items: Array<[string, string]> }) {
           <div className="mt-0.5 break-all font-mono text-on-surface">{value}</div>
         </div>
       ))}
-    </div>
-  );
-}
-
-function HashCard({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded border border-outline bg-surface-lowest p-3">
-      <div className="text-xs text-muted">{label}</div>
-      <div className="mt-1 break-all font-mono text-xs text-on-surface">{value || '-'}</div>
     </div>
   );
 }
@@ -250,7 +231,7 @@ function SourceBreakdown({ detail }: { detail: AgentDetail }) {
         <div key={`${source.type}-${source.id}`} className="rounded border border-outline bg-surface-lowest p-3 text-xs">
           <div className="flex items-center justify-between gap-2">
             <span className="font-semibold text-primary">{sourceTypeLabel(source.type)}</span>
-            <span className="font-mono text-muted">{shortHash(source.hash)}</span>
+            {source.status ? <span className="text-muted">{source.status}</span> : null}
           </div>
           <div className="mt-1 text-muted">{source.name || source.id} · {source.status || '-'}</div>
           {source.warnings.length > 0 ? <div className="mt-1 text-warning">{source.warnings.join('; ')}</div> : null}

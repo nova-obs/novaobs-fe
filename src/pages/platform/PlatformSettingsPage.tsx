@@ -6,8 +6,8 @@ import { EmptyState } from '../../components/EmptyState';
 import { platformApi, type PlatformImage } from './api';
 
 const imageLabels: Record<string, string> = {
-  __NOVAOBS_IMAGE_OTEL_COLLECTOR__: 'OTel Collector',
-  __NOVAOBS_IMAGE_VMALERT__: 'vmalert',
+  __NOVAAPM_IMAGE_OTEL_COLLECTOR__: 'OTel Collector',
+  __NOVAAPM_IMAGE_VMALERT__: 'vmalert',
 };
 
 export function PlatformSettingsPage() {
@@ -103,7 +103,7 @@ export function PlatformSettingsPage() {
   return (
     <div className="console-workbench platform-settings-page overflow-hidden">
       <section className="min-w-0">
-          <DataPanel title="镜像模板" meta="平台级运行配置，部署清单渲染时使用">
+          <DataPanel title="镜像模板" help="镜像模板会在部署清单渲染时作为平台级运行配置使用。">
             {imagesQuery.isLoading ? (
               <div className="space-y-2">
                 <div className="h-10 rounded-md bg-surface" />
@@ -279,8 +279,8 @@ function imageDisplayName(item: PlatformImage) {
 }
 
 function imageScopeText(key: string) {
-  if (key === '__NOVAOBS_IMAGE_OTEL_COLLECTOR__') return '日志采集 DaemonSet';
-  if (key === '__NOVAOBS_IMAGE_VMALERT__') return '日志告警 vmalert Runtime';
+  if (key === '__NOVAAPM_IMAGE_OTEL_COLLECTOR__') return '日志采集 DaemonSet';
+  if (key === '__NOVAAPM_IMAGE_VMALERT__') return '日志告警 vmalert Runtime';
   return '平台部署清单';
 }
 

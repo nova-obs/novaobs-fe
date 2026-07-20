@@ -154,14 +154,14 @@ export function AppShell({ children }: PropsWithChildren) {
     <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-background text-on-surface">
       <header className="relative z-40 shrink-0 border-b border-outline bg-surface-lowest">
         <div className="flex min-h-14 items-center gap-2 px-3 md:gap-4 md:px-5">
-          <Link className="flex shrink-0 items-center gap-2.5" to="/" aria-label="返回 NovaObs 平台总览">
+          <Link className="flex shrink-0 items-center gap-2.5" to="/" aria-label="返回 NovaAPM 平台总览">
             <span className="flex h-8 w-8 items-center justify-center rounded-md bg-primary-soft text-primary">
               <Activity className="h-4 w-4" />
             </span>
-            <span className="hidden font-display text-base font-semibold tracking-tight text-on-surface sm:block">NovaObs</span>
+            <span className="hidden font-display text-base font-semibold tracking-tight text-on-surface sm:block">NovaAPM</span>
           </Link>
 
-          <nav className="hidden h-14 items-stretch lg:flex" aria-label="NovaObs 业务域">
+          <nav className="hidden h-14 items-stretch lg:flex" aria-label="NovaAPM 业务域">
             {navigationDomains.map((domain) => {
               const expanded = openDomainId === domain.id;
               const selected = (openDomainId ?? activeDomain.id) === domain.id;
@@ -174,7 +174,7 @@ export function AppShell({ children }: PropsWithChildren) {
                     selected || expanded ? 'text-primary' : 'text-muted hover:text-on-surface',
                   ].join(' ')}
                   aria-expanded={expanded}
-                  aria-controls="novaobs-mega-menu"
+                  aria-controls="novaapm-mega-menu"
                   onClick={() => toggleDomain(domain.id)}
                 >
                   {domain.label}
@@ -189,7 +189,7 @@ export function AppShell({ children }: PropsWithChildren) {
             type="button"
             className="console-button ml-1 h-9 px-2.5 lg:hidden"
             aria-expanded={Boolean(openDomain)}
-            aria-controls="novaobs-mega-menu"
+            aria-controls="novaapm-mega-menu"
             onClick={() => toggleDomain(openDomain?.id ?? activeDomain.id)}
           >
             <Grid2X2 className="h-4 w-4" />
@@ -310,7 +310,7 @@ function MegaMenu({
     .filter((item) => ['logs-explore', 'k8s-fleet', 'platform-access'].includes(item.id));
 
   return (
-    <div id="novaobs-mega-menu" className="absolute inset-x-0 top-full px-3 pt-2 md:px-5">
+    <div id="novaapm-mega-menu" className="absolute inset-x-0 top-full px-3 pt-2 md:px-5">
       <button
         type="button"
         className="mega-menu-backdrop fixed inset-x-0 bottom-0 top-14 z-0 cursor-default bg-slate-950/20"
@@ -319,7 +319,7 @@ function MegaMenu({
       />
       <section
         className="mega-menu-panel relative z-10 mx-auto max-h-[calc(100dvh-4rem)] max-w-[1440px] overflow-y-auto rounded-lg border border-outline bg-surface-lowest shadow-[0_22px_48px_-20px_rgba(18,32,51,0.42)]"
-        aria-label="NovaObs 超级菜单"
+        aria-label="NovaAPM 超级菜单"
       >
         <div className="border-b border-outline px-3 py-2 lg:hidden">
           <div className="flex gap-1 overflow-x-auto">
@@ -450,14 +450,14 @@ function K8sMegaMenuClusterWork() {
 
       {error ? (
         <div className="mt-3 rounded-md bg-rose-50 px-3 py-2 text-xs font-semibold text-danger">
-          集群列表读取失败，请检查 NovaObs 后端连接。
+          集群列表读取失败，请检查 NovaAPM 后端连接。
         </div>
       ) : null}
 
       {!isLoading && !error && !clusters.length ? (
         <div className="mt-3 flex flex-col gap-2 rounded-md border border-outline/70 bg-surface px-3 py-3 text-xs text-muted sm:flex-row sm:items-center sm:justify-between">
           <span>当前还没有可选择的集群。</span>
-          <Link className="font-semibold text-primary hover:underline" to="/k8s/access">去集群接入</Link>
+          <Link className="font-semibold text-primary hover:underline" to="/k8s">去集群总览</Link>
         </div>
       ) : null}
 
@@ -552,7 +552,7 @@ function MegaMenuNavigationItem({
       ].join(' ')}
     >
       <Link
-        className={['group flex items-center gap-3', hasChildren ? 'min-h-12' : 'min-h-16'].join(' ')}
+        className="group flex min-h-10 items-center gap-3"
         to={item.path}
       >
         <span className={['flex h-8 w-8 shrink-0 items-center justify-center rounded-md', selected ? 'bg-primary text-white' : 'bg-surface text-muted group-hover:bg-primary-soft group-hover:text-primary'].join(' ')}>
@@ -560,7 +560,7 @@ function MegaMenuNavigationItem({
         </span>
         <span className="min-w-0 flex-1">
           <span className={['block text-sm font-semibold', selected ? 'text-primary' : 'text-on-surface'].join(' ')}>{item.label}</span>
-          <span className="mt-0.5 block text-[11px] leading-4 text-muted">{item.description}</span>
+          <span className="mt-0.5 block truncate whitespace-nowrap text-[11px] leading-4 text-muted" title={item.description}>{item.description}</span>
         </span>
         <ArrowRight className={['h-3.5 w-3.5 shrink-0 transition-transform group-hover:translate-x-0.5', selected ? 'text-primary' : 'text-muted/60'].join(' ')} />
       </Link>
@@ -689,6 +689,7 @@ function getWorkspaceBreadcrumbSegments(
 
 function getWorkspaceModuleLabel(pathname: string, activeItem: NavigationItem | undefined) {
   if (isLogsWorkspacePath(pathname, activeItem)) return 'Logs';
+	if (isMetricsPath(pathname, activeItem)) return '监控';
   return '';
 }
 
@@ -697,9 +698,16 @@ function isLogsWorkspacePath(pathname: string, activeItem: NavigationItem | unde
   return normalizedPath.startsWith('/logs')
     || normalizedPath.startsWith('/agents/')
     || normalizedPath === '/onboarding'
-    || normalizedPath === '/observability/endpoints'
     || activeItem?.id === 'logs'
     || Boolean(activeItem?.id.startsWith('logs-'));
+}
+
+function isMetricsPath(pathname: string, activeItem: NavigationItem | undefined) {
+  const normalizedPath = pathname.split('?')[0] || '/';
+  return normalizedPath.startsWith('/metrics')
+    || /^\/products\/[^/]+\/services\/[^/]+\/metrics(?:\/|$)/.test(normalizedPath)
+    || activeItem?.id === 'metrics'
+    || Boolean(activeItem?.id.startsWith('metrics-'));
 }
 
 function getBackTarget(pathname: string) {

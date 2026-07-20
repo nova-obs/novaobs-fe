@@ -18,13 +18,13 @@ import {
 type PlatformAdminTab = 'users' | 'groups' | 'service-accounts' | 'roles' | 'bindings' | 'effective';
 type PlatformEditor = 'user' | 'group' | 'membership' | 'service-account' | 'role' | 'binding';
 
-const platformAdminTabs: { key: PlatformAdminTab; label: string; meta: string }[] = [
-  { key: 'users', label: '用户', meta: '登录账号' },
-  { key: 'groups', label: '用户组', meta: '成员关系' },
-  { key: 'service-accounts', label: '服务账号', meta: '自动化主体' },
-  { key: 'roles', label: '角色', meta: '权限集合' },
-  { key: 'bindings', label: '授权绑定', meta: '主体到角色' },
-  { key: 'effective', label: '有效权限', meta: '继承预览' },
+const platformAdminTabs: { key: PlatformAdminTab; label: string }[] = [
+  { key: 'users', label: '用户' },
+  { key: 'groups', label: '用户组' },
+  { key: 'service-accounts', label: '服务账号' },
+  { key: 'roles', label: '角色' },
+  { key: 'bindings', label: '授权绑定' },
+  { key: 'effective', label: '有效权限' },
 ];
 
 interface SubjectDeleteTarget {
@@ -55,7 +55,6 @@ export function PlatformAccessAdminPage() {
   const [scopeMode, setScopeMode] = useState<'global' | 'cluster' | 'namespace'>('global');
   const [clusterId, setClusterId] = useState('');
   const [namespace, setNamespace] = useState('');
-  const [lastBinding, setLastBinding] = useState<PlatformBinding | null>(null);
   const [roleId, setRoleId] = useState('');
   const [roleName, setRoleName] = useState('');
   const [roleDescription, setRoleDescription] = useState('');
@@ -209,8 +208,7 @@ export function PlatformAccessAdminPage() {
         },
       });
     },
-    onSuccess: (result) => {
-      setLastBinding(result.item ?? null);
+    onSuccess: () => {
       setActiveEditor(null);
       invalidatePlatformIAM();
     },
@@ -238,14 +236,7 @@ export function PlatformAccessAdminPage() {
 
   return (
     <div className="space-y-4">
-      <div className="console-panel grid divide-y divide-outline md:grid-cols-4 md:divide-x md:divide-y-0">
-        <AdminMetric icon={UserRoundCog} label="当前主体" value={meQuery.data?.subjectId || '-'} meta={meQuery.data?.subjectType || 'request subject'} />
-        <AdminMetric icon={UsersRound} label="用户 / 组 / SA" value={`${users.length} / ${groups.length} / ${serviceAccounts.length}`} meta="local identity directory" />
-        <AdminMetric icon={ShieldCheck} label="角色" value={String(roles.length)} meta="custom platform role set" />
-        <AdminMetric icon={KeyRound} label="授权绑定" value={String(bindings.length)} meta={lastBinding?.id || 'scoped RBAC grant'} />
-      </div>
-
-      <DataPanel title="平台用户权限" meta="users / groups / service accounts / roles / bindings" action={<PlatformTabNav activeTab={activeTab} onChange={setActiveTab} />}>
+      <DataPanel title="平台用户权限" action={<PlatformTabNav activeTab={activeTab} onChange={setActiveTab} />}>
         {permissionError ? (
           <div className="console-notice console-notice-warning mb-3">
             <ShieldAlert className="h-4 w-4" />
@@ -339,7 +330,6 @@ function PlatformTabNav({ activeTab, onChange }: { activeTab: PlatformAdminTab; 
           onClick={() => onChange(tab.key)}
         >
           <span className="block">{tab.label}</span>
-          <span className="block text-[10px] font-medium opacity-75">{tab.meta}</span>
         </button>
       ))}
     </div>
@@ -359,10 +349,7 @@ function TabWorkspace({ table, action }: { table: ReactNode; action?: ReactNode 
   return (
     <div className="console-workbench grid gap-3">
       {action ? (
-        <div className="console-list-toolbar">
-          <div className="text-xs text-muted">当前视图只展示生产真值；创建和授权进入独立任务抽屉。</div>
-          {action}
-        </div>
+        <div className="console-list-toolbar justify-end">{action}</div>
       ) : null}
       <div className="console-resource-list min-w-0">{table}</div>
     </div>
@@ -375,10 +362,7 @@ function PlatformEditorDrawer({ title, children, onClose }: { title: string; chi
       <button className="absolute inset-0 cursor-default" aria-label={`关闭${title}`} onClick={onClose} />
       <aside className="console-drawer-panel console-detail-rail relative flex h-full w-full max-w-[720px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="platform-editor-title">
         <header className="flex items-start justify-between gap-4 border-b border-outline px-5 py-4">
-          <div className="min-w-0">
-            <h2 id="platform-editor-title" className="text-base font-semibold text-on-surface">{title}</h2>
-            <p className="mt-1 text-xs text-muted">完成必要字段后提交，成功后回到当前列表。</p>
-          </div>
+          <h2 id="platform-editor-title" className="text-base font-semibold text-on-surface">{title}</h2>
           <button className="console-button h-8 w-8 p-0" aria-label={`关闭${title}`} onClick={onClose}>
             <X className="h-4 w-4" />
           </button>
@@ -565,7 +549,6 @@ function RolesTable({ roles, confirmDeleteKey, pending, onConfirmKey, onDelete }
             <tr key={item.id} className="bg-white/35">
               <td>
                 <div className="font-semibold text-primary">{item.name || item.id}</div>
-                <div className="mt-0.5 text-[11px] text-muted">平台角色</div>
               </td>
               <td className="font-mono text-xs">{item.permissions.length}</td>
               <td className="max-w-[320px] truncate text-xs text-muted">{item.description || '-'}</td>
@@ -591,7 +574,6 @@ function BindingsTable({ bindings, confirmDeleteKey, pending, onConfirmKey, onDe
             <th>Subject</th>
             <th>Role</th>
             <th>Scope</th>
-            <th>Binding ID</th>
             <th className="sticky right-0 bg-surface-lowest/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">操作</th>
           </tr>
         </thead>
@@ -604,7 +586,6 @@ function BindingsTable({ bindings, confirmDeleteKey, pending, onConfirmKey, onDe
               </td>
               <td className="text-xs text-muted">{item.roleName || item.roleId}</td>
               <td className="font-mono text-xs">{formatScope(item.scope)}</td>
-              <td className="font-mono text-[11px] text-muted">{item.id}</td>
               <td className="sticky right-0 bg-white/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">
                 <DeleteActionButton id={`binding:${item.id}`} confirmKey={confirmDeleteKey} label="删除" pending={pending} setConfirmKey={onConfirmKey} onDelete={() => onDelete(item.id)} />
               </td>
@@ -675,7 +656,7 @@ function CreateUserPanel(props: {
 }) {
   return (
     <section className="grid gap-3">
-      <PanelTitle icon={UserRoundCog} title="录入用户" meta="创建后可登录 NovaObs" />
+      <PanelTitle icon={UserRoundCog} title="录入用户" meta="创建后可登录 NovaAPM" />
       <div className="grid gap-3">
         <input className="console-input w-full" placeholder="username" value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
         <input className="console-input w-full" placeholder="显示名" value={props.displayName} onChange={(event) => props.setDisplayName(event.target.value)} />
@@ -842,21 +823,6 @@ function BindingEditorPanel(props: {
   );
 }
 
-function AdminMetric({ icon: Icon, label, value, meta }: { icon: typeof UsersRound; label: string; value: string; meta: string }) {
-  return (
-    <section className="px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-[11px] font-semibold text-muted">{label}</div>
-          <div className="mt-1 truncate font-mono text-xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-0.5 truncate text-[11px] text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 shrink-0 text-primary" />
-      </div>
-    </section>
-  );
-}
-
 function PanelTitle({ icon: Icon, title, meta }: { icon: typeof UsersRound; title: string; meta: string }) {
   return (
     <div className="flex items-start gap-2">
@@ -994,6 +960,6 @@ function formatScope(scope: PlatformScope) {
   if (scope.serviceId) return `service/${scope.serviceId}`;
   if (scope.namespace) return `${scope.clusterId || '-'}/${scope.namespace}`;
   if (scope.clusterId) return `cluster/${scope.clusterId}`;
-  if (scope.environment) return `environment/${scope.environment}`;
+	if (scope.environmentId) return `environment/${scope.environmentId}`;
   return '-';
 }

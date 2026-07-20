@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link2, Plus, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Link2, Plus, ShieldAlert, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sRBACBinding } from './api';
 import { useK8sOpsContext } from './context';
@@ -97,12 +97,6 @@ export function K8sRbacPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[1fr_1fr_0.8fr]">
-        <RbacMetric icon={ShieldCheck} label="Role" value={String(roles.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <RbacMetric icon={Link2} label="Binding" value={String(bindings.length)} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
-        <RbacMetric icon={ShieldAlert} label="写权限" value="RBAC" meta="k8s.rbac" />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -122,7 +116,7 @@ export function K8sRbacPage() {
         </div>
         {clusterError || namespaceError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
           </div>
         ) : null}
       </section>
@@ -170,7 +164,6 @@ export function K8sRbacPage() {
                   <th>集群</th>
                   <th>命名空间</th>
                   <th>规则</th>
-                  <th>UID</th>
                   <th>来源</th>
                 </tr>
               </thead>
@@ -184,7 +177,6 @@ export function K8sRbacPage() {
                     <td className="font-mono text-xs">{item.clusterId}</td>
                     <td className="font-mono text-xs">{item.namespace || '-'}</td>
                     <td className="text-xs text-muted">{item.rules.map((rule) => `${rule.resources.join(',')}:${rule.verbs.join(',')}`).join(' · ') || '-'}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.uid}</td>
                     <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
                   </tr>
                 ))}
@@ -202,7 +194,6 @@ export function K8sRbacPage() {
                   <th>Binding</th>
                   <th>RoleRef</th>
                   <th>Subject</th>
-                  <th>UID</th>
                   <th>来源</th>
                 </tr>
               </thead>
@@ -219,7 +210,6 @@ export function K8sRbacPage() {
                     </td>
                     <td className="font-mono text-xs">{item.roleRef.kind}/{item.roleRef.name}</td>
                     <td className="text-xs text-muted">{item.subjects.map(formatSubject).join(' · ') || '-'}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.uid}</td>
                     <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
                   </tr>
                 ))}
@@ -303,21 +293,6 @@ function SummaryBox({ rows }: { rows: string[] }) {
 
 function DrawerFooter({ children }: { children: ReactNode }) {
   return <div className="mt-auto flex items-center justify-end gap-2 border-t border-outline pt-4">{children}</div>;
-}
-
-function RbacMetric({ icon: Icon, label, value, meta }: { icon: typeof ShieldCheck; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
-  );
 }
 
 function errorMessage(error: unknown) {

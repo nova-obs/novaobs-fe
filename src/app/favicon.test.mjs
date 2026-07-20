@@ -5,7 +5,7 @@ import { resolve } from 'node:path';
 
 const appRoot = resolve(import.meta.dirname, '../..');
 
-test('浏览器标签页图标使用 NovaObs 设计系统主色', () => {
+test('浏览器标签页图标使用 NovaAPM 设计系统主色', () => {
   const indexHtml = readFileSync(resolve(appRoot, 'index.html'), 'utf8');
   const faviconPath = resolve(appRoot, 'public/favicon.svg');
 

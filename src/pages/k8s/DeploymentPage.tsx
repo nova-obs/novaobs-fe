@@ -211,7 +211,7 @@ export function K8sDeploymentPage() {
         </div>
         {clusterError || namespaceError || resourceError || historyError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError || resourceError || historyError)}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError || resourceError || historyError)}
           </div>
         ) : null}
       </section>
@@ -494,10 +494,6 @@ function PreviewDiffRow({ diff }: { diff: K8sDeploymentDiff }) {
         </div>
         <span className={`shrink-0 rounded-md px-2 py-1 text-[11px] font-semibold ${tone}`}>{diff.operation || 'apply'}</span>
       </div>
-      <div className="mt-3 grid gap-1 text-[11px] text-muted">
-        <div className="truncate font-mono">before={shortHash(diff.beforeHash)}</div>
-        <div className="truncate font-mono">after={shortHash(diff.afterHash)}</div>
-      </div>
     </div>
   );
 }
@@ -546,10 +542,6 @@ function completeIdentity(value: K8sDeploymentIdentity) {
 
 function resourceOptionKey(resource: K8sResourceSummary) {
   return resource.identity.uid || `${resource.identity.kind}/${resource.identity.namespace}/${resource.identity.name}`;
-}
-
-function shortHash(value = '') {
-  return value ? `${value.slice(0, 12)}...` : '-';
 }
 
 function maskToken(value = '') {

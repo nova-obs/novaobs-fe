@@ -7,7 +7,8 @@ const alertsSource = readFileSync(new URL('./AlertsPage.tsx', import.meta.url), 
 test('告警中心用单一工作台承载实例、策略和规则视图', () => {
   assert.equal(alertsSource.includes('AlertViewTabs'), true);
   assert.equal(alertsSource.includes("type AlertView = 'instances' | 'policies' | 'rules'"), true);
-  assert.equal(alertsSource.includes('title="告警工作台"'), true);
+  assert.equal(alertsSource.includes('<DataPanel action={<AlertViewTabs'), true);
+  assert.equal(alertsSource.includes('title="告警工作台"'), false);
   assert.equal(alertsSource.includes('title="告警实例"'), false);
   assert.equal(alertsSource.includes('title="通知策略"'), false);
   assert.equal(alertsSource.includes('title="规则列表"'), false);

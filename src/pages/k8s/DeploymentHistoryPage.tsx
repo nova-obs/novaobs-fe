@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { GitBranch, History, RotateCcw } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from './api';
 import { useK8sOpsContext } from './context';
@@ -31,12 +30,6 @@ export function K8sDeploymentHistoryPage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-3">
-        <HistoryMetric icon={History} label="部署记录" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <HistoryMetric icon={GitBranch} label="版本维度" value="revision" meta="rollout trace" />
-        <HistoryMetric icon={RotateCcw} label="回滚依据" value="read-only" meta={namespace ? `namespace/${namespace}` : 'cluster scope'} />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -55,11 +48,11 @@ export function K8sDeploymentHistoryPage() {
 
         </div>
         {clusterError || namespaceError ? (
-          <Warning text={clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : errorMessage(namespaceError)} />
+          <Warning text={clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : errorMessage(namespaceError)} />
         ) : null}
       </section>
 
-      <DataPanel title="部署历史" meta={isLoading ? '加载中' : `${data.length} 条记录`}>
+      <DataPanel title="部署历史" meta={isLoading ? '加载中' : undefined}>
         {error ? <Warning text={`部署历史读取失败：${errorMessage(error)}`} /> : null}
         {isLoading ? <Loading text="正在读取部署历史。" /> : null}
         {!isLoading && !error && data.length ? (
@@ -96,21 +89,6 @@ export function K8sDeploymentHistoryPage() {
         {activeClusterId && !isLoading && !error && !data.length ? <Empty text="暂无部署历史" /> : null}
       </DataPanel>
     </div>
-  );
-}
-
-function HistoryMetric({ icon: Icon, label, value, meta }: { icon: typeof History; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
   );
 }
 

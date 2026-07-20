@@ -12,20 +12,26 @@ const alerts = readFileSync(new URL('./LogsAlertsPage.tsx', import.meta.url), 'u
 const explore = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 'utf8');
 const servicePicker = readFileSync(new URL('./ServicePickerPanel.tsx', import.meta.url), 'utf8');
 
-test('Logs 保留四个子入口并把创建更新归入父模块子路径', () => {
+test('Logs 保留服务级入口并把下游端点迁移到可观测性领域入口', () => {
+  assert.doesNotMatch(routes, /path: 'targets'/);
+  assert.doesNotMatch(workspace, /\/logs\/targets/);
+  assert.doesNotMatch(workspace, /日志目标/);
   assert.match(routes, /path: 'agents\/new'/);
   assert.match(routes, /path: 'agents\/:id\/edit'/);
-  assert.match(routes, /path: 'onboarding'.*Navigate to="\/logs\/agents\/new"/);
+	assert.match(routes, /path: 'onboarding'.*Navigate to="\.\.\/agents\/new"/);
   assert.match(routes, /path: 'alerts\/new'/);
-  assert.match(routes, /path: 'alerts\/:id'/);
+	assert.match(routes, /path: 'alerts\/:id'/);
   assert.match(routes, /path: 'endpoints'/);
-  assert.match(routes, /path: '\/observability\/endpoints'.*Navigate to="\/logs\/endpoints"/);
-  assert.match(workspace, /to: '\/logs\/endpoints'/);
-  assert.match(workspace, /label: '接入配置'/);
+	assert.match(routes, /path: '\/observability\/endpoints\/logs'.*ObservabilitySettingsPage key="logs-endpoints" domain="logs"/);
+	assert.match(routes, /path: '\/observability\/endpoints\/metrics'.*ObservabilitySettingsPage key="metrics-endpoints" domain="metrics"/);
+	assert.match(routes, /path: '\/observability\/endpoints'.*Navigate to="\/observability\/endpoints\/logs"/);
+  assert.doesNotMatch(workspace, /entry: 'endpoints'/);
 });
 
 test('采集路由保留任务页，日志告警新增编辑进入列表表单抽屉', () => {
   assert.match(primitives, /export function LogsTaskPageHeader/);
+  assert.match(primitives, /logs-task-page-header flex shrink-0/);
+  assert.doesNotMatch(primitives, /mt-2 flex flex-wrap items-center/);
   assert.doesNotMatch(primitives, /返回\{parentLabel\}/);
   assert.doesNotMatch(primitives, /parentTo/);
   assert.doesNotMatch(primitives, /parentLabel/);
@@ -41,10 +47,23 @@ test('采集路由保留任务页，日志告警新增编辑进入列表表单�
   assert.doesNotMatch(alertRule, /<LogsTaskPageHeader/);
 });
 
+test('日志告警固定使用产品服务路径中的服务上下文', () => {
+	assert.match(alerts, /useParams/);
+	assert.match(alerts, /find\(\(item\) => item\.id === serviceId\)/);
+  assert.match(alerts, /logs-alert-service-selector/);
+  assert.match(alerts, /selectedServiceRules/);
+  assert.match(alerts, /alertServices/);
+	assert.doesNotMatch(alerts, /useSearchParams/);
+	assert.doesNotMatch(alerts, /setSelectedServiceId/);
+  assert.doesNotMatch(alerts, /logs-alerts-service-list/);
+  assert.doesNotMatch(alerts, /lg:grid-cols-\[280px_minmax\(0,1fr\)\]/);
+  assert.doesNotMatch(alerts, /const logRules = rules;/);
+});
+
 test('采集路由使用单一工作面突出列表选择和当前路由功能', () => {
   assert.match(agents, /const \[routeView, setRouteView\] = useState<'overview' \| 'instances'>\('overview'\)/);
   assert.match(agents, />运行概览</);
-  assert.match(agents, />Agent 实例</);
+	assert.match(agents, /activeRouteIsVM \? 'VM 节点' : 'Agent 实例'/);
   assert.match(agents, /routeView === 'overview'/);
   assert.match(agents, /routeView === 'instances'/);
   assert.match(agents, /aria-label="采集路由工作区"/);
@@ -53,11 +72,27 @@ test('采集路由使用单一工作面突出列表选择和当前路由功能',
   assert.doesNotMatch(agents, /路由运行状态/);
 });
 
-test('Logs 模块层只保留导航，不和页面重复提供刷新工具条', () => {
-  assert.match(workspace, /sr-only module-navigation-title/);
+test('VM 采集路由运行页展示回填节点而不是托管 Agent 实例', () => {
+	assert.match(agents, /logsApi\.listVMAgentEndpoints/);
+	assert.match(agents, /activeRouteIsVM \? 'VM 节点' : 'Agent 实例'/);
+	assert.match(agents, /地址可达不代表采集中/);
+	assert.match(agents, /vmEndpointsLoading/);
+	assert.match(agents, /vmEndpointsError/);
+	assert.match(agents, /route\.route\.id === activeRoute\?\.route\.id \? activeLifecycle/);
+	assert.doesNotMatch(agents, /source\.hostGroup \|\| 'VM'/);
+});
+
+test('Logs 模块层只保留统一导航和服务作用域，不在业务页面重复实现入口', () => {
+  assert.match(workspace, /ServiceScopedModuleWorkbench/);
   assert.doesNotMatch(workspace, /page-title module-navigation-title/);
   assert.doesNotMatch(workspace, /RefreshCw/);
   assert.doesNotMatch(workspace, /console-panel shrink-0/);
+});
+
+test('Logs 日志分析通过服务上下文卡片切换当前服务', () => {
+  assert.match(explore, /<ServiceContextSelector/);
+  assert.match(explore, /logs-explore-context-header[\s\S]*?<span>服务<\/span>/);
+  assert.doesNotMatch(workspace, /选择当前服务/);
 });
 
 test('Logs 页面不展示无决策价值的汇总计数和英文追加描述', () => {

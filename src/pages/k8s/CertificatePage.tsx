@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CalendarClock, FileKey2, Fingerprint, Plus, ShieldAlert, ShieldCheck, Trash2, X } from 'lucide-react';
+import { Plus, ShieldAlert, Trash2, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi, type K8sCertificate } from './api';
 import { useK8sOpsContext } from './context';
@@ -85,12 +85,6 @@ export function K8sCertificatePage() {
 
   return (
     <div className="space-y-4">
-      <div className="grid gap-4 md:grid-cols-[1.2fr_0.9fr_0.9fr]">
-        <CertificateMetric icon={FileKey2} label="证书资产" value={String(data.length)} meta={activeClusterId ? `cluster/${activeClusterId}` : '等待集群'} />
-        <CertificateMetric icon={CalendarClock} label="过期风险" value={String(expiringSoon)} meta={namespace ? `namespace/${namespace}` : '等待命名空间'} />
-        <CertificateMetric icon={ShieldCheck} label="敏感字段" value="masked" meta="private material hidden" />
-      </div>
-
       <section className="console-panel px-4 py-3">
         <div className="grid gap-3 md:grid-cols-[minmax(200px,280px)_minmax(180px,240px)_1fr] md:items-end">
           <div className="rounded-lg bg-white/55 px-3 py-2 shadow-[inset_0_1px_0_rgba(255,255,255,0.72)]">
@@ -112,14 +106,15 @@ export function K8sCertificatePage() {
         </div>
         {clusterError || namespaceError ? (
           <div className="mt-3 rounded-lg bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">
-            {clusterError ? '集群列表读取失败，请检查 NovaObs 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
+            {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : `命名空间读取失败：${errorMessage(namespaceError)}`}
           </div>
         ) : null}
       </section>
 
       <DataPanel
         title="证书中心"
-        meta={isLoading ? '加载中' : `${data.length} 张证书`}
+        meta={isLoading ? '加载中' : undefined}
+        help="页面只展示证书元数据，不读取或回显私钥材料。"
         action={(
           <div className="flex flex-wrap items-center gap-2">
             <button className="console-button" disabled={!current} onClick={() => setActiveAction('delete')}><Trash2 className="h-4 w-4" />删除证书</button>
@@ -163,8 +158,6 @@ export function K8sCertificatePage() {
                   <th>集群</th>
                   <th>命名空间</th>
                   <th>Common Name</th>
-                  <th>Fingerprint</th>
-                  <th>Secret</th>
                   <th>Not After</th>
                   <th>状态</th>
                   <th>来源</th>
@@ -179,13 +172,11 @@ export function K8sCertificatePage() {
                   >
                     <td>
                       <div className="font-semibold text-primary">{item.name}</div>
-                      <div className="text-[11px] text-muted">{item.id}</div>
+                      <div className="text-[11px] text-muted">{item.source || 'Kubernetes TLS Secret'}</div>
                     </td>
                     <td className="font-mono text-xs">{item.clusterId}</td>
                     <td className="font-mono text-xs">{item.namespace || '-'}</td>
                     <td className="font-mono text-xs">{item.commonName || '-'}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.fingerprint || '-'}</td>
-                    <td className="font-mono text-[11px] text-muted">{item.secretId || '-'}</td>
                     <td className="font-mono text-xs">{formatDate(item.notAfter)}</td>
                     <td><StatusPill status={item.status} /></td>
                     <td className="text-xs text-muted">{item.source || 'Kubernetes API'}</td>
@@ -234,9 +225,9 @@ export function K8sCertificatePage() {
         <CertificateActionDrawer title="删除证书" onClose={() => setActiveAction(null)}>
           <div className="text-sm font-semibold text-on-surface">删除确认摘要</div>
           <div className="rounded-lg bg-surface px-3 py-3 text-xs text-muted">
-            <div className="font-mono">id={current?.id ?? '-'}</div>
-            <div className="font-mono">name={current?.name ?? '-'}</div>
-            <div className="font-mono">fingerprint={current?.fingerprint ?? '-'}</div>
+            <div>证书：{current?.name ?? '-'}</div>
+            <div>命名空间：{current?.namespace ?? '-'}</div>
+            <div>状态：{current?.status ?? '-'}</div>
           </div>
           <DrawerFooter>
             <button className="console-button" onClick={() => setActiveAction(null)}>取消</button>
@@ -245,18 +236,6 @@ export function K8sCertificatePage() {
         </CertificateActionDrawer>
       ) : null}
 
-      <section className="console-panel px-4 py-3">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div>
-            <div className="text-sm font-semibold text-on-surface">证书安全边界</div>
-            <p className="mt-1 text-xs text-muted">仅展示名称、指纹、有效期和来源；密钥材料留在后端受控域。</p>
-          </div>
-          <div className="inline-flex items-center gap-2 rounded-lg bg-primary-soft px-3 py-2 text-xs font-semibold text-primary">
-            <Fingerprint className="h-3.5 w-3.5" />
-            metadata only
-          </div>
-        </div>
-      </section>
     </div>
   );
 }
@@ -286,21 +265,6 @@ function CertInput({ label, value, onChange }: { label: string; value: string; o
       {label}
       <input className="console-input mt-2 w-full" value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
-  );
-}
-
-function CertificateMetric({ icon: Icon, label, value, meta }: { icon: typeof FileKey2; label: string; value: string; meta: string }) {
-  return (
-    <section className="console-panel px-4 py-3">
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <div className="text-sm font-semibold text-on-surface">{label}</div>
-          <div className="mt-3 font-mono text-2xl font-semibold text-on-surface">{value}</div>
-          <div className="mt-2 text-xs text-muted">{meta}</div>
-        </div>
-        <Icon className="h-4 w-4 text-primary" />
-      </div>
-    </section>
   );
 }
 
