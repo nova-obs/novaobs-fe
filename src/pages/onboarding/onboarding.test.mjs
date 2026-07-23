@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 const workspaceNotStarted = {
-  service: { id: 'svc-1', name: 'payment-api', environmentId: 'prod', cluster: 'cn-a', namespace: 'pay', status: 'active' },
+  service: { id: 'svc-1', name: 'payment-api', status: 'active' },
   onboarding: { status: 'not_started', mode: 'shared_gateway' },
   identity: null,
   collectorTarget: { groupId: 'cg-1', name: 'shared-gw-prod', status: 'active', onlineInstances: 3, healthyInstances: 3 },

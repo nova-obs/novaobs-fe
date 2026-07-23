@@ -5,7 +5,7 @@ import type { LogRouteView, LogsServiceSummary } from './api';
 export type StatusTone = 'success' | 'warning' | 'danger' | 'muted' | 'primary';
 
 export function serviceDisplayName(service: LogsServiceSummary) {
-  return service.displayName || service.name;
+  return service.name;
 }
 
 export function routeLifecycle(route: LogRouteView): { label: string; tone: StatusTone; detail: string } {
@@ -84,15 +84,25 @@ function serviceAccessState(serviceRoutes: LogRouteView[]) {
   };
 }
 
-function serviceWorkloadLabel(service: LogsServiceSummary) {
-  if (service.identityType === 'host_process') return service.serviceType || 'host process';
-  return service.serviceType || service.identityType || 'workload';
+function serviceSourceLabel(route?: LogRouteView) {
+  const source = route?.source;
+  if (!source) return '-';
+  if (source.sourceType === 'vm_file') return source.hostGroup || 'VM';
+  return [source.workloadKind, source.workloadName].filter(Boolean).join('/') || 'K8s';
 }
 
-function serviceLogPath(service: LogsServiceSummary) {
-  if (service.identityType === 'host_process') return '/data/logs/*.log';
-  if (!service.namespace && !service.name) return '-';
-  return `/var/log/pods/${service.namespace || '*'}_${service.name || '*'}*/*/*.log`;
+function serviceLogPath(route?: LogRouteView) {
+  return route?.source?.pathPattern || '-';
+}
+
+function serviceScopeLabel(route?: LogRouteView) {
+  if (!route) return '-';
+  const source = route.source;
+  if (!source) return '-';
+  const location = source.sourceType === 'vm_file'
+    ? source.hostGroup
+    : [source.clusterId, source.namespace].filter(Boolean).join('/');
+  return location || '-';
 }
 
 function serviceFreshnessLabel(service: LogsServiceSummary) {
@@ -148,7 +158,7 @@ export function ServicePickerPanel({
             className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed disabled:opacity-70"
             value={serviceQuery}
             onChange={(event) => onServiceQueryChange(event.target.value)}
-            placeholder={locked ? '当前路由服务' : '搜索服务、命名空间或标签'}
+            placeholder={locked ? '当前路由服务' : '搜索服务名称、Key 或 Owner'}
             disabled={locked}
           />
         </div>
@@ -165,9 +175,9 @@ export function ServicePickerPanel({
             <thead>
               <tr>
                 <th>服务</th>
-                <th>命名空间</th>
+                <th>来源位置</th>
                 <th className="w-24">状态</th>
-                <th>工作负载</th>
+                <th>采集来源</th>
                 <th>日志路径</th>
                 <th>最近发现</th>
                 <th className="w-24">操作</th>
@@ -177,6 +187,7 @@ export function ServicePickerPanel({
               {services.map((service) => {
                 const serviceRoutes = serviceRoutesByService.get(service.id) ?? [];
                 const serviceRoute = serviceRoutes.find(isCollectingRoute) ?? null;
+                const primaryRoute = serviceRoutes[0];
                 const accessState = serviceAccessState(serviceRoutes);
                 const selected = service.id === selectedServiceId;
                 const selectable = !locked;
@@ -203,18 +214,15 @@ export function ServicePickerPanel({
                         <div className="truncate font-semibold text-on-surface">{serviceDisplayName(service)}</div>
                       </div>
                     </td>
-                    <td className="font-mono text-xs text-muted">
-                      <div className="truncate">{service.namespace || '-'}</div>
-                      <div className="mt-0.5 truncate text-[11px]">{service.cluster || service.environmentId || '-'}</div>
-                    </td>
+                    <td className="font-mono text-xs text-muted">{serviceScopeLabel(primaryRoute)}</td>
                     <td>
                       <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(accessState.tone)}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass(accessState.tone)}`} />
                         {accessState.label}
                       </span>
                     </td>
-                    <td className="font-mono text-xs text-muted">{serviceWorkloadLabel(service)}</td>
-                    <td className="max-w-[300px] truncate font-mono text-xs text-muted">{serviceLogPath(service)}</td>
+                    <td className="font-mono text-xs text-muted">{serviceSourceLabel(primaryRoute)}</td>
+                    <td className="max-w-[300px] truncate font-mono text-xs text-muted">{serviceLogPath(primaryRoute)}</td>
                     <td className="font-mono text-xs text-muted">{serviceFreshnessLabel(service)}</td>
                     <td>
                       {serviceRoute ? (

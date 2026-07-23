@@ -54,7 +54,8 @@ export function VMOnboardingFlow() {
   const { productId = '', serviceId: pathServiceId = '' } = useParams();
 
   const [currentStep, setCurrentStep] = useState<VMStep>(1);
-  const [serviceId, setServiceId] = useState('');
+  const [serviceId, setServiceId] = useState(pathServiceId);
+  const [hostGroup, setHostGroup] = useState('');
   const [serviceQuery, setServiceQuery] = useState('');
   const [logPath, setLogPath] = useState('');
   const [endpointId, setEndpointId] = useState('');
@@ -81,13 +82,12 @@ export function VMOnboardingFlow() {
   const endpoints = workspace?.endpoints ?? [];
   const routes = workspace?.routes ?? [];
 
-  const vmServices = useMemo(() => services.filter((s) => s.identityType === 'host_process'), [services]);
+  const vmServices = services;
   const vmEndpoints = useMemo(() => endpoints.filter((e) => e.scopeType !== 'k8s_cluster'), [endpoints]);
-
   const filteredServices = useMemo(() => {
     const q = serviceQuery.trim().toLowerCase();
     if (!q) return vmServices;
-    return vmServices.filter((s) => `${s.name} ${s.displayName} ${s.ownerTeam}`.toLowerCase().includes(q));
+    return vmServices.filter((s) => `${s.name} ${s.key} ${s.ownerTeam}`.toLowerCase().includes(q));
   }, [vmServices, serviceQuery]);
 
   const serviceRoutesByService = useMemo(() => {
@@ -104,10 +104,10 @@ export function VMOnboardingFlow() {
   const vmRouteId = createdRoute?.route.id || '';
   const parseRules = useMemo(() => buildParserRules(parserMode, parserRuleName, parserPattern), [parserMode, parserRuleName, parserPattern]);
   const parseValid = parserMode !== 'regex' || parserPattern.includes('?P<');
-  const canProceedStep1 = Boolean(serviceId && logPath && endpointId);
+  const canProceedStep1 = Boolean(serviceId && hostGroup.trim() && logPath && endpointId);
   const canPreview = canProceedStep1 && parseValid;
   const parseDraftValid = parserDraftMode !== 'regex' || parserDraftPattern.includes('?P<');
-  const selectedServiceLabel = service?.displayName || service?.name || '-';
+  const selectedServiceLabel = service?.name || '-';
 
   const vmInstallationQuery = useQuery({
     queryKey: ['logs-vm-installation', vmRouteId],
@@ -125,14 +125,14 @@ export function VMOnboardingFlow() {
 
   function buildRouteInput(): LogRouteInput {
     return {
-      name: service?.displayName || service?.name,
+      name: service?.name,
       routeId: createdRoute?.route.id || undefined,
       serviceId,
       sourceType: 'vm_file',
       agentGroupId: '',
       endpointId,
       k8s: {},
-      vm: { pathPattern: logPath, parseRules },
+      vm: { hostGroup: hostGroup.trim(), pathPattern: logPath, parseRules },
     };
   }
 
@@ -307,7 +307,7 @@ export function VMOnboardingFlow() {
                       <div className="flex items-center gap-2 py-6 px-3 text-sm text-muted"><Server className="h-4 w-4" />暂无匹配服务</div>
                     ) : (
                       <table className="console-table min-w-[680px] w-full">
-                        <thead><tr><th>服务</th><th>命名空间</th><th>状态</th><th>工作负载</th><th>操作</th></tr></thead>
+                        <thead><tr><th>服务</th><th>服务 Key</th><th>状态</th><th>Owner</th><th>操作</th></tr></thead>
                         <tbody>{filteredServices.map((s) => {
                           const sRoutes = serviceRoutesByService.get(s.id) ?? [];
                           const lifecycle = sRoutes.length > 0 ? routeLifecycle(sRoutes[0]) : null;
@@ -315,9 +315,9 @@ export function VMOnboardingFlow() {
                           return (
                             <tr key={s.id} role="button" tabIndex={0} className={`cursor-pointer ${selected ? 'console-selected-row' : ''}`} onClick={() => setServiceId(s.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setServiceId(s.id); } }}>
                               <td><div className="truncate font-semibold text-on-surface">{serviceDisplayName(s)}</div></td>
-                              <td className="font-mono text-xs text-muted">{s.namespace || '-'}</td>
+                              <td className="font-mono text-xs text-muted">{s.key || '-'}</td>
                               <td>{lifecycle ? <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(lifecycle.tone)}`}>{lifecycle.label}</span> : <span className="text-xs text-muted">未接入</span>}</td>
-                              <td className="font-mono text-xs text-muted">{s.serviceType || 'host process'}</td>
+                              <td className="text-xs text-muted">{s.ownerTeam || '-'}</td>
                               <td><span className={`text-xs font-semibold ${selected ? 'text-primary' : 'text-muted'}`}>{selected ? '已选择' : '选择'}</span></td>
                             </tr>
                           );
@@ -326,6 +326,11 @@ export function VMOnboardingFlow() {
                     )}
                   </div>
                 </div>
+              </section>
+
+              <section className="rounded-lg border border-outline bg-surface-lowest">
+                <div className="border-b border-outline bg-white px-3 py-3"><h3 className="text-sm font-semibold text-on-surface">主机来源</h3></div>
+                <div className="p-3"><label className="text-xs font-semibold text-muted">主机组<input className="console-input mt-1.5 w-full font-mono" value={hostGroup} onChange={(event) => setHostGroup(event.target.value)} placeholder="billing-vms" /></label></div>
               </section>
 
               <section className="rounded-lg border border-outline bg-surface-lowest">

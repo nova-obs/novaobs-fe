@@ -4,9 +4,10 @@ import { useSearchParams } from 'react-router-dom';
 import { AlertTriangle, CheckCircle2, ChevronDown, ChevronRight, FileCode2, Loader2, RefreshCw, Rocket, Server, ServerCog } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
-import { api } from '../../services/api';
+import { api, ApiRequestError } from '../../services/api';
 import { LogsPublishPreviewPanel } from '../logs/LogsPublishPreviewPanel';
 import { defaultLogsCollectorNamespace, logsApi, normalizeLogsCollectorNamespace, type LogRouteView, type LogsCollectorRuntimePublishResult, type LogsCollectorRuntimeResourceStatus, type LogsCollectorRuntimeStatus, type LogsServiceSummary } from '../logs/api';
+import { findSameNameClusterReplacement, formatClusterIdentity, resolveObservabilityClusterId } from './clusterIdentity';
 import { useK8sOpsContext } from './context';
 
 type PublishTaskType = 'base' | 'incremental';
@@ -25,16 +26,15 @@ function LogsCollectorAccessPanel() {
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeClusterId, activeCluster, clusters, isLoadingClusters, clusterError } = useK8sOpsContext();
-  const requestedClusterId = activeClusterId || searchParams.get('cluster_id') || '';
+  const requestedClusterId = searchParams.get('cluster_id') || '';
   const requestedNamespace = normalizeLogsCollectorNamespace(searchParams.get('namespace'));
   const requestedTaskType = searchParams.get('task') === 'incremental' ? 'incremental' : searchParams.get('task') === 'base' ? 'base' : '';
-  const [selectedClusterId, setSelectedClusterId] = useState(requestedClusterId);
   const [namespace, setNamespace] = useState(requestedNamespace);
   const [pendingPublish, setPendingPublish] = useState<LogsCollectorRuntimePublishResult | null>(null);
   const [lastResult, setLastResult] = useState<LogsCollectorRuntimePublishResult | null>(null);
   const [showResourceDetails, setShowResourceDetails] = useState(false);
   const [publishingServiceId, setPublishingServiceId] = useState<string | null>(null);
-  const effectiveClusterId = activeClusterId || selectedClusterId;
+  const effectiveClusterId = resolveObservabilityClusterId(activeClusterId, requestedClusterId, clusters);
   const selectedCluster = activeClusterId
     ? activeCluster
     : clusters.find((cluster) => cluster.id === effectiveClusterId);
@@ -78,22 +78,10 @@ function LogsCollectorAccessPanel() {
   }, [effectiveClusterId, workspaceQuery.data]);
 
   useEffect(() => {
-    if (requestedClusterId && requestedClusterId !== selectedClusterId) {
-      setSelectedClusterId(requestedClusterId);
-    }
-  }, [requestedClusterId, selectedClusterId]);
-
-  useEffect(() => {
     if (requestedNamespace) {
       setNamespace(requestedNamespace);
     }
   }, [requestedNamespace]);
-
-  useEffect(() => {
-    if (!selectedClusterId && clusters.length) {
-      setSelectedClusterId(clusters[0].id);
-    }
-  }, [clusters, selectedClusterId]);
 
   useEffect(() => {
     setPendingPublish(null);
@@ -115,27 +103,44 @@ function LogsCollectorAccessPanel() {
   const namespaceReady = Boolean(namespace.trim());
   const clusterReadOnly = Boolean(selectedCluster?.readOnly);
   const clusterUnknown = Boolean(effectiveClusterId && !selectedCluster && !isLoadingClusters);
+  const sameNameReplacement = clusterUnknown
+    ? findSameNameClusterReplacement(effectiveClusterId, clusters)
+    : undefined;
   const hasPendingConfirmation = Boolean(pendingPublish?.requiresConfirmation);
   const canPublish = Boolean(effectiveClusterId && selectedCluster && namespaceReady && !clusterReadOnly && !hasPendingConfirmation);
   const canPreviewBase = canPublish && runtimeStatus?.status === 'missing_resources';
   const canPreviewIncremental = canPublish && Boolean(runtimeStatus?.ready);
   const publishMutation = useMutation({
-    mutationFn: (input: { taskType: PublishTaskType; routeIds?: string[]; previewId?: string; confirmationToken?: string }) => logsApi.publishLogsCollectorRuntime({
-      clusterId: effectiveClusterId,
-      namespace,
-      taskType: input.taskType,
-      routeIds: input.routeIds,
-      previewId: input.previewId,
-      confirmationToken: input.confirmationToken,
-    }),
+    mutationFn: (input: { taskType?: PublishTaskType; routeIds?: string[]; previewId?: string; confirmationToken?: string }) => (
+      input.previewId && input.confirmationToken
+        ? logsApi.confirmLogsCollectorRuntime({
+            previewId: input.previewId,
+            confirmationToken: input.confirmationToken,
+          })
+        : logsApi.publishLogsCollectorRuntime({
+            clusterId: effectiveClusterId,
+            namespace,
+            taskType: input.taskType ?? 'incremental',
+            routeIds: input.routeIds,
+          })
+    ),
     onSuccess: async (result) => {
       setLastResult(result);
       setPendingPublish(result.requiresConfirmation ? result : null);
       if (!result.requiresConfirmation) setPublishingServiceId(null);
       await queryClient.invalidateQueries({ queryKey: ['logs-collector-runtime-status', effectiveClusterId, namespace] });
-	  await queryClient.invalidateQueries({ queryKey: ['logs-service-workspaces'] });
+      await queryClient.invalidateQueries({ queryKey: ['logs-service-workspaces'] });
       await queryClient.invalidateQueries({ queryKey: ['k8s-deployment-history', effectiveClusterId] });
       await queryClient.invalidateQueries({ queryKey: ['k8s-audit-events', effectiveClusterId] });
+    },
+    onError: (error) => {
+      setPublishingServiceId(null);
+      if (
+        error instanceof ApiRequestError
+        && (error.code === 'preview_expired' || error.code === 'confirmation_mismatch')
+      ) {
+        setPendingPublish(null);
+      }
     },
   });
 
@@ -144,7 +149,7 @@ function LogsCollectorAccessPanel() {
     : !effectiveClusterId
       ? '请先选择已登记集群'
       : clusterUnknown
-        ? '目标集群未登记'
+        ? `目标集群 ID“${effectiveClusterId}”未登记；平台不会按名称自动改绑`
         : clusterReadOnly
           ? '当前集群为只读接入，不能部署平台运行时'
           : !namespaceReady
@@ -152,7 +157,6 @@ function LogsCollectorAccessPanel() {
             : '';
 
   function selectCluster(nextClusterId: string) {
-    setSelectedClusterId(nextClusterId);
     setPendingPublish(null);
     setLastResult(null);
     setSearchParams(nextClusterId ? { cluster_id: nextClusterId, namespace: normalizeLogsCollectorNamespace(namespace) } : {});
@@ -171,7 +175,6 @@ function LogsCollectorAccessPanel() {
   function applyRuntime() {
     if (!pendingPublish?.previewId || !pendingPublish.confirmationToken) return;
     publishMutation.mutate({
-      taskType: pendingPublish.taskType === 'base' ? 'base' : 'incremental',
       previewId: pendingPublish.previewId,
       confirmationToken: pendingPublish.confirmationToken,
     });
@@ -181,7 +184,7 @@ function LogsCollectorAccessPanel() {
     <div className="space-y-4">
       <DataPanel
         title="集群观测接入"
-        meta={effectiveClusterId ? `cluster/${selectedCluster?.name || effectiveClusterId}` : '请选择目标集群'}
+        meta={effectiveClusterId ? `cluster/${selectedCluster ? formatClusterIdentity(selectedCluster) : effectiveClusterId}` : '请选择目标集群'}
         action={(
           <div className="flex flex-wrap items-center justify-end gap-2">
             {!activeClusterId ? (
@@ -193,10 +196,10 @@ function LogsCollectorAccessPanel() {
               >
                 <option value="">选择集群</option>
                 {effectiveClusterId && !clusters.some((cluster) => cluster.id === effectiveClusterId) ? (
-                  <option value={effectiveClusterId}>{effectiveClusterId} / 未登记</option>
+                  <option value={effectiveClusterId}>ID: {effectiveClusterId} / 未登记</option>
                 ) : null}
                 {clusters.map((cluster) => (
-                  <option key={cluster.id} value={cluster.id}>{cluster.name || cluster.id}</option>
+                  <option key={cluster.id} value={cluster.id}>{formatClusterIdentity(cluster)}</option>
                 ))}
               </select>
             ) : null}
@@ -209,11 +212,30 @@ function LogsCollectorAccessPanel() {
       >
         <div className="space-y-4">
           {clusterError ? <InlineNotice tone="danger" message={clusterError.message} /> : null}
-          {blocker ? <InlineNotice tone={clusterReadOnly ? 'warning' : 'danger'} message={blocker} /> : null}
+          {blocker ? (
+            <InlineNotice
+              tone={clusterReadOnly ? 'warning' : 'danger'}
+              message={blocker}
+              action={sameNameReplacement ? (
+                <button
+                  type="button"
+                  className="console-button h-7 shrink-0 border-current bg-white px-2.5 text-[11px]"
+                  onClick={() => selectCluster(sameNameReplacement.id)}
+                >
+                  切换至 ID: {sameNameReplacement.id}
+                </button>
+              ) : undefined}
+            />
+          ) : null}
           {runtimeStatusQuery.error ? <InlineNotice tone="danger" message={(runtimeStatusQuery.error as Error).message} /> : null}
           {runtimeStatusMessage ? <InlineNotice tone={runtimeStatusTone} message={runtimeStatusMessage} /> : null}
           {publishMutation.error ? <InlineNotice tone="danger" message={(publishMutation.error as Error).message} /> : null}
-          {lastResult && !lastResult.requiresConfirmation ? <InlineNotice tone="success" message={lastResult.message || '平台运行时已部署'} /> : null}
+          {lastResult && !lastResult.requiresConfirmation ? (
+            <InlineNotice
+              tone={lastResult.status === 'applied_with_pending_changes' ? 'warning' : 'success'}
+              message={lastResult.message || '平台运行时已部署'}
+            />
+          ) : null}
 
           <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(280px,360px)]">
             <div className="overflow-auto rounded-md border border-outline bg-surface-lowest">
@@ -372,14 +394,26 @@ function LogsCollectorAccessPanel() {
               <LogsPublishPreviewPanel preview={pendingPublish} />
               <div className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-outline bg-surface-lowest px-3 py-2">
                 <div className="text-xs font-semibold text-muted">{publishTaskLabel(pendingPublish.taskType)} · {pendingPublish.diffs.length || pendingPublish.resources.length} 个资源待确认</div>
-                <button
-                  className="console-button console-button-primary"
-                  disabled={!pendingPublish.previewId || !pendingPublish.confirmationToken || publishMutation.isPending}
-                  onClick={applyRuntime}
-                >
-                  <CheckCircle2 className="h-3.5 w-3.5" />
-                  确认{publishTaskLabel(pendingPublish.taskType)}
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    className="console-button"
+                    disabled={publishMutation.isPending}
+                    onClick={() => {
+                      setPendingPublish(null);
+                      setPublishingServiceId(null);
+                    }}
+                  >
+                    放弃预览
+                  </button>
+                  <button
+                    className="console-button console-button-primary"
+                    disabled={!pendingPublish.previewId || !pendingPublish.confirmationToken || publishMutation.isPending}
+                    onClick={applyRuntime}
+                  >
+                    <CheckCircle2 className="h-3.5 w-3.5" />
+                    确认{publishTaskLabel(pendingPublish.taskType)}
+                  </button>
+                </div>
               </div>
             </div>
           ) : null}
@@ -487,7 +521,7 @@ function ServicePublishRow({ group, publishing, disabled, onPreview }: {
   disabled: boolean;
   onPreview: () => void;
 }) {
-  const serviceName = group.service?.displayName || group.service?.name || group.serviceId;
+  const serviceName = group.service?.name || group.serviceId;
   const hasPending = group.pendingCount > 0;
   return (
     <div className="flex items-center gap-3 bg-white px-3 py-2.5">
@@ -523,16 +557,19 @@ function RuntimeFact({ label, value }: { label: string; value: string }) {
   );
 }
 
-function InlineNotice({ tone, message }: { tone: 'success' | 'warning' | 'danger'; message: string }) {
+function InlineNotice({ tone, message, action }: { tone: 'success' | 'warning' | 'danger'; message: string; action?: ReactNode }) {
   const toneClass = tone === 'success'
     ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
     : tone === 'warning'
       ? 'border-amber-200 bg-amber-50 text-amber-700'
       : 'border-red-200 bg-red-50 text-red-700';
   return (
-    <div className={`flex items-center gap-2 rounded-md border px-3 py-2 text-xs ${toneClass}`}>
-      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
-      <span>{message}</span>
+    <div className={`flex flex-wrap items-center justify-between gap-2 rounded-md border px-3 py-2 text-xs ${toneClass}`}>
+      <div className="flex min-w-0 items-center gap-2">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        <span>{message}</span>
+      </div>
+      {action}
     </div>
   );
 }

@@ -40,7 +40,8 @@ test('Nginx 支持 SPA 回退、健康检查和后端同源代理', async () => 
 test('Vite 本地开发代理转发 Grafana HTTP 和 Live WebSocket', async () => {
 	const config = await readFile('vite.config.ts', 'utf8');
 
-	assert.match(config, /'\/grafana':\s*\{[\s\S]*?target:\s*'http:\/\/127\.0\.0\.1:8080'/);
+	assert.match(config, /NOVAAPM_API_PROXY_TARGET \|\| 'http:\/\/127\.0\.0\.1:8080'/);
+	assert.match(config, /'\/grafana':\s*\{[\s\S]*?target:\s*apiTarget/);
 	assert.match(config, /'\/grafana':\s*\{[\s\S]*?changeOrigin:\s*false/);
 	assert.match(config, /'\/grafana':\s*\{[\s\S]*?ws:\s*true/);
 });

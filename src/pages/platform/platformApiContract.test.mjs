@@ -64,7 +64,7 @@ test('平台 IAM 授权绑定保留主体、角色和作用域', async () => {
       subject_id: 'operator-1',
       subject_type: 'user',
       role_id: 'role-k8s-reader',
-		scope: { global: false, cluster_id: 'prod', namespace: 'orders', environment_id: '', service_id: '' },
+		scope: { global: false, cluster_id: 'prod', namespace: 'orders', product_id: '', service_id: '' },
     });
     assert.equal(result.item.scope.namespace, 'orders');
   } finally {
@@ -217,36 +217,8 @@ test('Grafana 工作区入口配置使用全局平台设置 API', async () => {
   }
 });
 
-test('平台环境 API 使用稳定 environment_id 并管理异构资源绑定', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    if (String(path).endsWith('/resource-bindings')) {
-      return jsonResponse({ id: 'binding-1', environment_id: 'env-1', resource_kind: 'k8s_cluster', resource_ref: 'cluster-prod' });
-    }
-    if (init.method === 'POST') {
-      return jsonResponse({ id: 'env-1', name: '生产环境', stage: 'production', status: 'active' });
-    }
-    return jsonResponse([{ id: 'env-1', name: '生产环境', stage: 'production', status: 'active', created_at: '2026-07-11T00:00:00Z' }]);
-  };
-
-  try {
-    const environments = await platformApi.listEnvironments();
-    const created = await platformApi.createEnvironment({ name: '生产环境', stage: 'production', description: '' });
-    const binding = await platformApi.bindEnvironmentResource('env-1', { resourceKind: 'k8s_cluster', resourceRef: 'cluster-prod' });
-
-    assert.deepEqual(requests.map((request) => request.path), [
-      '/api/v1/platform/environments',
-      '/api/v1/platform/environments',
-      '/api/v1/platform/environments/env-1/resource-bindings',
-    ]);
-    assert.deepEqual(JSON.parse(requests[1].init.body), { name: '生产环境', stage: 'production', description: '' });
-    assert.deepEqual(JSON.parse(requests[2].init.body), { resource_kind: 'k8s_cluster', resource_ref: 'cluster-prod' });
-    assert.equal(environments[0].id, 'env-1');
-    assert.equal(created.stage, 'production');
-    assert.equal(binding.environmentId, 'env-1');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+test('平台 API 不再暴露环境资源操作', () => {
+  assert.equal(platformApi.listEnvironments, undefined);
+  assert.equal(platformApi.createEnvironment, undefined);
+  assert.equal(platformApi.bindEnvironmentResource, undefined);
 });

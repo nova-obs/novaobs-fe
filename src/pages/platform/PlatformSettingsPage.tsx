@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronLeft, ChevronRight, Pencil, RefreshCw, Save, Search, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, KeyRound, Pencil, RefreshCw, Save, Search, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { EmptyState } from '../../components/EmptyState';
 import { platformApi, type PlatformImage } from './api';
@@ -280,19 +280,22 @@ function GrafanaWorkspaceSetting() {
 	const queryClient = useQueryClient();
 	const [editing, setEditing] = useState(false);
 	const [draftURL, setDraftURL] = useState('');
+	const [draftToken, setDraftToken] = useState('');
 	const grafanaQuery = useQuery({ queryKey: ['platform-grafana-setting'], queryFn: () => platformApi.getGrafanaSetting(), retry: false });
 	const setting = grafanaQuery.data;
 	const validationError = editing ? validateGrafanaEntryURL(draftURL) : '';
-	const changed = draftURL.trim() !== (setting?.entryURL ?? '');
+	const changed = draftURL.trim() !== (setting?.entryURL ?? '') || Boolean(draftToken.trim());
 	const grafanaMutation = useMutation({
-		mutationFn: () => platformApi.updateGrafanaSetting(draftURL.trim()),
+		mutationFn: () => platformApi.updateGrafanaSetting(draftURL.trim(), draftToken.trim()),
 		onSuccess: async (nextSetting) => {
 			queryClient.setQueryData(['platform-grafana-setting'], nextSetting);
 			await queryClient.invalidateQueries({ queryKey: ['metrics-dashboard'] });
 			setDraftURL(nextSetting.entryURL);
+			setDraftToken('');
 			setEditing(false);
 		},
 	});
+	const connectionMutation = useMutation({ mutationFn: platformApi.testGrafanaConnection });
 
 	useEffect(() => {
 		if (!editing) setDraftURL(setting?.entryURL ?? '');
@@ -301,20 +304,22 @@ function GrafanaWorkspaceSetting() {
 	function beginGrafanaEdit() {
 		grafanaMutation.reset();
 		setDraftURL(setting?.entryURL ?? '');
+		setDraftToken('');
 		setEditing(true);
 	}
 
 	function cancelGrafanaEdit() {
 		grafanaMutation.reset();
 		setDraftURL(setting?.entryURL ?? '');
+		setDraftToken('');
 		setEditing(false);
 	}
 
 	return (
 		<DataPanel
 			title="Grafana 工作区"
-			help="配置 NovaAPM 后端可访问的 Grafana 入口地址；支持 Dashboard 列表、Folder、具体 Dashboard 和 Explore，嵌入访问统一使用 Viewer 权限。"
-			action={!grafanaQuery.isLoading && !grafanaQuery.error && !editing ? <button type="button" className="console-button h-8 px-2" onClick={beginGrafanaEdit}><Pencil className="h-3.5 w-3.5" />修改</button> : null}
+			help="配置 NovaAPM 后端可访问的 Grafana 入口地址与 Service Account Token。Token 只加密保存，用于自动创建 Folder 和 VictoriaLogs Datasource。"
+			action={!grafanaQuery.isLoading && !grafanaQuery.error && !editing ? <div className="flex gap-2"><button type="button" className="console-button h-8 px-2" onClick={() => connectionMutation.mutate()} disabled={!setting?.tokenConfigured || connectionMutation.isPending}><RefreshCw className={`h-3.5 w-3.5 ${connectionMutation.isPending ? 'animate-spin' : ''}`} />连接测试</button><button type="button" className="console-button h-8 px-2" onClick={beginGrafanaEdit}><Pencil className="h-3.5 w-3.5" />修改 / 轮换</button></div> : null}
 		>
 			{grafanaQuery.isLoading ? (
 				<div className="space-y-2"><div className="h-8 rounded bg-surface" /><div className="h-10 rounded bg-surface" /></div>
@@ -324,7 +329,10 @@ function GrafanaWorkspaceSetting() {
 				<div className="max-w-4xl space-y-2">
 					<label className="block text-xs font-semibold text-on-surface" htmlFor="grafana-entry-url">Grafana 入口地址</label>
 					<input id="grafana-entry-url" className="console-input w-full font-mono text-xs" value={draftURL} onChange={(event) => setDraftURL(event.target.value)} placeholder="http://grafana:3000/dashboards" autoFocus />
-					<div className="text-xs text-muted">支持 /dashboards、/d/... 和 /explore 入口；追加 kiosk=1 可隐藏 Grafana 顶部和左侧导航。</div>
+					<div className="text-xs text-muted">支持 /dashboards、/d/... 和 /explore 入口；平台嵌入时自动强制 kiosk=1，原生 Grafana 管理请使用独立后台入口。</div>
+					<label className="block pt-2 text-xs font-semibold text-on-surface" htmlFor="grafana-service-account-token">Service Account Token</label>
+					<input id="grafana-service-account-token" type="password" autoComplete="new-password" className="console-input w-full font-mono text-xs" value={draftToken} onChange={(event) => setDraftToken(event.target.value)} placeholder={setting?.tokenConfigured ? '留空表示保留现有 Token；输入新值执行轮换' : '请输入 Grafana Service Account Token'} />
+					<div className="text-xs text-muted">Token 不会回显。建议使用具备 Folder 与 Datasource 管理权限的专用 Service Account。</div>
 					{validationError ? <div className="text-xs font-semibold text-danger">{validationError}</div> : null}
 					{grafanaMutation.error ? <div className="console-notice console-notice-danger">{errorMessage(grafanaMutation.error)}</div> : null}
 					<div className="flex justify-end gap-2 pt-1">
@@ -338,6 +346,10 @@ function GrafanaWorkspaceSetting() {
 					<div className={`text-xs font-semibold ${setting?.state === 'ready' ? 'text-success' : setting?.state === 'disabled' ? 'text-warning' : 'text-muted'}`}>{setting?.state === 'ready' ? '已启用' : setting?.state === 'disabled' ? '已停用' : '未配置'}</div>
 					<div className="text-xs text-muted">Grafana 入口地址</div>
 					<div className="break-all font-mono text-xs text-on-surface">{setting?.entryURL || '尚未配置'}</div>
+					<div className="text-xs text-muted">Service Account Token</div>
+					<div className="flex items-center gap-2 text-xs text-on-surface"><KeyRound className="h-3.5 w-3.5 text-muted" />{setting?.tokenConfigured ? `已加密保存 · 指纹 ${setting.tokenFingerprint.slice(0, 12)}…` : '尚未配置'}</div>
+					{connectionMutation.data ? <><div className="text-xs text-muted">连接测试</div><div className="text-xs font-semibold text-success">连接与认证正常</div></> : null}
+					{connectionMutation.error ? <><div className="text-xs text-muted">连接测试</div><div className="text-xs font-semibold text-danger">{errorMessage(connectionMutation.error)}</div></> : null}
 				</div>
 			)}
 		</DataPanel>

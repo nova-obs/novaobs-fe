@@ -6,7 +6,7 @@ export type MetricsCollectionMode = 'external_collector' | 'managed_collector';
 
 export interface MetricsIntegration {
   id: string;
-  environmentId: string;
+  productId: string;
 	destinationRef: string;
   desiredState: MetricsDesiredState;
   identityLabelKey: string;
@@ -17,7 +17,8 @@ export interface MetricsIntegration {
 export interface MetricsSourceAccess {
   id: string;
   integrationId: string;
-  resourceBindingId: string;
+  resourceKind: 'k8s_cluster' | 'host_group' | '';
+  resourceRef: string;
   sourceKind: MetricsSourceKind;
   collectionMode: MetricsCollectionMode;
   desiredState: MetricsDesiredState;
@@ -41,7 +42,7 @@ export interface MetricsWriteDestinationOption {
 
 export interface MetricsSourceHandoff {
   sourceAccessId: string;
-  environmentId: string;
+  productId: string;
   resourceRef: string;
   destinationRef: string;
 	artifacts: Array<{ kind: 'vmoperator_patch' | 'vmagent_args' | 'prometheus_patch' | 'vmalert_args'; content: string; note: string }>;
@@ -52,7 +53,7 @@ export interface MetricsHealthLayer { status: MetricsHealthStatus; message: stri
 export interface MetricsHealthSnapshot {
   id: string;
   integrationId: string;
-  environmentId: string;
+  productId: string;
   configuration: MetricsHealthLayer;
   destination: MetricsHealthLayer;
   dataFlow: MetricsHealthLayer;
@@ -76,7 +77,7 @@ export interface MetricsSourceAssessment { sourceAccessId: string; resourceRef: 
 function mapIntegration(raw: any): MetricsIntegration {
   return {
     id: String(raw?.id ?? ''),
-    environmentId: raw?.environment_id ?? raw?.environmentId ?? '',
+    productId: raw?.product_id ?? raw?.productId ?? '',
     destinationRef: raw?.destination_ref ?? raw?.destinationRef ?? '',
     desiredState: raw?.desired_state ?? raw?.desiredState ?? 'disconnected',
     identityLabelKey: raw?.identity_label_key ?? raw?.identityLabelKey ?? '',
@@ -89,7 +90,8 @@ function mapSourceAccess(raw: any): MetricsSourceAccess {
   return {
     id: String(raw?.id ?? ''),
     integrationId: raw?.integration_id ?? raw?.integrationId ?? '',
-    resourceBindingId: raw?.resource_binding_id ?? raw?.resourceBindingId ?? '',
+    resourceKind: raw?.resource_kind ?? raw?.resourceKind ?? '',
+    resourceRef: raw?.resource_ref ?? raw?.resourceRef ?? '',
     sourceKind: raw?.source_kind ?? raw?.sourceKind ?? 'kubernetes_infra',
     collectionMode: raw?.collection_mode ?? raw?.collectionMode ?? 'external_collector',
     desiredState: raw?.desired_state ?? raw?.desiredState ?? 'disconnected',
@@ -119,7 +121,7 @@ function mapDestination(raw: any): MetricsWriteDestinationOption {
 function mapSourceHandoff(raw: any): MetricsSourceHandoff {
   return {
     sourceAccessId: raw?.source_access_id ?? '',
-    environmentId: raw?.environment_id ?? '',
+    productId: raw?.product_id ?? '',
     resourceRef: raw?.resource_ref ?? '',
     destinationRef: raw?.destination_ref ?? '',
     artifacts: Array.isArray(raw?.artifacts) ? raw.artifacts.map((item: any) => ({ kind: item.kind, content: item.content ?? '', note: item.note ?? '' })) : [],
@@ -132,7 +134,7 @@ function mapHealthLayer(raw: any): MetricsHealthLayer {
 
 function mapHealthSnapshot(raw: any): MetricsHealthSnapshot {
   return {
-    id: String(raw?.id ?? ''), integrationId: raw?.integration_id ?? '', environmentId: raw?.environment_id ?? '',
+    id: String(raw?.id ?? ''), integrationId: raw?.integration_id ?? '', productId: raw?.product_id ?? '',
     configuration: mapHealthLayer(raw?.configuration), destination: mapHealthLayer(raw?.destination), dataFlow: mapHealthLayer(raw?.data_flow),
 		sources: Array.isArray(raw?.sources) ? raw.sources.map((source: any) => ({ sourceAccessId: source.source_access_id ?? '', sourceKind: source.source_kind ?? 'kubernetes_infra', status: source.status ?? 'unknown', message: source.message ?? '' })) : [],
 		signals: Array.isArray(raw?.signals) ? raw.signals.map((signal: any) => ({ key: signal.key ?? '', label: signal.label ?? '', value: Number(signal.value ?? 0), unit: signal.unit ?? 'count', status: signal.status ?? 'unknown' })) : [],
@@ -169,16 +171,19 @@ export const metricsApi = {
     const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(id)}`);
     return mapIntegrationView(raw);
   },
-	async createIntegration(input: { environmentId: string; destinationRef: string }): Promise<MetricsIntegrationView> {
+	async createIntegration(input: { productId: string; destinationRef: string }): Promise<MetricsIntegrationView> {
     const raw = await apiRequest<any>('/metrics/integrations', {
       method: 'POST',
-		body: JSON.stringify({ environment_id: input.environmentId, destination_ref: input.destinationRef }),
+		body: JSON.stringify({ product_id: input.productId, destination_ref: input.destinationRef }),
     });
     return mapIntegrationView(raw);
   },
-	async reconcileSources(integrationId: string): Promise<MetricsIntegrationView> {
-		const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(integrationId)}/reconcile-sources`, { method: 'POST' });
-		return mapIntegrationView(raw);
+	async createSourceAccess(integrationId: string, input: { resourceKind: 'k8s_cluster' | 'host_group'; resourceRef: string }): Promise<MetricsSourceAccess> {
+		const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(integrationId)}/sources`, {
+			method: 'POST',
+			body: JSON.stringify({ resource_kind: input.resourceKind, resource_ref: input.resourceRef }),
+		});
+		return mapSourceAccess(raw);
 	},
 	async updateIntegration(integrationId: string, input: { destinationRef: string; desiredState: MetricsDesiredState }): Promise<MetricsIntegrationView> {
 		const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(integrationId)}`, {
@@ -187,8 +192,8 @@ export const metricsApi = {
 		});
 		return mapIntegrationView(raw);
 	},
-	async listWriteDestinationOptions(environmentId: string): Promise<MetricsWriteDestinationOption[]> {
-    const query = new URLSearchParams({ environment_id: environmentId });
+	async listWriteDestinationOptions(productId: string): Promise<MetricsWriteDestinationOption[]> {
+    const query = new URLSearchParams({ product_id: productId });
     const raw = await apiRequest<any[]>(`/metrics/write-destinations/options?${query.toString()}`);
     return Array.isArray(raw) ? raw.map(mapDestination) : [];
   },

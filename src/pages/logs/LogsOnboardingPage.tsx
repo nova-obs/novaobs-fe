@@ -5,12 +5,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Server, Settings2, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { k8sApi } from '../k8s/api';
+import { formatClusterIdentity, resolvePersistedRouteClusterId } from '../k8s/clusterIdentity';
 import { defaultLogsCollectorNamespace, logSinkLabel, logsApi, normalizeLogsCollectorNamespace, type LogAccessSource, type LogParsePreviewResult, type LogParseRule, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogSource, type LogSourceType, type LogsServiceSummary, type LogsWorkload, type VMAgentEndpoint, type VMInstallation } from './api';
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsErrorLine, LogsTaskPageHeader } from './LogsPrimitives';
 import { VMOnboardingFlow } from './VMOnboardingFlow';
-import { platformApi } from '../platform/api';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
   { value: 'k8s', label: 'K8s' },
@@ -22,14 +22,7 @@ const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
 
 type OnboardingStep = 1 | 2 | 3;
-type SetupTask = 'service' | 'target' | 'endpoint';
-
-function serviceMatchesAccessSource(service: LogsServiceSummary, source: LogAccessSource) {
-  if (source === 'vm') {
-    return service.identityType === 'host_process';
-  }
-  return service.identityType === 'k8s_workload' || service.source === 'k8s';
-}
+type SetupTask = 'service' | 'source' | 'endpoint';
 
 function formatMissing(items: string[]) {
   if (items.length <= 3) return items.join('、');
@@ -48,11 +41,11 @@ function k8sLogIncludePath(namespace: string, workloadName: string) {
 }
 
 export function renderK8sRouteFragmentDraft(input: {
+  productId: string;
   namespace: string;
   workloadName: string;
 	serviceId: string;
   serviceName: string;
-  environmentId: string;
   endpointWriteURL: string;
   accountId: string;
   projectId: string;
@@ -109,14 +102,14 @@ ${enabledRules.map((rule) => {
 processors:
   resource/${suffix}:
     attributes:
+      - key: novaapm.product_id
+        value: "${input.productId}"
+        action: upsert
       - key: service.name
         value: "${input.serviceName || input.workloadName}"
         action: upsert
       - key: novaapm.service_id
         value: "${input.serviceId}"
-        action: upsert
-      - key: deployment.environment
-        value: "${input.environmentId}"
         action: upsert
 ${transformProcessor}
 exporters:
@@ -160,8 +153,7 @@ function parserFormFromRules(rules?: LogParseRule[]) {
 }
 
 function resolveServiceWorkloadKey(service: LogsServiceSummary, workloads: LogsWorkload[]) {
-  if (!service.cluster || !service.namespace) return '';
-  const matched = workloads.find((item) => item.name === service.name || item.name === service.displayName);
+  const matched = workloads.find((item) => item.name === service.name || item.name === service.key);
   return matched ? workloadIdentity(matched) : '';
 }
 
@@ -181,10 +173,10 @@ export function LogsOnboardingPage() {
   const [sourceMode, setSourceMode] = useState<LogAccessSource>('k8s');
   const [serviceQuery, setServiceQuery] = useState('');
   const [serviceId, setServiceId] = useState(pathServiceId);
+  const [vmHostGroup, setVMHostGroup] = useState('');
   const [syncDialogOpen, setSyncDialogOpen] = useState(false);
   const [syncClusterId, setSyncClusterId] = useState('');
   const [syncNamespace, setSyncNamespace] = useState('');
-	const [syncEnvironmentId, setSyncEnvironmentId] = useState('');
   const [endpointQuery, setEndpointQuery] = useState('');
   const [endpointId, setEndpointId] = useState('');
   const [clusterId, setClusterId] = useState('');
@@ -222,11 +214,7 @@ export function LogsOnboardingPage() {
   const runtimeAgentNamespace = normalizeLogsCollectorNamespace(agentNamespace);
   const writableClusters = useMemo(() => clusters.filter((cluster) => !cluster.readOnly), [clusters]);
   const writableClusterIds = useMemo(() => new Set(writableClusters.map((cluster) => cluster.id)), [writableClusters]);
-  const sourceServices = useMemo(() => services.filter((service) => {
-    if (!serviceMatchesAccessSource(service, sourceMode)) return false;
-    if (sourceMode === 'k8s' && service.cluster && !writableClusterIds.has(service.cluster)) return false;
-    return true;
-  }), [services, sourceMode, writableClusterIds]);
+  const sourceServices = services;
   const selectedRoute = routes.find((item) => item.route.id === selectedRouteId) ?? null;
   const runningRouteServiceIds = useMemo(() => new Set(routes.filter(isCollectingRoute).map((route) => route.route.serviceId)), [routes]);
   const routeScopedServices = useMemo(() => {
@@ -270,7 +258,7 @@ export function LogsOnboardingPage() {
     }
     setPreview(null);
     setCreatedRoute(null);
-  }, [sourceType, serviceId, endpointId, clusterId, namespace, workloadKey, vmPath, collectorConfigYaml, parserMode, parserRuleName, parserPattern]);
+  }, [sourceType, serviceId, endpointId, clusterId, namespace, workloadKey, vmHostGroup, vmPath, collectorConfigYaml, parserMode, parserRuleName, parserPattern]);
 
   useEffect(() => {
     if (!onboardingRouteId) {
@@ -283,9 +271,6 @@ export function LogsOnboardingPage() {
     routeParamAppliedRef.current = onboardingRouteId;
     loadRouteDraft(route, { edit: routeUpdateMode || isCollectingRoute(route) });
   }, [onboardingRouteId, routeUpdateMode, routes]);
-
-	const platformEnvironmentsQuery = useQuery({ queryKey: ['platform-environments'], queryFn: platformApi.listEnvironments });
-	const platformEnvironments = (platformEnvironmentsQuery.data ?? []).filter((item) => item.status === 'active');
 
   const namespacesQuery = useQuery({
     queryKey: ['logs-k8s-namespaces', clusterId],
@@ -343,7 +328,7 @@ export function LogsOnboardingPage() {
   const filteredServices = useMemo(() => {
     const query = serviceQuery.trim().toLowerCase();
     if (!query) return accessServices;
-    return accessServices.filter((service) => `${service.name} ${service.displayName} ${service.ownerTeam}`.toLowerCase().includes(query));
+    return accessServices.filter((service) => `${service.name} ${service.key} ${service.ownerTeam}`.toLowerCase().includes(query));
   }, [accessServices, serviceQuery]);
 
   const serviceRoutesByService = useMemo(() => {
@@ -376,8 +361,9 @@ export function LogsOnboardingPage() {
   const effectiveEndpoint = selectedEndpoint ?? (sourceType !== 'vm_file' ? availableEndpoints[0] ?? null : null);
   const selectedCluster = clusters.find((item) => item.id === clusterId) ?? null;
   const logsCollectorRuntimeStatus = sourceType === 'vm_file' ? null : logsCollectorRuntimeStatusQuery.data ?? null;
-  const observabilityAccessURL = clusterId
-    ? `/k8s/observability?cluster_id=${encodeURIComponent(clusterId)}&namespace=${encodeURIComponent(runtimeAgentNamespace)}&task=incremental`
+  const observabilityClusterId = resolvePersistedRouteClusterId(createdRoute?.source, clusterId);
+  const observabilityAccessURL = observabilityClusterId
+    ? `/k8s/observability?cluster_id=${encodeURIComponent(observabilityClusterId)}&namespace=${encodeURIComponent(runtimeAgentNamespace)}&task=incremental`
     : '/k8s/observability';
   const observabilityAccessError = logsCollectorRuntimeStatusQuery.error instanceof Error
     ? logsCollectorRuntimeStatusQuery.error.message
@@ -427,17 +413,17 @@ export function LogsOnboardingPage() {
     if (sourceType === 'vm_file' || !namespace || !(selectedWorkload?.name || restoredSource?.workloadName) || !effectiveEndpoint?.writeURL) return '';
     const workloadName = selectedWorkload?.name || restoredSource?.workloadName || '';
     return renderK8sRouteFragmentDraft({
+      productId,
       namespace,
       workloadName,
 	  serviceId: selectedService?.id || serviceId,
 	  serviceName: selectedService?.name || workloadName,
-		environmentId: selectedService?.environmentId || syncEnvironmentId,
       endpointWriteURL: effectiveEndpoint.writeURL,
       accountId: effectiveEndpoint.accountId,
       projectId: effectiveEndpoint.projectId,
       parseRules: buildParseRules(),
     });
-	}, [effectiveEndpoint?.accountId, effectiveEndpoint?.projectId, effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, restoredSource?.workloadName, selectedService?.environmentId, selectedService?.id, selectedService?.name, selectedWorkload?.name, serviceId, sourceType, syncEnvironmentId]);
+	  }, [effectiveEndpoint?.accountId, effectiveEndpoint?.projectId, effectiveEndpoint?.writeURL, namespace, parserMode, parserPattern, parserRuleName, productId, restoredSource?.workloadName, selectedService?.id, selectedService?.name, selectedWorkload?.name, serviceId, sourceType]);
   const fragmentWarnings = useMemo(() => {
     if (sourceType === 'vm_file') return [];
     return fragmentPlaceholderWarnings(collectorConfigYaml, [
@@ -479,11 +465,10 @@ export function LogsOnboardingPage() {
 
   const syncK8sServicesMutation = useMutation({
     mutationFn: () => logsApi.syncK8sServices({
-	  productId,
-      clusterId: syncClusterId,
-      namespace: syncNamespace,
-	  environmentId: syncEnvironmentId,
-      ownerTeam: '',
+		  productId,
+	      clusterId: syncClusterId,
+	      namespace: syncNamespace,
+	      ownerTeam: '',
       workloadKind: 'Deployment',
     }),
     onSuccess: async () => {
@@ -581,7 +566,7 @@ export function LogsOnboardingPage() {
       return buildK8sRouteInput(selectedWorkload, selectedService);
     }
     return {
-      name: selectedService?.displayName || selectedService?.name,
+      name: selectedService?.name,
       routeId: selectedRouteId,
       serviceId,
       sourceType,
@@ -598,6 +583,7 @@ export function LogsOnboardingPage() {
         collectorFragmentYAML: collectorConfigYaml,
       },
       vm: sourceType === 'vm_file' ? {
+        hostGroup: vmHostGroup,
         pathPattern: vmPath,
         parseRules: buildParseRules(),
       } : {},
@@ -606,7 +592,7 @@ export function LogsOnboardingPage() {
 
   function buildK8sRouteInput(workload: LogsWorkload, service: typeof selectedService): LogRouteInput {
     return {
-      name: service?.displayName || service?.name || workload.name,
+      name: service?.name || workload.name,
       routeId: selectedRouteId,
       serviceId: service?.id ?? '',
       sourceType,
@@ -661,19 +647,15 @@ export function LogsOnboardingPage() {
     }
     setRouteEditMode(false);
     setCurrentStep(1);
-    setSetupTask('target');
+    setSetupTask('source');
     setSelectedRouteId('');
     setCreatedRoute(null);
     setCollectorConfigYaml('');
     setCollectorFragmentTouched(false);
     setServiceId(service.id);
     setServiceQuery('');
-    if (sourceMode === 'k8s' && service.cluster && service.namespace) {
-      setClusterId(service.cluster);
-      setNamespace(service.namespace);
-      setWorkloadKey('');
-      setWorkloadQuery('');
-    }
+    setWorkloadKey('');
+    setWorkloadQuery('');
   }
 
   function nonRunningServiceRoute(service: LogsServiceSummary) {
@@ -695,7 +677,7 @@ export function LogsOnboardingPage() {
       return false;
     }
     if (sourceType === 'vm_file') {
-      return (source.pathPattern ?? '') === vmPath;
+      return (source.hostGroup ?? '') === vmHostGroup && (source.pathPattern ?? '') === vmPath;
     }
     return source.clusterId === clusterId
       && source.namespace === namespace
@@ -719,7 +701,7 @@ export function LogsOnboardingPage() {
     setSelectedRouteId(route.route.id);
     setCurrentStep(1);
     setRouteEditMode(Boolean(options.edit));
-    setSetupTask('target');
+    setSetupTask('source');
     setSourceMode(source.sourceType === 'vm_file' ? 'vm' : 'k8s');
     setServiceId(route.route.serviceId);
     setEndpointId(route.route.endpointId);
@@ -733,6 +715,7 @@ export function LogsOnboardingPage() {
     setServiceQuery('');
     setEndpointQuery('');
     if (source.sourceType === 'vm_file') {
+      setVMHostGroup(source.hostGroup ?? '');
       setVmPath(source.pathPattern ?? '');
       return;
     }
@@ -756,6 +739,7 @@ export function LogsOnboardingPage() {
     { key: 'parser', label: '修正解析规则', done: parseValid },
     ...(sourceType === 'vm_file'
       ? [
+        { key: 'host-group', label: '填写主机组', done: Boolean(vmHostGroup.trim()) },
         { key: 'vm-path', label: '填写日志路径', done: Boolean(vmPath) },
       ]
       : [
@@ -766,7 +750,7 @@ export function LogsOnboardingPage() {
         { key: 'agent-namespace', label: '填写 Agent Namespace', done: Boolean(agentNamespace) },
       ]),
   ];
-  const targetMissing = previewRequirements.filter((item) => item.key !== 'parser' && !item.done).map((item) => item.label);
+  const setupMissing = previewRequirements.filter((item) => item.key !== 'parser' && !item.done).map((item) => item.label);
   const previewMissing = previewRequirements.filter((item) => !item.done).map((item) => item.label);
   const canPreview = previewMissing.length === 0;
   const collectorConfigState = !parseValid
@@ -777,28 +761,31 @@ export function LogsOnboardingPage() {
         ? '手动编辑'
         : '示例片段';
   const parseDraftValid = parserDraftMode !== 'regex' || parserDraftPattern.includes('?P<');
-  const selectedServiceLabel = selectedService?.displayName || selectedService?.name || '-';
+  const selectedServiceLabel = selectedService?.name || '-';
   const selectedEndpointLabel = effectiveEndpoint ? `${effectiveEndpoint.name} · ${logSinkLabel(effectiveEndpoint.sinkType)}` : '未选择下游端点';
   const selectedScopeLabel = sourceType === 'vm_file'
-    ? vmPath || '未填写日志路径'
-    : `${selectedCluster?.name || clusterId || restoredSource?.clusterId || '-'} / ${namespace || restoredSource?.namespace || '-'} / ${selectedWorkload ? `${selectedWorkload.kind}/${selectedWorkload.name}` : restoredSource?.workloadName ? `${restoredSource.workloadKind}/${restoredSource.workloadName}` : '-'}`;
+    ? `${vmHostGroup || '-'} / ${vmPath || '-'}`
+    : `${selectedCluster ? formatClusterIdentity(selectedCluster) : clusterId || restoredSource?.clusterId || '-'} / ${namespace || restoredSource?.namespace || '-'}`;
   const k8sIncludePath = k8sLogIncludePath(
     namespace || restoredSource?.namespace || '',
     selectedWorkload?.name || restoredSource?.workloadName || '',
   );
-  const runtimeTargetBound = sourceType === 'vm_file'
-    ? Boolean(serviceId && vmPath)
-    : Boolean(serviceId && selectedWorkload);
-  const runtimeTargetReady = runtimeTargetBound && observabilityAccessReady;
+  const sourceReady = Boolean(
+    serviceId
+    && observabilityAccessReady
+    && (sourceType === 'vm_file'
+      ? vmHostGroup.trim() && vmPath
+      : clusterId && namespace && selectedWorkload && agentNamespace),
+  );
   useEffect(() => {
     if (!serviceId) {
       setSetupTask('service');
     }
   }, [serviceId]);
-  const endpointBlocked = !runtimeTargetReady;
-  const endpointDisabledReason = endpointBlocked ? observabilityAccessBlockedReason || '运行目标未绑定时禁用日志下游端点' : '';
-  const targetStepReady = runtimeTargetReady && hasEndpointForSource;
-  const targetDisabledReason = targetMissing.length ? `当前步骤还需：${formatMissing(targetMissing)}` : '';
+  const endpointBlocked = !sourceReady;
+  const endpointDisabledReason = endpointBlocked ? observabilityAccessBlockedReason || '采集来源未配置完整，暂不能选择下游端点' : '';
+  const routeSetupReady = sourceReady && hasEndpointForSource;
+  const setupDisabledReason = setupMissing.length ? `当前步骤还需：${formatMissing(setupMissing)}` : '';
   const previewDisabledReason = previewMissing.length ? `预览前还需：${formatMissing(previewMissing)}` : '';
   const saveDisabledReason = preview ? '' : '先完成配置预览';
   const publishDisabledReason = !createdRoute
@@ -811,13 +798,11 @@ export function LogsOnboardingPage() {
     ? 'VM 来源不需要同步 K8s 服务'
     : !syncClusterId
       ? '请选择同步集群'
-		: !syncNamespace
-		  ? '请选择同步 Namespace'
-		  : !syncEnvironmentId
-			? '请选择所属环境'
-		  : '';
+			: !syncNamespace
+			  ? '请选择同步 Namespace'
+			  : '';
   const actionHint = currentStep === 1
-    ? targetDisabledReason
+    ? setupDisabledReason
     : currentStep === 2
       ? parseValid ? '' : '请先修正解析规则'
       : collectingConfigLocked
@@ -830,12 +815,12 @@ export function LogsOnboardingPage() {
               ? `发布阻断：${publishDisabledReason}`
             : '';
   const activeTaskLabel = currentStep === 1
-    ? setupTask === 'service' ? '选择服务' : setupTask === 'target' ? sourceType === 'vm_file' ? '设置日志路径' : '绑定运行目标' : '选择下游端点'
+    ? setupTask === 'service' ? '选择服务' : setupTask === 'source' ? '配置采集来源' : '选择下游端点'
     : currentStep === 2 ? '业务采集配置' : '配置预览';
   const sourceModeLabel = sourceMode === 'k8s' ? 'K8s' : 'VM';
   const summaryImpactLabel = sourceType === 'vm_file'
     ? vmPath || 'VM 日志路径'
-    : `${selectedCluster?.name || clusterId || '-'} / ${namespace || '-'} / ${selectedWorkload?.name || restoredSource?.workloadName || '-'}`;
+    : `${selectedCluster ? formatClusterIdentity(selectedCluster) : clusterId || '-'} / ${namespace || '-'} / ${selectedWorkload?.name || restoredSource?.workloadName || '-'}`;
   const summaryAuditLabel = createdRoute?.route.lastAuditId || selectedRoute?.route.lastAuditId || '-';
   const previewPrimaryConfigYAML = preview?.serviceConfigYAML || (sourceType === 'vm_file'
     ? preview?.collectorYAML ?? ''
@@ -896,14 +881,14 @@ export function LogsOnboardingPage() {
               return;
             }
             setCurrentStep(1);
-            setSetupTask(runtimeTargetReady ? 'endpoint' : serviceId ? 'target' : 'service');
+            setSetupTask(sourceReady ? 'endpoint' : serviceId ? 'source' : 'service');
           }}
         >
           上一步
         </button>
       ) : null}
       {currentStep === 1 ? (
-        <button className="console-button console-button-primary h-9 w-full" disabled={!targetStepReady} onClick={() => setCurrentStep(2)} title={targetStepReady ? '进入采集配置' : targetDisabledReason}>
+        <button className="console-button console-button-primary h-9 w-full" disabled={!routeSetupReady} onClick={() => setCurrentStep(2)} title={routeSetupReady ? '进入采集配置' : setupDisabledReason}>
           下一步：采集配置
         </button>
       ) : currentStep === 2 ? (
@@ -996,21 +981,21 @@ export function LogsOnboardingPage() {
           currentStep={currentStep}
           setupTask={setupTask}
           serviceDone={Boolean(serviceId)}
-          targetDone={runtimeTargetReady}
-          endpointDone={targetStepReady}
-          serviceSummary={selectedService ? selectedServiceLabel : '选择后绑定运行目标'}
-          targetSummary={runtimeTargetReady ? selectedScopeLabel : serviceId ? '等待绑定运行范围' : '先选择服务'}
+          sourceDone={sourceReady}
+          endpointDone={routeSetupReady}
+          serviceSummary={selectedService ? selectedServiceLabel : '选择后配置采集来源'}
+          sourceSummary={sourceReady ? selectedScopeLabel : serviceId ? '等待配置采集范围' : '先选择服务'}
           endpointSummary={selectedEndpointLabel}
           onSelectService={() => {
             setCurrentStep(1);
             setSetupTask('service');
           }}
-          onSelectTarget={() => {
+          onSelectSource={() => {
             setCurrentStep(1);
-            setSetupTask('target');
+            setSetupTask('source');
           }}
           onSelectEndpoint={() => {
-            if (!runtimeTargetReady) return;
+            if (!sourceReady) return;
             setCurrentStep(1);
             setSetupTask('endpoint');
           }}
@@ -1021,7 +1006,7 @@ export function LogsOnboardingPage() {
             className="logs-route-service-card"
             index={1}
             title="选择服务"
-            summary={selectedService ? selectedServiceLabel : '选择服务后绑定运行目标'}
+            summary={selectedService ? selectedServiceLabel : '选择服务后配置采集来源'}
             active={currentStep === 1 && setupTask === 'service'}
             done={Boolean(serviceId)}
             onSelect={() => {
@@ -1049,24 +1034,25 @@ export function LogsOnboardingPage() {
           </RouteTaskCard>
 
           <RouteTaskCard
-            className="logs-route-target-card"
+            className="logs-route-source-card"
             index={2}
-            title={sourceType === 'vm_file' ? '设置日志路径' : '绑定运行目标'}
-            summary={runtimeTargetReady ? selectedScopeLabel : serviceId ? '等待绑定运行范围' : '先选择服务'}
-            active={currentStep === 1 && setupTask === 'target'}
-            done={runtimeTargetReady}
+            title="配置采集来源"
+            summary={sourceReady ? selectedScopeLabel : serviceId ? '等待配置采集范围' : '先选择服务'}
+            active={currentStep === 1 && setupTask === 'source'}
+            done={sourceReady}
             disabled={!serviceId}
             disabledReason="先选择服务"
             onSelect={() => {
               setCurrentStep(1);
-              setSetupTask('target');
+              setSetupTask('source');
             }}
           >
             <div className="relative p-3">
                 {sourceType === 'vm_file' ? (
-                  <div className="max-w-2xl">
+                  <div className="grid max-w-2xl gap-3 sm:grid-cols-2">
+                    <label className="text-sm font-semibold">主机组<input className="console-input mt-2 w-full font-mono" value={vmHostGroup} onChange={(event) => setVMHostGroup(event.target.value)} placeholder="billing-vms" /></label>
                     <label className="text-sm font-semibold">日志路径<input className="console-input mt-2 w-full font-mono" value={vmPath} onChange={(event) => setVmPath(event.target.value)} placeholder="/data/logs/*.log" /></label>
-                    <p className="mt-2 text-xs leading-5 text-muted">平台不会登录或修改 VM。保存路由后，由运维人员在每台机器执行安装脚本，再回填 Agent 健康检查地址。</p>
+                    <p className="text-xs leading-5 text-muted sm:col-span-2">平台不会登录或修改 VM。保存路由后，由运维人员在每台机器执行安装脚本，再回填 Agent 健康检查地址。</p>
                   </div>
                 ) : (
                   <div className="grid gap-3">
@@ -1109,7 +1095,7 @@ export function LogsOnboardingPage() {
                                 {cluster.id === clusterId ? <CheckCircle className="h-4 w-4" /> : <Server className="h-4 w-4" />}
                               </span>
                               <div className="min-w-0 flex-1">
-                                <span className="block min-w-0 truncate text-[13px] font-semibold text-on-surface">{cluster.name || cluster.id}</span>
+                                <span className="block min-w-0 truncate text-[13px] font-semibold text-on-surface">{formatClusterIdentity(cluster)}</span>
                                 <div className="mt-2 grid grid-cols-2 gap-1.5">
                                   <div className="rounded-md border border-outline/70 bg-surface-lowest/80 px-2 py-1">
                                     <div className="text-[10px] font-semibold text-muted">版本</div>
@@ -1211,7 +1197,7 @@ export function LogsOnboardingPage() {
                         <div className="min-w-0">
                           <div className="text-xs font-semibold text-muted">当前范围</div>
                           <div className="mt-1 break-all font-mono text-sm font-semibold text-on-surface">
-                            {selectedCluster?.name || clusterId || '-'} / {namespace || '-'} / {selectedWorkload ? `${selectedWorkload.kind}/${selectedWorkload.name}` : '-'}
+                            {selectedCluster ? formatClusterIdentity(selectedCluster) : clusterId || '-'} / {namespace || '-'} / {selectedWorkload ? `${selectedWorkload.kind}/${selectedWorkload.name}` : '-'}
                           </div>
                         </div>
                         <div className="flex shrink-0 flex-wrap gap-1.5">
@@ -1234,9 +1220,9 @@ export function LogsOnboardingPage() {
             title="选择下游端点"
             summary={selectedEndpointLabel}
             active={currentStep === 1 && setupTask === 'endpoint'}
-            done={runtimeTargetReady && hasEndpointForSource}
+            done={sourceReady && hasEndpointForSource}
             disabled={endpointBlocked}
-            disabledReason={endpointDisabledReason || '先绑定运行目标'}
+            disabledReason={endpointDisabledReason || '先配置采集来源'}
             onSelect={() => {
               setCurrentStep(1);
               setSetupTask('endpoint');
@@ -1306,11 +1292,11 @@ export function LogsOnboardingPage() {
             summary={`${collectorConfigState} · ${sourceType === 'vm_file' ? 'vm route config' : 'service config fragment'}`}
             active={currentStep === 2}
             done={Boolean(preview)}
-            disabled={!targetStepReady}
-            disabledReason={targetDisabledReason || '先完成目标与端点'}
+            disabled={!routeSetupReady}
+            disabledReason={setupDisabledReason || '先完成采集来源与端点'}
             bodyClassName="min-h-0 flex-1 overflow-hidden bg-surface/35"
             onSelect={() => {
-              if (!targetStepReady) return;
+              if (!routeSetupReady) return;
               setCurrentStep(2);
             }}
           >
@@ -1486,7 +1472,7 @@ export function LogsOnboardingPage() {
           impactLabel={summaryImpactLabel}
           auditLabel={summaryAuditLabel}
           actionHint={actionHint}
-          warning={Boolean(actionHint && (targetDisabledReason || previewMissing.length || publishDisabledReason || lockedDisabledReason))}
+          warning={Boolean(actionHint && (setupDisabledReason || previewMissing.length || publishDisabledReason || lockedDisabledReason))}
           actions={routeActions}
         />
       </div>
@@ -1498,8 +1484,6 @@ export function LogsOnboardingPage() {
         namespacesLoading={syncNamespacesQuery.isLoading}
         clusterId={syncClusterId}
         namespace={syncNamespace}
-		environments={platformEnvironments}
-		environmentId={syncEnvironmentId}
         disabledReason={serviceSyncDisabledReason}
         pending={syncK8sServicesMutation.isPending}
         error={syncK8sServicesMutation.error}
@@ -1508,7 +1492,6 @@ export function LogsOnboardingPage() {
           setSyncNamespace('');
         }}
         onNamespaceChange={setSyncNamespace}
-		onEnvironmentChange={setSyncEnvironmentId}
         onClose={() => {
           if (!syncK8sServicesMutation.isPending) setSyncDialogOpen(false);
         }}
@@ -1714,34 +1697,28 @@ function SyncK8sServicesDialog({
   open,
   clusters,
   namespaceOptions,
-  namespacesLoading,
-  clusterId,
-  namespace,
-	environments,
-	environmentId,
-  disabledReason,
+	  namespacesLoading,
+	  clusterId,
+	  namespace,
+	  disabledReason,
   pending,
-  error,
-  onClusterChange,
-  onNamespaceChange,
-	onEnvironmentChange,
-  onClose,
+	  error,
+	  onClusterChange,
+	  onNamespaceChange,
+	  onClose,
   onConfirm,
 }: {
   open: boolean;
   clusters: Array<{ id: string; name: string }>;
   namespaceOptions: Array<{ id: string; name: string }>;
-  namespacesLoading: boolean;
-  clusterId: string;
-  namespace: string;
-	environments: Array<{ id: string; name: string; stage: string }>;
-	environmentId: string;
+	  namespacesLoading: boolean;
+	  clusterId: string;
+	  namespace: string;
   disabledReason: string;
   pending: boolean;
-  error: unknown;
-  onClusterChange: (value: string) => void;
-  onNamespaceChange: (value: string) => void;
-	onEnvironmentChange: (value: string) => void;
+	  error: unknown;
+	  onClusterChange: (value: string) => void;
+	  onNamespaceChange: (value: string) => void;
   onClose: () => void;
   onConfirm: () => void;
 }) {
@@ -1779,10 +1756,6 @@ function SyncK8sServicesDialog({
               ))}
             </select>
           </label>
-          <label className="text-xs font-semibold text-muted">
-			所属环境
-			<select className="console-input mt-1.5 h-9 w-full text-sm" value={environmentId} disabled={pending} onChange={(event) => onEnvironmentChange(event.target.value)}><option value="">选择环境</option>{environments.map((item) => <option key={item.id} value={item.id}>{item.name} · {item.stage}</option>)}</select>
-		  </label>
 		  <label className="text-xs font-semibold text-muted">
             Namespace
             <select
@@ -1848,31 +1821,31 @@ function RouteCanvasStepper({
   currentStep,
   setupTask,
   serviceDone,
-  targetDone,
+  sourceDone,
   endpointDone,
   serviceSummary,
-  targetSummary,
+  sourceSummary,
   endpointSummary,
   onSelectService,
-  onSelectTarget,
+  onSelectSource,
   onSelectEndpoint,
 }: {
   currentStep: OnboardingStep;
   setupTask: SetupTask;
   serviceDone: boolean;
-  targetDone: boolean;
+  sourceDone: boolean;
   endpointDone: boolean;
   serviceSummary: string;
-  targetSummary: string;
+  sourceSummary: string;
   endpointSummary: string;
   onSelectService: () => void;
-  onSelectTarget: () => void;
+  onSelectSource: () => void;
   onSelectEndpoint: () => void;
 }) {
   const steps = [
     { key: 'service' as SetupTask, index: 1, title: '选择服务', summary: serviceSummary, done: serviceDone, disabled: false, onSelect: onSelectService },
-    { key: 'target' as SetupTask, index: 2, title: '绑定运行目标', summary: targetSummary, done: targetDone, disabled: !serviceDone, onSelect: onSelectTarget },
-    { key: 'endpoint' as SetupTask, index: 3, title: '选择下游端点', summary: endpointSummary, done: endpointDone, disabled: !targetDone, onSelect: onSelectEndpoint },
+    { key: 'source' as SetupTask, index: 2, title: '配置采集来源', summary: sourceSummary, done: sourceDone, disabled: !serviceDone, onSelect: onSelectSource },
+    { key: 'endpoint' as SetupTask, index: 3, title: '选择下游端点', summary: endpointSummary, done: endpointDone, disabled: !sourceDone, onSelect: onSelectEndpoint },
   ];
 
   return (

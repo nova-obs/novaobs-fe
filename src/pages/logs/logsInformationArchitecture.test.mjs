@@ -89,9 +89,10 @@ test('Logs 模块层只保留统一导航和服务作用域，不在业务页面
   assert.doesNotMatch(workspace, /console-panel shrink-0/);
 });
 
-test('Logs 日志分析通过服务上下文卡片切换当前服务', () => {
+test('Logs 日志分析通过产品与服务两级上下文切换当前服务', () => {
   assert.match(explore, /<ServiceContextSelector/);
-  assert.match(explore, /logs-explore-context-header[\s\S]*?<span>服务<\/span>/);
+  assert.match(explore, /查询上下文/);
+  assert.match(explore, /VictoriaLogs Endpoint/);
   assert.doesNotMatch(workspace, /选择当前服务/);
 });
 

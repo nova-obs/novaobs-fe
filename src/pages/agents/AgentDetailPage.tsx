@@ -115,8 +115,8 @@ export function AgentDetailPage() {
         <div className="console-detail-rail space-y-4">
           <DataPanel title="运行态" meta={runtimeStatusLabel(runtime.runtimeStatus)}>
             <InfoGrid items={[
-              ['服务', service ? service.displayName || service.name : runtime.serviceId || '-'],
-              ['环境', service?.environmentId || '-'],
+              ['服务', service ? service.name : runtime.serviceId || '-'],
+              ['服务 Key', service?.key || '-'],
               ['Service ID', runtime.serviceId || '-'],
               ['Remote Config', runtime.remoteConfigStatus || 'unset'],
               ['支持下发', String(runtime.remoteConfigCapable)],
@@ -142,8 +142,8 @@ export function AgentDetailPage() {
               <div className="space-y-2">
                 {services.map((item) => (
                   <div key={item.id} className="rounded border border-outline bg-surface-lowest p-3">
-                    <div className="font-semibold text-primary">{item.displayName || item.name}</div>
-                    <div className="mt-1 text-xs text-muted">{item.environmentId || '-'} · {item.cluster || '-'} · {item.namespace || '-'}</div>
+                    <div className="font-semibold text-primary">{item.name}</div>
+                    <div className="mt-1 font-mono text-xs text-muted">{item.key} · {item.id}</div>
                     <div className="mt-1 text-xs text-muted">owner: {item.ownerTeam || item.owner || '-'}</div>
                   </div>
                 ))}

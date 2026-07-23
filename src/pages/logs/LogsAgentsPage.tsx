@@ -507,10 +507,10 @@ function RuntimeFact({ label, value, tone }: { label: string; value: string; ton
   );
 }
 
-function collectorDomainScope(group?: { mode?: string; cluster?: string; namespace?: string; environmentId?: string } | null, instance?: { clusterId?: string; agentNamespace?: string } | null) {
+function collectorDomainScope(group?: { mode?: string; cluster?: string; namespace?: string } | null, instance?: { clusterId?: string; agentNamespace?: string } | null) {
   if (!group) return '-';
   if (group.mode === 'dedicated_collector' || group.mode === 'daemonset' || group.cluster) {
     return `${instance?.clusterId || group.cluster || '-'} / ${instance?.agentNamespace || group.namespace || '-'}`;
   }
-  return group.environmentId || '-';
+  return group.namespace || '-';
 }

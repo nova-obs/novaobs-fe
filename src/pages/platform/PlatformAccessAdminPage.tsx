@@ -960,6 +960,5 @@ function formatScope(scope: PlatformScope) {
   if (scope.serviceId) return `service/${scope.serviceId}`;
   if (scope.namespace) return `${scope.clusterId || '-'}/${scope.namespace}`;
   if (scope.clusterId) return `cluster/${scope.clusterId}`;
-	if (scope.environmentId) return `environment/${scope.environmentId}`;
   return '-';
 }

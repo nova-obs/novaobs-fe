@@ -4,10 +4,12 @@ import type { Product, Service } from '../../services/types';
 export interface ServiceScopeContextValue {
   products: Product[];
   services: Service[];
+  activeProduct: Product | null;
   activeService: Service | null;
   loading: boolean;
   error: unknown;
   retry: () => void;
+  selectProduct: (productId: string) => void;
   selectService: (serviceId: string) => void;
 }
 

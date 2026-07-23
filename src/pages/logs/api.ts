@@ -170,17 +170,10 @@ export interface LogTargetInput {
 
 export interface LogsServiceSummary {
   id: string;
-	productId: string;
-	accountId: string;
-	projectId: string;
+  productId: string;
+  key: string;
   name: string;
-  displayName: string;
-  environmentId: string;
-  cluster: string;
-  namespace: string;
   ownerTeam: string;
-  identityType: string;
-  serviceType: string;
   source: string;
   syncStatus: string;
 }
@@ -190,7 +183,6 @@ export interface LogsAgentGroupSummary {
   name: string;
   displayName: string;
   mode: string;
-  environmentId: string;
   cluster: string;
   namespace: string;
   status: string;
@@ -253,6 +245,7 @@ export interface LogRouteInput {
     collectorFragmentYAML?: string;
   };
   vm?: {
+    hostGroup?: string;
     pathPattern?: string;
     parseRules?: LogParseRule[];
     collectorYAML?: string;
@@ -263,7 +256,6 @@ export interface SyncK8sServicesInput {
 	productId: string;
   clusterId: string;
   namespace: string;
-  environmentId?: string;
   ownerTeam?: string;
   workloadKind?: string;
 }
@@ -271,7 +263,6 @@ export interface SyncK8sServicesInput {
 export interface SyncedK8sService {
   service: LogsServiceSummary;
   workload: LogsWorkload;
-  targetId: string;
   created: boolean;
 }
 
@@ -422,6 +413,7 @@ export interface LogsCollectorRuntimePublishResult extends LogRoutePublishResult
   changedConfigMaps: string[];
   resources: K8sPublishResource[];
   diffs: K8sPublishDiff[];
+  expiresAt: string;
 }
 
 export interface K8sPublishResource {
@@ -568,17 +560,10 @@ function mapTarget(raw: any): LogTarget {
 function mapServiceSummary(raw: any): LogsServiceSummary {
   return {
     id: String(raw.id ?? ''),
-	productId: String(raw.product_id ?? raw.productId ?? ''),
-	accountId: String(raw.account_id ?? raw.accountId ?? ''),
-	projectId: String(raw.project_id ?? raw.projectId ?? ''),
+    productId: String(raw.product_id ?? raw.productId ?? ''),
+    key: raw.key ?? '',
     name: raw.name ?? '',
-    displayName: raw.display_name ?? raw.displayName ?? '',
-    environmentId: raw.environment_id ?? '',
-    cluster: raw.cluster ?? '',
-    namespace: raw.namespace ?? '',
     ownerTeam: raw.owner_team ?? raw.ownerTeam ?? '',
-    identityType: raw.identity_type ?? raw.identityType ?? '',
-    serviceType: raw.service_type ?? raw.serviceType ?? '',
     source: raw.source ?? '',
     syncStatus: raw.sync_status ?? raw.syncStatus ?? '',
   };
@@ -600,7 +585,6 @@ function mapWorkspace(raw: any): LogOnboardingWorkspace {
       name: item.name ?? '',
       displayName: item.display_name ?? item.displayName ?? '',
       mode: item.mode ?? '',
-      environmentId: item.environment_id ?? '',
       cluster: item.cluster ?? '',
       namespace: item.namespace ?? '',
       status: item.status ?? '',
@@ -667,22 +651,14 @@ function mapSyncedService(raw: any): SyncedK8sService {
   return {
     service: {
       id: String(service.id ?? ''),
-	  productId: String(service.product_id ?? service.productId ?? ''),
-	  accountId: String(service.account_id ?? service.accountId ?? ''),
-	  projectId: String(service.project_id ?? service.projectId ?? ''),
+      productId: String(service.product_id ?? service.productId ?? ''),
+      key: service.key ?? '',
       name: service.name ?? '',
-      displayName: service.display_name ?? service.displayName ?? '',
-      environmentId: service.environment_id ?? '',
-      cluster: service.cluster ?? '',
-      namespace: service.namespace ?? '',
       ownerTeam: service.owner_team ?? service.ownerTeam ?? '',
-      identityType: service.identity_type ?? service.identityType ?? '',
-      serviceType: service.service_type ?? service.serviceType ?? '',
       source: service.source ?? '',
       syncStatus: service.sync_status ?? service.syncStatus ?? '',
     },
     workload: mapWorkload(raw.workload ?? {}),
-    targetId: raw.target_id ?? raw.targetId ?? '',
     created: Boolean(raw.created),
   };
 }
@@ -780,6 +756,7 @@ function mapCollectorRuntimePublish(raw: any): LogsCollectorRuntimePublishResult
     requiresConfirmation: Boolean(raw.requires_confirmation),
     previewId: raw.preview_id ?? '',
     confirmationToken: raw.confirmation_token ?? '',
+    expiresAt: raw.expires_at ?? '',
     auditId: raw.audit_id ?? '',
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     runtime: raw.runtime ? mapObservabilityRuntime(raw.runtime) : undefined,
@@ -888,6 +865,7 @@ function toRoutePayload(input: LogRouteInput) {
       collector_fragment_yaml: input.k8s?.collectorFragmentYAML ?? '',
     },
     vm: isVM ? {
+      host_group: input.vm?.hostGroup,
       path_pattern: input.vm?.pathPattern,
       parse_rules: toParseRulesPayload(input.vm?.parseRules),
       collector_yaml: input.vm?.collectorYAML,
@@ -944,11 +922,10 @@ export const logsApi = {
   async syncK8sServices(input: SyncK8sServicesInput): Promise<SyncK8sServicesResult> {
 	const raw = await apiRequest<any>(`/products/${encodeURIComponent(input.productId)}/logs/onboarding/k8s/sync-services`, {
       method: 'POST',
-      body: JSON.stringify({
-        cluster_id: input.clusterId,
-        namespace: input.namespace,
-		environment_id: input.environmentId,
-        owner_team: input.ownerTeam,
+	      body: JSON.stringify({
+	        cluster_id: input.clusterId,
+	        namespace: input.namespace,
+	        owner_team: input.ownerTeam,
         workload_kind: input.workloadKind,
       }),
     });
@@ -1029,7 +1006,7 @@ export const logsApi = {
       }),
     }));
   },
-  async publishLogsCollectorRuntime(input: { clusterId: string; namespace?: string; taskType: 'base' | 'incremental'; routeIds?: string[]; previewId?: string; confirmationToken?: string }): Promise<LogsCollectorRuntimePublishResult> {
+  async publishLogsCollectorRuntime(input: { clusterId: string; namespace?: string; taskType: 'base' | 'incremental'; routeIds?: string[] }): Promise<LogsCollectorRuntimePublishResult> {
     return mapCollectorRuntimePublish(await apiRequest<any>('/observability/runtimes/logs-collector/publish', {
       method: 'POST',
       body: JSON.stringify({
@@ -1037,6 +1014,13 @@ export const logsApi = {
         namespace: normalizeLogsCollectorNamespace(input.namespace),
         task_type: input.taskType,
         route_ids: input.routeIds?.length ? input.routeIds : undefined,
+      }),
+    }));
+  },
+  async confirmLogsCollectorRuntime(input: { previewId: string; confirmationToken: string }): Promise<LogsCollectorRuntimePublishResult> {
+    return mapCollectorRuntimePublish(await apiRequest<any>('/observability/runtimes/logs-collector/publish', {
+      method: 'POST',
+      body: JSON.stringify({
         preview_id: input.previewId,
         confirmation_token: input.confirmationToken,
       }),

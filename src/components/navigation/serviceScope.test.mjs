@@ -28,33 +28,32 @@ test('从入口和嵌套 URL 中解析当前模块功能', () => {
   assert.equal(serviceModuleEntryFromPath('/products/p/services/s/logs', 'logs'), 'explore');
 });
 
-test('Logs 保存最近服务偏好且页面不再渲染服务表格', () => {
+test('Logs 保存最近服务偏好并使用产品、服务两级上下文', () => {
   assert.equal(serviceScopePreferenceKey('logs'), 'novaapm.service-scope.logs');
   assert.match(workbenchSource, /api\.getProducts/);
   assert.match(workbenchSource, /api\.getServices/);
-  assert.match(selectorSource, /LogsEntitySelector<Service>/);
-  assert.match(selectorSource, /ariaLabel="选择当前服务"/);
-  assert.match(selectorSource, /triggerHeight="h-14"/);
+  assert.match(selectorSource, /aria-label="选择产品"/);
+  assert.match(selectorSource, /aria-label="选择产品内服务"/);
   assert.doesNotMatch(workbenchSource, /<select/);
   assert.doesNotMatch(workbenchSource, /toolbar=/);
-  assert.doesNotMatch(selectorSource, /<select/);
+  assert.match(selectorSource, /<select/);
   assert.doesNotMatch(selectorSource, /<optgroup/);
   assert.doesNotMatch(selectorSource, /<table/);
   assert.doesNotMatch(selectorSource, />服务作用域</);
-  assert.doesNotMatch(selectorSource, /选择产品/);
+  assert.match(selectorSource, /选择产品/);
   assert.doesNotMatch(selectorSource, /product_id/);
 });
 
-test('服务卡片恢复历史自定义下拉交互，不再增加模块顶部下拉条', () => {
-  assert.match(selectorSource, /LogsEntitySelector/);
-  assert.match(selectorSource, /triggerTitle=/);
-  assert.match(selectorSource, /triggerMeta=/);
-  assert.match(selectorSource, /renderOption=/);
+test('服务上下文显式区分产品和产品内服务', () => {
+  assert.match(selectorSource, /activeProduct/);
+  assert.match(selectorSource, /productServices/);
+  assert.match(selectorSource, /selectProduct/);
+  assert.match(selectorSource, /selectService/);
   assert.doesNotMatch(selectorSource, /absolute inset-0/);
   assert.doesNotMatch(selectorSource, /opacity-0/);
   assert.doesNotMatch(selectorSource, /triggerMeta=\{activeService\?\.id/);
   assert.doesNotMatch(selectorSource, /· \{service\.id\}/);
-  assert.match(logsExploreSource, /logs-explore-context-header[\s\S]*?<span>服务<\/span>/);
+  assert.match(logsExploreSource, /查询上下文/);
   assert.match(logsExploreSource, /<ServiceContextSelector/);
   assert.doesNotMatch(workbenchSource, /ServiceScopeToolbar/);
 });

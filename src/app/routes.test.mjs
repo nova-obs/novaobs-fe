@@ -5,6 +5,13 @@ import { routeDefinitions, getDocumentTitle, getRouteTitle } from './routes.tsx'
 test('路由定义覆盖主路径', () => {
   assert.deepEqual(routeDefinitions.map((route) => route.path), [
     '/',
+    '/products',
+    '/products/:productId/services',
+    '/products/:productId/integrations',
+    '/products/:productId/services/:serviceId',
+    '/products/:productId/services/:serviceId/overview',
+    '/products/:productId/services/:serviceId/graph',
+    '/products/:productId/services/:serviceId/settings',
     '/services',
     '/onboarding',
     '/logs',
@@ -25,17 +32,17 @@ test('路由定义覆盖主路径', () => {
   ]);
 });
 
-test('Metrics 使用环境级路由', () => {
+test('Metrics 使用产品级接入路由', () => {
 	const metricsEntry = routeDefinitions.find((item) => item.path === '/metrics');
 
-	assert.deepEqual(metricsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'overview', 'dashboard', 'alerts/new', 'alerts/:id', 'alerts', 'environments', 'endpoints']);
+	assert.deepEqual(metricsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'overview', 'dashboard', 'alerts/new', 'alerts/:id', 'alerts', 'integrations', 'endpoints']);
 	assert.equal(metricsEntry?.element?.type?.name, 'MetricsLayout');
 	assert.equal(metricsEntry?.children?.find((item) => item.path === 'dashboard')?.element?.type?.name, 'MetricsDashboardPage');
 	assert.equal(metricsEntry?.children?.some((item) => item.path === 'monitoring'), false);
 	assert.equal(metricsEntry?.children?.find((item) => item.path === 'alerts')?.element?.type?.name, 'MetricsAlertsPage');
 	assert.equal(metricsEntry?.children?.find((item) => item.path === 'alerts/new')?.element?.type?.name, 'MetricsAlertsPage');
 	assert.equal(metricsEntry?.children?.find((item) => item.path === 'alerts/:id')?.element?.type?.name, 'MetricsAlertsPage');
-  assert.equal(metricsEntry?.children?.find((item) => item.path === 'environments')?.element?.type?.name, 'MetricsEnvironmentsPage');
+  assert.equal(metricsEntry?.children?.find((item) => item.path === 'integrations')?.element?.type?.name, 'MetricsIntegrationsPage');
   assert.equal(metricsEntry?.children?.find((item) => item.path === 'endpoints')?.element?.props?.to, '/observability/endpoints/metrics');
 	const serviceEndpoints = routeDefinitions.find((item) => item.path === '/products/:productId/services/:serviceId/metrics/endpoints');
 	assert.equal(serviceEndpoints?.element?.props?.to, '/observability/endpoints/metrics');
@@ -69,7 +76,7 @@ test('平台管理只保留平台域入口，观测接入配置迁移到可观�
   const legacyObservabilityRoute = routeDefinitions.find((item) => item.path === '/observability/endpoints');
 	const logsEndpointsRoute = routeDefinitions.find((item) => item.path === '/observability/endpoints/logs');
 	const metricsEndpointsRoute = routeDefinitions.find((item) => item.path === '/observability/endpoints/metrics');
-  assert.deepEqual(platform?.children?.map((item) => item.path ?? 'index'), ['index', 'environments', 'settings', 'access', 'observability']);
+  assert.deepEqual(platform?.children?.map((item) => item.path ?? 'index'), ['index', 'settings', 'access', 'observability']);
   assert.equal(Boolean(legacyObservabilityRoute), true);
 	assert.equal(legacyObservabilityRoute?.element?.type?.name, 'Navigate');
 	assert.equal(legacyObservabilityRoute?.element?.props?.to, '/observability/endpoints/logs');
@@ -83,6 +90,9 @@ test('平台管理只保留平台域入口，观测接入配置迁移到可观�
 
 test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/onboarding'), '服务接入');
+  assert.equal(getRouteTitle('/products'), '产品与服务');
+  assert.equal(getRouteTitle('/products/product-1/services'), '产品服务');
+  assert.equal(getRouteTitle('/products/product-1/integrations'), '产品集成');
   assert.equal(getRouteTitle('/logs'), 'Logs 日志分析');
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/logs/explore'), 'Logs 日志分析');
 	assert.equal(getRouteTitle('/logs/explore'), 'Logs 日志分析');
@@ -103,7 +113,7 @@ test('路由标题可按路径查找', () => {
 	assert.equal(getRouteTitle('/metrics/alerts'), '指标告警');
 	assert.equal(getRouteTitle('/metrics/alerts/new'), '创建指标告警');
 	assert.equal(getRouteTitle('/metrics/alerts/rule-1'), '编辑指标告警');
-	assert.equal(getRouteTitle('/metrics/environments'), '环境接入');
+	assert.equal(getRouteTitle('/metrics/integrations'), '指标接入');
 	assert.equal(getRouteTitle('/metrics/endpoints'), '指标下游端点');
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/endpoints'), '指标下游端点');
   assert.equal(getRouteTitle('/traces'), 'Trace');
@@ -127,7 +137,7 @@ test('浏览器标签页标题包含当前模块和产品名', () => {
   assert.equal(getDocumentTitle('/observability/endpoints/logs'), 'Logs 下游端点 - NovaAPM');
   assert.equal(getDocumentTitle('/observability/endpoints/metrics'), '指标下游端点 - NovaAPM');
   assert.equal(getDocumentTitle('/metrics'), '监控总览 - NovaAPM');
-	assert.equal(getDocumentTitle('/metrics/environments'), '环境接入 - NovaAPM');
+	assert.equal(getDocumentTitle('/metrics/integrations'), '指标接入 - NovaAPM');
 	assert.equal(getDocumentTitle('/metrics/dashboard'), 'Dashboard - NovaAPM');
 	assert.equal(getDocumentTitle('/metrics/monitoring'), '平台总览 - NovaAPM');
 	assert.equal(getDocumentTitle('/metrics/alerts'), '指标告警 - NovaAPM');

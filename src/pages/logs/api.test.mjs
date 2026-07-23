@@ -36,14 +36,14 @@ test('获取 Logs 接入工作台时调用统一 onboarding workspace 接口', a
   const { request, result } = await captureRequest(
 	() => logsApi.getWorkspace('product-001', 'svc-001'),
     {
-      services: [{ id: 'svc-001', name: 'order-api', environmentId: 'prod' }],
+      services: [{ id: 'svc-001', name: 'order-api' }],
       collector_groups: [{ id: 'ag-001', name: 'prod-ds', mode: 'daemonset', online_instances: 2 }],
       clusters: [{ id: 'test03', name: 'test03', version: 'v1.28.3', access_mode: 'direct/ro', read_only: true }],
       endpoints: [{ id: 'vl-001', name: 'vl-prod', sink_type: 'vl', stream_name: '', write_url: 'http://vl/insert', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527', scope_type: 'k8s_cluster', cluster_id: 'test03' }],
       routes: [],
       targets: [{
         target: { id: 'target-001', name: 'orders 自建 VL', service_id: 'svc-001', endpoint_id: 'vl-001', source_kind: 'external_vlogs', base_filter: '"stream":"orders"', status: 'verified' },
-        service: { id: 'svc-001', name: 'order-api', environmentId: 'prod' },
+        service: { id: 'svc-001', name: 'order-api' },
         endpoint: { id: 'vl-001', name: 'vl-prod', sink_type: 'vl', query_url: 'http://vl/select/logsql/query', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527' },
       }],
     },
@@ -107,7 +107,7 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
   const { result } = await captureRequest(
 	() => logsApi.getWorkspace('product-001', 'svc-001'),
     {
-      services: [{ id: 'svc-001', name: 'order-api', environmentId: 'prod', identity_type: 'k8s_workload' }],
+      services: [{ id: 'svc-001', name: 'order-api', identity_type: 'k8s_workload' }],
       collector_groups: [],
       clusters: [],
       endpoints: [{ id: 'sink-001', name: 'vl-prod', sink_type: 'vl', write_url: 'http://vl/insert' }],
@@ -328,12 +328,9 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
   assert.equal(result.resources[0].kind, 'Deployment');
 });
 
-test('发布 K8s logs_collector Runtime 时使用观测运行时接口', async () => {
+test('确认 K8s logs_collector Runtime 时只提交不可变预览凭据', async () => {
   const { request, result } = await captureRequest(
-    () => logsApi.publishLogsCollectorRuntime({
-      clusterId: 'test03',
-      namespace: 'novaapm-system',
-      taskType: 'incremental',
+    () => logsApi.confirmLogsCollectorRuntime({
       previewId: 'preview-001',
       confirmationToken: 'token-001',
     }),
@@ -360,9 +357,7 @@ test('发布 K8s logs_collector Runtime 时使用观测运行时接口', async (
 
   assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/publish');
   assert.equal(request.init.method, 'POST');
-  assert.equal(request.body.cluster_id, 'test03');
-  assert.equal(request.body.namespace, 'novaapm-system');
-  assert.equal(request.body.task_type, 'incremental');
+  assert.deepEqual(Object.keys(request.body).sort(), ['confirmation_token', 'preview_id']);
   assert.equal(request.body.preview_id, 'preview-001');
   assert.equal(request.body.confirmation_token, 'token-001');
   assert.equal(result.auditId, 'audit-001');
@@ -411,10 +406,9 @@ test('Logs 接入来源只按 K8s 和 VM 展示', () => {
 test('同步 K8s namespace 服务时使用专用 logs onboarding 接口', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.syncK8sServices({
-	  productId: 'product-orders',
+      productId: 'product-orders',
       clusterId: 'test03',
       namespace: 'logplatform',
-      environmentId: 'prod',
       ownerTeam: 'sre',
       workloadKind: 'Deployment',
     }),
@@ -422,8 +416,7 @@ test('同步 K8s namespace 服务时使用专用 logs onboarding 接口', async 
       total: 1,
       services: [{
         created: true,
-        target_id: 'target-001',
-        service: { id: 'svc-001', name: 'utrace-api', identity_type: 'k8s_workload', service_type: 'k8s业务', source: 'k8s', sync_status: 'synced' },
+        service: { id: 'svc-001', key: 'utrace-api', name: 'utrace-api', source: 'k8s', sync_status: 'synced' },
         workload: { kind: 'Deployment', name: 'utrace-api', namespace: 'logplatform' },
       }],
     },
@@ -433,7 +426,7 @@ test('同步 K8s namespace 服务时使用专用 logs onboarding 接口', async 
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.cluster_id, 'test03');
   assert.equal(request.body.namespace, 'logplatform');
-  assert.equal(result.services[0].service.serviceType, 'k8s业务');
+  assert.equal(result.services[0].service.key, 'utrace-api');
   assert.equal(result.services[0].created, true);
 });
 
@@ -485,6 +478,8 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
   assert.equal(request.path, '/api/v1/logs/routes/preview');
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.service_id, 'svc-001');
+  assert.equal(request.body.environment_id, undefined);
+  assert.equal(request.body.target_id, undefined);
   assert.equal(request.body.route_id, 'route-001');
   assert.equal(request.body.source_type, 'k8s_stdout');
   assert.equal(request.body.agent_group_id, 'ag-001');
@@ -580,6 +575,7 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
         namespace: 'logplatform',
       },
       vm: {
+        hostGroup: 'billing-vms',
         pathPattern: '/data/logs/*.log',
         collectorYAML: 'receivers:\n  file_log/vm:\n',
       },
@@ -596,8 +592,10 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
   );
 
   assert.equal(request.body.source_type, 'vm_file');
+  assert.equal(request.body.environment_id, undefined);
+  assert.equal(request.body.target_id, undefined);
   assert.equal(request.body.vm.collector_yaml, 'receivers:\n  file_log/vm:\n');
-  assert.equal('host_group' in request.body.vm, false);
+  assert.equal(request.body.vm.host_group, 'billing-vms');
   assert.equal('host_selector' in request.body.vm, false);
   assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(request.body.k8s.cluster_id, undefined);

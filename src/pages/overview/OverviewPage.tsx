@@ -48,8 +48,8 @@ export function OverviewPage() {
                 <thead>
                   <tr>
                     <th>服务</th>
-                    <th>环境</th>
-                    <th>定位</th>
+                    <th>服务 Key</th>
+                    <th>产品 ID</th>
                     <th>Owner</th>
                     <th>来源</th>
                     <th>同步</th>
@@ -61,10 +61,10 @@ export function OverviewPage() {
                     <tr key={service.id} className="bg-white/35 hover:bg-white/60">
                       <td>
                         <div className="font-semibold text-primary">{service.name}</div>
-                        <div className="text-[11px] text-muted">{service.displayName || service.serviceType || '-'}</div>
+                        <div className="text-[11px] text-muted">{service.description || '-'}</div>
                       </td>
-                      <td className="font-mono text-xs">{service.environmentId || '-'}</td>
-                      <td className="font-mono text-xs">{serviceLocation(service)}</td>
+                      <td className="font-mono text-xs">{service.key || '-'}</td>
+                      <td className="font-mono text-xs">{service.productId || '-'}</td>
                       <td className="text-xs text-muted">{serviceOwner(service)}</td>
                       <td className="text-xs text-muted">{sourceLabel(service.source)}</td>
                       <td><StateChip value={syncLabel(service.syncStatus)} /></td>
@@ -161,10 +161,6 @@ function StateChip({ value }: { value: string }) {
       {value || 'unknown'}
     </span>
   );
-}
-
-function serviceLocation(service: Service) {
-  return [service.cluster, service.namespace].filter(Boolean).join(' / ') || '-';
 }
 
 function serviceOwner(service: Service) {

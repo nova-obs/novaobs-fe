@@ -47,14 +47,10 @@ test('日志告警工具栏先选择服务，再放搜索、刷新、新增', ()
   assert.match(alertsSource, /filteredRules/);
 });
 
-test('服务目录复用左操作右检索工具栏', () => {
-  const toolbarIndex = servicesSource.indexOf('console-list-toolbar');
-  const createIndex = servicesSource.indexOf('新增服务', toolbarIndex);
-  const refreshIndex = servicesSource.indexOf('刷新', toolbarIndex);
-  const searchIndex = servicesSource.indexOf('名称 / CMDB ID / 业务 / 负责人', toolbarIndex);
-
-  assert.ok(toolbarIndex >= 0);
-  assert.ok(createIndex > toolbarIndex);
-  assert.ok(refreshIndex > toolbarIndex);
-  assert.ok(searchIndex > createIndex);
+test('产品与服务使用紧凑表格和独立创建抽屉', () => {
+  assert.match(servicesSource, /console-resource-list/);
+  assert.match(servicesSource, /新增产品/);
+  assert.match(servicesSource, /新增服务/);
+  assert.match(servicesSource, /ProductDrawer/);
+  assert.match(servicesSource, /ServiceDrawer/);
 });

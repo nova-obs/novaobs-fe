@@ -12,17 +12,18 @@ export interface DashboardViewState {
 export type GrafanaWorkspaceView = 'dashboard' | 'explore';
 
 export function grafanaWorkspaceURL(configuredURL: string, workspace: GrafanaWorkspaceView): string {
-	if (workspace === 'dashboard') return configuredURL;
-
   const configured = new URL(configuredURL, 'http://novaapm.local');
+  if (workspace === 'dashboard') {
+    configured.searchParams.set('kiosk', '1');
+    const suffix = configured.searchParams.toString();
+    return `${configured.pathname}${suffix ? `?${suffix}` : ''}`;
+  }
+
   const query = new URLSearchParams();
   if (configured.searchParams.has('orgId')) {
     query.set('orgId', configured.searchParams.get('orgId') ?? '');
   }
-  if (configured.searchParams.has('kiosk')) {
-    const kiosk = configured.searchParams.get('kiosk');
-    query.set('kiosk', kiosk === '' || kiosk === 'true' ? '1' : (kiosk ?? '1'));
-  }
+  query.set('kiosk', '1');
 	const suffix = query.toString();
 	return `/grafana/explore${suffix ? `?${suffix}` : ''}`;
 }

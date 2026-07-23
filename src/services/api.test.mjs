@@ -83,12 +83,12 @@ test('保存 Collector Group Override 时传递增量 YAML', async () => {
 
 test('服务接入保存时以字符串 collector_group_id 传递 MongoDB ID', async () => {
   const request = await captureRequest(
-    () => api.upsertServiceOnboarding('507f1f77bcf86cd799439011', {
+    () => api.upsertServiceOnboarding('product-commerce', '507f1f77bcf86cd799439011', {
       mode: 'shared_gateway',
       collectorGroupId: '507f1f77bcf86cd799439013',
     }),
     {
-      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc', environmentId: 'prod' },
+      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc' },
       onboarding: {
         id: '507f1f77bcf86cd799439014',
         service_id: '507f1f77bcf86cd799439011',
@@ -102,16 +102,16 @@ test('服务接入保存时以字符串 collector_group_id 传递 MongoDB ID', a
     },
   );
 
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439011/onboarding');
+  assert.equal(request.path, '/api/v1/products/product-commerce/services/507f1f77bcf86cd799439011/onboarding');
   assert.equal(request.body.collector_group_id, '507f1f77bcf86cd799439013');
   assert.equal('identity_type' in request.body, false);
 });
 
-test('获取服务接入工作台时调用 GET /services/:id/onboarding', async () => {
+test('获取服务接入工作台时使用产品嵌套路径', async () => {
   const request = await captureRequest(
-    () => api.getServiceOnboarding('507f1f77bcf86cd799439011'),
+    () => api.getServiceOnboarding('product-commerce', '507f1f77bcf86cd799439011'),
     {
-      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc', environmentId: 'prod' },
+      service: { id: '507f1f77bcf86cd799439011', name: 'test-svc' },
       onboarding: { id: '507f1f77bcf86cd799439014', service_id: '507f1f77bcf86cd799439011', status: 'not_started' },
       generated_config: {},
       checklist: [],
@@ -119,13 +119,13 @@ test('获取服务接入工作台时调用 GET /services/:id/onboarding', async 
     },
   );
 
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439011/onboarding');
+  assert.equal(request.path, '/api/v1/products/product-commerce/services/507f1f77bcf86cd799439011/onboarding');
   assert.equal(request.init.method, undefined);
 });
 
-test('执行服务接入检查时调用 POST /services/:id/onboarding/check', async () => {
+test('执行服务接入检查时使用产品嵌套路径', async () => {
   const request = await captureRequest(
-    () => api.checkServiceOnboarding('507f1f77bcf86cd799439011'),
+    () => api.checkServiceOnboarding('product-commerce', '507f1f77bcf86cd799439011'),
     {
       service: { id: '507f1f77bcf86cd799439011', name: 'test-svc' },
       onboarding: { id: '507f1f77bcf86cd799439014', service_id: '507f1f77bcf86cd799439011', status: 'verified' },
@@ -138,27 +138,29 @@ test('执行服务接入检查时调用 POST /services/:id/onboarding/check', as
     },
   );
 
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439011/onboarding/check');
+  assert.equal(request.path, '/api/v1/products/product-commerce/services/507f1f77bcf86cd799439011/onboarding/check');
   assert.equal(request.init.method, 'POST');
 });
 
 test('创建服务时传递必填字段并以字符串 ID 返回', async () => {
-  const request = await captureRequest(
-	() => api.createService({ productId: 'product-commerce', name: 'order-svc', environmentId: 'prod' }),
+	const request = await captureRequest(
+	() => api.createService({ productId: 'product-commerce', key: 'order-svc', name: '订单服务' }),
     {
       id: '507f1f77bcf86cd799439020',
-      name: 'order-svc',
-			  environment_id: 'prod',
+      product_id: 'product-commerce',
+      key: 'order-svc',
+      name: '订单服务',
       source: 'manual',
       sync_status: 'local',
-      status: 'pending',
+      status: 'active',
     },
   );
 
 	assert.equal(request.path, '/api/v1/products/product-commerce/services');
   assert.equal(request.init.method, 'POST');
-  assert.equal(request.body.name, 'order-svc');
-	assert.equal(request.body.environment_id, 'prod');
+  assert.equal(request.body.key, 'order-svc');
+  assert.equal(request.body.name, '订单服务');
+	assert.equal(request.body.environment_id, undefined);
 });
 
 test('创建产品后由后端生成产品级 projectId', async () => {
@@ -166,15 +168,16 @@ test('创建产品后由后端生成产品级 projectId', async () => {
 	const requests = [];
 	globalThis.fetch = async (path, init = {}) => {
 		requests.push({ path, init, body: init.body ? JSON.parse(init.body) : undefined });
-		return jsonResponse({ id: 'product-payments', name: 'payments', display_name: '支付产品', project_id: 9528, status: 'active' });
+		return jsonResponse({ id: 'product-payments', key: 'payments', name: '支付产品', tenant: { account_id: '0', project_id: 9528 }, status: 'active' });
 	};
 
 	try {
-		const product = await api.createProduct({ name: 'payments', displayName: '支付产品' });
+		const product = await api.createProduct({ key: 'payments', name: '支付产品' });
 		assert.equal(requests[0].path, '/api/v1/products');
 		assert.equal(requests[0].init.method, 'POST');
 		assert.equal(requests[0].body.project_id, undefined);
-		assert.equal(product.projectId, '9528');
+		assert.equal(product.tenant.accountId, '0');
+		assert.equal(product.tenant.projectId, '9528');
 	} finally {
 		globalThis.fetch = originalFetch;
 	}
@@ -182,31 +185,32 @@ test('创建产品后由后端生成产品级 projectId', async () => {
 
 test('更新服务时使用 PATCH 方法', async () => {
   const request = await captureRequest(
-    () => api.updateService('507f1f77bcf86cd799439020', { name: 'order-svc-v2' }),
+    () => api.updateService('product-commerce', '507f1f77bcf86cd799439020', { name: '订单服务 V2' }),
     { id: '507f1f77bcf86cd799439020', name: 'order-svc-v2' },
   );
 
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439020');
+  assert.equal(request.path, '/api/v1/products/product-commerce/services/507f1f77bcf86cd799439020');
   assert.equal(request.init.method, 'PATCH');
 });
 
-test('删除服务时调用 DELETE /services/:id', async () => {
+test('归档服务时调用产品嵌套 DELETE', async () => {
   const request = await captureRequest(
-    () => api.deleteService('507f1f77bcf86cd799439020'),
-    null,
+    () => api.archiveService('product-commerce', '507f1f77bcf86cd799439020'),
+    { id: '507f1f77bcf86cd799439020', product_id: 'product-commerce', key: 'order-svc', name: '订单服务', status: 'archived' },
   );
 
-  assert.equal(request.path, '/api/v1/services/507f1f77bcf86cd799439020');
+  assert.equal(request.path, '/api/v1/products/product-commerce/services/507f1f77bcf86cd799439020');
   assert.equal(request.init.method, 'DELETE');
 });
 
-test('getServices 支持查询参数', async () => {
+test('getProductServices 支持产品内查询参数', async () => {
   const request = await captureRequest(
-    () => api.getServices({ environmentId: 'prod', status: 'active' }),
+    () => api.getProductServices('product-commerce', { q: 'order', status: 'active' }),
     [],
   );
 
-	assert.ok(request.path.includes('environment_id=prod'));
+	assert.ok(request.path.includes('/products/product-commerce/services?'));
+	assert.ok(request.path.includes('q=order'));
   assert.ok(request.path.includes('status=active'));
 });
 
@@ -433,8 +437,8 @@ test('发布 Collector Group 配置时调用 config/publish', async () => {
 
 test('创建 Collector Group 时使用 POST 方法', async () => {
   const request = await captureRequest(
-    () => api.createCollectorGroup({ name: 'shared-gw-prod', mode: 'shared_gateway', environmentId: 'prod' }),
-    { id: '507f1f77bcf86cd799439030', name: 'shared-gw-prod', mode: 'shared_gateway', environmentId: 'prod', status: 'draft' },
+    () => api.createCollectorGroup({ name: 'shared-gw-prod', mode: 'shared_gateway' }),
+    { id: '507f1f77bcf86cd799439030', name: 'shared-gw-prod', mode: 'shared_gateway', status: 'draft' },
   );
 
   assert.equal(request.path, '/api/v1/collector-groups');
@@ -466,11 +470,11 @@ test('启用 Collector Group 时调用 activate 接口', async () => {
 
 test('getCollectorGroups 支持查询参数', async () => {
   const request = await captureRequest(
-    () => api.getCollectorGroups({ environmentId: 'prod', status: 'active' }),
+    () => api.getCollectorGroups({ cluster: 'prod', status: 'active' }),
     [],
   );
 
-	assert.ok(request.path.includes('environment_id=prod'));
+	assert.ok(request.path.includes('cluster=prod'));
   assert.ok(request.path.includes('status=active'));
 });
 
@@ -513,13 +517,13 @@ test('删除 Collector Group 时使用 DELETE 方法', async () => {
   assert.equal(request.init.method, 'DELETE');
 });
 
-test('获取服务绑定 Agent 时调用 GET /services/:id/agents', async () => {
+test('获取服务绑定 Agent 时使用产品嵌套路径', async () => {
   const request = await captureRequest(
-    () => api.getServiceAgents('svc-001'),
+    () => api.getServiceAgents('product-commerce', 'svc-001'),
     [{ instance_uid: 'agent-001', service_id: 'svc-001', runtime_status: 'online' }],
   );
 
-  assert.equal(request.path, '/api/v1/services/svc-001/agents');
+  assert.equal(request.path, '/api/v1/products/product-commerce/services/svc-001/agents');
 });
 
 test('日志告警测试和启用使用结构化规则契约', async () => {
@@ -528,7 +532,7 @@ test('日志告警测试和启用使用结构化规则契约', async () => {
     scope: { serviceId: 'svc-a', serviceName: 'payment', logRouteId: 'route-a', endpointId: 'vl-a', accountId: '1', projectId: '2' },
     query: { mode: 'contains', expression: 'payment failed' },
     trigger: { mode: 'window', aggregation: 'count', operator: 'gte', threshold: 3, window: '1m', evaluationInterval: '30s', evaluationDelay: '5s', pendingFor: '0s', keepFiringFor: '0s' },
-    grouping: { fields: ['deployment.environmentId'], maxInstances: 100 },
+    grouping: { fields: ['k8s.namespace.name'], maxInstances: 100 },
     notification: { policyId: 'default-webhook', severity: 'warning', ownerTeam: 'pay', runbookUrl: '' },
   };
   const request = await captureRequest(
@@ -541,7 +545,7 @@ test('日志告警测试和启用使用结构化规则契约', async () => {
   assert.equal(request.body.test_token, 'test-token');
   assert.equal(request.body.spec.scope.service_id, 'svc-a');
   assert.equal(request.body.spec.trigger.evaluation_interval, '30s');
-  assert.deepEqual(request.body.spec.grouping.fields, ['deployment.environmentId']);
+  assert.deepEqual(request.body.spec.grouping.fields, ['k8s.namespace.name']);
   assert.equal('draft' in request.body, false);
 });
 
@@ -564,7 +568,7 @@ test('日志告警支持绑定服务外部日志链路', async () => {
   assert.equal(request.body.spec.scope.base_filter, '"stream":"payment"');
 });
 
-test('统一告警 API 映射指标环境作用域', async () => {
+test('统一告警 API 映射指标产品作用域', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -575,8 +579,7 @@ test('统一告警 API 映射指标环境作用域', async () => {
         signal_type: 'metrics',
         name: '订单 5xx',
         scope: {
-			environment_id: 'env-prod',
-			environment_name: '生产环境',
+			product_id: 'product-commerce',
 			endpoint_id: 'vm-prod',
 			scope_labels: { cluster: 'prod-a' },
         },
@@ -595,7 +598,7 @@ test('统一告警 API 映射指标环境作用域', async () => {
 		const rules = await api.getAlertRules({ signalType: 'metrics' });
 		assert.equal(requests[0].path, '/api/v1/alerts/rules?signal_type=metrics');
 		assert.equal(rules[0].spec.signalType, 'metrics');
-		assert.equal(rules[0].spec.scope.environmentId, 'env-prod');
+		assert.equal(rules[0].spec.scope.productId, 'product-commerce');
 		assert.deepEqual(rules[0].spec.scope.scopeLabels, { cluster: 'prod-a' });
     assert.equal(rules[0].spec.query.mode, 'promql');
   } finally {
@@ -603,11 +606,11 @@ test('统一告警 API 映射指标环境作用域', async () => {
   }
 });
 
-test('统一告警创建提交指标环境作用域', async () => {
+test('统一告警创建提交指标产品作用域', async () => {
   const spec = {
 		signalType: 'metrics',
     name: '订单 5xx', description: '',
-		scope: { serviceId: '', serviceName: '', environmentId: 'env-prod', environmentName: '生产环境', scopeLabels: { cluster: 'prod-a' }, logRouteId: '', endpointId: 'vm-prod', accountId: '', projectId: '' },
+		scope: { productId: 'product-commerce', serviceId: '', serviceName: '', scopeLabels: { cluster: 'prod-a' }, logRouteId: '', endpointId: 'vm-prod', accountId: '', projectId: '' },
     query: { mode: 'promql', expression: 'sum(rate(http_requests_total{status=~"5.."}[5m]))' },
     trigger: { mode: 'window', aggregation: 'count', operator: 'gte', threshold: 10, window: '5m', evaluationInterval: '1m', evaluationDelay: '0s', pendingFor: '0s', keepFiringFor: '0s' },
     grouping: { fields: [], maxInstances: 20 },
@@ -622,7 +625,7 @@ test('统一告警创建提交指标环境作用域', async () => {
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.test_token, 'test-token');
   assert.equal(request.body.spec.signal_type, 'metrics');
-	assert.equal(request.body.spec.scope.environment_id, 'env-prod');
+	assert.equal(request.body.spec.scope.product_id, 'product-commerce');
 	assert.deepEqual(request.body.spec.scope.scope_labels, { cluster: 'prod-a' });
 	assert.equal(request.body.spec.query.mode, 'promql');
 	assert.equal(request.body.change_summary, '创建并启用指标告警');

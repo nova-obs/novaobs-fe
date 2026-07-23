@@ -18,13 +18,16 @@ test('Dashboard 慢加载只在 iframe 未完成时提示', () => {
   assert.equal(dashboardViewState({ data, slow: true, loaded: true }).slow, false);
 });
 
-test('Explore 使用同源固定路径并只继承组织与 kiosk 参数', () => {
-  const configured = '/grafana/d/nova/overview?orgId=2&kiosk&from=now-6h&access_token=ignored';
+test('Dashboard 与 Explore 都强制使用 kiosk 模式且 Explore 只继承组织', () => {
+  const configured = '/grafana/d/nova/overview?orgId=2&from=now-6h';
 
-  assert.equal(grafanaWorkspaceURL(configured, 'dashboard'), configured);
+  assert.equal(
+    grafanaWorkspaceURL(configured, 'dashboard'),
+    '/grafana/d/nova/overview?orgId=2&from=now-6h&kiosk=1',
+  );
   assert.equal(grafanaWorkspaceURL(configured, 'explore'), '/grafana/explore?orgId=2&kiosk=1');
   assert.equal(
     grafanaWorkspaceURL('/grafana/d/nova/overview?kiosk=tv', 'explore'),
-    '/grafana/explore?kiosk=tv',
+    '/grafana/explore?kiosk=1',
   );
 });

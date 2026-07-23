@@ -66,6 +66,10 @@ test('K8s 观测接入页面承载集群级 runtime 发布入口', () => {
   assert.equal(observabilitySource.includes('getLogsCollectorRuntimeStatus'), true);
   assert.equal(observabilitySource.includes('listObservabilityRuntimes'), false);
   assert.equal(observabilitySource.includes('publishLogsCollectorRuntime'), true);
+  assert.equal(observabilitySource.includes('confirmLogsCollectorRuntime'), true);
+  assert.equal(observabilitySource.includes('preview_expired'), true);
+  assert.equal(observabilitySource.includes('confirmation_mismatch'), true);
+  assert.equal(observabilitySource.includes('放弃预览'), true);
   assert.equal(observabilitySource.includes('LogsPublishPreviewPanel'), true);
   assert.equal(observabilitySource.includes('查看基础资源清单'), true);
   assert.equal(observabilitySource.includes('RuntimeStepperHeader'), true);
@@ -77,6 +81,11 @@ test('K8s 观测接入页面承载集群级 runtime 发布入口', () => {
   assert.equal(observabilitySource.includes('useSearchParams'), true);
   assert.equal(observabilitySource.includes('selectedCluster?.readOnly'), true);
   assert.equal(observabilitySource.includes('选择观测接入集群'), true);
+  assert.equal(observabilitySource.includes('resolveObservabilityClusterId'), true);
+  assert.equal(observabilitySource.includes('findSameNameClusterReplacement'), true);
+  assert.equal(observabilitySource.includes('setSelectedClusterId'), false);
+  assert.equal(observabilitySource.includes('平台不会按名称自动改绑'), true);
+  assert.equal(observabilitySource.includes('切换至 ID:'), true);
   assert.equal(observabilitySource.includes('Config Hash'), false);
   assert.equal(observabilitySource.includes('Manifest Hash'), false);
   assert.equal(observabilitySource.includes('<th>配置状态</th>'), false);

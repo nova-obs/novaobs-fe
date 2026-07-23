@@ -1,32 +1,24 @@
-export type ServiceStatus = 'active' | 'pending' | 'degraded' | 'deleted';
+export type ServiceStatus = 'active' | 'archived';
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type ServiceSource = 'manual' | 'cmdb' | 'k8s';
 export type SyncStatus = 'local' | 'synced';
 export type ServiceIdentityType = 'k8s_workload' | 'host_process';
-export type ServiceTargetType = 'cloud_native_workload' | 'host_process' | 'physical_or_network_device';
 
 export interface Service {
   id: string;
   productId: string;
-  accountId: string;
-  projectId: string;
+  key: string;
+  name: string;
+  description: string;
   cmdbServiceId: string;
   businessId: string;
   applicationId: string;
-  name: string;
-  displayName: string;
-  description: string;
-  environmentId: string;
-  cluster: string;
-  namespace: string;
   ownerTeam: string;
   owner: string;
   alertRoute: string;
   sloLevel: string;
-  identityType: ServiceIdentityType;
-  serviceType: string;
   source: ServiceSource;
   syncStatus: SyncStatus;
   lastSyncedAt?: string;
@@ -37,35 +29,16 @@ export interface Service {
 
 export interface Product {
   id: string;
+  key: string;
   name: string;
-  displayName: string;
   description: string;
-  projectId: string;
-  status: string;
+  tenant: {
+    accountId: string;
+    projectId: string;
+  };
+  status: 'active' | 'archived';
   createdAt: string;
   updatedAt: string;
-}
-
-export interface ServiceTarget {
-  id: string;
-  serviceId: string;
-  targetType: ServiceTargetType;
-  environmentId: string;
-  displayName: string;
-  identityAttributes: Record<string, string>;
-  matchRules: Record<string, string>;
-  source: ServiceSource | 'discovered';
-  syncStatus: SyncStatus | 'stale' | 'conflict';
-  lastSyncedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateServiceTargetInput {
-  targetType: ServiceTargetType;
-  displayName?: string;
-  identityAttributes: Record<string, string>;
-  matchRules?: Record<string, string>;
 }
 
 export interface ServiceGraphLogRouteSummary {
@@ -95,7 +68,6 @@ export interface ServiceGraphLogRouteSummary {
 
 export interface ServiceObservabilityGraph {
   service: Service;
-  targets: ServiceTarget[];
   agents: CollectorInstance[];
   logRoutes: ServiceGraphLogRouteSummary;
   alertRules: AlertRule[];
@@ -103,36 +75,55 @@ export interface ServiceObservabilityGraph {
 
 export interface CreateServiceInput {
   productId: string;
+  key: string;
   name: string;
-  environmentId: string;
-  displayName?: string;
-  cluster?: string;
-  namespace?: string;
+  description?: string;
   ownerTeam?: string;
   owner?: string;
   alertRoute?: string;
   sloLevel?: string;
-  identityType?: ServiceIdentityType;
-  serviceType?: string;
 }
 
 export interface UpdateServiceInput {
+  key?: string;
   cmdbServiceId?: string;
   businessId?: string;
   applicationId?: string;
   name?: string;
-  displayName?: string;
   description?: string;
-  environmentId?: string;
-  cluster?: string;
-  namespace?: string;
   ownerTeam?: string;
   owner?: string;
   alertRoute?: string;
   sloLevel?: string;
-  identityType?: ServiceIdentityType;
-  serviceType?: string;
   status?: ServiceStatus;
+}
+
+export interface GrafanaDatasourceBinding {
+  endpointId: string;
+  endpointName: string;
+  uid: string;
+  name: string;
+  url: string;
+  state: 'pending' | 'ready' | 'degraded' | 'conflict' | 'retained_unused';
+  health: string;
+  lastError: string;
+  lastCheckedAt: string;
+}
+
+export interface GrafanaProductIntegration {
+  productId: string;
+  state: 'pending' | 'ready' | 'degraded' | 'conflict' | 'retained_unused';
+  folder: {
+    uid: string;
+    title: string;
+    state: string;
+  };
+  datasources: GrafanaDatasourceBinding[];
+  lastError: string;
+  attempts: number;
+  nextRetryAt: string;
+  lastReconciledAt: string;
+  updatedAt: string;
 }
 
 export interface OpAMPAgent {
@@ -241,7 +232,6 @@ export interface ServiceSummary {
   name: string;
   displayName: string;
   identityType: ServiceIdentityType;
-  environmentId: string;
   cluster: string;
   namespace: string;
   ownerTeam: string;
@@ -255,7 +245,6 @@ export interface IdentitySummary {
   identityType: string;
   enabled: boolean;
   tenantId: string;
-  environmentId: string;
   k8sNamespace: string;
   k8sWorkload: string;
   expiresAt: string;
@@ -268,7 +257,6 @@ export interface CollectorTarget {
   groupId: string;
   name: string;
   mode: string;
-  environmentId: string;
   cluster: string;
   namespace: string;
   status: string;
@@ -318,7 +306,6 @@ export interface CollectorGroup {
   displayName: string;
   description: string;
   mode: CollectorGroupMode;
-  environmentId: string;
   cluster: string;
   namespace: string;
   tenantId: string;
@@ -497,10 +484,9 @@ export interface AlertRuleSpec {
   name: string;
   description: string;
   scope: {
+    productId?: string;
     serviceId: string;
     serviceName: string;
-		environmentId?: string;
-		environmentName?: string;
 		scopeLabels?: Record<string, string>;
     logRouteId: string;
     logTargetId?: string;

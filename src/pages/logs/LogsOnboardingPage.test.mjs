@@ -8,7 +8,6 @@ const baseInput = {
   workloadName: 'payment-api',
 	serviceId: 'svc-payment',
   serviceName: 'payment-api',
-  environmentId: 'prod',
   endpointWriteURL: 'http://vl.prod:9428/insert/opentelemetry/v1/logs',
   accountId: '',
   projectId: '',

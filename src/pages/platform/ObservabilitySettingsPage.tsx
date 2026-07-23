@@ -344,7 +344,7 @@ export function ObservabilitySettingsPage({ domain = 'logs' }: { domain?: Endpoi
               </div>
               <div>
                 <div className="text-sm font-semibold text-on-surface">{query.trim() ? '未找到匹配的下游端点' : domain === 'metrics' ? '暂无指标下游端点' : '暂无 Logs 下游端点'}</div>
-                <div className="mt-1 text-xs text-muted">{query.trim() ? '调整关键词后再查看列表。' : domain === 'metrics' ? '登记 VictoriaMetrics 后，环境指标接入才能选择写入目标。' : '登记日志下游后，Logs 接入才能选择写入目标。'}</div>
+                <div className="mt-1 text-xs text-muted">{query.trim() ? '调整关键词后再查看列表。' : domain === 'metrics' ? '登记 VictoriaMetrics 后，产品指标接入才能选择写入目标。' : '登记日志下游后，Logs 接入才能选择写入目标。'}</div>
               </div>
               {!query.trim() ? (
                 <button className="console-button console-button-primary" onClick={startCreate}>
@@ -565,7 +565,7 @@ function EndpointFormFields({ domain, form, clusters, registeredClusterIds, clus
 }) {
   return (
     <>
-      <EndpointFormSection title="端点身份" description="名称、类型与作用域决定该端点可被日志接入还是环境指标接入使用。">
+      <EndpointFormSection title="端点身份" description="名称、类型与作用域决定该端点可被日志接入还是产品指标接入使用。">
         <div className="grid gap-3 md:grid-cols-2">
           <Field label="名称">
             <input className="console-input w-full" value={form.name} onChange={(event) => onFormChange({ ...form, name: event.target.value })} placeholder={form.sinkType === 'vm' ? 'vms-production' : 'vl-test03'} />
@@ -651,7 +651,7 @@ function EndpointFormFields({ domain, form, clusters, registeredClusterIds, clus
 
       <EndpointFormSection title="说明" description="可记录用途、覆盖范围或变更原因，便于审计回看。">
         <Field label="描述">
-          <input className="console-input w-full" value={form.description} onChange={(event) => onFormChange({ ...form, description: event.target.value })} placeholder={form.sinkType === 'vm' ? '例如：生产环境指标写入 VictoriaMetrics' : '例如：test03 集群日志写入 VictoriaLogs'} />
+          <input className="console-input w-full" value={form.description} onChange={(event) => onFormChange({ ...form, description: event.target.value })} placeholder={form.sinkType === 'vm' ? '例如：交易产品指标写入 VictoriaMetrics' : '例如：test03 集群日志写入 VictoriaLogs'} />
         </Field>
       </EndpointFormSection>
     </>

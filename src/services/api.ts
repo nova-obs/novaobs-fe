@@ -20,9 +20,9 @@ import type {
   CollectorInstance,
   CollectorPlatformTemplate,
   CollectorTarget,
-  CreateServiceTargetInput,
   CreateServiceInput,
   GeneratedConfig,
+  GrafanaProductIntegration,
   IdentitySummary,
   K8sDashboardSnapshot,
   OnboardingWorkspace,
@@ -32,7 +32,6 @@ import type {
   ReceiverProfile,
   Service,
   ServiceObservabilityGraph,
-  ServiceTarget,
   ServiceEnrichmentPatch,
   ServiceOnboarding,
   ServicePipelinePatch,
@@ -177,58 +176,66 @@ function mapService(raw: any): Service {
 	return {
 		id: String(raw.id),
 		productId: String(raw.product_id ?? raw.productId ?? ''),
-    accountId: String(raw.account_id ?? raw.accountId ?? ''),
-    projectId: String(raw.project_id ?? raw.projectId ?? ''),
+    key: raw.key ?? '',
+    name: raw.name ?? '',
+    description: raw.description ?? '',
     cmdbServiceId: raw.cmdb_service_id ?? raw.cmdbServiceId ?? '',
     businessId: raw.business_id ?? raw.businessId ?? '',
     applicationId: raw.application_id ?? raw.applicationId ?? '',
-    name: raw.name,
-    displayName: raw.display_name ?? raw.displayName ?? '',
-    description: raw.description ?? '',
-    environmentId: raw.environment_id ?? '',
-    cluster: raw.cluster ?? '',
-    namespace: raw.namespace ?? '',
     ownerTeam: raw.owner_team ?? raw.ownerTeam ?? '',
     owner: raw.owner ?? '',
     alertRoute: raw.alert_route ?? raw.alertRoute ?? '',
     sloLevel: raw.slo_level ?? raw.sloLevel ?? '',
-    identityType: raw.identity_type ?? raw.identityType ?? 'k8s_workload',
-    serviceType: raw.service_type ?? raw.serviceType ?? '',
     source: raw.source ?? 'manual',
     syncStatus: raw.sync_status ?? 'local',
     lastSyncedAt: raw.last_synced_at ?? undefined,
-    status: raw.status ?? 'pending',
+    status: raw.status ?? 'active',
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
 }
 
 function mapProduct(raw: any): Product {
+  const tenant = raw.tenant ?? {};
 	return {
 		id: String(raw.id ?? ''),
+    key: raw.key ?? '',
 		name: raw.name ?? '',
-		displayName: raw.display_name ?? raw.displayName ?? '',
 		description: raw.description ?? '',
-		projectId: String(raw.project_id ?? raw.projectId ?? ''),
-		status: raw.status ?? '',
+    tenant: {
+      accountId: String(tenant.account_id ?? tenant.accountId ?? '0'),
+      projectId: String(tenant.project_id ?? tenant.projectId ?? ''),
+    },
+		status: raw.status ?? 'active',
 		createdAt: raw.created_at ?? raw.createdAt ?? '',
 		updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
 	};
 }
 
-function mapServiceTarget(raw: any): ServiceTarget {
+function mapGrafanaProductIntegration(raw: any): GrafanaProductIntegration {
   return {
-    id: String(raw.id ?? ''),
-    serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
-    targetType: raw.target_type ?? raw.targetType ?? 'cloud_native_workload',
-    environmentId: raw.environment_id ?? '',
-    displayName: raw.display_name ?? raw.displayName ?? '',
-    identityAttributes: raw.identity_attributes ?? raw.identityAttributes ?? {},
-    matchRules: raw.match_rules ?? raw.matchRules ?? {},
-    source: raw.source ?? 'manual',
-    syncStatus: raw.sync_status ?? raw.syncStatus ?? 'local',
-    lastSyncedAt: raw.last_synced_at ?? raw.lastSyncedAt ?? undefined,
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    productId: String(raw.product_id ?? raw.productId ?? ''),
+    state: raw.state ?? 'pending',
+    folder: {
+      uid: raw.folder?.uid ?? '',
+      title: raw.folder?.title ?? '',
+      state: raw.folder?.state ?? 'pending',
+    },
+    datasources: Array.isArray(raw.datasources) ? raw.datasources.map((item: any) => ({
+      endpointId: String(item.endpoint_id ?? item.endpointId ?? ''),
+      endpointName: item.endpoint_name ?? item.endpointName ?? '',
+      uid: item.uid ?? '',
+      name: item.name ?? '',
+      url: item.url ?? '',
+      state: item.state ?? 'pending',
+      health: item.health ?? '',
+      lastError: item.last_error ?? item.lastError ?? '',
+      lastCheckedAt: item.last_checked_at ?? item.lastCheckedAt ?? '',
+    })) : [],
+    lastError: raw.last_error ?? raw.lastError ?? '',
+    attempts: Number(raw.attempts ?? 0),
+    nextRetryAt: raw.next_retry_at ?? raw.nextRetryAt ?? '',
+    lastReconciledAt: raw.last_reconciled_at ?? raw.lastReconciledAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
 }
@@ -328,7 +335,6 @@ function mapServiceSummary(raw: any): ServiceSummary {
     name: raw.name,
     displayName: raw.display_name ?? '',
     identityType: raw.identity_type ?? 'k8s_workload',
-    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     ownerTeam: raw.owner_team ?? '',
@@ -344,7 +350,6 @@ function mapIdentitySummary(raw: any): IdentitySummary {
     identityType: raw.identity_type ?? '',
     enabled: raw.enabled ?? false,
     tenantId: raw.tenant_id ?? '',
-    environmentId: raw.environment_id ?? '',
     k8sNamespace: raw.k8s_namespace ?? '',
     k8sWorkload: raw.k8s_workload ?? '',
     expiresAt: raw.expires_at ?? '',
@@ -359,7 +364,6 @@ function mapCollectorTarget(raw: any): CollectorTarget {
     groupId: String(raw.group_id),
     name: raw.name,
     mode: raw.mode,
-    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     status: raw.status ?? 'active',
@@ -417,7 +421,6 @@ function mapCollectorGroup(raw: any): CollectorGroup {
     displayName: raw.display_name ?? '',
     description: raw.description ?? '',
     mode: raw.mode,
-    environmentId: raw.environment_id ?? '',
     cluster: raw.cluster ?? '',
     namespace: raw.namespace ?? '',
     tenantId: raw.tenant_id ?? '',
@@ -616,7 +619,6 @@ function mapCollectorConfigSources(raw: any): CollectorConfigSources {
 function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
   return {
     service: mapService(raw.service ?? {}),
-    targets: Array.isArray(raw.targets) ? raw.targets.map(mapServiceTarget) : [],
     agents: Array.isArray(raw.agents) ? raw.agents.map(mapCollectorInstance) : [],
     logRoutes: {
       total: raw.log_routes?.total ?? raw.logRoutes?.total ?? 0,
@@ -675,10 +677,9 @@ function mapAlertRuleSpec(raw: any): AlertRuleSpec {
     name: raw.name ?? '',
     description: raw.description ?? '',
     scope: {
+      productId: scope.product_id ?? scope.productId ?? '',
       serviceId: scope.service_id ?? scope.serviceId ?? '',
       serviceName: scope.service_name ?? scope.serviceName ?? '',
-		environmentId: scope.environment_id ?? scope.environmentId ?? '',
-		environmentName: scope.environment_name ?? scope.environmentName ?? '',
 		scopeLabels: scope.scope_labels ?? scope.scopeLabels ?? {},
       logRouteId: scope.log_route_id ?? scope.logRouteId ?? '',
       logTargetId: scope.log_target_id ?? scope.logTargetId ?? '',
@@ -720,10 +721,9 @@ function alertRuleSpecBody(spec: AlertRuleSpec) {
     name: spec.name,
     description: spec.description,
     scope: {
+      product_id: spec.scope.productId,
       service_id: spec.scope.serviceId,
       service_name: spec.scope.serviceName,
-		environment_id: spec.scope.environmentId,
-		environment_name: spec.scope.environmentName,
 		scope_labels: spec.scope.scopeLabels,
       log_route_id: spec.scope.logRouteId,
       log_target_id: spec.scope.logTargetId,
@@ -772,98 +772,98 @@ export const api = {
 		const raw = await request<any[]>('/products');
 		return Array.isArray(raw) ? raw.map(mapProduct) : [];
 	},
-	async createProduct(input: { name: string; displayName?: string; description?: string }): Promise<Product> {
+  async getProduct(productId: string): Promise<Product> {
+    return mapProduct(await request<any>(`/products/${encodeURIComponent(productId)}`));
+  },
+	async createProduct(input: { key: string; name: string; description?: string }): Promise<Product> {
 		return mapProduct(await request<any>('/products', {
 			method: 'POST',
-			body: JSON.stringify({ name: input.name, display_name: input.displayName, description: input.description }),
+			body: JSON.stringify({ key: input.key, name: input.name, description: input.description }),
 		}));
 	},
+  async updateProduct(productId: string, patch: { name?: string; description?: string }): Promise<Product> {
+    return mapProduct(await request<any>(`/products/${encodeURIComponent(productId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    }));
+  },
+  async archiveProduct(productId: string): Promise<Product> {
+    return mapProduct(await request<any>(`/products/${encodeURIComponent(productId)}`, { method: 'DELETE' }));
+  },
+  async getGrafanaProductIntegration(productId: string): Promise<GrafanaProductIntegration> {
+    return mapGrafanaProductIntegration(await request<any>(`/products/${encodeURIComponent(productId)}/integrations/grafana`));
+  },
+  async reconcileGrafanaProductIntegration(productId: string): Promise<GrafanaProductIntegration> {
+    return mapGrafanaProductIntegration(await request<any>(`/products/${encodeURIComponent(productId)}/integrations/grafana/reconcile`, { method: 'POST' }));
+  },
   async getOverview(): Promise<OverviewSummary> {
     const raw = await request<any>('/overview');
     return mapOverview(raw);
   },
-  async getServices(params?: { q?: string; environmentId?: string; status?: string; source?: string }): Promise<Service[]> {
+  async getProductServices(productId: string, params?: { q?: string; status?: string; source?: string }): Promise<Service[]> {
     const search = new URLSearchParams();
     if (params?.q) search.set('q', params.q);
-    if (params?.environmentId) search.set('environment_id', params.environmentId);
     if (params?.status) search.set('status', params.status);
     if (params?.source) search.set('source', params.source);
     const qs = search.toString();
-    const raw = await request<any[]>(`/services${qs ? `?${qs}` : ''}`);
+    const raw = await request<any[]>(`/products/${encodeURIComponent(productId)}/services${qs ? `?${qs}` : ''}`);
     return Array.isArray(raw) ? raw.map(mapService) : [];
+  },
+  async getService(productId: string, serviceId: string): Promise<Service> {
+    return mapService(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}`));
+  },
+  async getServices(params?: { q?: string; status?: string; source?: string }): Promise<Service[]> {
+    const products = await api.getProducts();
+    const lists = await Promise.all(products.map((product) => api.getProductServices(product.id, params)));
+    return lists.flat();
   },
   async createService(input: CreateServiceInput): Promise<Service> {
 	const raw = await request<any>(`/products/${encodeURIComponent(input.productId)}/services`, {
       method: 'POST',
       body: JSON.stringify({
+        key: input.key,
 		name: input.name,
-		environment_id: input.environmentId,
-        display_name: input.displayName,
-        cluster: input.cluster,
-        namespace: input.namespace,
+        description: input.description,
         owner_team: input.ownerTeam,
         owner: input.owner,
         alert_route: input.alertRoute,
         slo_level: input.sloLevel,
-        identity_type: input.identityType,
-        service_type: input.serviceType,
       }),
     });
     return mapService(raw);
   },
-  async updateService(id: string, patch: UpdateServiceInput): Promise<Service> {
-    const raw = await request<any>(`/services/${id}`, {
+  async updateService(productId: string, id: string, patch: UpdateServiceInput): Promise<Service> {
+    const raw = await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(id)}`, {
       method: 'PATCH',
       body: JSON.stringify({
+        key: patch.key,
         cmdb_service_id: optionalString(patch.cmdbServiceId),
         business_id: optionalString(patch.businessId),
         application_id: optionalString(patch.applicationId),
         name: patch.name,
-        display_name: patch.displayName,
         description: patch.description,
-		environment_id: patch.environmentId,
-        cluster: patch.cluster,
-        namespace: patch.namespace,
         owner_team: patch.ownerTeam,
         owner: patch.owner,
         alert_route: patch.alertRoute,
         slo_level: patch.sloLevel,
-        identity_type: patch.identityType,
-        service_type: patch.serviceType,
         status: patch.status,
       }),
     });
     return mapService(raw);
   },
-  async deleteService(id: string): Promise<void> {
-    await request<any>(`/services/${id}`, { method: 'DELETE' });
+  async archiveService(productId: string, id: string): Promise<Service> {
+    return mapService(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(id)}`, { method: 'DELETE' }));
   },
-  async getServiceTargets(serviceId: string): Promise<ServiceTarget[]> {
-    const raw = await request<any[]>(`/services/${serviceId}/targets`);
-    return raw.map(mapServiceTarget);
-  },
-  async createServiceTarget(serviceId: string, input: CreateServiceTargetInput): Promise<ServiceTarget> {
-    const raw = await request<any>(`/services/${serviceId}/targets`, {
-      method: 'POST',
-      body: JSON.stringify({
-        target_type: input.targetType,
-        display_name: input.displayName,
-        identity_attributes: input.identityAttributes,
-        match_rules: input.matchRules ?? {},
-      }),
-    });
-    return mapServiceTarget(raw);
-  },
-  async getServiceObservabilityGraph(serviceId: string): Promise<ServiceObservabilityGraph> {
-    const raw = await request<any>(`/services/${serviceId}/observability-graph`);
+  async getServiceObservabilityGraph(productId: string, serviceId: string): Promise<ServiceObservabilityGraph> {
+    const raw = await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/observability-graph`);
     return mapServiceObservabilityGraph(raw);
   },
   async getOpAMPAgents(): Promise<OpAMPAgent[]> {
     const raw = await request<any[]>('/opamp/agents');
     return raw.map(mapAgent);
   },
-  async getServiceAgents(serviceId: string): Promise<OpAMPAgent[]> {
-    const raw = await request<any[]>(`/services/${serviceId}/agents`);
+  async getServiceAgents(productId: string, serviceId: string): Promise<OpAMPAgent[]> {
+    const raw = await request<any[]>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/agents`);
     return raw.map(mapAgent);
   },
   async getAgentDetail(uid: string): Promise<AgentDetail> {
@@ -877,7 +877,6 @@ export const api = {
         name: input.name,
         display_name: input.displayName,
         mode: input.mode,
-		environment_id: input.environmentId,
         cluster: input.cluster,
         namespace: input.namespace,
         owner_team: input.ownerTeam,
@@ -890,9 +889,8 @@ export const api = {
     });
     return mapCollectorGroup(raw);
   },
-  async getCollectorGroups(params?: { environmentId?: string; cluster?: string; namespace?: string; mode?: string; status?: CollectorGroupStatus | 'deleted'; receiver_profile?: ReceiverProfile; q?: string }): Promise<CollectorGroup[]> {
+  async getCollectorGroups(params?: { cluster?: string; namespace?: string; mode?: string; status?: CollectorGroupStatus | 'deleted'; receiver_profile?: ReceiverProfile; q?: string }): Promise<CollectorGroup[]> {
     const search = new URLSearchParams();
-    if (params?.environmentId) search.set('environment_id', params.environmentId);
     if (params?.cluster) search.set('cluster', params.cluster);
     if (params?.namespace) search.set('namespace', params.namespace);
     if (params?.mode) search.set('mode', params.mode);
@@ -915,7 +913,6 @@ export const api = {
         display_name: patch.displayName,
         description: patch.description,
         mode: patch.mode,
-		environment_id: patch.environmentId,
         cluster: patch.cluster,
         namespace: patch.namespace,
         owner_team: patch.ownerTeam,
@@ -1020,15 +1017,15 @@ export const api = {
   async deleteCollectorGroup(id: string): Promise<void> {
     await request<any>(`/collector-groups/${id}`, { method: 'DELETE' });
   },
-  async getServiceOnboarding(serviceId: string): Promise<OnboardingWorkspace> {
-    const raw = await request<any>(`/services/${serviceId}/onboarding`);
+  async getServiceOnboarding(productId: string, serviceId: string): Promise<OnboardingWorkspace> {
+    const raw = await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/onboarding`);
     return mapWorkspace(raw);
   },
-  async upsertServiceOnboarding(serviceId: string, payload: Partial<ServiceOnboarding> & {
+  async upsertServiceOnboarding(productId: string, serviceId: string, payload: Partial<ServiceOnboarding> & {
     k8sNamespace?: string;
     k8sWorkload?: string;
   }): Promise<OnboardingWorkspace> {
-    const raw = await request<any>(`/services/${serviceId}/onboarding`, {
+    const raw = await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/onboarding`, {
       method: 'POST',
       body: JSON.stringify({
         mode: payload.mode,
@@ -1039,8 +1036,8 @@ export const api = {
     });
     return mapWorkspace(raw);
   },
-  async checkServiceOnboarding(serviceId: string): Promise<OnboardingWorkspace> {
-    const raw = await request<any>(`/services/${serviceId}/onboarding/check`, { method: 'POST' });
+  async checkServiceOnboarding(productId: string, serviceId: string): Promise<OnboardingWorkspace> {
+    const raw = await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/onboarding/check`, { method: 'POST' });
     return mapWorkspace(raw);
   },
   async getAlertRules(params?: { signalType?: AlertSignalType }): Promise<AlertRule[]> {

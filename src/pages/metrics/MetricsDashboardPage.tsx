@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { ExternalLink, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { metricsApi } from './api';
 import { dashboardViewState, grafanaWorkspaceURL, type GrafanaWorkspaceView } from './dashboardViewModel';
@@ -41,15 +41,9 @@ export function MetricsDashboardPage() {
 							<span>已连接</span>
 							{view.slow ? <span className="text-warning">加载时间较长，请检查 Grafana 连通性</span> : null}
 						</div>
-						<div className="flex shrink-0 items-center gap-2">
-							<div className="flex items-center gap-1" role="group" aria-label="Grafana 工作区视图">
-								<WorkspaceButton active={workspace === 'dashboard'} onClick={() => setWorkspace('dashboard')}>Dashboard</WorkspaceButton>
-								<WorkspaceButton active={workspace === 'explore'} onClick={() => setWorkspace('explore')}>Explore</WorkspaceButton>
-							</div>
-							<a className="console-button h-8 shrink-0 px-2" href={iframeURL} target="_blank" rel="noopener noreferrer">
-								<ExternalLink className="h-3.5 w-3.5" />
-								新窗口打开
-							</a>
+						<div className="flex items-center gap-1" role="group" aria-label="Grafana 工作区视图">
+							<WorkspaceButton active={workspace === 'dashboard'} onClick={() => setWorkspace('dashboard')}>Dashboard</WorkspaceButton>
+							<WorkspaceButton active={workspace === 'explore'} onClick={() => setWorkspace('explore')}>Explore</WorkspaceButton>
 						</div>
 					</div>
 					<iframe
