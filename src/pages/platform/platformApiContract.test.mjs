@@ -196,6 +196,27 @@ test('平台镜像模板读取和更新使用平台设置 API', async () => {
   }
 });
 
+test('Grafana 工作区入口配置使用全局平台设置 API', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({ state: 'ready', entry_url: 'http://grafana:3000/dashboards', updated_at: '2026-07-22T10:00:00Z' });
+  };
+  try {
+    const setting = await platformApi.getGrafanaSetting();
+    const updated = await platformApi.updateGrafanaSetting('http://grafana:3000/explore?orgId=1');
+    assert.equal(requests[0].path, '/api/v1/platform/settings/grafana');
+    assert.equal(requests[1].path, '/api/v1/platform/settings/grafana');
+    assert.equal(requests[1].init.method, 'PUT');
+    assert.deepEqual(JSON.parse(requests[1].init.body), { entry_url: 'http://grafana:3000/explore?orgId=1' });
+    assert.equal(setting.entryURL, 'http://grafana:3000/dashboards');
+    assert.equal(updated.updatedAt, '2026-07-22T10:00:00Z');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('平台环境 API 使用稳定 environment_id 并管理异构资源绑定', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;

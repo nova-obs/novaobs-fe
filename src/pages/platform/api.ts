@@ -111,6 +111,12 @@ export interface PlatformImage {
   updatedAt: string;
 }
 
+export interface PlatformGrafanaSetting {
+	state: 'unconfigured' | 'disabled' | 'ready';
+	entryURL: string;
+	updatedAt: string;
+}
+
 export type EnvironmentStage = 'production' | 'staging' | 'test' | 'development';
 export type EnvironmentStatus = 'active' | 'archived';
 export type EnvironmentResourceKind = 'k8s_cluster' | 'host_group';
@@ -274,6 +280,14 @@ function mapImage(raw: any): PlatformImage {
     value: raw.value ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
+}
+
+function mapGrafanaSetting(raw: any): PlatformGrafanaSetting {
+	return {
+		state: raw?.state ?? 'unconfigured',
+		entryURL: raw?.entry_url ?? raw?.entryURL ?? '',
+		updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
+	};
 }
 
 function mapEnvironment(raw: any): PlatformEnvironment {
@@ -475,4 +489,15 @@ export const platformApi = {
     });
     return mapImage(raw);
   },
+	async getGrafanaSetting(): Promise<PlatformGrafanaSetting> {
+		const raw = await apiRequest<any>('/platform/settings/grafana');
+		return mapGrafanaSetting(raw);
+	},
+	async updateGrafanaSetting(entryURL: string): Promise<PlatformGrafanaSetting> {
+		const raw = await apiRequest<any>('/platform/settings/grafana', {
+			method: 'PUT',
+			body: JSON.stringify({ entry_url: entryURL }),
+		});
+		return mapGrafanaSetting(raw);
+	},
 };

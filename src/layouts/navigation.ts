@@ -87,7 +87,7 @@ const navigationDomains: NavigationDomain[] = [
             icon: Monitor,
             children: [
               { id: 'metrics-overview', label: '监控总览', description: '查看环境接入健康与关键信号', path: '/metrics/overview', icon: Gauge },
-              { id: 'metrics-monitoring', label: '指标监控', description: '查看指标监控视图', path: '/metrics/monitoring', icon: Activity },
+              { id: 'metrics-dashboard', label: 'Dashboard', description: '打开 Grafana 工作区', path: '/metrics/dashboard', icon: LayoutDashboard },
               { id: 'metrics-alerts', label: '指标告警', description: '管理环境级指标告警规则', path: '/metrics/alerts', icon: Bell },
               { id: 'metrics-environments', label: '环境接入', description: '管理环境指标来源和写入目标', path: '/metrics/environments', icon: RadioTower },
             ],
@@ -178,6 +178,10 @@ function cloneNavigationItem(item: NavigationItem): NavigationItem {
 
 export const getNavigationByPath = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
+	const metricsEntryMatch = normalizedPath.match(/^\/metrics\/([^/]+)/);
+	if (metricsEntryMatch && !metricsNavigationChildID(metricsEntryMatch[1])) {
+		return metricsEntryMatch[1] === 'explore' ? allNavigationItems.find((item) => item.id === 'metrics') : undefined;
+	}
 	const logsServiceMatch = normalizedPath.match(/^\/products\/[^/]+\/services\/[^/]+\/logs(?:\/([^/]+))?/);
 	if (logsServiceMatch) {
 		const childID = logsNavigationChildID(logsServiceMatch[1] ?? '');
@@ -220,7 +224,7 @@ function logsNavigationChildID(segment: string): string | undefined {
 
 function metricsNavigationChildID(segment: string): string | undefined {
 	if (segment === 'overview') return 'metrics-overview';
-	if (segment === 'monitoring') return 'metrics-monitoring';
+	if (segment === 'dashboard') return 'metrics-dashboard';
 	if (segment === 'alerts') return 'metrics-alerts';
 	if (segment === 'environments') return 'metrics-environments';
 	return undefined;

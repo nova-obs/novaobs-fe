@@ -26,8 +26,8 @@ import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MetricsEnvironmentsPage } from '../pages/metrics/MetricsEnvironmentsPage';
 import { MetricsAlertsPage } from '../pages/metrics/MetricsAlertsPage';
+import { MetricsDashboardPage } from '../pages/metrics/MetricsDashboardPage';
 import { MetricsLayout } from '../pages/metrics/MetricsLayout';
-import { MetricsMonitoringPage } from '../pages/metrics/MetricsMonitoringPage';
 import { MetricsOverviewPage } from '../pages/metrics/MetricsOverviewPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
 import { ObservabilitySettingsPage } from '../pages/platform/ObservabilitySettingsPage';
@@ -113,7 +113,7 @@ const platformChildRoutes: RouteDefinition[] = [
 const metricsEntryChildRoutes: RouteDefinition[] = [
   { index: true, title: '监控总览', element: <Navigate to="/metrics/overview" replace /> },
   { path: 'overview', title: '监控总览', element: <MetricsOverviewPage /> },
-  { path: 'monitoring', title: '指标监控', element: <MetricsMonitoringPage /> },
+  { path: 'dashboard', title: 'Dashboard', element: <MetricsDashboardPage /> },
   { path: 'alerts/new', title: '创建指标告警', element: <MetricsAlertsPage /> },
   { path: 'alerts/:id', title: '编辑指标告警', element: <MetricsAlertsPage /> },
   { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },

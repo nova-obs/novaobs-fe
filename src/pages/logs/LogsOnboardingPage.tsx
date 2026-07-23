@@ -9,6 +9,7 @@ import { defaultLogsCollectorNamespace, logSinkLabel, logsApi, normalizeLogsColl
 import { ServicePickerPanel, isCollectingRoute, routeAccessPriority, routeLifecycle, serviceDisplayName } from './ServicePickerPanel';
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsErrorLine, LogsTaskPageHeader } from './LogsPrimitives';
+import { VMOnboardingFlow } from './VMOnboardingFlow';
 import { platformApi } from '../platform/api';
 
 const sourceTabs: Array<{ value: LogAccessSource; label: string }> = [
@@ -939,6 +940,23 @@ export function LogsOnboardingPage() {
       )}
     </>
   );
+
+  if (sourceMode === 'vm') {
+    return (
+      <div className="logs-task-page flex h-full min-h-[720px] min-w-0 flex-col overflow-hidden">
+        <LogsTaskPageHeader
+          title={routeUpdateMode ? '更新采集路由' : '创建采集路由'}
+          context={sourceModeSwitch}
+          action={
+            <Link className="console-button h-8" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(pathServiceId)}/logs/agents`}>退出</Link>
+          }
+        />
+        <div className="mt-3 min-h-0 flex-1 overflow-auto">
+          <VMOnboardingFlow />
+        </div>
+      </div>
+    );
+  }
 
   if (error) {
     return (

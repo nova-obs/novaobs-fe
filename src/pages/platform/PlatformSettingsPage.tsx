@@ -4,6 +4,7 @@ import { ChevronLeft, ChevronRight, Pencil, RefreshCw, Save, Search, X } from 'l
 import { DataPanel } from '../../components/DataPanel';
 import { EmptyState } from '../../components/EmptyState';
 import { platformApi, type PlatformImage } from './api';
+import { validateGrafanaEntryURL } from './grafanaEntryURL';
 
 const imageLabels: Record<string, string> = {
   __NOVAAPM_IMAGE_OTEL_COLLECTOR__: 'OTel Collector',
@@ -102,7 +103,8 @@ export function PlatformSettingsPage() {
 
   return (
     <div className="console-workbench platform-settings-page overflow-hidden">
-      <section className="min-w-0">
+      <section className="min-w-0 space-y-3 overflow-auto">
+          <GrafanaWorkspaceSetting />
           <DataPanel title="镜像模板" help="镜像模板会在部署清单渲染时作为平台级运行配置使用。">
             {imagesQuery.isLoading ? (
               <div className="space-y-2">
@@ -272,6 +274,74 @@ export function PlatformSettingsPage() {
         </section>
     </div>
   );
+}
+
+function GrafanaWorkspaceSetting() {
+	const queryClient = useQueryClient();
+	const [editing, setEditing] = useState(false);
+	const [draftURL, setDraftURL] = useState('');
+	const grafanaQuery = useQuery({ queryKey: ['platform-grafana-setting'], queryFn: () => platformApi.getGrafanaSetting(), retry: false });
+	const setting = grafanaQuery.data;
+	const validationError = editing ? validateGrafanaEntryURL(draftURL) : '';
+	const changed = draftURL.trim() !== (setting?.entryURL ?? '');
+	const grafanaMutation = useMutation({
+		mutationFn: () => platformApi.updateGrafanaSetting(draftURL.trim()),
+		onSuccess: async (nextSetting) => {
+			queryClient.setQueryData(['platform-grafana-setting'], nextSetting);
+			await queryClient.invalidateQueries({ queryKey: ['metrics-dashboard'] });
+			setDraftURL(nextSetting.entryURL);
+			setEditing(false);
+		},
+	});
+
+	useEffect(() => {
+		if (!editing) setDraftURL(setting?.entryURL ?? '');
+	}, [editing, setting?.entryURL]);
+
+	function beginGrafanaEdit() {
+		grafanaMutation.reset();
+		setDraftURL(setting?.entryURL ?? '');
+		setEditing(true);
+	}
+
+	function cancelGrafanaEdit() {
+		grafanaMutation.reset();
+		setDraftURL(setting?.entryURL ?? '');
+		setEditing(false);
+	}
+
+	return (
+		<DataPanel
+			title="Grafana 工作区"
+			help="配置 NovaAPM 后端可访问的 Grafana 入口地址；支持 Dashboard 列表、Folder、具体 Dashboard 和 Explore，嵌入访问统一使用 Viewer 权限。"
+			action={!grafanaQuery.isLoading && !grafanaQuery.error && !editing ? <button type="button" className="console-button h-8 px-2" onClick={beginGrafanaEdit}><Pencil className="h-3.5 w-3.5" />修改</button> : null}
+		>
+			{grafanaQuery.isLoading ? (
+				<div className="space-y-2"><div className="h-8 rounded bg-surface" /><div className="h-10 rounded bg-surface" /></div>
+			) : grafanaQuery.error ? (
+				<EmptyState title="Grafana 工作区配置加载失败" action={<button type="button" className="console-button" onClick={() => grafanaQuery.refetch()}>重试</button>} />
+			) : editing ? (
+				<div className="max-w-4xl space-y-2">
+					<label className="block text-xs font-semibold text-on-surface" htmlFor="grafana-entry-url">Grafana 入口地址</label>
+					<input id="grafana-entry-url" className="console-input w-full font-mono text-xs" value={draftURL} onChange={(event) => setDraftURL(event.target.value)} placeholder="http://grafana:3000/dashboards" autoFocus />
+					<div className="text-xs text-muted">支持 /dashboards、/d/... 和 /explore 入口；追加 kiosk=1 可隐藏 Grafana 顶部和左侧导航。</div>
+					{validationError ? <div className="text-xs font-semibold text-danger">{validationError}</div> : null}
+					{grafanaMutation.error ? <div className="console-notice console-notice-danger">{errorMessage(grafanaMutation.error)}</div> : null}
+					<div className="flex justify-end gap-2 pt-1">
+						<button type="button" className="console-button" onClick={cancelGrafanaEdit} disabled={grafanaMutation.isPending}><X className="h-3.5 w-3.5" />取消</button>
+						<button type="button" className="console-button console-button-primary" onClick={() => grafanaMutation.mutate()} disabled={!changed || Boolean(validationError) || grafanaMutation.isPending}><Save className="h-3.5 w-3.5" />{grafanaMutation.isPending ? '保存中' : '保存'}</button>
+					</div>
+				</div>
+			) : (
+				<div className="grid gap-3 sm:grid-cols-[120px_minmax(0,1fr)] sm:items-start">
+					<div className="text-xs text-muted">配置状态</div>
+					<div className={`text-xs font-semibold ${setting?.state === 'ready' ? 'text-success' : setting?.state === 'disabled' ? 'text-warning' : 'text-muted'}`}>{setting?.state === 'ready' ? '已启用' : setting?.state === 'disabled' ? '已停用' : '未配置'}</div>
+					<div className="text-xs text-muted">Grafana 入口地址</div>
+					<div className="break-all font-mono text-xs text-on-surface">{setting?.entryURL || '尚未配置'}</div>
+				</div>
+			)}
+		</DataPanel>
+	);
 }
 
 function imageDisplayName(item: PlatformImage) {

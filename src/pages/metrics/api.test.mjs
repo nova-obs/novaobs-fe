@@ -42,13 +42,29 @@ test('环境接入支持调整目标、断开和同步资源来源', async () =>
     return response({ integration: { id: 'integration-1', environment_id: 'env-prod', destination_ref: 'vm-next', desired_state: 'disconnected' }, source_accesses: [], collector_releases: [] });
   };
   try {
-    await metricsApi.updateIntegration('integration-1', { destinationRef: 'vm-next', dashboardRef: '', desiredState: 'disconnected' });
+    await metricsApi.updateIntegration('integration-1', { destinationRef: 'vm-next', desiredState: 'disconnected' });
     await metricsApi.reconcileSources('integration-1');
     assert.equal(requests[0].path, '/api/v1/metrics/integrations/integration-1');
     assert.equal(requests[0].init.method, 'PATCH');
-    assert.deepEqual(JSON.parse(requests[0].init.body), { destination_ref: 'vm-next', dashboard_ref: '', desired_state: 'disconnected' });
+    assert.deepEqual(JSON.parse(requests[0].init.body), { destination_ref: 'vm-next', desired_state: 'disconnected' });
     assert.equal(requests[1].path, '/api/v1/metrics/integrations/integration-1/reconcile-sources');
     assert.equal(requests[1].init.method, 'POST');
+  } finally { globalThis.fetch = original; }
+});
+
+test('Dashboard 运行态只映射同源嵌入地址', async () => {
+  const original = globalThis.fetch;
+  let requestPath = '';
+  globalThis.fetch = async (path) => {
+    requestPath = String(path);
+    return response({ state: 'ready', embed_url: '/grafana/d/nova/overview?orgId=1', updated_at: '2026-07-22T10:00:00Z' });
+  };
+  try {
+    const dashboard = await metricsApi.getDashboard();
+    assert.equal(requestPath, '/api/v1/metrics/dashboard');
+    assert.equal(dashboard.state, 'ready');
+    assert.equal(dashboard.embedURL, '/grafana/d/nova/overview?orgId=1');
+    assert.equal(dashboard.updatedAt, '2026-07-22T10:00:00Z');
   } finally { globalThis.fetch = original; }
 });
 

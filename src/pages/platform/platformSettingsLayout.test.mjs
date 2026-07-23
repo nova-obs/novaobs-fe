@@ -28,6 +28,14 @@ test('平台管理模块保留平台设置和访问控制入口', () => {
 });
 
 test('平台设置页面承载平台级镜像模板而非业务或项目配置', () => {
+	assert.equal(platformSettingsSource.includes("queryKey: ['platform-grafana-setting']"), true);
+	assert.equal(platformSettingsSource.includes('platformApi.getGrafanaSetting'), true);
+	assert.equal(platformSettingsSource.includes('platformApi.updateGrafanaSetting'), true);
+	assert.equal(platformSettingsSource.includes('title="Grafana 工作区"'), true);
+	assert.equal(platformSettingsSource.includes('Grafana 入口地址'), true);
+	assert.equal(platformSettingsSource.includes('kiosk=1 可隐藏 Grafana 顶部和左侧导航'), true);
+	assert.equal(platformSettingsSource.includes('/dashboards'), true);
+	assert.equal(platformSettingsSource.includes('/explore'), true);
   assert.equal(platformSettingsSource.includes("queryKey: ['platform-images']"), true);
   assert.equal(platformSettingsSource.includes('platformApi.listImages'), true);
   assert.equal(platformSettingsSource.includes('platformApi.updateImage'), true);

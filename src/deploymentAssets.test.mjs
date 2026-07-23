@@ -23,6 +23,26 @@ test('Nginx 支持 SPA 回退、健康检查和后端同源代理', async () => 
   assert.match(config, /location \/v1\/opamp/);
   assert.match(config, /proxy_set_header Upgrade \$http_upgrade/);
   assert.match(config, /proxy_set_header Connection \$connection_upgrade/);
+	assert.match(config, /location \/grafana\//);
+	assert.match(config, /proxy_buffering off/);
+	assert.match(config, /log_format novaapm[^;]*\$request_method \$uri \$server_protocol/s);
+	assert.doesNotMatch(config, /access_log \/dev\/stdout;/);
+	assert.match(config, /map \$http_x_forwarded_proto \$novaapm_forwarded_proto/);
+	assert.match(config, /proxy_set_header X-Forwarded-Proto \$novaapm_forwarded_proto/);
+	assert.equal(
+		[...config.matchAll(/proxy_set_header Host \$http_host;/g)].length,
+		3,
+		'所有同源代理都必须保留浏览器访问端口，避免 Grafana Live 的 Origin 校验误判',
+	);
+	assert.doesNotMatch(config, /proxy_set_header Host \$host;/);
+});
+
+test('Vite 本地开发代理转发 Grafana HTTP 和 Live WebSocket', async () => {
+	const config = await readFile('vite.config.ts', 'utf8');
+
+	assert.match(config, /'\/grafana':\s*\{[\s\S]*?target:\s*'http:\/\/127\.0\.0\.1:8080'/);
+	assert.match(config, /'\/grafana':\s*\{[\s\S]*?changeOrigin:\s*false/);
+	assert.match(config, /'\/grafana':\s*\{[\s\S]*?ws:\s*true/);
 });
 
 test('Makefile 默认构建 linux amd64 前端镜像并支持直接推送', async () => {

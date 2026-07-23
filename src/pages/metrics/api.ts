@@ -8,7 +8,6 @@ export interface MetricsIntegration {
   id: string;
   environmentId: string;
 	destinationRef: string;
-	dashboardRef: string;
   desiredState: MetricsDesiredState;
   identityLabelKey: string;
   createdAt: string;
@@ -61,8 +60,13 @@ export interface MetricsHealthSnapshot {
 	signals: Array<{ key: string; label: string; value: number; unit: 'ratio' | 'count'; status: MetricsHealthStatus }>;
   createdAt: string;
 }
-export interface MetricsOverviewItem extends MetricsIntegrationView { latestSnapshot: MetricsHealthSnapshot | null; grafanaURL: string }
-export interface MetricsDashboardOption { id: string; name: string; uiURL: string }
+export interface MetricsOverviewItem extends MetricsIntegrationView { latestSnapshot: MetricsHealthSnapshot | null }
+export type MetricsDashboardState = 'unconfigured' | 'disabled' | 'ready';
+export interface MetricsDashboard {
+	state: MetricsDashboardState;
+	embedURL: string;
+	updatedAt: string;
+}
 export interface MetricsCollectorRelease {
   id: string; sourceAccessId: string; generation: number; clusterId: string; namespace: string; image: string; status: 'previewed' | 'applied' | 'failed'; message: string;
   resources: Array<{ apiVersion: string; kind: string; namespace: string; name: string }>;
@@ -74,7 +78,6 @@ function mapIntegration(raw: any): MetricsIntegration {
     id: String(raw?.id ?? ''),
     environmentId: raw?.environment_id ?? raw?.environmentId ?? '',
     destinationRef: raw?.destination_ref ?? raw?.destinationRef ?? '',
-		dashboardRef: raw?.dashboard_ref ?? raw?.dashboardRef ?? '',
     desiredState: raw?.desired_state ?? raw?.desiredState ?? 'disconnected',
     identityLabelKey: raw?.identity_label_key ?? raw?.identityLabelKey ?? '',
     createdAt: raw?.created_at ?? raw?.createdAt ?? '',
@@ -148,7 +151,15 @@ function mapSourceAssessment(raw: any): MetricsSourceAssessment {
 export const metricsApi = {
 	async listOverview(): Promise<MetricsOverviewItem[]> {
 		const raw = await apiRequest<any[]>('/metrics/overview');
-		return Array.isArray(raw) ? raw.map((item) => ({ ...mapIntegrationView(item), latestSnapshot: item?.latest_snapshot ? mapHealthSnapshot(item.latest_snapshot) : null, grafanaURL: item?.grafana_url ?? '' })) : [];
+		return Array.isArray(raw) ? raw.map((item) => ({ ...mapIntegrationView(item), latestSnapshot: item?.latest_snapshot ? mapHealthSnapshot(item.latest_snapshot) : null })) : [];
+	},
+	async getDashboard(): Promise<MetricsDashboard> {
+		const raw = await apiRequest<any>('/metrics/dashboard');
+		return {
+			state: raw?.state ?? 'unconfigured',
+			embedURL: raw?.embed_url ?? raw?.embedURL ?? '',
+			updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
+		};
 	},
   async listIntegrations(): Promise<MetricsIntegrationView[]> {
     const raw = await apiRequest<any[]>('/metrics/integrations');
@@ -158,10 +169,10 @@ export const metricsApi = {
     const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(id)}`);
     return mapIntegrationView(raw);
   },
-	async createIntegration(input: { environmentId: string; destinationRef: string; dashboardRef?: string }): Promise<MetricsIntegrationView> {
+	async createIntegration(input: { environmentId: string; destinationRef: string }): Promise<MetricsIntegrationView> {
     const raw = await apiRequest<any>('/metrics/integrations', {
       method: 'POST',
-		body: JSON.stringify({ environment_id: input.environmentId, destination_ref: input.destinationRef, dashboard_ref: input.dashboardRef }),
+		body: JSON.stringify({ environment_id: input.environmentId, destination_ref: input.destinationRef }),
     });
     return mapIntegrationView(raw);
   },
@@ -169,10 +180,10 @@ export const metricsApi = {
 		const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(integrationId)}/reconcile-sources`, { method: 'POST' });
 		return mapIntegrationView(raw);
 	},
-	async updateIntegration(integrationId: string, input: { destinationRef: string; dashboardRef: string; desiredState: MetricsDesiredState }): Promise<MetricsIntegrationView> {
+	async updateIntegration(integrationId: string, input: { destinationRef: string; desiredState: MetricsDesiredState }): Promise<MetricsIntegrationView> {
 		const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(integrationId)}`, {
 			method: 'PATCH',
-			body: JSON.stringify({ destination_ref: input.destinationRef, dashboard_ref: input.dashboardRef, desired_state: input.desiredState }),
+			body: JSON.stringify({ destination_ref: input.destinationRef, desired_state: input.desiredState }),
 		});
 		return mapIntegrationView(raw);
 	},
@@ -195,11 +206,6 @@ export const metricsApi = {
 	async verifyIntegration(id: string): Promise<MetricsHealthSnapshot> {
 		const raw = await apiRequest<any>(`/metrics/integrations/${encodeURIComponent(id)}/verify`, { method: 'POST' });
 		return mapHealthSnapshot(raw);
-	},
-	async listDashboardOptions(environmentId: string): Promise<MetricsDashboardOption[]> {
-		const query = new URLSearchParams({ environment_id: environmentId });
-		const raw = await apiRequest<any[]>(`/metrics/dashboard-options?${query.toString()}`);
-		return Array.isArray(raw) ? raw.map((item) => ({ id: String(item?.id ?? ''), name: item?.name ?? '', uiURL: item?.ui_url ?? '' })) : [];
 	},
 	async previewManagedCollector(sourceAccessId: string, namespace = 'novaapm-system'): Promise<MetricsCollectorRelease> {
 		const raw = await apiRequest<any>(`/metrics/source-accesses/${encodeURIComponent(sourceAccessId)}/managed-release/preview`, { method: 'POST', body: JSON.stringify({ namespace }) });
