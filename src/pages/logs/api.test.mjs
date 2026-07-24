@@ -328,6 +328,39 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
   assert.equal(result.resources[0].kind, 'Deployment');
 });
 
+test('预览 K8s logs_collector 增量发布时使用集群采集域作为发布边界', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.publishLogsCollectorRuntime({
+      clusterId: 'test03',
+      namespace: 'novaapm-system',
+      taskType: 'incremental',
+    }),
+    {
+      runtime: { id: 'logs-collector:test03:novaapm-system', kind: 'logs_collector', status: 'previewed' },
+      task_type: 'incremental',
+      status: 'previewed',
+      message: '部署预览已生成',
+      requires_confirmation: true,
+      preview_id: 'preview-001',
+      confirmation_token: 'token-001',
+      changed_config_maps: ['novaapm-logs-agent-svc-orders-api-route-001'],
+      collector_config_files: {},
+      resources: [],
+      diffs: [],
+      warnings: [],
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/publish');
+  assert.deepEqual(request.body, {
+    cluster_id: 'test03',
+    namespace: 'novaapm-system',
+    task_type: 'incremental',
+  });
+  assert.equal(result.requiresConfirmation, true);
+  assert.equal(result.taskType, 'incremental');
+});
+
 test('确认 K8s logs_collector Runtime 时只提交不可变预览凭据', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.confirmLogsCollectorRuntime({

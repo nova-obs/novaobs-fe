@@ -84,6 +84,14 @@ export interface CreateServiceInput {
   sloLevel?: string;
 }
 
+export interface ImportK8sDeploymentServiceInput {
+  productId: string;
+  clusterId: string;
+  namespace: string;
+  deploymentName: string;
+  deploymentUid: string;
+}
+
 export interface UpdateServiceInput {
   key?: string;
   cmdbServiceId?: string;

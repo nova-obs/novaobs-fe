@@ -76,6 +76,9 @@ test('K8s 观测接入页面承载集群级 runtime 发布入口', () => {
   assert.equal(observabilitySource.includes('RuntimeStepPanel'), true);
   assert.equal(observabilitySource.includes('预览基础组件发布'), true);
   assert.equal(observabilitySource.includes('预览增量发布'), true);
+  assert.equal(observabilitySource.includes('个服务配置待发布'), true);
+  assert.equal(observabilitySource.includes('当前服务配置已与集群运行时一致'), true);
+  assert.equal(observabilitySource.includes('共 ${serviceRouteGroups.length} 个服务'), false);
   assert.equal(observabilitySource.includes('defaultLogsCollectorNamespace'), true);
   assert.equal(observabilitySource.includes('normalizeLogsCollectorNamespace'), true);
   assert.equal(observabilitySource.includes('useSearchParams'), true);

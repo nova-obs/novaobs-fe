@@ -22,6 +22,7 @@ import { K8sTerminalPage } from '../pages/k8s/TerminalPage';
 import { LogsAgentsPage } from '../pages/logs/LogsAgentsPage';
 import { LogsAlertsPage } from '../pages/logs/LogsAlertsPage';
 import { LogsExplorePage } from '../pages/logs/LogsExplorePage';
+import { LogsFormatDemoPage } from '../pages/logs/LogsFormatDemoPage';
 import { LogsOnboardingPage } from '../pages/logs/LogsOnboardingPage';
 import LogsWorkspace from '../pages/logs/LogsWorkspace';
 import { MetricsIntegrationsPage } from '../pages/metrics/MetricsIntegrationsPage';
@@ -83,6 +84,7 @@ const k8sChildRoutes: RouteDefinition[] = [
 const logsChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <ServiceLogsIndexRedirect /> },
   { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
+  { path: 'format-demo', title: '日志格式改造演示', element: <LogsFormatDemoPage /> },
   { path: 'onboarding', title: '创建日志采集路由', element: <Navigate to="../agents/new" replace /> },
   { path: 'agents/new', title: '创建日志采集路由', element: <LogsOnboardingPage /> },
   { path: 'agents/:id/edit', title: '更新日志采集路由', element: <LogsOnboardingPage /> },
@@ -96,6 +98,7 @@ const logsChildRoutes: RouteDefinition[] = [
 const logsEntryChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <Navigate to="/logs/explore" replace /> },
   { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
+  { path: 'format-demo', title: '日志格式改造演示', element: <LogsFormatDemoPage /> },
   { path: 'agents', title: 'Logs 日志采集', element: <LogsAgentsPage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
   { path: 'endpoints', title: 'Logs 下游端点', element: <Navigate to="/observability/endpoints/logs" replace /> },
@@ -124,10 +127,10 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/products', title: '产品与服务', element: <ServicesPage /> },
   { path: '/products/:productId/services', title: '产品服务', element: <ServicesPage /> },
   { path: '/products/:productId/integrations', title: '产品集成', element: <ServicesPage /> },
-  { path: '/products/:productId/services/:serviceId', title: '服务概览', element: <ProductServiceIndexRedirect /> },
-  { path: '/products/:productId/services/:serviceId/overview', title: '服务概览', element: <ServicesPage /> },
-  { path: '/products/:productId/services/:serviceId/graph', title: '观测关系', element: <ServicesPage /> },
-  { path: '/products/:productId/services/:serviceId/settings', title: '服务设置', element: <ServicesPage /> },
+  { path: '/products/:productId/services/:serviceId', title: '服务详情', element: <ServicesPage /> },
+  { path: '/products/:productId/services/:serviceId/overview', title: '服务详情', element: <LegacyServiceSectionRedirect /> },
+  { path: '/products/:productId/services/:serviceId/graph', title: '服务详情', element: <LegacyServiceSectionRedirect /> },
+  { path: '/products/:productId/services/:serviceId/settings', title: '服务详情', element: <LegacyServiceSectionRedirect /> },
   { path: '/services', title: '产品与服务', element: <Navigate to="/products" replace /> },
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/products" replace /> },
 	{ path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsEntryChildRoutes },
@@ -192,9 +195,9 @@ function ServiceLogsIndexRedirect() {
 	return <Navigate to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/explore`} replace />;
 }
 
-function ProductServiceIndexRedirect() {
+function LegacyServiceSectionRedirect() {
   const { productId = '', serviceId = '' } = useParams();
-  return <Navigate to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/overview`} replace />;
+  return <Navigate to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}`} replace />;
 }
 
 function LegacyMetricsAlertRedirect() {

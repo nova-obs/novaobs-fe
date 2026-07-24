@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "test": "node --test --import tsx \"src/**/*.test.mjs\"",
     "test:e2e:catalog": "node --test e2e/catalog-v2.e2e.mjs",
+    "test:e2e:log-format-demo": "node --test e2e/log-format-demo.e2e.mjs",
     "test:e2e:k8s-cluster-rebind": "node --test e2e/k8s-cluster-rebind.e2e.mjs",
     "preview": "vite preview"
   },

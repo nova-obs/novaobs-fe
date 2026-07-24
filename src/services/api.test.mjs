@@ -163,6 +163,36 @@ test('创建服务时传递必填字段并以字符串 ID 返回', async () => {
 	assert.equal(request.body.environment_id, undefined);
 });
 
+test('从 K8s Deployment 导入服务时提交稳定资源身份', async () => {
+  const request = await captureRequest(
+    () => api.importK8sDeploymentService({
+      productId: 'product-commerce',
+      clusterId: 'prod-1',
+      namespace: 'orders',
+      deploymentName: 'orders-api',
+      deploymentUid: 'deployment-orders-api',
+    }),
+    {
+      id: '507f1f77bcf86cd799439021',
+      product_id: 'product-commerce',
+      key: 'orders-api',
+      name: 'orders-api',
+      source: 'k8s',
+      sync_status: 'local',
+      status: 'active',
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/products/product-commerce/services/imports/k8s');
+  assert.equal(request.init.method, 'POST');
+  assert.deepEqual(request.body, {
+    cluster_id: 'prod-1',
+    namespace: 'orders',
+    deployment_name: 'orders-api',
+    deployment_uid: 'deployment-orders-api',
+  });
+});
+
 test('创建产品后由后端生成产品级 projectId', async () => {
 	const originalFetch = globalThis.fetch;
 	const requests = [];

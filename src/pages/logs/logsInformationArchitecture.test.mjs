@@ -10,6 +10,7 @@ const onboarding = readFileSync(new URL('./LogsOnboardingPage.tsx', import.meta.
 const alertRule = readFileSync(new URL('./LogsAlertRulePage.tsx', import.meta.url), 'utf8');
 const alerts = readFileSync(new URL('./LogsAlertsPage.tsx', import.meta.url), 'utf8');
 const explore = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 'utf8');
+const formatDemo = readFileSync(new URL('./LogsFormatDemoPage.tsx', import.meta.url), 'utf8');
 const servicePicker = readFileSync(new URL('./ServicePickerPanel.tsx', import.meta.url), 'utf8');
 
 test('Logs 保留服务级入口并把下游端点迁移到可观测性领域入口', () => {
@@ -94,6 +95,17 @@ test('Logs 日志分析通过产品与服务两级上下文切换当前服务', 
   assert.match(explore, /查询上下文/);
   assert.match(explore, /VictoriaLogs Endpoint/);
   assert.doesNotMatch(workspace, /选择当前服务/);
+});
+
+test('日志格式改造演示区分业务输出与平台补齐且不形成第二套发布路径', () => {
+  assert.match(routes, /path: 'format-demo'.*LogsFormatDemoPage/);
+  assert.doesNotMatch(workspace, /entry: 'format-demo'/);
+  assert.match(formatDemo, /业务输出/);
+  assert.match(formatDemo, /平台补齐/);
+  assert.match(formatDemo, /仅在当前浏览器/);
+  assert.match(formatDemo, /useServiceScope/);
+  assert.doesNotMatch(formatDemo, /logsApi|api\./);
+  assert.doesNotMatch(formatDemo, /发布|保存到服务/);
 });
 
 test('Logs 页面不展示无决策价值的汇总计数和英文追加描述', () => {

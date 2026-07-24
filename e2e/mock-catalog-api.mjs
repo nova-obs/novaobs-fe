@@ -66,6 +66,31 @@ const k8sClusters = [
     read_only: true,
   },
 ];
+const k8sNamespaces = [
+  {
+    id: 'namespace-orders',
+    cluster_id: 'test03',
+    name: 'orders',
+    status: 'active',
+    phase: 'Active',
+    updated_at: now,
+  },
+];
+const k8sDeployments = [
+  {
+    identity: {
+      cluster_id: 'test03',
+      namespace: 'orders',
+      api_version: 'apps/v1',
+      kind: 'Deployment',
+      name: 'orders-api',
+      uid: 'deployment-orders-api',
+    },
+    status: 'ready',
+    labels: { app: 'orders-api' },
+    updated_at: now,
+  },
+];
 function envelope(data, meta = {}) {
   return { success: true, data, error: null, meta };
 }
@@ -132,6 +157,22 @@ const server = createServer(async (request, response) => {
   }
   if (path === '/k8s/clusters' && request.method === 'GET') {
     return json(response, 200, envelope(k8sClusters, { total: k8sClusters.length }));
+  }
+  if (path === '/k8s/namespaces' && request.method === 'GET') {
+    const clusterId = url.searchParams.get('cluster_id') || '';
+    const items = k8sNamespaces.filter((item) => item.cluster_id === clusterId);
+    return json(response, 200, envelope(items, { total: items.length }));
+  }
+  if (path === '/k8s/resources' && request.method === 'GET') {
+    const clusterId = url.searchParams.get('cluster_id') || '';
+    const namespace = url.searchParams.get('namespace') || '';
+    const kind = url.searchParams.get('kind') || '';
+    const items = k8sDeployments.filter((item) => (
+      item.identity.cluster_id === clusterId
+      && item.identity.namespace === namespace
+      && (!kind || item.identity.kind === kind)
+    ));
+    return json(response, 200, envelope(items, { total: items.length }));
   }
   if (path === '/observability/runtimes/logs-collector/status' && request.method === 'GET') {
     const clusterId = url.searchParams.get('cluster_id') || '';
@@ -210,6 +251,40 @@ const server = createServer(async (request, response) => {
   if (productServicesMatch && request.method === 'GET') {
     const productId = decodeURIComponent(productServicesMatch[1]);
     return json(response, 200, envelope(services[productId] || []));
+  }
+
+  const k8sImportMatch = path.match(/^\/products\/([^/]+)\/services\/imports\/k8s$/);
+  if (k8sImportMatch && request.method === 'POST') {
+    const productId = decodeURIComponent(k8sImportMatch[1]);
+    const input = await readBody(request);
+    const deployment = k8sDeployments.find((item) => (
+      item.identity.cluster_id === input.cluster_id
+      && item.identity.namespace === input.namespace
+      && item.identity.name === input.deployment_name
+      && item.identity.uid === input.deployment_uid
+    ));
+    if (!deployment) {
+      return json(response, 404, {
+        success: false,
+        data: null,
+        error: { code: 'k8s_deployment_not_found', message: 'Deployment 不存在或已被重建' },
+        meta: {},
+      });
+    }
+    const service = {
+      id: `svc-${deployment.identity.name}-02`,
+      product_id: productId,
+      key: deployment.identity.name,
+      name: deployment.identity.name,
+      description: '',
+      source: 'k8s',
+      sync_status: 'local',
+      status: 'active',
+      created_at: now,
+      updated_at: now,
+    };
+    services[productId] = [...(services[productId] || []), service];
+    return json(response, 201, envelope(service));
   }
 
   const productMatch = path.match(/^\/products\/([^/]+)$/);

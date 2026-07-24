@@ -47,10 +47,12 @@ test('日志告警工具栏先选择服务，再放搜索、刷新、新增', ()
   assert.match(alertsSource, /filteredRules/);
 });
 
-test('产品与服务使用紧凑表格和独立创建抽屉', () => {
+test('产品与服务使用产品服务树表和独立动作抽屉', () => {
   assert.match(servicesSource, /console-resource-list/);
   assert.match(servicesSource, /新增产品/);
-  assert.match(servicesSource, /新增服务/);
+  assert.match(servicesSource, /ProductServiceRows/);
   assert.match(servicesSource, /ProductDrawer/);
   assert.match(servicesSource, /ServiceDrawer/);
+  assert.match(servicesSource, /ProductIntegrationDrawer/);
+  assert.match(servicesSource, /ServiceDetailDrawer/);
 });

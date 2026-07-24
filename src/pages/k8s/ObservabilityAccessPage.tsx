@@ -73,9 +73,14 @@ function LogsCollectorAccessPanel() {
     }
     return [...groups.entries()].map(([serviceId, group]) => {
       const pendingRoutes = group.routes.filter((r) => r.route.lastPublishStatus !== 'published' && r.route.lastPublishStatus !== 'applied');
-      return { serviceId, ...group, pendingCount: pendingRoutes.length, pendingRouteIds: pendingRoutes.map((r) => r.route.id) };
+      return { serviceId, ...group, pendingCount: pendingRoutes.length };
     });
   }, [effectiveClusterId, workspaceQuery.data]);
+  const pendingServiceCount = useMemo(
+    () => serviceRouteGroups.filter((group) => group.pendingCount > 0).length,
+    [serviceRouteGroups],
+  );
+  const serviceConfigReady = serviceRouteGroups.length > 0 && pendingServiceCount === 0;
 
   useEffect(() => {
     if (requestedNamespace) {
@@ -111,7 +116,7 @@ function LogsCollectorAccessPanel() {
   const canPreviewBase = canPublish && runtimeStatus?.status === 'missing_resources';
   const canPreviewIncremental = canPublish && Boolean(runtimeStatus?.ready);
   const publishMutation = useMutation({
-    mutationFn: (input: { taskType?: PublishTaskType; routeIds?: string[]; previewId?: string; confirmationToken?: string }) => (
+    mutationFn: (input: { taskType?: PublishTaskType; previewId?: string; confirmationToken?: string }) => (
       input.previewId && input.confirmationToken
         ? logsApi.confirmLogsCollectorRuntime({
             previewId: input.previewId,
@@ -121,7 +126,6 @@ function LogsCollectorAccessPanel() {
             clusterId: effectiveClusterId,
             namespace,
             taskType: input.taskType ?? 'incremental',
-            routeIds: input.routeIds,
           })
     ),
     onSuccess: async (result) => {
@@ -162,14 +166,14 @@ function LogsCollectorAccessPanel() {
     setSearchParams(nextClusterId ? { cluster_id: nextClusterId, namespace: normalizeLogsCollectorNamespace(namespace) } : {});
   }
 
-  function previewRuntime(taskType: PublishTaskType, routeIds?: string[]) {
+  function previewRuntime(taskType: PublishTaskType) {
     setPendingPublish(null);
-    publishMutation.mutate({ taskType, routeIds });
+    publishMutation.mutate({ taskType });
   }
 
-  function previewServicePublish(serviceId: string, routeIds: string[]) {
+  function previewServicePublish(serviceId: string) {
     setPublishingServiceId(serviceId);
-    previewRuntime('incremental', routeIds);
+    previewRuntime('incremental');
   }
 
   function applyRuntime() {
@@ -346,22 +350,28 @@ function LogsCollectorAccessPanel() {
 
             <RuntimeStepPanel
               stepNumber={2}
-              title="服务配置增量发布"
-              complete={false}
-              active={runtimeStatus?.ready ?? false}
+              title="服务配置发布"
+              complete={serviceConfigReady}
+              active={Boolean(runtimeStatus?.ready && !serviceConfigReady)}
               description={runtimeStatus?.ready
-                ? `按服务维度展示待发布配置变更 · 共 ${serviceRouteGroups.length} 个服务`
+                ? pendingServiceCount > 0
+                  ? `${pendingServiceCount} 个服务配置待发布，确认后将一致性协调当前集群采集域`
+                  : serviceRouteGroups.length > 0
+                    ? '当前服务配置已与集群运行时一致'
+                    : '当前集群暂无采集路由'
                 : '基础组件缺失时不能执行增量发布，请先完成 Step 1。'}
-              action={runtimeStatus?.ready ? (
+              action={runtimeStatus?.ready && pendingServiceCount > 0 ? (
                 <button
                   className="console-button"
                   disabled={!canPreviewIncremental || publishMutation.isPending}
                   onClick={() => previewRuntime('incremental')}
-                  title="预览所有服务增量变更"
+                  title="预览当前采集域全部待发布变更"
                 >
                   <Rocket className="h-3.5 w-3.5" />
-                  全量预览
+                  预览采集域变更
                 </button>
+              ) : runtimeStatus?.ready ? (
+                <StatusBadge value={serviceConfigReady ? 'ready' : 'not_started'} />
               ) : (
                 <button className="console-button" disabled title="基础组件未就绪">
                   <Rocket className="h-3.5 w-3.5" />
@@ -377,7 +387,7 @@ function LogsCollectorAccessPanel() {
                       group={group}
                       publishing={publishingServiceId === group.serviceId && publishMutation.isPending}
                       disabled={!canPreviewIncremental || publishMutation.isPending}
-                      onPreview={() => previewServicePublish(group.serviceId, group.routes.map((r) => r.route.id))}
+                      onPreview={() => previewServicePublish(group.serviceId)}
                     />
                   ))}
                 </div>
@@ -539,9 +549,10 @@ function ServicePublishRow({ group, publishing, disabled, onPreview }: {
           className="console-button console-button-primary gap-1 text-xs"
           disabled={disabled}
           onClick={onPreview}
+          title="预览当前采集域全部待发布变更"
         >
           {publishing ? <Loader2 className="h-3 w-3 animate-spin" /> : <Rocket className="h-3 w-3" />}
-          预览发布
+          预览变更
         </button>
       ) : null}
     </div>

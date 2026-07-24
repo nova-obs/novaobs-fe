@@ -1006,14 +1006,13 @@ export const logsApi = {
       }),
     }));
   },
-  async publishLogsCollectorRuntime(input: { clusterId: string; namespace?: string; taskType: 'base' | 'incremental'; routeIds?: string[] }): Promise<LogsCollectorRuntimePublishResult> {
+  async publishLogsCollectorRuntime(input: { clusterId: string; namespace?: string; taskType: 'base' | 'incremental' }): Promise<LogsCollectorRuntimePublishResult> {
     return mapCollectorRuntimePublish(await apiRequest<any>('/observability/runtimes/logs-collector/publish', {
       method: 'POST',
       body: JSON.stringify({
         cluster_id: input.clusterId,
         namespace: normalizeLogsCollectorNamespace(input.namespace),
         task_type: input.taskType,
-        route_ids: input.routeIds?.length ? input.routeIds : undefined,
       }),
     }));
   },

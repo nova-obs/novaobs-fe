@@ -24,6 +24,7 @@ import type {
   GeneratedConfig,
   GrafanaProductIntegration,
   IdentitySummary,
+  ImportK8sDeploymentServiceInput,
   K8sDashboardSnapshot,
   OnboardingWorkspace,
   OpAMPAgent,
@@ -828,6 +829,18 @@ export const api = {
         owner: input.owner,
         alert_route: input.alertRoute,
         slo_level: input.sloLevel,
+      }),
+    });
+    return mapService(raw);
+  },
+  async importK8sDeploymentService(input: ImportK8sDeploymentServiceInput): Promise<Service> {
+    const raw = await request<any>(`/products/${encodeURIComponent(input.productId)}/services/imports/k8s`, {
+      method: 'POST',
+      body: JSON.stringify({
+        cluster_id: input.clusterId,
+        namespace: input.namespace,
+        deployment_name: input.deploymentName,
+        deployment_uid: input.deploymentUid,
       }),
     });
     return mapService(raw);

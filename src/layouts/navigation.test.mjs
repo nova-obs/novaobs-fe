@@ -73,10 +73,12 @@ test('根据路径解析当前导航项', () => {
   assert.equal(getNavigationByPath('/products/product-1/services')?.id, 'products');
   assert.equal(getNavigationByPath('/logs')?.id, 'logs');
 	assert.equal(getNavigationByPath('/logs/explore')?.id, 'logs-explore');
+	assert.equal(getNavigationByPath('/logs/format-demo')?.id, 'logs');
 	assert.equal(getNavigationByPath('/logs/agents')?.id, 'logs-agents');
 	assert.equal(getNavigationByPath('/logs/alerts')?.id, 'logs-alerts');
 	assert.equal(getNavigationByPath('/logs/endpoints')?.id, 'observability-logs-endpoints');
 	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/logs/agents/new')?.id, 'logs-agents');
+	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/logs/format-demo')?.id, 'logs');
 	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/logs/alerts/new')?.id, 'logs-alerts');
 	assert.equal(getNavigationByPath('/products/product-1/services/svc-1/logs/endpoints')?.id, 'observability-logs-endpoints');
 	assert.equal(getNavigationByPath('/observability/endpoints')?.id, 'observability-logs-endpoints');

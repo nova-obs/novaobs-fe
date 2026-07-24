@@ -44,13 +44,14 @@ test('全站具备表单反馈、图标动作、加载骨架、危险操作和�
   }
 });
 
-test('产品与服务采用紧凑表格、分页式详情和可发现的危险操作', () => {
+test('产品与服务采用产品服务树表、按需抽屉和可发现的危险操作', () => {
   assert.match(servicesPage, /console-resource-list/);
-  assert.match(servicesPage, /ProductTab/);
-  assert.match(servicesPage, /ServiceDetail/);
-  assert.match(servicesPage, /console-danger-zone/);
-  assert.match(servicesPage, /GraphPanel/);
-  assert.match(servicesPage, /GrafanaIntegrationPanel/);
+  assert.match(servicesPage, /ProductServiceRows/);
+  assert.match(servicesPage, /ServiceDetailDrawer/);
+  assert.match(servicesPage, /ProductIntegrationDrawer/);
+  assert.match(servicesPage, /确认归档产品/);
+  assert.match(servicesPage, /确认归档服务/);
+  assert.doesNotMatch(servicesPage, /ProductTab/);
 });
 
 test('Agent 与 Logs 运行页面展示连续上下文和按需详情', () => {

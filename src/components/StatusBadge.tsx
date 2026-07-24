@@ -80,9 +80,16 @@ const statusText: Record<string, string> = {
   unmatched: '未匹配',
 };
 
-export function StatusBadge({ value }: { value: string }) {
+function textTone(status: string) {
+  return (statusClass[status] ?? statusClass.low)
+    .split(' ')
+    .filter((className) => className.startsWith('text-'))
+    .join(' ');
+}
+
+export function StatusBadge({ value, appearance = 'badge' }: { value: string; appearance?: 'badge' | 'inline' }) {
   return (
-    <span className={`status-badge ${statusClass[value] ?? statusClass.low}`}>
+    <span className={appearance === 'inline' ? `status-inline ${textTone(value)}` : `status-badge ${statusClass[value] ?? statusClass.low}`}>
       <span className="status-dot" aria-hidden />
       {statusText[value] ?? value}
     </span>

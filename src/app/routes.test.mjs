@@ -32,6 +32,22 @@ test('路由定义覆盖主路径', () => {
   ]);
 });
 
+test('产品与服务深层入口只打开工作面抽屉，旧服务分区路径统一回收', () => {
+  const productServices = routeDefinitions.find((route) => route.path === '/products/:productId/services');
+  const productIntegration = routeDefinitions.find((route) => route.path === '/products/:productId/integrations');
+  const serviceDetail = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId');
+  const overview = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/overview');
+  const graph = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/graph');
+  const settings = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/settings');
+
+  assert.equal(productServices?.element?.type?.name, 'ServicesPage');
+  assert.equal(productIntegration?.element?.type?.name, 'ServicesPage');
+  assert.equal(serviceDetail?.element?.type?.name, 'ServicesPage');
+  assert.equal(overview?.element?.type?.name, 'LegacyServiceSectionRedirect');
+  assert.equal(graph?.element?.type?.name, 'LegacyServiceSectionRedirect');
+  assert.equal(settings?.element?.type?.name, 'LegacyServiceSectionRedirect');
+});
+
 test('Metrics 使用产品级接入路由', () => {
 	const metricsEntry = routeDefinitions.find((item) => item.path === '/metrics');
 
@@ -60,12 +76,13 @@ test('Logs 保留服务级能力，旧接入配置路径统一跳转观测端点
   const paths = routeDefinitions.map((r) => r.path);
 	const logsEntry = routeDefinitions.find((r) => r.path === '/logs');
 	const logs = routeDefinitions.find((r) => r.path === '/products/:productId/services/:serviceId/logs');
-	assert.deepEqual(logsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'agents', 'alerts', 'endpoints']);
+	assert.deepEqual(logsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'format-demo', 'agents', 'alerts', 'endpoints']);
   assert.equal(logsEntry?.element?.type?.name, 'LogsWorkspace');
   assert.equal(logsEntry?.children?.find((item) => item.path === 'explore')?.element?.type?.name, 'LogsExplorePage');
+  assert.equal(logsEntry?.children?.find((item) => item.path === 'format-demo')?.element?.type?.name, 'LogsFormatDemoPage');
   assert.equal(logsEntry?.children?.find((item) => item.path === 'agents')?.element?.type?.name, 'LogsAgentsPage');
 	assert.equal(logsEntry?.children?.find((item) => item.path === 'endpoints')?.element?.type?.name, 'Navigate');
-  assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'onboarding', 'agents/new', 'agents/:id/edit', 'agents', 'alerts/new', 'alerts/:id', 'alerts', 'endpoints']);
+  assert.deepEqual(logs?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'format-demo', 'onboarding', 'agents/new', 'agents/:id/edit', 'agents', 'alerts/new', 'alerts/:id', 'alerts', 'endpoints']);
   assert.equal(paths.includes('/pipelines'), false);
   assert.ok(paths.includes('/agents/:uid'));
   assert.equal(paths.includes('/collectors'), false);
@@ -96,8 +113,10 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/logs'), 'Logs 日志分析');
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/logs/explore'), 'Logs 日志分析');
 	assert.equal(getRouteTitle('/logs/explore'), 'Logs 日志分析');
+	assert.equal(getRouteTitle('/logs/format-demo'), '日志格式改造演示');
 	assert.equal(getRouteTitle('/logs/agents'), 'Logs 日志采集');
 	assert.equal(getRouteTitle('/logs/alerts'), 'Logs 日志告警');
+	assert.equal(getRouteTitle('/products/product-1/services/svc-1/logs/format-demo'), '日志格式改造演示');
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/logs/onboarding'), '创建日志采集路由');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/logs/agents/new'), '创建日志采集路由');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/logs/agents/route-1/edit'), '更新日志采集路由');
@@ -130,6 +149,7 @@ test('路由标题可按路径查找', () => {
 
 test('浏览器标签页标题包含当前模块和产品名', () => {
   assert.equal(getDocumentTitle('/logs'), 'Logs 日志分析 - NovaAPM');
+	assert.equal(getDocumentTitle('/logs/format-demo'), '日志格式改造演示 - NovaAPM');
 	assert.equal(getDocumentTitle('/products/product-1/services/svc-1/logs/agents/new'), '创建日志采集路由 - NovaAPM');
 	assert.equal(getDocumentTitle('/products/product-1/services/svc-1/logs/agents/route-1/edit'), '更新日志采集路由 - NovaAPM');
 	assert.equal(getDocumentTitle('/products/product-1/services/svc-1/logs/endpoints'), 'Logs 下游端点 - NovaAPM');
