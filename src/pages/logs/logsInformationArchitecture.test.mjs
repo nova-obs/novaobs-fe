@@ -62,25 +62,22 @@ test('日志告警固定使用产品服务路径中的服务上下文', () => {
 });
 
 test('采集路由使用单一工作面突出列表选择和当前路由功能', () => {
-  assert.match(agents, /const \[routeView, setRouteView\] = useState<'overview' \| 'instances'>\('overview'\)/);
-  assert.match(agents, />运行概览</);
-	assert.match(agents, /activeRouteIsVM \? 'VM 节点' : 'Agent 实例'/);
-  assert.match(agents, /routeView === 'overview'/);
-  assert.match(agents, /routeView === 'instances'/);
+  assert.match(agents, /getRouteRuntimeStatus/);
+  assert.match(agents, /预期目标/);
+  assert.match(agents, /配置收敛/);
+  assert.match(agents, /仅看异常/);
   assert.match(agents, /aria-label="采集路由工作区"/);
   assert.doesNotMatch(agents, /<LogsSection/);
   assert.doesNotMatch(agents, /采集路由列表/);
   assert.doesNotMatch(agents, /路由运行状态/);
 });
 
-test('VM 采集路由运行页展示回填节点而不是托管 Agent 实例', () => {
-	assert.match(agents, /logsApi\.listVMAgentEndpoints/);
-	assert.match(agents, /activeRouteIsVM \? 'VM 节点' : 'Agent 实例'/);
-	assert.match(agents, /地址可达不代表采集中/);
-	assert.match(agents, /vmEndpointsLoading/);
-	assert.match(agents, /vmEndpointsError/);
-	assert.match(agents, /route\.route\.id === activeRoute\?\.route\.id \? activeLifecycle/);
-	assert.doesNotMatch(agents, /source\.hostGroup \|\| 'VM'/);
+test('VM 与 K8S 运行状态使用统一目标摘要且不再读取手工 Endpoint', () => {
+	assert.match(agents, /runtime\?\.targets/);
+	assert.match(agents, /target\.installationId/);
+	assert.match(agents, /target\.connectionStatus/);
+	assert.match(agents, /target\.dataStatus/);
+	assert.doesNotMatch(agents, /listVMAgentEndpoints|地址可达|13133|source\.hostGroup/);
 });
 
 test('Logs 模块层只保留统一导航和服务作用域，不在业务页面重复实现入口', () => {

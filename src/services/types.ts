@@ -25,6 +25,89 @@ export interface Service {
   status: ServiceStatus;
   createdAt: string;
   updatedAt: string;
+  deploymentKinds: ServiceDeploymentKind[];
+}
+
+export type ServiceDeploymentKind = 'kubernetes_workload' | 'host_set';
+export type ServiceDeploymentStatus = 'active' | 'retired';
+
+export interface ServiceDeploymentK8sRef {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  workloadKind: string;
+  workloadName: string;
+  workloadUid: string;
+}
+
+export interface HostAsset {
+  id: string;
+  identitySource: 'manual' | 'cmdb' | 'cloud' | string;
+  identityScope: string;
+  externalId: string;
+  displayName: string;
+  hostname: string;
+  ipAddresses: string[];
+  status: 'active' | 'retired' | string;
+  region: string;
+  zone: string;
+  labels: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type HostAssetInput = Omit<HostAsset, 'id' | 'createdAt' | 'updatedAt'>;
+
+export type HostAssetPatch = Pick<HostAsset, 'displayName' | 'hostname' | 'ipAddresses' | 'region' | 'zone' | 'labels'>;
+
+export interface ServiceDeployment {
+  id: string;
+  productId: string;
+  serviceId: string;
+  name: string;
+  kind: ServiceDeploymentKind;
+  status: ServiceDeploymentStatus;
+  source: 'manual' | 'k8s' | 'cmdb' | string;
+  k8sRef: ServiceDeploymentK8sRef | null;
+  allowedLogRoots: string[];
+  hostTargets: HostAsset[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceDeploymentInput {
+  name: string;
+  kind: ServiceDeploymentKind;
+  source?: string;
+  allowedLogRoots?: string[];
+  hostIds?: string[];
+  k8sRef?: Partial<ServiceDeploymentK8sRef>;
+}
+
+export interface CollectorInstallation {
+  id: string;
+  installationId: string;
+  hostAssetId: string;
+  agentRole: 'logs_agent' | 'metrics_agent' | 'gateway' | string;
+  status: 'pending' | 'active' | 'revoked' | string;
+  version: string;
+  connectionStatus: 'online' | 'offline' | 'revoked' | string;
+  processStatus: 'healthy' | 'unhealthy' | 'unknown' | string;
+  configStatus: 'pending' | 'applying' | 'applied' | 'failed' | 'drift' | string;
+  dataStatus: 'flowing' | 'stale' | 'no_data' | 'unknown' | string;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CollectorEnrollmentCredential {
+  installation: CollectorInstallation;
+  token: string;
+}
+
+export interface CollectorInstallationCredential {
+  installation: CollectorInstallation;
+  credential: string;
 }
 
 export interface Product {
@@ -47,28 +130,19 @@ export interface ServiceGraphLogRouteSummary {
     route: {
       id: string;
       sourceType: string;
-      agentGroupId: string;
+      serviceDeploymentId: string;
       endpointId: string;
       status: string;
       collectorConfigHash: string;
       lastPublishStatus: string;
     };
-    source?: {
-      sourceType: string;
-      clusterId: string;
-      namespace: string;
-      workloadKind: string;
-      workloadName: string;
-      hostGroup: string;
-      pathPattern: string;
-    } | null;
     endpoint?: { id: string; name: string; sinkType: string; streamName: string; vmuiURL: string } | null;
   }>;
 }
 
 export interface ServiceObservabilityGraph {
   service: Service;
-  agents: CollectorInstance[];
+  deployments: ServiceDeployment[];
   logRoutes: ServiceGraphLogRouteSummary;
   alertRules: AlertRule[];
 }
@@ -137,7 +211,6 @@ export interface GrafanaProductIntegration {
 export interface OpAMPAgent {
   instanceUid: string;
   collectorGroupId: string;
-  serviceId: string;
   online: boolean;
   healthy: boolean;
   capabilities: number;
@@ -159,7 +232,6 @@ export interface AgentAttribute {
 export interface AgentState {
   instanceUid: string;
   collectorGroupId: string;
-  serviceId: string;
   online: boolean;
   healthy: boolean;
   capabilities: number;
@@ -201,8 +273,6 @@ export interface AgentDetail {
   runtime: CollectorInstance;
   agent: AgentRuntimeDetail;
   collectorGroup: CollectorGroup | null;
-  services: Service[];
-  onboardings: ServiceOnboarding[];
   configuration: AgentDetailConfiguration;
 }
 
@@ -346,7 +416,9 @@ export interface CollectorInstance {
   opampInstanceUid: string;
   runtimeIdentity: string;
   collectorGroupId: string;
-  serviceId: string;
+  installationId: string;
+  hostAssetId: string;
+  agentRole: string;
   clusterId: string;
   namespace: string;
   agentNamespace: string;
@@ -365,6 +437,11 @@ export interface CollectorInstance {
   lastConfigHash: string;
   remoteConfigStatus: 'unset' | 'applying' | 'applied' | 'failed';
   runtimeStatus: 'online' | 'stale' | 'offline';
+  connectionStatus: 'online' | 'offline' | 'revoked' | string;
+  processStatus: 'healthy' | 'unhealthy' | 'unknown' | string;
+  configStatus: 'pending' | 'applying' | 'applied' | 'failed' | 'drift' | string;
+  dataStatus: 'flowing' | 'stale' | 'no_data' | 'unknown' | string;
+  lastLogAt: string;
   lastSeenAgeSeconds: number;
   lastError: string;
   lastSeenAt: string;

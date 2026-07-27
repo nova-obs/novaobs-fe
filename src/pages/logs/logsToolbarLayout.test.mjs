@@ -15,7 +15,7 @@ test('资源列表工具栏具备左操作右检索语义', () => {
 
 test('采集路由工具栏先选择路由，再放刷新、新增', () => {
   const toolbarIndex = routesSource.indexOf('console-panel-header shrink-0');
-  const selectorIndex = routesSource.indexOf('logs-route-selector', toolbarIndex);
+  const selectorIndex = routesSource.indexOf('aria-label="采集路由"', toolbarIndex);
   const refreshIndex = routesSource.indexOf('刷新', toolbarIndex);
   const createIndex = routesSource.indexOf('创建采集路由', toolbarIndex);
 
@@ -23,7 +23,7 @@ test('采集路由工具栏先选择路由，再放刷新、新增', () => {
   assert.ok(selectorIndex > toolbarIndex);
   assert.ok(refreshIndex > selectorIndex);
   assert.ok(createIndex > refreshIndex);
-  assert.match(routesSource, /LogsEntitySelector<LogRouteView>/);
+  assert.match(routesSource, /aria-label="采集路由"/);
   assert.match(routesSource, /function selectRoute\(routeId: string\)/);
   assert.doesNotMatch(routesSource, /const \[routeQuery, setRouteQuery\]/);
   assert.doesNotMatch(routesSource, /搜索采集路由/);

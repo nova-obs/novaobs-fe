@@ -85,16 +85,9 @@ export interface LogSource {
   id: string;
   sourceType: LogSourceType;
   clusterId: string;
-  namespace: string;
   agentNamespace: string;
-  workloadKind: string;
-  workloadName: string;
-  hostGroup: string;
-  hostSelector: Record<string, string>;
   pathPattern: string;
   parseRules: LogParseRule[];
-  collectorFragmentYAML: string;
-  collectorYAML: string;
   collectorConfigHash: string;
   deploymentManifestHash: string;
 }
@@ -103,9 +96,9 @@ export interface LogRoute {
   id: string;
   name: string;
   serviceId: string;
+  serviceDeploymentId: string;
   sourceId: string;
   sourceType: LogSourceType;
-  agentGroupId: string;
   endpointId: string;
   status: string;
   collectorConfigHash: string;
@@ -178,17 +171,6 @@ export interface LogsServiceSummary {
   syncStatus: string;
 }
 
-export interface LogsAgentGroupSummary {
-  id: string;
-  name: string;
-  displayName: string;
-  mode: string;
-  cluster: string;
-  namespace: string;
-  status: string;
-  onlineInstances: number;
-}
-
 export interface LogsClusterSummary {
   id: string;
   name: string;
@@ -201,7 +183,6 @@ export interface LogsClusterSummary {
 
 export interface LogOnboardingWorkspace {
   services: LogsServiceSummary[];
-  collectorGroups: LogsAgentGroupSummary[];
   clusters: LogsClusterSummary[];
   endpoints: LogEndpoint[];
   routes: LogRouteView[];
@@ -228,28 +209,56 @@ export interface LogRouteInput {
   routeId?: string;
   name?: string;
   serviceId: string;
+  serviceDeploymentId: string;
   sourceType: LogSourceType;
-  agentGroupId: string;
   endpointId: string;
   k8s?: {
-    clusterId?: string;
-    namespace?: string;
     agentNamespace?: string;
-    workloadKind?: string;
-    workloadName?: string;
-    container?: string;
-    workloadSelector?: Record<string, string>;
-    pathPattern?: string;
     parseRules?: LogParseRule[];
-    operatorsYAML?: string;
-    collectorFragmentYAML?: string;
   };
   vm?: {
-    hostGroup?: string;
     pathPattern?: string;
     parseRules?: LogParseRule[];
-    collectorYAML?: string;
   };
+}
+
+export type CollectorConnectionStatus = 'online' | 'offline' | 'revoked';
+export type CollectorProcessStatus = 'healthy' | 'unhealthy' | 'unknown';
+export type CollectorConfigStatus = 'pending' | 'applying' | 'applied' | 'failed' | 'drift';
+export type CollectorDataStatus = 'flowing' | 'stale' | 'no_data' | 'unknown';
+
+export interface LogRouteRuntimeTarget {
+  targetId: string;
+  targetName: string;
+  installationId: string;
+  instanceUid: string;
+  connectionStatus: CollectorConnectionStatus;
+  processStatus: CollectorProcessStatus;
+  configStatus: CollectorConfigStatus;
+  dataStatus: CollectorDataStatus;
+  blockingReason: string;
+  lastSeenAt: string;
+  lastLogAt: string;
+}
+
+export interface LogRouteRuntimeStatus {
+  expected: number;
+  registered: number;
+  online: number;
+  healthy: number;
+  converged: number;
+  flowing: number;
+  blockingReason: string;
+  targets: LogRouteRuntimeTarget[];
+}
+
+export interface LogRouteTargetRetryResult {
+  runtimeTargetId: string;
+  installationId: string;
+  rolloutId: string;
+  generation: number;
+  sent: boolean;
+  queued: boolean;
 }
 
 export interface SyncK8sServicesInput {
@@ -310,27 +319,30 @@ export interface LogRoutePublishResult {
   warnings: string[];
 }
 
-export interface VMInstallation {
-  routeId: string;
-  serviceId: string;
-  collectorConfigHash: string;
-  collectorYAML: string;
-  installScript: string;
-  healthAddressExample: string;
-  prerequisites: string[];
+export interface LogRouteRolloutTarget {
+  targetId: string;
+  installationId: string;
+  desiredConfigHash: string;
+  reportedConfigHash: string;
+  effectiveConfigHash: string;
+  status: string;
+  errorMessage: string;
+  reportedAt: string;
 }
 
-export interface VMAgentEndpoint {
-  id: string;
-  routeId: string;
-  serviceId: string;
-  name: string;
-  address: string;
+export interface LogRouteRolloutSummary {
+  rolloutId: string;
+  generation: number;
+  configHash: string;
+  rollbackOf: string;
+  createdBy: string;
+  createdAt: string;
   status: string;
-  lastProbeStatus: string;
-  lastProbeMessage: string;
-  lastProbeLatencyMs: number;
-  lastProbeAt: string;
+  expectedTargets: number;
+  convergedTargets: number;
+  failedTargets: number;
+  pendingTargets: number;
+  targets: LogRouteRolloutTarget[];
 }
 
 export interface LogRuntimePublishInput {
@@ -479,18 +491,11 @@ function mapSource(raw: any): LogSource {
     id: String(raw.id ?? ''),
     sourceType,
     clusterId: raw.cluster_id ?? raw.clusterId ?? '',
-    namespace: raw.namespace ?? '',
     agentNamespace: sourceType === 'k8s_stdout'
       ? normalizeLogsCollectorNamespace(raw.agent_namespace ?? raw.agentNamespace)
       : normalizeExistingLogsCollectorNamespace(raw.agent_namespace ?? raw.agentNamespace),
-    workloadKind: raw.workload_kind ?? raw.workloadKind ?? '',
-    workloadName: raw.workload_name ?? raw.workloadName ?? '',
-    hostGroup: raw.host_group ?? raw.hostGroup ?? '',
-    hostSelector: raw.host_selector ?? raw.hostSelector ?? {},
     pathPattern: raw.path_pattern ?? raw.pathPattern ?? '',
     parseRules: mapParseRules(raw.parse_rules ?? raw.parseRules),
-    collectorFragmentYAML: raw.collector_fragment_yaml ?? raw.collectorFragmentYAML ?? '',
-    collectorYAML: raw.custom_collector_yaml ?? raw.customCollectorYAML ?? '',
     collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
     deploymentManifestHash: raw.deployment_manifest_hash ?? raw.deploymentManifestHash ?? '',
   };
@@ -501,9 +506,9 @@ function mapRoute(raw: any): LogRoute {
     id: String(raw.id ?? ''),
     name: raw.name ?? '',
     serviceId: raw.service_id ?? raw.serviceId ?? '',
+    serviceDeploymentId: raw.service_deployment_id ?? raw.serviceDeploymentId ?? '',
     sourceId: raw.source_id ?? raw.sourceId ?? '',
     sourceType: raw.source_type ?? raw.sourceType ?? 'vm_file',
-    agentGroupId: raw.agent_group_id ?? raw.agentGroupId ?? '',
     endpointId: raw.endpoint_id ?? raw.endpointId ?? '',
     status: raw.status ?? '',
     collectorConfigHash: raw.collector_config_hash ?? raw.collectorConfigHash ?? '',
@@ -580,16 +585,6 @@ function mapTargetView(raw: any): LogTargetView {
 function mapWorkspace(raw: any): LogOnboardingWorkspace {
   return {
     services: Array.isArray(raw.services) ? raw.services.map(mapServiceSummary) : [],
-    collectorGroups: Array.isArray(raw.collector_groups ?? raw.collectorGroups) ? (raw.collector_groups ?? raw.collectorGroups).map((item: any) => ({
-      id: String(item.id ?? ''),
-      name: item.name ?? '',
-      displayName: item.display_name ?? item.displayName ?? '',
-      mode: item.mode ?? '',
-      cluster: item.cluster ?? '',
-      namespace: item.namespace ?? '',
-      status: item.status ?? '',
-      onlineInstances: item.online_instances ?? item.onlineInstances ?? 0,
-    })) : [],
     clusters: Array.isArray(raw.clusters) ? raw.clusters.map((item: any) => ({
       id: String(item.id ?? ''),
       name: item.name ?? '',
@@ -722,30 +717,30 @@ function mapRoutePublish(raw: any): LogRoutePublishResult {
   };
 }
 
-function mapVMInstallation(raw: any): VMInstallation {
+function mapRouteRolloutSummary(raw: any): LogRouteRolloutSummary {
+  const rollout = raw.rollout ?? {};
   return {
-    routeId: raw.route_id ?? raw.routeId ?? '',
-    serviceId: raw.service_id ?? raw.serviceId ?? '',
-    collectorConfigHash: raw.collector_config_hash ?? raw.config_hash ?? raw.collectorConfigHash ?? '',
-    collectorYAML: raw.collector_yaml ?? raw.collectorYAML ?? '',
-    installScript: raw.install_script ?? raw.installScript ?? '',
-    healthAddressExample: raw.health_address_example ?? raw.healthAddressExample ?? '',
-    prerequisites: Array.isArray(raw.prerequisites) ? raw.prerequisites.map(String) : [],
-  };
-}
-
-function mapVMAgentEndpoint(raw: any): VMAgentEndpoint {
-  return {
-    id: raw.id ?? '',
-    routeId: raw.route_id ?? raw.routeId ?? '',
-    serviceId: raw.service_id ?? raw.serviceId ?? '',
-    name: raw.name ?? '',
-    address: raw.address ?? '',
-    status: raw.status ?? '',
-    lastProbeStatus: raw.last_probe_status ?? raw.lastProbeStatus ?? '',
-    lastProbeMessage: raw.last_probe_message ?? raw.lastProbeMessage ?? '',
-    lastProbeLatencyMs: raw.last_probe_latency_ms ?? raw.latency_ms ?? raw.lastProbeLatencyMs ?? 0,
-    lastProbeAt: raw.last_probe_at ?? raw.lastProbeAt ?? '',
+    rolloutId: String(rollout.id ?? ''),
+    generation: Number(rollout.generation ?? 0),
+    configHash: String(rollout.config_hash ?? ''),
+    rollbackOf: String(rollout.rollback_of ?? ''),
+    createdBy: String(rollout.created_by ?? ''),
+    createdAt: String(rollout.created_at ?? ''),
+    status: String(raw.status ?? ''),
+    expectedTargets: Number(raw.expected_targets ?? 0),
+    convergedTargets: Number(raw.converged_targets ?? 0),
+    failedTargets: Number(raw.failed_targets ?? 0),
+    pendingTargets: Number(raw.pending_targets ?? 0),
+    targets: Array.isArray(raw.targets) ? raw.targets.map((target: any) => ({
+      targetId: String(target.runtime_target_id ?? ''),
+      installationId: String(target.installation_id ?? ''),
+      desiredConfigHash: String(target.desired_config_hash ?? ''),
+      reportedConfigHash: String(target.reported_config_hash ?? ''),
+      effectiveConfigHash: String(target.effective_config_hash ?? ''),
+      status: String(target.status ?? ''),
+      errorMessage: String(target.error_message ?? ''),
+      reportedAt: String(target.reported_at ?? ''),
+    })) : [],
   };
 }
 
@@ -849,27 +844,42 @@ function toRoutePayload(input: LogRouteInput) {
     route_id: input.routeId,
     name: input.name,
     service_id: input.serviceId,
+    service_deployment_id: input.serviceDeploymentId,
     source_type: input.sourceType,
-    agent_group_id: input.agentGroupId,
     endpoint_id: input.endpointId,
     k8s: isVM ? {} : {
-      cluster_id: input.k8s?.clusterId,
-      namespace: input.k8s?.namespace,
       agent_namespace: normalizeLogsCollectorNamespace(input.k8s?.agentNamespace),
-      workload_kind: input.k8s?.workloadKind,
-      workload_name: input.k8s?.workloadName,
-      workload_selector: input.k8s?.workloadSelector ?? {},
-      path_pattern: input.k8s?.pathPattern,
       parse_rules: toParseRulesPayload(input.k8s?.parseRules),
-      operators_yaml: input.k8s?.operatorsYAML ?? '',
-      collector_fragment_yaml: input.k8s?.collectorFragmentYAML ?? '',
     },
     vm: isVM ? {
-      host_group: input.vm?.hostGroup,
       path_pattern: input.vm?.pathPattern,
       parse_rules: toParseRulesPayload(input.vm?.parseRules),
-      collector_yaml: input.vm?.collectorYAML,
     } : {},
+  };
+}
+
+function mapRouteRuntimeStatus(raw: any): LogRouteRuntimeStatus {
+  return {
+    expected: Number(raw.expected ?? 0),
+    registered: Number(raw.registered ?? 0),
+    online: Number(raw.online ?? 0),
+    healthy: Number(raw.healthy ?? 0),
+    converged: Number(raw.converged ?? 0),
+    flowing: Number(raw.flowing ?? 0),
+    blockingReason: raw.blocking_reason ?? raw.blockingReason ?? '',
+    targets: Array.isArray(raw.targets) ? raw.targets.map((target: any) => ({
+      targetId: String(target.target_id ?? target.targetId ?? ''),
+      targetName: target.target_name ?? target.targetName ?? '',
+      installationId: String(target.installation_id ?? target.installationId ?? ''),
+      instanceUid: String(target.instance_uid ?? target.instanceUid ?? ''),
+      connectionStatus: target.connection_status ?? target.connectionStatus ?? 'offline',
+      processStatus: target.process_status ?? target.processStatus ?? 'unknown',
+      configStatus: target.config_status ?? target.configStatus ?? 'pending',
+      dataStatus: target.data_status ?? target.dataStatus ?? 'unknown',
+      blockingReason: target.blocking_reason ?? target.blockingReason ?? '',
+      lastSeenAt: target.last_seen_at ?? target.lastSeenAt ?? '',
+      lastLogAt: target.last_log_at ?? target.lastLogAt ?? '',
+    })) : [],
   };
 }
 
@@ -1060,6 +1070,13 @@ export const logsApi = {
   async getRouteCollectorConfig(routeId: string): Promise<LogRouteCollectorConfig> {
     return mapRouteCollectorConfig(await apiRequest<any>(`/logs/routes/${routeId}/collector-config`));
   },
+  async getRouteRuntimeStatus(routeId: string): Promise<LogRouteRuntimeStatus> {
+    return mapRouteRuntimeStatus(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/runtime-status`));
+  },
+  async getRouteRollouts(routeId: string): Promise<LogRouteRolloutSummary[]> {
+    const raw = await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/rollouts`);
+    return Array.isArray(raw) ? raw.map(mapRouteRolloutSummary) : [];
+  },
   async probeRoute(routeId: string): Promise<LogProbeResult> {
     const raw = await apiRequest<any>(`/logs/routes/${routeId}/probe`, { method: 'POST' });
     return {
@@ -1079,24 +1096,25 @@ export const logsApi = {
       }),
     }));
   },
-  async getVMInstallation(routeId: string): Promise<VMInstallation> {
-    return mapVMInstallation(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-installation`));
-  },
-  async listVMAgentEndpoints(routeId: string): Promise<VMAgentEndpoint[]> {
-    const raw = await apiRequest<any[] | null>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints`);
-    return Array.isArray(raw) ? raw.map(mapVMAgentEndpoint) : [];
-  },
-  async createVMAgentEndpoint(routeId: string, input: { name: string; address: string }): Promise<VMAgentEndpoint> {
-    return mapVMAgentEndpoint(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints`, {
+  async rollbackRoute(routeId: string, sourceRolloutId: string): Promise<LogRoutePublishResult> {
+    return mapRoutePublish(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/rollbacks`, {
       method: 'POST',
-      body: JSON.stringify({ name: input.name, address: input.address }),
+      body: JSON.stringify({ source_rollout_id: sourceRolloutId }),
     }));
   },
-  async probeVMAgentEndpoint(routeId: string, endpointId: string): Promise<VMAgentEndpoint> {
-    return mapVMAgentEndpoint(await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints/${encodeURIComponent(endpointId)}/probe`, { method: 'POST' }));
-  },
-  async deleteVMAgentEndpoint(routeId: string, endpointId: string): Promise<void> {
-    await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/vm-agent-endpoints/${encodeURIComponent(endpointId)}`, { method: 'DELETE' });
+  async retryRouteTarget(routeId: string, runtimeTargetId: string): Promise<LogRouteTargetRetryResult> {
+    const raw = await apiRequest<any>(`/logs/routes/${encodeURIComponent(routeId)}/retries`, {
+      method: 'POST',
+      body: JSON.stringify({ runtime_target_id: runtimeTargetId }),
+    });
+    return {
+      runtimeTargetId: String(raw.runtime_target_id ?? ''),
+      installationId: String(raw.installation_id ?? ''),
+      rolloutId: String(raw.rollout_id ?? ''),
+      generation: Number(raw.generation ?? 0),
+      sent: Boolean(raw.sent),
+      queued: Boolean(raw.queued),
+    };
   },
   async deleteRoute(routeId: string): Promise<void> {
     await apiRequest<any>(`/logs/routes/${routeId}`, { method: 'DELETE' });

@@ -36,6 +36,7 @@ import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPa
 import { PlatformLayout } from '../pages/platform/PlatformLayout';
 import { PlatformSettingsPage } from '../pages/platform/PlatformSettingsPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
+import { ServiceDeploymentTaskPage } from '../pages/services/ServiceDeploymentTaskPage';
 import { TracesPage } from '../pages/traces/TracesPage';
 
 export interface RouteDefinition {
@@ -128,6 +129,8 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/products/:productId/services', title: '产品服务', element: <ServicesPage /> },
   { path: '/products/:productId/integrations', title: '产品集成', element: <ServicesPage /> },
   { path: '/products/:productId/services/:serviceId', title: '服务详情', element: <ServicesPage /> },
+  { path: '/products/:productId/services/:serviceId/deployments/new', title: '新增服务部署', element: <ServiceDeploymentTaskPage /> },
+  { path: '/products/:productId/services/:serviceId/deployments/:deploymentId/edit', title: '编辑服务部署', element: <ServiceDeploymentTaskPage /> },
   { path: '/products/:productId/services/:serviceId/overview', title: '服务详情', element: <LegacyServiceSectionRedirect /> },
   { path: '/products/:productId/services/:serviceId/graph', title: '服务详情', element: <LegacyServiceSectionRedirect /> },
   { path: '/products/:productId/services/:serviceId/settings', title: '服务详情', element: <LegacyServiceSectionRedirect /> },

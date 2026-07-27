@@ -55,12 +55,13 @@ test('产品与服务采用产品服务树表、按需抽屉和可发现的危�
 });
 
 test('Agent 与 Logs 运行页面展示连续上下文和按需详情', () => {
-  assert.match(agentDetailPage, /console-detail-rail/);
-  assert.match(agentDetailPage, /console-audit-meta/);
+  assert.match(agentDetailPage, /连接状态/);
+  assert.match(agentDetailPage, /高级诊断/);
+  assert.match(agentDetailPage, /<details/);
   assert.match(logsAgentsPage, /console-workbench/);
-  assert.match(logsAgentsPage, /logs-route-selector/);
-  assert.match(logsAgentsPage, /路由详情/);
-  assert.match(logsAgentsPage, /route-context-drawer/);
+  assert.match(logsAgentsPage, /aria-label="采集路由"/);
+  assert.match(logsAgentsPage, /仅看异常/);
+  assert.match(logsAgentsPage, /查看配置/);
   assert.match(css, /\.console-drawer-panel/);
 });
 

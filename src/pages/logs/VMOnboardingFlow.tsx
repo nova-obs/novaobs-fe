@@ -1,47 +1,59 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, CheckCircle, Copy, Play, RefreshCw, Save, Search, Settings2, Server, XCircle } from 'lucide-react';
-import { logSinkLabel, logsApi, type LogParseRule, type LogRouteInput, type LogRoutePreview, type LogRouteView, type LogsServiceSummary, type VMAgentEndpoint } from './api';
-import { isCollectingRoute, routeLifecycle, serviceDisplayName, statusPillClass, type StatusTone } from './ServicePickerPanel';
-import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
-import { LogsErrorLine, LogsTaskPageHeader } from './LogsPrimitives';
+import { Copy, RefreshCw, RotateCcw, Server } from 'lucide-react';
+import { api } from '../../services/api';
+import type { CollectorEnrollmentCredential, CollectorInstallation } from '../../services/types';
+import {
+  logsApi,
+  type LogParseRule,
+  type LogRouteInput,
+  type LogRoutePreview,
+  type LogRoutePublishResult,
+  type LogRouteRuntimeTarget,
+} from './api';
+import { type ParserMode } from './LogsParseRuleDialog';
+import { LogsEmptyState, LogsErrorLine } from './LogsPrimitives';
+import { RouteEditor } from './LogsOnboardingPage';
 
-type VMStep = 1 | 2 | 3;
-
-const defaultParseSample = '{"level":"INFO","message":"service started"}';
 const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
 
-export function parseVMEndpointDraft(text: string): { items: Array<{ name: string; address: string }>; error: string } {
-  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
-  if (lines.length === 0) return { items: [], error: '请至少填写一个 VM 节点地址' };
-  const items: Array<{ name: string; address: string }> = [];
-  for (const [index, line] of lines.entries()) {
-    const parts = line.split(',').map((part) => part.trim());
-    if (parts.length > 2 || parts.some((part) => !part)) {
-      return { items: [], error: `第 ${index + 1} 行格式错误，请使用"名称,host:port"或仅填写 host:port` };
-    }
-    const address = parts.length === 2 ? parts[1] : parts[0];
-    if (!/^(?:\[[^\]]+\]|[^:\s]+):\d+$/.test(address)) {
-      return { items: [], error: `第 ${index + 1} 行地址格式错误，请填写 host:port` };
-    }
-    items.push({ name: parts.length === 2 ? parts[0] : address, address });
+export function validateHostLogPath(path: string, allowedLogRoots: string[]): string {
+  const value = path.trim();
+  if (!value.startsWith('/')) return '日志路径必须是绝对路径';
+  if (value.split('/').includes('..')) return '日志路径不能包含 ..';
+  const allowed = allowedLogRoots.some((root) => {
+    const normalizedRoot = root.trim().replace(/\/+$/, '');
+    return normalizedRoot && (value === normalizedRoot || value.startsWith(`${normalizedRoot}/`));
+  });
+  return allowed ? '' : '日志路径必须位于部署目标允许的日志根目录内';
+}
+
+interface CollectorEnrollmentClient {
+  getCollectorInstallations(): Promise<CollectorInstallation[]>;
+  createCollectorInstallation(input: { hostAssetId: string; agentRole?: string }): Promise<CollectorInstallation>;
+  issueCollectorEnrollmentToken(installationId: string): Promise<CollectorEnrollmentCredential>;
+}
+
+export async function issueHostEnrollmentToken(
+  client: CollectorEnrollmentClient,
+  hostAssetId: string,
+): Promise<CollectorEnrollmentCredential> {
+  const installations = await client.getCollectorInstallations();
+  const existing = installations.find((installation) =>
+    installation.hostAssetId === hostAssetId &&
+    installation.agentRole === 'logs_agent' &&
+    installation.status !== 'revoked',
+  );
+  if (existing?.status === 'active') {
+    throw new Error('该主机日志 Agent 已完成注册；如需更换凭据，请执行轮换安装凭据');
   }
-  return { items, error: '' };
-}
-
-function vmEndpointStatus(endpoint: VMAgentEndpoint) {
-  const value = (endpoint.lastProbeStatus || endpoint.status).toLowerCase();
-  if (['reachable', 'healthy', 'success', 'ok'].includes(value)) return { label: '可达', className: 'text-emerald-700' };
-  if (['unreachable', 'failed', 'failure', 'error'].includes(value)) return { label: '不可达', className: 'text-danger' };
-  return { label: '待校验', className: 'text-muted' };
-}
-
-function formatVMTime(value: string) {
-  if (!value) return '-';
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString('zh-CN', { hour12: false });
+  const installation = existing ?? await client.createCollectorInstallation({
+    hostAssetId,
+    agentRole: 'logs_agent',
+  });
+  return client.issueCollectorEnrollmentToken(installation.installationId);
 }
 
 function buildParserRules(mode: ParserMode, name: string, pattern: string): LogParseRule[] {
@@ -51,435 +63,316 @@ function buildParserRules(mode: ParserMode, name: string, pattern: string): LogP
 
 export function VMOnboardingFlow() {
   const queryClient = useQueryClient();
-  const { productId = '', serviceId: pathServiceId = '' } = useParams();
-
-  const [currentStep, setCurrentStep] = useState<VMStep>(1);
-  const [serviceId, setServiceId] = useState(pathServiceId);
-  const [hostGroup, setHostGroup] = useState('');
-  const [serviceQuery, setServiceQuery] = useState('');
-  const [logPath, setLogPath] = useState('');
+  const { productId = '', serviceId = '', id: editRouteId = '' } = useParams();
+  const [deploymentId, setDeploymentId] = useState('');
   const [endpointId, setEndpointId] = useState('');
+  const [logPath, setLogPath] = useState('');
   const [parserMode, setParserMode] = useState<ParserMode>('none');
   const [parserRuleName, setParserRuleName] = useState(defaultParserRuleName);
   const [parserPattern, setParserPattern] = useState(defaultParserPattern);
-  const [parserDraftMode, setParserDraftMode] = useState<ParserMode>('none');
-  const [parserDraftRuleName, setParserDraftRuleName] = useState(defaultParserRuleName);
-  const [parserDraftPattern, setParserDraftPattern] = useState(defaultParserPattern);
   const [parseDialogOpen, setParseDialogOpen] = useState(false);
-  const [parseSample, setParseSample] = useState(defaultParseSample);
   const [preview, setPreview] = useState<LogRoutePreview | null>(null);
-  const [createdRoute, setCreatedRoute] = useState<LogRouteView | null>(null);
-  const [vmEndpointDraft, setVMEndpointDraft] = useState('');
-  const [vmEndpointDraftError, setVMEndpointDraftError] = useState('');
+  const [savedRouteId, setSavedRouteId] = useState(editRouteId);
+  const [publishConfirmation, setPublishConfirmation] = useState<LogRoutePublishResult | null>(null);
+  const [enrollment, setEnrollment] = useState<CollectorEnrollmentCredential | null>(null);
 
-  const { data: workspace, isLoading, error, refetch } = useQuery({
-    queryKey: ['logs-onboarding-workspace', productId, pathServiceId],
-    queryFn: () => logsApi.getWorkspace(productId, pathServiceId),
-    enabled: Boolean(productId && pathServiceId),
+  const workspaceQuery = useQuery({
+    queryKey: ['logs-onboarding-workspace', productId, serviceId],
+    queryFn: () => logsApi.getWorkspace(productId, serviceId),
+    enabled: Boolean(productId && serviceId),
   });
+  const deploymentsQuery = useQuery({
+    queryKey: ['service-deployments', productId, serviceId],
+    queryFn: () => api.getServiceDeployments(productId, serviceId),
+    enabled: Boolean(productId && serviceId),
+  });
+  const serviceQuery = useQuery({
+    queryKey: ['service', productId, serviceId],
+    queryFn: () => api.getService(productId, serviceId),
+    enabled: Boolean(productId && serviceId),
+  });
+  const deployments = useMemo(
+    () => (deploymentsQuery.data ?? []).filter((deployment) => deployment.kind === 'host_set' && deployment.status === 'active'),
+    [deploymentsQuery.data],
+  );
+  const selectedDeployment = deployments.find((deployment) => deployment.id === deploymentId) ?? null;
+  const endpoints = useMemo(
+    () => (workspaceQuery.data?.endpoints ?? []).filter((endpoint) => endpoint.scopeType !== 'k8s_cluster'),
+    [workspaceQuery.data?.endpoints],
+  );
+  const editRoute = workspaceQuery.data?.routes.find((item) => item.route.id === editRouteId) ?? null;
 
-  const services = workspace?.services ?? [];
-  const endpoints = workspace?.endpoints ?? [];
-  const routes = workspace?.routes ?? [];
-
-  const vmServices = services;
-  const vmEndpoints = useMemo(() => endpoints.filter((e) => e.scopeType !== 'k8s_cluster'), [endpoints]);
-  const filteredServices = useMemo(() => {
-    const q = serviceQuery.trim().toLowerCase();
-    if (!q) return vmServices;
-    return vmServices.filter((s) => `${s.name} ${s.key} ${s.ownerTeam}`.toLowerCase().includes(q));
-  }, [vmServices, serviceQuery]);
-
-  const serviceRoutesByService = useMemo(() => {
-    const grouped = new Map<string, LogRouteView[]>();
-    for (const route of routes) {
-      if (route.route.sourceType !== 'vm_file') continue;
-      const items = grouped.get(route.route.serviceId) ?? [];
-      grouped.set(route.route.serviceId, [...items, route]);
+  useEffect(() => {
+    if (editRoute?.route.serviceDeploymentId && deployments.some((deployment) => deployment.id === editRoute.route.serviceDeploymentId)) {
+      setDeploymentId(editRoute.route.serviceDeploymentId);
+      setEndpointId(editRoute.route.endpointId);
+      setLogPath(editRoute.source?.pathPattern ?? '');
+      const parser = editRoute.source?.parseRules.find((rule) => rule.enabled !== false);
+      setParserMode(parser?.ruleType ?? 'none');
+      setParserRuleName(parser?.name || defaultParserRuleName);
+      setParserPattern(parser?.pattern || defaultParserPattern);
+      return;
     }
-    return grouped;
-  }, [routes]);
+    setDeploymentId((current) => deployments.some((deployment) => deployment.id === current) ? current : deployments[0]?.id ?? '');
+  }, [deployments, editRoute]);
 
-  const service = vmServices.find((s) => s.id === serviceId) ?? null;
-  const vmRouteId = createdRoute?.route.id || '';
-  const parseRules = useMemo(() => buildParserRules(parserMode, parserRuleName, parserPattern), [parserMode, parserRuleName, parserPattern]);
+  useEffect(() => {
+    setEndpointId((current) => endpoints.some((endpoint) => endpoint.id === current) ? current : endpoints[0]?.id ?? '');
+  }, [deploymentId, endpoints]);
+
+  useEffect(() => {
+    setPreview(null);
+    setPublishConfirmation(null);
+  }, [deploymentId, endpointId, logPath, parserMode, parserRuleName, parserPattern]);
+
+  const pathError = selectedDeployment ? validateHostLogPath(logPath, selectedDeployment.allowedLogRoots) : '';
   const parseValid = parserMode !== 'regex' || parserPattern.includes('?P<');
-  const canProceedStep1 = Boolean(serviceId && hostGroup.trim() && logPath && endpointId);
-  const canPreview = canProceedStep1 && parseValid;
-  const parseDraftValid = parserDraftMode !== 'regex' || parserDraftPattern.includes('?P<');
-  const selectedServiceLabel = service?.name || '-';
-
-  const vmInstallationQuery = useQuery({
-    queryKey: ['logs-vm-installation', vmRouteId],
-    queryFn: () => logsApi.getVMInstallation(vmRouteId),
-    enabled: Boolean(vmRouteId),
-    retry: false,
+  const buildInput = (): LogRouteInput => ({
+    routeId: savedRouteId || undefined,
+    name: serviceQuery.data?.name,
+    serviceId,
+    serviceDeploymentId: deploymentId,
+    sourceType: 'vm_file',
+    endpointId,
+    vm: {
+      pathPattern: logPath.trim(),
+      parseRules: buildParserRules(parserMode, parserRuleName, parserPattern),
+    },
   });
-
-  const vmAgentEndpointsQuery = useQuery({
-    queryKey: ['logs-vm-agent-endpoints', vmRouteId],
-    queryFn: () => logsApi.listVMAgentEndpoints(vmRouteId),
-    enabled: Boolean(vmRouteId),
-    retry: false,
-  });
-
-  function buildRouteInput(): LogRouteInput {
-    return {
-      name: service?.name,
-      routeId: createdRoute?.route.id || undefined,
-      serviceId,
-      sourceType: 'vm_file',
-      agentGroupId: '',
-      endpointId,
-      k8s: {},
-      vm: { hostGroup: hostGroup.trim(), pathPattern: logPath, parseRules },
-    };
-  }
+  const canPreview = Boolean(selectedDeployment && endpointId && logPath.trim() && !pathError && parseValid);
 
   const previewMutation = useMutation({
-    mutationFn: () => logsApi.previewRoute(buildRouteInput()),
-    onSuccess: (result) => {
-      setPreview(result);
-      createRouteMutation.mutate();
-    },
+    mutationFn: () => logsApi.previewRoute(buildInput()),
+    onSuccess: setPreview,
   });
-
-  const createRouteMutation = useMutation({
-    mutationFn: () => {
-      const input = buildRouteInput();
-      if (createdRoute?.route.id) {
-        return logsApi.updateRoute(createdRoute.route.id, input);
-      }
-      return logsApi.createRoute(input);
-    },
-    onSuccess: async (created) => {
-      setCreatedRoute(created);
-      setCurrentStep(3);
+  const saveMutation = useMutation({
+    mutationFn: () => savedRouteId
+      ? logsApi.updateRoute(savedRouteId, buildInput())
+      : logsApi.createRoute(buildInput()),
+    onSuccess: async (result) => {
+      setSavedRouteId(result.route.id);
+      setPublishConfirmation(null);
       await queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
     },
   });
-
-  const draftParseRules = useMemo(() => buildParserRules(parserDraftMode, parserDraftRuleName, parserDraftPattern), [parserDraftMode, parserDraftRuleName, parserDraftPattern]);
-
-  const parsePreviewMutation = useMutation({
-    mutationFn: async () => {
-      if (parserDraftMode === 'regex' && !parserDraftPattern.includes('?P<')) {
-        return { status: 'error' as const, fields: {} as Record<string, unknown>, warnings: [] as string[], errors: ['Regex 需要使用命名捕获组，例如 (?P<level>INFO)。'] };
-      }
-      return logsApi.previewParseRules(parseSample, draftParseRules);
+  const publishMutation = useMutation({
+    mutationFn: () => logsApi.publishRoute(savedRouteId, publishConfirmation?.requiresConfirmation ? {
+      previewId: publishConfirmation.previewId,
+      confirmationToken: publishConfirmation.confirmationToken,
+    } : undefined),
+    onSuccess: (result) => {
+      setPublishConfirmation(result.requiresConfirmation ? result : null);
+      void queryClient.invalidateQueries({ queryKey: ['logs-route-runtime', savedRouteId] });
+      void queryClient.invalidateQueries({ queryKey: ['logs-route-rollouts', savedRouteId] });
+    },
+  });
+  const runtimeQuery = useQuery({
+    queryKey: ['logs-route-runtime', savedRouteId],
+    queryFn: () => logsApi.getRouteRuntimeStatus(savedRouteId),
+    enabled: Boolean(savedRouteId),
+    refetchInterval: 10000,
+  });
+  const rolloutsQuery = useQuery({
+    queryKey: ['logs-route-rollouts', savedRouteId],
+    queryFn: () => logsApi.getRouteRollouts(savedRouteId),
+    enabled: Boolean(savedRouteId),
+  });
+  const rollbackMutation = useMutation({
+    mutationFn: (sourceRolloutId: string) => logsApi.rollbackRoute(savedRouteId, sourceRolloutId),
+    onSuccess: () => {
+      setPublishConfirmation(null);
+      void queryClient.invalidateQueries({ queryKey: ['logs-route-runtime', savedRouteId] });
+      void queryClient.invalidateQueries({ queryKey: ['logs-route-rollouts', savedRouteId] });
+      void queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] });
+    },
+  });
+  const retryMutation = useMutation({
+    mutationFn: (runtimeTargetId: string) => logsApi.retryRouteTarget(savedRouteId, runtimeTargetId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['logs-route-runtime', savedRouteId] });
+      void queryClient.invalidateQueries({ queryKey: ['logs-route-rollouts', savedRouteId] });
+    },
+  });
+  const createEnrollmentMutation = useMutation({
+    mutationFn: (target: LogRouteRuntimeTarget) => issueHostEnrollmentToken(api, target.targetId),
+    onSuccess: (credential) => {
+      setEnrollment(credential);
+      void runtimeQuery.refetch();
     },
   });
 
-  const createVMEndpointsMutation = useMutation({
-    mutationFn: async (items: Array<{ name: string; address: string }>) => {
-      if (!vmRouteId) throw new Error('请先保存 VM 路由');
-      const settled = await Promise.allSettled(items.map((item) => logsApi.createVMAgentEndpoint(vmRouteId, item)));
-      return {
-        succeeded: settled.filter((r) => r.status === 'fulfilled').length,
-        failed: settled.flatMap((r, i) => r.status === 'rejected' ? [{ item: items[i], reason: r.reason }] : []),
-      };
-    },
-    onSuccess: async (result) => {
-      await queryClient.invalidateQueries({ queryKey: ['logs-vm-agent-endpoints', vmRouteId] });
-      if (result.failed.length === 0) {
-        setVMEndpointDraft('');
-        setVMEndpointDraftError('');
-        return;
-      }
-      setVMEndpointDraft(result.failed.map(({ item }) => item.name === item.address ? item.address : `${item.name},${item.address}`).join('\n'));
-      const msg = result.failed[0]?.reason instanceof Error ? result.failed[0].reason.message : '节点登记失败';
-      setVMEndpointDraftError(`已登记 ${result.succeeded} 个节点，${result.failed.length} 个失败：${msg}`);
-    },
-  });
-
-  const probeVMEndpointMutation = useMutation({
-    mutationFn: (epId: string) => {
-      if (!vmRouteId) throw new Error('请先保存 VM 路由');
-      return logsApi.probeVMAgentEndpoint(vmRouteId, epId);
-    },
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['logs-vm-agent-endpoints', vmRouteId] }),
-  });
-
-  const deleteVMEndpointMutation = useMutation({
-    mutationFn: (epId: string) => {
-      if (!vmRouteId) throw new Error('请先保存 VM 路由');
-      return logsApi.deleteVMAgentEndpoint(vmRouteId, epId);
-    },
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ['logs-vm-agent-endpoints', vmRouteId] }),
-  });
-
-  useEffect(() => {
-    if (parseDialogOpen) {
-      parsePreviewMutation.reset();
-    }
-  }, [parseDialogOpen, parseSample, parserDraftMode, parserDraftRuleName, parserDraftPattern]);
-
-  function openParseDialog() {
-    setParserDraftMode(parserMode);
-    setParserDraftRuleName(parserRuleName);
-    setParserDraftPattern(parserPattern);
-    setParseDialogOpen(true);
-  }
-
-  function applyParseDraft() {
-    if (!parseDraftValid) return;
-    setParserMode(parserDraftMode);
-    setParserRuleName(parserDraftRuleName);
-    setParserPattern(parserDraftPattern);
-    setParseDialogOpen(false);
-  }
-
-  function submitVMEndpointDraft() {
-    const parsed = parseVMEndpointDraft(vmEndpointDraft);
-    if (parsed.error) {
-      setVMEndpointDraftError(parsed.error);
-      return;
-    }
-    setVMEndpointDraftError('');
-    createVMEndpointsMutation.mutate(parsed.items);
-  }
-
-  function probeAll() {
-    const eps = vmAgentEndpointsQuery.data ?? [];
-    for (const ep of eps) {
-      probeVMEndpointMutation.mutate(ep.id);
-    }
-  }
-
-  if (error) {
-    return (
-      <div className="logs-task-page space-y-3">
-        <LogsTaskPageHeader title="VM 日志接入" />
-        <LogsErrorLine message={(error as Error).message} />
-        <button className="console-button console-button-primary" onClick={() => refetch()}>重试</button>
-      </div>
-    );
-  }
-
-  const stepItems: Array<{ step: VMStep; label: string; done: boolean }> = [
-    { step: 1, label: '基础信息', done: canProceedStep1 },
-    { step: 2, label: '解析配置', done: Boolean(preview) },
-    { step: 3, label: '安装部署', done: Boolean(vmRouteId && (vmAgentEndpointsQuery.data?.length ?? 0) > 0) },
-  ];
+  const error = workspaceQuery.error ?? deploymentsQuery.error ?? serviceQuery.error;
+  if (error) return <div className="p-3"><LogsErrorLine message={(error as Error).message} /></div>;
 
   return (
-    <div className="logs-task-page flex h-full min-h-[720px] min-w-0 flex-col overflow-hidden">
-      <LogsTaskPageHeader
-        title="VM 日志接入"
-        description="三步完成 VM 日志采集配置"
-        action={
-          <Link className="console-button h-8" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(pathServiceId)}/logs/agents`}>退出</Link>
-        }
+    <div className="space-y-3">
+      <RouteEditor
+        kind="host_set"
+        deployments={deployments}
+        selectedDeployment={selectedDeployment}
+        deploymentId={deploymentId}
+        onDeploymentChange={setDeploymentId}
+        endpointId={endpointId}
+        onEndpointChange={setEndpointId}
+        endpoints={endpoints}
+        parserMode={parserMode}
+        parserRuleName={parserRuleName}
+        parserPattern={parserPattern}
+        onParserModeChange={setParserMode}
+        onParserRuleNameChange={setParserRuleName}
+        onParserPatternChange={setParserPattern}
+        parseDialogOpen={parseDialogOpen}
+        onParseDialogOpenChange={setParseDialogOpen}
+        preview={preview}
+        canPreview={canPreview}
+        previewMutation={previewMutation}
+        saveMutation={saveMutation}
+        savedRouteId={savedRouteId}
+        publishMutation={publishMutation}
+        publishConfirmation={publishConfirmation}
+        extraConfig={(
+          <label className="block text-xs font-semibold">
+            日志路径 *
+            <input
+              className={`console-input mt-1.5 w-full font-mono ${pathError && logPath ? 'border-danger' : ''}`}
+              value={logPath}
+              onChange={(event) => setLogPath(event.target.value)}
+              placeholder={selectedDeployment?.allowedLogRoots[0] ? `${selectedDeployment.allowedLogRoots[0]}/*.log` : '/data/logs/*.log'}
+            />
+            {pathError && logPath ? <span className="mt-1 block font-normal text-danger">{pathError}</span> : null}
+          </label>
+        )}
       />
-      <div className="mt-3 grid min-h-0 min-w-0 flex-1 gap-3 overflow-hidden xl:grid-cols-[220px_minmax(0,1fr)]">
-        <aside className="min-w-0 rounded-lg border border-outline bg-surface-lowest p-3 xl:sticky xl:top-0 xl:h-fit">
-          <div className="space-y-2">
-            {stepItems.map((item) => {
-              const active = currentStep === item.step;
-              return (
-                <button key={item.step} className={`w-full rounded-md border px-3 py-2.5 text-left transition-colors ${active ? 'border-primary bg-primary-soft text-on-surface shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : item.done ? 'border-outline bg-white text-on-surface hover:border-primary/30 hover:bg-primary-soft/45' : 'border-outline bg-white text-muted hover:bg-surface-low/65'}`} onClick={() => setCurrentStep(item.step)}>
-                  <div className="flex items-center gap-2.5">
-                    <span className={`inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full border text-[11px] font-semibold ${item.done ? 'border-primary bg-primary text-white' : active ? 'border-primary bg-white text-primary' : 'border-outline bg-white text-muted'}`}>
-                      {item.done ? <CheckCircle className="h-3.5 w-3.5" /> : item.step}
-                    </span>
-                    <span className="text-sm font-semibold">{item.label}</span>
-                  </div>
-                </button>
-              );
-            })}
+
+      {savedRouteId ? (
+        <section className="rounded-md border border-outline bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-outline px-3 py-2.5">
+            <div>
+              <h2 className="text-sm font-semibold">主机覆盖与安装</h2>
+              <p className="mt-1 text-xs text-muted">每台主机只安装一个 OpAMP Supervisor，由它托管本机日志 Collector。</p>
+            </div>
+            <button className="console-icon-button" aria-label="刷新主机覆盖" title="刷新" onClick={() => runtimeQuery.refetch()}>
+              <RefreshCw className={`h-3.5 w-3.5 ${runtimeQuery.isFetching ? 'animate-spin' : ''}`} />
+            </button>
           </div>
-        </aside>
-
-        <div className="flex min-h-0 min-w-0 flex-col gap-3 overflow-auto">
-          {currentStep === 1 && (
+          {runtimeQuery.error ? <div className="p-3"><LogsErrorLine message={(runtimeQuery.error as Error).message} /></div> : runtimeQuery.isLoading ? (
+            <div className="console-skeleton m-3 h-28" />
+          ) : !runtimeQuery.data ? <LogsEmptyState title="尚无运行目标" /> : (
             <>
-              <section className="overflow-hidden rounded-lg border border-outline bg-surface-lowest">
-                <div className="border-b border-outline bg-white px-3 py-3"><h3 className="text-sm font-semibold text-on-surface">选择服务</h3></div>
-                <div className="logs-service-picker-panel relative flex min-h-[320px] flex-col overflow-hidden bg-surface-lowest">
-                  <div className="flex border-b border-outline bg-surface-lowest px-3 py-3">
-                    <div className="relative min-w-0 flex-1">
-                      <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-                      <input className="console-input h-9 w-full pl-8 text-sm" value={serviceQuery} onChange={(e) => setServiceQuery(e.target.value)} placeholder="搜索服务" />
-                    </div>
-                  </div>
-                  <div className="min-h-0 flex-1 overflow-auto">
-                    {filteredServices.length === 0 ? (
-                      <div className="flex items-center gap-2 py-6 px-3 text-sm text-muted"><Server className="h-4 w-4" />暂无匹配服务</div>
-                    ) : (
-                      <table className="console-table min-w-[680px] w-full">
-                        <thead><tr><th>服务</th><th>服务 Key</th><th>状态</th><th>Owner</th><th>操作</th></tr></thead>
-                        <tbody>{filteredServices.map((s) => {
-                          const sRoutes = serviceRoutesByService.get(s.id) ?? [];
-                          const lifecycle = sRoutes.length > 0 ? routeLifecycle(sRoutes[0]) : null;
-                          const selected = s.id === serviceId;
-                          return (
-                            <tr key={s.id} role="button" tabIndex={0} className={`cursor-pointer ${selected ? 'console-selected-row' : ''}`} onClick={() => setServiceId(s.id)} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setServiceId(s.id); } }}>
-                              <td><div className="truncate font-semibold text-on-surface">{serviceDisplayName(s)}</div></td>
-                              <td className="font-mono text-xs text-muted">{s.key || '-'}</td>
-                              <td>{lifecycle ? <span className={`inline-flex items-center gap-1.5 rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(lifecycle.tone)}`}>{lifecycle.label}</span> : <span className="text-xs text-muted">未接入</span>}</td>
-                              <td className="text-xs text-muted">{s.ownerTeam || '-'}</td>
-                              <td><span className={`text-xs font-semibold ${selected ? 'text-primary' : 'text-muted'}`}>{selected ? '已选择' : '选择'}</span></td>
-                            </tr>
-                          );
-                        })}</tbody>
-                      </table>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              <section className="rounded-lg border border-outline bg-surface-lowest">
-                <div className="border-b border-outline bg-white px-3 py-3"><h3 className="text-sm font-semibold text-on-surface">主机来源</h3></div>
-                <div className="p-3"><label className="text-xs font-semibold text-muted">主机组<input className="console-input mt-1.5 w-full font-mono" value={hostGroup} onChange={(event) => setHostGroup(event.target.value)} placeholder="billing-vms" /></label></div>
-              </section>
-
-              <section className="rounded-lg border border-outline bg-surface-lowest">
-                <div className="border-b border-outline bg-white px-3 py-3"><h3 className="text-sm font-semibold text-on-surface">日志路径</h3></div>
-                <div className="p-3"><input className="console-input w-full font-mono" value={logPath} onChange={(e) => setLogPath(e.target.value)} placeholder="/data/logs/*.log" /></div>
-              </section>
-
-              <section className="rounded-lg border border-outline bg-surface-lowest">
-                <div className="border-b border-outline bg-white px-3 py-3"><h3 className="text-sm font-semibold text-on-surface">日志下游端点</h3></div>
-                <div className="grid gap-2 p-3 sm:grid-cols-2">
-                  {vmEndpoints.length === 0 ? (
-                    <div className="flex items-center gap-2 py-4 text-sm text-muted"><Server className="h-4 w-4" />暂无可用端点</div>
-                  ) : vmEndpoints.map((ep) => (
-                    <button key={ep.id} className={`w-full rounded-lg border px-3 py-3 text-left transition-all ${ep.id === endpointId ? 'border-primary bg-primary-soft text-on-surface shadow-[inset_3px_0_0_rgba(13,91,215,0.78)]' : 'border-outline bg-white text-on-surface hover:border-primary/30'}`} onClick={() => setEndpointId(ep.id)}>
-                      <div className="text-sm font-semibold">{ep.name}</div>
-                      <div className="mt-1 truncate font-mono text-[11px] text-muted">{logSinkLabel(ep.sinkType)} · {ep.writeURL || '-'}</div>
-                    </button>
-                  ))}
-                </div>
-              </section>
-
-              <div className="flex justify-end py-2">
-                <button className="console-button console-button-primary h-9" disabled={!canProceedStep1} onClick={() => setCurrentStep(2)}>
-                  下一步：解析配置
-                </button>
+              {runtimeQuery.data.expected === 0 ? (
+                <div className="console-notice console-notice-danger m-3">部署目标没有预期主机，发布会被阻断。</div>
+              ) : null}
+              <div className="overflow-x-auto">
+                <table className="console-table min-w-[860px] w-full">
+                  <thead><tr><th>主机</th><th>安装</th><th>连接</th><th>进程</th><th>配置</th><th>数据</th><th className="text-right">操作</th></tr></thead>
+                  <tbody>{runtimeQuery.data.targets.map((target) => (
+                    <tr key={target.targetId}>
+                      <td><div className="font-semibold">{target.targetName || target.targetId}</div><div className="mt-1 font-mono text-[11px] text-muted">{target.targetId}</div></td>
+                      <td>{target.installationId ? '已注册' : '未安装'}</td>
+                      <td><RuntimeState value={target.connectionStatus} /></td>
+                      <td><RuntimeState value={target.processStatus} /></td>
+                      <td><RuntimeState value={target.configStatus} /></td>
+                      <td><RuntimeState value={target.dataStatus} /></td>
+                      <td className="text-right">
+                        {!target.installationId ? (
+                          <button className="console-button" disabled={createEnrollmentMutation.isPending} onClick={() => createEnrollmentMutation.mutate(target)}>签发安装令牌</button>
+                        ) : (
+                          <div className="flex justify-end gap-2">
+                            {['failed', 'drift'].includes(target.configStatus) ? (
+                              <button className="console-button" disabled={retryMutation.isPending} onClick={() => retryMutation.mutate(target.targetId)}>重试</button>
+                            ) : null}
+                            {target.instanceUid ? <Link className="text-xs font-semibold text-primary hover:underline" to={`/agents/${encodeURIComponent(target.instanceUid)}`}>诊断</Link> : null}
+                          </div>
+                        )}
+                      </td>
+                    </tr>
+                  ))}</tbody>
+                </table>
               </div>
             </>
           )}
+        </section>
+      ) : null}
 
-          {currentStep === 2 && (
-            <>
-              <section className="rounded-lg border border-outline bg-surface-lowest">
-                <div className="border-b border-outline bg-white px-3 py-3"><h3 className="text-sm font-semibold text-on-surface">日志解析规则</h3></div>
-                <div className="p-4">
-                  <dl className="grid gap-3 rounded border border-outline bg-white p-3 text-xs sm:grid-cols-2">
-                    <div><dt className="font-semibold text-muted">日志路径</dt><dd className="mt-1 break-all font-mono text-on-surface">{logPath || '-'}</dd></div>
-                    <div><dt className="font-semibold text-muted">解析方式</dt><dd className="mt-1 text-on-surface">{parserMode === 'none' ? '不解析' : parserMode === 'json' ? 'JSON' : 'Regex'}</dd></div>
-                  </dl>
-                  <button className="mt-4 inline-flex h-8 items-center justify-center gap-2 rounded-lg border border-primary bg-white px-3 text-xs font-semibold text-primary transition-all active:translate-y-px" onClick={openParseDialog}><Settings2 className="h-3.5 w-3.5" />配置解析规则</button>
-                </div>
-              </section>
-              {previewMutation.error ? <LogsErrorLine message={(previewMutation.error as Error).message} /> : null}
-              {createRouteMutation.error ? <LogsErrorLine message={(createRouteMutation.error as Error).message} /> : null}
-              <div className="flex items-center justify-between py-2">
-                <button className="console-button h-9" onClick={() => setCurrentStep(1)}>上一步</button>
-                <button className="console-button console-button-primary h-9" disabled={!canPreview || previewMutation.isPending || createRouteMutation.isPending} onClick={() => previewMutation.mutate()}>
-                  {(previewMutation.isPending || createRouteMutation.isPending) ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Play className="h-4 w-4" />}
-                  生成预览并保存
-                </button>
-              </div>
-            </>
+      {savedRouteId ? (
+        <section className="rounded-md border border-outline bg-white">
+          <div className="flex items-center justify-between gap-3 border-b border-outline px-3 py-2.5">
+            <div>
+              <h2 className="text-sm font-semibold">发布历史</h2>
+              <p className="mt-1 text-xs text-muted">回滚会复用历史产物创建新 generation，不会修改旧发布记录。</p>
+            </div>
+            <button className="console-icon-button" aria-label="刷新发布历史" title="刷新" onClick={() => rolloutsQuery.refetch()}>
+              <RefreshCw className={`h-3.5 w-3.5 ${rolloutsQuery.isFetching ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+          {rolloutsQuery.error ? <div className="p-3"><LogsErrorLine message={(rolloutsQuery.error as Error).message} /></div> : rolloutsQuery.isLoading ? (
+            <div className="console-skeleton m-3 h-24" />
+          ) : !rolloutsQuery.data?.length ? <LogsEmptyState title="尚无发布记录" /> : (
+            <div className="overflow-x-auto">
+              <table className="console-table min-w-[760px] w-full">
+                <thead><tr><th>Generation</th><th>状态</th><th>目标收敛</th><th>发布时间</th><th>来源</th><th className="text-right">操作</th></tr></thead>
+                <tbody>{rolloutsQuery.data.map((rollout, index) => (
+                  <tr key={rollout.rolloutId}>
+                    <td><div className="font-semibold">#{rollout.generation}</div><div className="mt-1 max-w-48 truncate font-mono text-[11px] text-muted">{rollout.rolloutId}</div></td>
+                    <td><RuntimeState value={rollout.status} /></td>
+                    <td>{rollout.convergedTargets} / {rollout.expectedTargets}</td>
+                    <td>{rollout.createdAt ? new Date(rollout.createdAt).toLocaleString() : '-'}</td>
+                    <td>{rollout.rollbackOf ? `回滚自 #${rollout.rollbackOf.slice(-6)}` : '发布'}</td>
+                    <td className="text-right">
+                      {index === 0 ? <span className="text-xs text-muted">当前期望</span> : (
+                        <button
+                          className="console-button"
+                          disabled={rollbackMutation.isPending}
+                          onClick={() => rollbackMutation.mutate(rollout.rolloutId)}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />回滚到此版本
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
           )}
+        </section>
+      ) : null}
 
-          {currentStep === 3 && (
-            <>
-              <section className="rounded-lg border border-outline bg-surface-lowest">
-                <div className="border-b border-outline bg-white px-3 py-3"><h3 className="text-sm font-semibold text-on-surface">安装脚本</h3></div>
-                {vmInstallationQuery.isLoading ? <div className="h-32 animate-pulse bg-surface" /> : vmInstallationQuery.error ? (
-                  <LogsErrorLine message={(vmInstallationQuery.error as Error).message || '安装材料加载失败'} />
-                ) : vmInstallationQuery.data ? (
-                  <div className="space-y-3 p-3">
-                    {[{ title: '安装脚本', content: vmInstallationQuery.data.installScript }, { title: 'Collector 配置', content: vmInstallationQuery.data.collectorYAML }].map((block) => (
-                      <div key={block.title} className="overflow-hidden rounded border border-outline bg-white">
-                        <div className="flex items-center justify-between gap-3 border-b border-outline bg-surface px-3 py-2">
-                          <div className="text-xs font-semibold">{block.title}</div>
-                          <button className="console-icon-button" onClick={() => navigator.clipboard?.writeText(block.content)} title={`复制${block.title}`}><Copy className="h-4 w-4" /></button>
-                        </div>
-                        <pre className="max-h-64 min-h-32 overflow-auto p-3 font-mono text-[11px] leading-5 whitespace-pre-wrap">{block.content || '暂无内容'}</pre>
-                      </div>
-                    ))}
-                  </div>
-                ) : <div className="flex items-center gap-2 px-3 py-6 text-sm text-muted"><Server className="h-4 w-4" />请先保存路由以获取安装材料</div>}
-              </section>
-
-              <section className="rounded-lg border border-outline bg-surface-lowest">
-                <div className="border-b border-outline bg-white px-3 py-3">
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-sm font-semibold text-on-surface">VM 节点</h3>
-                    <button className="console-button console-button-sm" disabled={!vmRouteId || !(vmAgentEndpointsQuery.data?.length)} onClick={probeAll}>全部校验</button>
-                  </div>
-                </div>
-                <div className="p-3 space-y-3">
-                  <div className="grid gap-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:items-end">
-                    <label className="text-xs font-semibold text-muted">批量录入<textarea className="console-input mt-1.5 min-h-20 w-full resize-y font-mono text-xs" value={vmEndpointDraft} onChange={(e) => { setVMEndpointDraft(e.target.value); setVMEndpointDraftError(''); }} placeholder={'192.168.1.10:13133\nnode-02,10.0.0.9:13133'} /></label>
-                    <button className="console-button console-button-primary h-9" disabled={createVMEndpointsMutation.isPending || !vmEndpointDraft.trim() || !vmRouteId} onClick={submitVMEndpointDraft}>
-                      {createVMEndpointsMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : null}登记节点
-                    </button>
-                  </div>
-                  {vmEndpointDraftError ? <div className="text-xs font-semibold text-danger">{vmEndpointDraftError}</div> : null}
-                  {[createVMEndpointsMutation.error, probeVMEndpointMutation.error, deleteVMEndpointMutation.error].filter(Boolean).map((err, i) => <LogsErrorLine key={i} message={(err as Error).message} />)}
-                  <div className="overflow-hidden rounded border border-outline bg-white">
-                    {vmAgentEndpointsQuery.isLoading ? <div className="h-24 animate-pulse bg-surface" /> : vmAgentEndpointsQuery.error ? (
-                      <div className="p-3"><LogsErrorLine message={(vmAgentEndpointsQuery.error as Error).message || 'VM 节点加载失败'} /></div>
-                    ) : !(vmAgentEndpointsQuery.data?.length) ? (
-                      <div className="flex items-center gap-2 py-6 px-3 text-sm text-muted"><Server className="h-4 w-4" />尚未登记 VM 节点</div>
-                    ) : (
-                      <div className="overflow-x-auto">
-                        <table className="console-table min-w-[760px] w-full">
-                          <thead><tr><th>节点</th><th>地址</th><th>连通状态</th><th>最近校验</th><th className="w-24">操作</th></tr></thead>
-                          <tbody>{(vmAgentEndpointsQuery.data ?? []).map((ep) => {
-                            const st = vmEndpointStatus(ep);
-                            return (
-                              <tr key={ep.id}>
-                                <td className="font-semibold">{ep.name || '-'}</td>
-                                <td className="font-mono text-xs">{ep.address}</td>
-                                <td><span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${st.className}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{st.label}</span></td>
-                                <td className="font-mono text-[11px] text-muted">{formatVMTime(ep.lastProbeAt)}</td>
-                                <td><div className="flex items-center gap-1">
-                                  <button className="console-button h-7 px-2 text-xs" disabled={probeVMEndpointMutation.isPending} onClick={() => probeVMEndpointMutation.mutate(ep.id)}>校验</button>
-                                  <button className="console-button h-7 px-2 text-xs text-danger" disabled={deleteVMEndpointMutation.isPending} onClick={() => { if (window.confirm(`确认删除 VM 节点"${ep.name || ep.address}"？`)) deleteVMEndpointMutation.mutate(ep.id); }}>删除</button>
-                                </div></td>
-                              </tr>
-                            );
-                          })}</tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </section>
-
-              <div className="flex items-center justify-between py-2">
-                <button className="console-button h-9" onClick={() => setCurrentStep(2)}>上一步</button>
-                <Link className="console-button console-button-primary h-9" to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(pathServiceId)}/logs/agents`}>
-                  完成
-                </Link>
-              </div>
-            </>
-          )}
-        </div>
-      </div>
-
-      <LogsParseRuleDialog
-        open={parseDialogOpen}
-        serviceLabel={selectedServiceLabel}
-        scopeLabel={logPath || 'VM'}
-        parseSample={parseSample}
-        parserDraftMode={parserDraftMode}
-        parserDraftRuleName={parserDraftRuleName}
-        parserDraftPattern={parserDraftPattern}
-        parseDraftValid={parseDraftValid}
-        parsePreviewMutation={parsePreviewMutation}
-        onParseSampleChange={setParseSample}
-        onParserDraftModeChange={setParserDraftMode}
-        onParserDraftRuleNameChange={setParserDraftRuleName}
-        onParserDraftPatternChange={setParserDraftPattern}
-        onClose={() => setParseDialogOpen(false)}
-        onApply={applyParseDraft}
-      />
+      {createEnrollmentMutation.error ? <LogsErrorLine message={(createEnrollmentMutation.error as Error).message} /> : null}
+      {rollbackMutation.error ? <LogsErrorLine message={(rollbackMutation.error as Error).message} /> : null}
+      {enrollment ? (
+        <section className="rounded-md border border-primary/30 bg-primary-soft p-3">
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <div className="text-sm font-semibold text-primary">一次性安装令牌</div>
+              <p className="mt-1 text-xs text-muted">令牌只展示一次，请在有效期内写入 Supervisor 安装流程；不要保存到脚本仓库或日志。</p>
+            </div>
+            <button className="console-icon-button" aria-label="复制安装令牌" title="复制" onClick={() => navigator.clipboard?.writeText(enrollment.token)}><Copy className="h-4 w-4" /></button>
+          </div>
+          <pre className="mt-3 overflow-auto rounded border border-outline bg-white p-3 font-mono text-xs">{enrollment.token}</pre>
+          <div className="mt-2 text-[11px] text-muted">installation_id: {enrollment.installation.installationId}</div>
+        </section>
+      ) : null}
     </div>
   );
+}
+
+function RuntimeState({ value }: { value: string }) {
+  const tone = ['online', 'healthy', 'applied', 'flowing'].includes(value)
+    ? 'text-emerald-700'
+    : ['failed', 'unhealthy', 'drift', 'stale'].includes(value)
+      ? 'text-danger'
+      : 'text-muted';
+  return <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${tone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{runtimeLabel(value)}</span>;
+}
+
+function runtimeLabel(value: string) {
+  const labels: Record<string, string> = {
+    online: '在线', offline: '离线', revoked: '已吊销',
+    healthy: '健康', unhealthy: '异常', unknown: '未知',
+    pending: '待下发', applying: '应用中', applied: '已应用', failed: '失败', drift: '配置漂移',
+    not_installed: '未安装',
+    blocked: '已阻塞', degraded: '部分异常', converged: '已收敛',
+    flowing: '有数据', stale: '数据中断', no_data: '暂无数据',
+  };
+  return (labels[value] ?? value) || '-';
 }

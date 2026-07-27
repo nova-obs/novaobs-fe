@@ -50,10 +50,13 @@ test('产品与服务行操作使用无常驻描边的轻量动作', () => {
   assert.equal(styles.includes('.product-catalog-row-action-danger {'), true);
 });
 
-test('产品集成和服务详情使用右侧抽屉而不是独立深层页面', () => {
+test('服务详情使用部署目标作为运行位置生产真值并保留独立维护任务路由', () => {
   assert.equal(source.includes('观测关系'), true);
-  assert.equal(source.includes('运行目标'), false);
-  assert.equal(source.includes('ServiceTarget'), false);
+  assert.equal(source.includes('部署目标'), true);
+  assert.equal(source.includes('ServiceDeployment'), true);
+  assert.equal(source.includes('getServiceDeployments'), true);
+  assert.equal(source.includes('/deployments/new'), true);
+  assert.equal(source.includes('/deployments/${encodeURIComponent(deployment.id)}/edit'), true);
   assert.equal(source.includes('ProductIntegrationDrawer'), true);
   assert.equal(source.includes('ServiceDetailDrawer'), true);
   assert.equal(source.includes('integrationMode'), false);

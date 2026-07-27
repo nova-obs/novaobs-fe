@@ -25,6 +25,7 @@ import type {
   GrafanaProductIntegration,
   Product,
   Service,
+  ServiceDeployment,
   ServiceObservabilityGraph,
 } from '../../services/types';
 
@@ -137,6 +138,12 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
   const graphQuery = useQuery({
     queryKey: ['service-graph', routeProductId, routeServiceId],
     queryFn: () => api.getServiceObservabilityGraph(routeProductId, routeServiceId),
+    enabled: Boolean(routeProductId && routeServiceId && selectedService),
+    retry: false,
+  });
+  const deploymentsQuery = useQuery({
+    queryKey: ['service-deployments', routeProductId, routeServiceId],
+    queryFn: () => api.getServiceDeployments(routeProductId, routeServiceId),
     enabled: Boolean(routeProductId && routeServiceId && selectedService),
     retry: false,
   });
@@ -328,6 +335,9 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
           graph={graphQuery.data}
           graphLoading={graphQuery.isLoading}
           graphError={graphQuery.error}
+          deployments={deploymentsQuery.data}
+          deploymentsLoading={deploymentsQuery.isLoading}
+          deploymentsError={deploymentsQuery.error}
           archiving={archiveService.isPending}
           archiveError={archiveService.error}
           onClose={() => navigate('/products')}
@@ -538,7 +548,7 @@ function ProductIntegrationDrawer({ product, integration, loading, error, reconc
   );
 }
 
-function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoading, graphError, archiving, archiveError, onClose, onArchive }: {
+function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoading, graphError, deployments, deploymentsLoading, deploymentsError, archiving, archiveError, onClose, onArchive }: {
   product: Product;
   service?: Service;
   loading: boolean;
@@ -546,6 +556,9 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
   graph?: ServiceObservabilityGraph;
   graphLoading: boolean;
   graphError: unknown;
+  deployments?: ServiceDeployment[];
+  deploymentsLoading: boolean;
+  deploymentsError: unknown;
   archiving: boolean;
   archiveError: unknown;
   onClose: () => void;
@@ -581,6 +594,36 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
                 <Capability icon={Activity} label="Metrics" ready={false} reason="当前后端尚未支持服务作用域指标" />
                 <Capability icon={GitBranch} label="Traces" ready={false} reason="当前后端尚未支持服务作用域链路" />
               </DetailSection>
+              <DetailSection title="部署目标" description="Service 是逻辑身份；每个部署目标描述一处真实运行位置。">
+                <div className="mb-3 flex justify-end">
+                  <Link className="console-button console-button-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/new`}>
+                    <Plus className="h-3.5 w-3.5" />新增部署
+                  </Link>
+                </div>
+                {deploymentsLoading ? <div className="console-skeleton h-24" /> : deploymentsError ? (
+                  <div className="console-notice console-notice-danger">{errorMessage(deploymentsError)}</div>
+                ) : !deployments?.length ? (
+                  <EmptyState title="尚未登记部署目标" action={<span className="text-xs text-muted">创建 K8S Workload 或主机部署后，日志路由才能绑定实际采集范围。</span>} />
+                ) : (
+                  <div className="console-resource-list overflow-x-auto">
+                    <table className="console-table w-full min-w-[680px]">
+                      <thead><tr><th>部署目标</th><th>类型</th><th>范围</th><th>状态</th><th>更新时间</th><th className="text-right">操作</th></tr></thead>
+                      <tbody>{deployments.map((deployment) => (
+                        <tr key={deployment.id}>
+                          <td><div className="font-semibold">{deployment.name}</div><div className="mt-1 font-mono text-[11px] text-muted">{deployment.id}</div></td>
+                          <td>{deployment.kind === 'host_set' ? 'VM / 物理机' : 'K8S Workload'}</td>
+                          <td className="font-mono text-xs">{deploymentScope(deployment)}</td>
+                          <td><StatusBadge value={deployment.status} appearance="inline" /></td>
+                          <td className="text-xs text-muted">{formatTime(deployment.updatedAt)}</td>
+                          <td className="text-right">
+                            <Link className="text-xs font-semibold text-primary hover:underline" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/${encodeURIComponent(deployment.id)}/edit`}>编辑</Link>
+                          </td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
+              </DetailSection>
               <DetailSection title="观测关系" description="服务 → 日志路由 → 采集 → 下游 → 告警">
                 {graphLoading ? <div className="console-skeleton h-32" /> : graphError ? <div className="console-notice console-notice-danger">{errorMessage(graphError)}</div> : !graph || graph.logRoutes.routes.length === 0 ? <EmptyState title="暂无已登记日志路由" /> : (
                   <div className="console-resource-list overflow-x-auto">
@@ -605,6 +648,11 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
       </aside>
     </div>
   );
+}
+
+function deploymentScope(deployment: ServiceDeployment) {
+  if (deployment.kind === 'host_set') return `${deployment.hostTargets.length} 台主机`;
+  return `${deployment.k8sRef?.clusterId || '-'} / ${deployment.k8sRef?.namespace || '-'} / ${deployment.k8sRef?.workloadKind || '-'}:${deployment.k8sRef?.workloadName || '-'}`;
 }
 
 function DetailSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {

@@ -547,15 +547,6 @@ test('删除 Collector Group 时使用 DELETE 方法', async () => {
   assert.equal(request.init.method, 'DELETE');
 });
 
-test('获取服务绑定 Agent 时使用产品嵌套路径', async () => {
-  const request = await captureRequest(
-    () => api.getServiceAgents('product-commerce', 'svc-001'),
-    [{ instance_uid: 'agent-001', service_id: 'svc-001', runtime_status: 'online' }],
-  );
-
-  assert.equal(request.path, '/api/v1/products/product-commerce/services/svc-001/agents');
-});
-
 test('日志告警测试和启用使用结构化规则契约', async () => {
   const spec = {
     name: '支付失败', description: '',

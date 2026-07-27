@@ -9,6 +9,8 @@ test('路由定义覆盖主路径', () => {
     '/products/:productId/services',
     '/products/:productId/integrations',
     '/products/:productId/services/:serviceId',
+    '/products/:productId/services/:serviceId/deployments/new',
+    '/products/:productId/services/:serviceId/deployments/:deploymentId/edit',
     '/products/:productId/services/:serviceId/overview',
     '/products/:productId/services/:serviceId/graph',
     '/products/:productId/services/:serviceId/settings',
@@ -30,6 +32,13 @@ test('路由定义覆盖主路径', () => {
     '/agents/:uid',
     '/alerts',
   ]);
+});
+
+test('服务部署目标使用独立创建与编辑任务路由', () => {
+  const create = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/deployments/new');
+  const edit = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/deployments/:deploymentId/edit');
+  assert.equal(create?.element?.type?.name, 'ServiceDeploymentTaskPage');
+  assert.equal(edit?.element?.type?.name, 'ServiceDeploymentTaskPage');
 });
 
 test('产品与服务深层入口只打开工作面抽屉，旧服务分区路径统一回收', () => {
@@ -110,6 +119,8 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/products'), '产品与服务');
   assert.equal(getRouteTitle('/products/product-1/services'), '产品服务');
   assert.equal(getRouteTitle('/products/product-1/integrations'), '产品集成');
+  assert.equal(getRouteTitle('/products/product-1/services/svc-1/deployments/new'), '新增服务部署');
+  assert.equal(getRouteTitle('/products/product-1/services/svc-1/deployments/deployment-1/edit'), '编辑服务部署');
   assert.equal(getRouteTitle('/logs'), 'Logs 日志分析');
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/logs/explore'), 'Logs 日志分析');
 	assert.equal(getRouteTitle('/logs/explore'), 'Logs 日志分析');

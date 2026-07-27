@@ -10,14 +10,17 @@ export function serviceDisplayName(service: LogsServiceSummary) {
 
 export function routeLifecycle(route: LogRouteView): { label: string; tone: StatusTone; detail: string } {
   const status = route.route.lastPublishStatus || route.route.status;
-  if (route.route.sourceType === 'vm_file') {
-    if (status === 'failed' || status === 'error') {
-      return { label: '配置失败', tone: 'danger', detail: route.route.lastPublishMessage || '采集配置生成失败' };
-    }
-    return { label: '手工接入', tone: 'muted', detail: '通过安装材料和节点回填完成接入' };
-  }
-  if (status === 'applied' || status === 'ready_for_agent_sync') {
+  if (status === 'applied' || status === 'converged' || status === 'ready_for_agent_sync') {
     return { label: '已发布', tone: 'success', detail: route.route.lastPublishMessage || '采集配置已下发' };
+  }
+  if (status === 'degraded') {
+    return { label: '部分异常', tone: 'warning', detail: route.route.lastPublishMessage || '部分预期目标尚未收敛' };
+  }
+  if (status === 'blocked') {
+    return { label: '已阻塞', tone: 'danger', detail: route.route.lastPublishMessage || '当前发布不满足执行条件' };
+  }
+  if (status === 'pending' || status === 'applying') {
+    return { label: '发布中', tone: 'primary', detail: route.route.lastPublishMessage || '等待预期目标应用配置' };
   }
   if (status === 'previewed') {
     return { label: '待确认', tone: 'primary', detail: '发布预览已生成' };
@@ -36,9 +39,9 @@ export function routeLifecycle(route: LogRouteView): { label: string; tone: Stat
 
 export function routeAccessPriority(route: LogRouteView) {
   const status = route.route.lastPublishStatus || route.route.status;
-  if (status === 'applied' || status === 'ready_for_agent_sync') return 0;
-  if (status === 'previewed' || status === 'pending_publish') return 1;
-  if (status === 'failed' || status === 'error') return 2;
+  if (status === 'applied' || status === 'converged' || status === 'ready_for_agent_sync') return 0;
+  if (status === 'previewed' || status === 'pending_publish' || status === 'pending' || status === 'applying') return 1;
+  if (status === 'degraded' || status === 'blocked' || status === 'failed' || status === 'error') return 2;
   if (route.route.collectorConfigHash) return 3;
   return 4;
 }
@@ -46,7 +49,7 @@ export function routeAccessPriority(route: LogRouteView) {
 export function isCollectingRoute(route: LogRouteView | null | undefined) {
   if (!route) return false;
   const status = route.route.lastPublishStatus || route.route.status;
-  return route.route.sourceType !== 'vm_file' && (status === 'applied' || status === 'ready_for_agent_sync');
+  return status === 'applied' || status === 'converged' || status === 'ready_for_agent_sync';
 }
 
 export function statusPillClass(tone: StatusTone) {
@@ -87,8 +90,8 @@ function serviceAccessState(serviceRoutes: LogRouteView[]) {
 function serviceSourceLabel(route?: LogRouteView) {
   const source = route?.source;
   if (!source) return '-';
-  if (source.sourceType === 'vm_file') return source.hostGroup || 'VM';
-  return [source.workloadKind, source.workloadName].filter(Boolean).join('/') || 'K8s';
+  if (source.sourceType === 'vm_file') return '主机部署';
+  return 'K8S Workload';
 }
 
 function serviceLogPath(route?: LogRouteView) {
@@ -99,10 +102,7 @@ function serviceScopeLabel(route?: LogRouteView) {
   if (!route) return '-';
   const source = route.source;
   if (!source) return '-';
-  const location = source.sourceType === 'vm_file'
-    ? source.hostGroup
-    : [source.clusterId, source.namespace].filter(Boolean).join('/');
-  return location || '-';
+  return route.route.serviceDeploymentId || '-';
 }
 
 function serviceFreshnessLabel(service: LogsServiceSummary) {

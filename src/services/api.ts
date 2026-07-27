@@ -11,6 +11,9 @@ import type {
   CheckResult,
   ChecklistItem,
   CollectorConfigSources,
+  CollectorEnrollmentCredential,
+  CollectorInstallationCredential,
+  CollectorInstallation,
   CollectorConfigValidation,
   CollectorGroupConfigStatus,
   CollectorConfigVersion,
@@ -29,9 +32,14 @@ import type {
   OnboardingWorkspace,
   OpAMPAgent,
   OverviewSummary,
-	Product,
+  Product,
   ReceiverProfile,
   Service,
+  ServiceDeployment,
+  ServiceDeploymentInput,
+  HostAsset,
+  HostAssetInput,
+  HostAssetPatch,
   ServiceObservabilityGraph,
   ServiceEnrichmentPatch,
   ServiceOnboarding,
@@ -193,6 +201,123 @@ function mapService(raw: any): Service {
     status: raw.status ?? 'active',
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+    deploymentKinds: parseStringList(raw.deployment_kinds ?? raw.deploymentKinds)
+      .filter((kind): kind is Service['deploymentKinds'][number] => kind === 'kubernetes_workload' || kind === 'host_set'),
+  };
+}
+
+function mapHostAsset(raw: any): HostAsset {
+  return {
+    id: String(raw.id ?? ''),
+    identitySource: raw.identity_source ?? 'manual',
+    identityScope: raw.identity_scope ?? '',
+    externalId: raw.external_id ?? '',
+    displayName: raw.display_name ?? '',
+    hostname: raw.hostname ?? '',
+    ipAddresses: parseStringList(raw.ip_addresses),
+    status: raw.status ?? 'active',
+    region: raw.region ?? '',
+    zone: raw.zone ?? '',
+    labels: raw.labels && typeof raw.labels === 'object' ? raw.labels : {},
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function hostAssetInputPayload(input: HostAssetInput) {
+  return {
+    identity_source: input.identitySource,
+    identity_scope: input.identityScope,
+    external_id: input.externalId,
+    display_name: input.displayName,
+    hostname: input.hostname,
+    status: input.status,
+    ip_addresses: input.ipAddresses,
+    region: input.region,
+    zone: input.zone,
+    labels: input.labels,
+  };
+}
+
+function hostAssetPatchPayload(input: HostAssetPatch) {
+  return {
+    display_name: input.displayName,
+    hostname: input.hostname,
+    ip_addresses: input.ipAddresses,
+    region: input.region,
+    zone: input.zone,
+    labels: input.labels,
+  };
+}
+
+function mapServiceDeployment(raw: any): ServiceDeployment {
+  const ref = raw.k8s_ref ?? raw.k8sRef;
+  return {
+    id: String(raw.id ?? ''),
+    productId: String(raw.product_id ?? raw.productId ?? ''),
+    serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
+    name: raw.name ?? '',
+    kind: raw.kind ?? 'host_set',
+    status: raw.status ?? 'active',
+    source: raw.source ?? 'manual',
+    k8sRef: ref ? {
+      clusterId: ref.cluster_id ?? ref.clusterId ?? '',
+      namespace: ref.namespace ?? '',
+      apiVersion: ref.api_version ?? ref.apiVersion ?? '',
+      workloadKind: ref.workload_kind ?? ref.workloadKind ?? '',
+      workloadName: ref.workload_name ?? ref.workloadName ?? '',
+      workloadUid: ref.workload_uid ?? ref.workloadUid ?? '',
+    } : null,
+    allowedLogRoots: parseStringList(raw.allowed_log_roots ?? raw.allowedLogRoots),
+    hostTargets: Array.isArray(raw.host_targets ?? raw.hostTargets)
+      ? (raw.host_targets ?? raw.hostTargets).map(mapHostAsset)
+      : [],
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
+function serviceDeploymentPayload(input: ServiceDeploymentInput) {
+  return {
+    name: input.name,
+    kind: input.kind,
+    source: input.source ?? 'manual',
+    allowed_log_roots: input.allowedLogRoots ?? [],
+    ...(input.k8sRef ? {
+      k8s_ref: {
+        cluster_id: input.k8sRef.clusterId,
+        namespace: input.k8sRef.namespace,
+        api_version: input.k8sRef.apiVersion,
+        workload_kind: input.k8sRef.workloadKind,
+        workload_name: input.k8sRef.workloadName,
+        workload_uid: input.k8sRef.workloadUid,
+      },
+    } : {}),
+  };
+}
+
+function mapCollectorInstallation(raw: any): CollectorInstallation {
+  const status = raw.status ?? (
+    raw.active === false || raw.revoked_at
+      ? 'revoked'
+      : raw.enrollment_state === 'enrolled'
+        ? 'active'
+        : 'pending'
+  );
+  return {
+    id: String(raw.id ?? raw.installation_id ?? ''),
+    installationId: String(raw.installation_id ?? raw.installationId ?? raw.id ?? ''),
+    hostAssetId: String(raw.host_asset_id ?? raw.hostAssetId ?? ''),
+    agentRole: raw.agent_role ?? raw.agentRole ?? 'logs_agent',
+    status,
+    version: raw.version ?? '',
+    connectionStatus: raw.connection_status ?? raw.connectionStatus ?? 'offline',
+    processStatus: raw.process_status ?? raw.processStatus ?? 'unknown',
+    configStatus: raw.config_status ?? raw.configStatus ?? 'pending',
+    dataStatus: raw.data_status ?? raw.dataStatus ?? 'unknown',
+    lastSeenAt: raw.last_seen_at ?? raw.lastSeenAt ?? '',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
 }
 
@@ -247,7 +372,6 @@ function mapAgent(raw: any): OpAMPAgent {
   return {
     instanceUid: String(raw.instance_uid ?? raw.instanceUid ?? ''),
     collectorGroupId: String(raw.collector_group_id ?? ''),
-    serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
     online: raw.online ?? false,
     healthy: raw.healthy ?? false,
     capabilities: raw.capabilities ?? 0,
@@ -268,7 +392,6 @@ function mapAgentDetail(raw: any): AgentDetail {
       state: {
         instanceUid: raw.agent?.state?.instance_uid ?? raw.instance_uid ?? '',
         collectorGroupId: String(raw.agent?.state?.collector_group_id ?? ''),
-        serviceId: String(raw.agent?.state?.service_id ?? raw.agent?.state?.serviceId ?? ''),
         online: raw.agent?.state?.online ?? false,
         healthy: raw.agent?.state?.healthy ?? false,
         capabilities: raw.agent?.state?.capabilities ?? 0,
@@ -293,8 +416,6 @@ function mapAgentDetail(raw: any): AgentDetail {
       lastSeenAt: raw.agent?.last_seen_at ?? '',
     },
     collectorGroup: raw.collector_group ? mapCollectorGroup(raw.collector_group) : null,
-    services: Array.isArray(raw.services) ? raw.services.map(mapService) : [],
-    onboardings: Array.isArray(raw.onboardings) ? raw.onboardings.map(mapOnboarding) : [],
     configuration: {
       effectiveConfig: raw.configuration?.effective_config ?? '',
       effectiveConfigFiles: raw.configuration?.effective_config_files ?? {},
@@ -458,7 +579,9 @@ function mapCollectorInstance(raw: any): CollectorInstance {
     opampInstanceUid: String(raw.opamp_instance_uid ?? raw.opampInstanceUid ?? raw.instance_uid ?? raw.instanceUid ?? ''),
     runtimeIdentity: String(raw.runtime_identity ?? raw.runtimeIdentity ?? ''),
     collectorGroupId: String(raw.collector_group_id ?? ''),
-    serviceId: String(raw.service_id ?? raw.serviceId ?? ''),
+    installationId: String(raw.installation_id ?? raw.installationId ?? ''),
+    hostAssetId: String(raw.host_asset_id ?? raw.hostAssetId ?? ''),
+    agentRole: raw.agent_role ?? raw.agentRole ?? '',
     clusterId: String(raw.cluster_id ?? raw.clusterId ?? ''),
     namespace: String(raw.namespace ?? ''),
     agentNamespace: String(raw.agent_namespace ?? raw.agentNamespace ?? ''),
@@ -477,6 +600,11 @@ function mapCollectorInstance(raw: any): CollectorInstance {
     lastConfigHash: raw.last_config_hash ?? raw.lastConfigHash ?? '',
     remoteConfigStatus: raw.remote_config_status ?? 'unset',
     runtimeStatus: backendStatus || local.runtimeStatus,
+    connectionStatus: raw.connection_status ?? raw.connectionStatus ?? (raw.online ? 'online' : 'offline'),
+    processStatus: raw.process_status ?? raw.processStatus ?? (raw.online ? (raw.healthy ? 'healthy' : 'unhealthy') : 'unknown'),
+    configStatus: raw.config_status ?? raw.configStatus ?? raw.remote_config_status ?? 'pending',
+    dataStatus: raw.data_status ?? raw.dataStatus ?? 'unknown',
+    lastLogAt: raw.last_log_at ?? raw.lastLogAt ?? '',
     lastSeenAgeSeconds: local.lastSeenAgeSeconds,
     lastError: raw.last_error ?? raw.lastError ?? '',
     lastSeenAt: raw.last_seen_at ?? raw.lastSeenAt ?? '',
@@ -620,7 +748,7 @@ function mapCollectorConfigSources(raw: any): CollectorConfigSources {
 function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
   return {
     service: mapService(raw.service ?? {}),
-    agents: Array.isArray(raw.agents) ? raw.agents.map(mapCollectorInstance) : [],
+    deployments: Array.isArray(raw.deployments) ? raw.deployments.map(mapServiceDeployment) : [],
     logRoutes: {
       total: raw.log_routes?.total ?? raw.logRoutes?.total ?? 0,
       routes: Array.isArray(raw.log_routes?.routes ?? raw.logRoutes?.routes)
@@ -628,21 +756,12 @@ function mapServiceObservabilityGraph(raw: any): ServiceObservabilityGraph {
           route: {
             id: String(item.route?.id ?? ''),
             sourceType: item.route?.source_type ?? item.route?.sourceType ?? '',
-            agentGroupId: item.route?.agent_group_id ?? item.route?.agentGroupId ?? '',
+            serviceDeploymentId: item.route?.service_deployment_id ?? item.route?.serviceDeploymentId ?? '',
             endpointId: item.route?.endpoint_id ?? item.route?.endpointId ?? '',
             status: item.route?.status ?? '',
             collectorConfigHash: item.route?.collector_config_hash ?? item.route?.collectorConfigHash ?? '',
             lastPublishStatus: item.route?.last_publish_status ?? item.route?.lastPublishStatus ?? '',
           },
-          source: item.source ? {
-            sourceType: item.source.source_type ?? item.source.sourceType ?? '',
-            clusterId: item.source.cluster_id ?? item.source.clusterId ?? '',
-            namespace: item.source.namespace ?? '',
-            workloadKind: item.source.workload_kind ?? item.source.workloadKind ?? '',
-            workloadName: item.source.workload_name ?? item.source.workloadName ?? '',
-            hostGroup: item.source.host_group ?? item.source.hostGroup ?? '',
-            pathPattern: item.source.path_pattern ?? item.source.pathPattern ?? '',
-          } : null,
           endpoint: item.endpoint ? {
             id: String(item.endpoint.id ?? ''),
             name: item.endpoint.name ?? '',
@@ -843,7 +962,7 @@ export const api = {
         deployment_uid: input.deploymentUid,
       }),
     });
-    return mapService(raw);
+    return mapService(raw.service ?? raw);
   },
   async updateService(productId: string, id: string, patch: UpdateServiceInput): Promise<Service> {
     const raw = await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(id)}`, {
@@ -867,16 +986,104 @@ export const api = {
   async archiveService(productId: string, id: string): Promise<Service> {
     return mapService(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(id)}`, { method: 'DELETE' }));
   },
+  async getServiceDeployments(productId: string, serviceId: string): Promise<ServiceDeployment[]> {
+    const raw = await request<any[] | null>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments`);
+    return Array.isArray(raw) ? raw.map(mapServiceDeployment) : [];
+  },
+  async getServiceDeployment(productId: string, serviceId: string, deploymentId: string): Promise<ServiceDeployment> {
+    return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}`));
+  },
+  async createServiceDeployment(productId: string, serviceId: string, input: ServiceDeploymentInput): Promise<ServiceDeployment> {
+    return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments`, {
+      method: 'POST',
+      body: JSON.stringify(serviceDeploymentPayload(input)),
+    }));
+  },
+  async updateServiceDeployment(productId: string, serviceId: string, deploymentId: string, input: ServiceDeploymentInput): Promise<ServiceDeployment> {
+    return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(serviceDeploymentPayload(input)),
+    }));
+  },
+  async replaceServiceDeploymentHosts(productId: string, serviceId: string, deploymentId: string, hostIds: string[]): Promise<ServiceDeployment> {
+    return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}/hosts`, {
+      method: 'PUT',
+      body: JSON.stringify({ host_asset_ids: hostIds }),
+    }));
+  },
+  async retireServiceDeployment(productId: string, serviceId: string, deploymentId: string): Promise<ServiceDeployment> {
+    return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}`, {
+      method: 'DELETE',
+    }));
+  },
+  async getHostAssets(params?: { q?: string; status?: string }): Promise<HostAsset[]> {
+    const search = new URLSearchParams();
+    if (params?.q) search.set('q', params.q);
+    if (params?.status) search.set('status', params.status);
+    const suffix = search.toString() ? `?${search.toString()}` : '';
+    const raw = await request<any[] | null>(`/platform/hosts${suffix}`);
+    return Array.isArray(raw) ? raw.map(mapHostAsset) : [];
+  },
+  async getHostAsset(hostId: string): Promise<HostAsset> {
+    return mapHostAsset(await request<any>(`/platform/hosts/${encodeURIComponent(hostId)}`));
+  },
+  async createHostAsset(input: HostAssetInput): Promise<HostAsset> {
+    return mapHostAsset(await request<any>('/platform/hosts', {
+      method: 'POST',
+      body: JSON.stringify(hostAssetInputPayload(input)),
+    }));
+  },
+  async importHostAssets(inputs: HostAssetInput[]): Promise<HostAsset[]> {
+    const raw = await request<any[] | null>('/platform/hosts/import', {
+      method: 'POST',
+      body: JSON.stringify({ hosts: inputs.map(hostAssetInputPayload) }),
+    });
+    return Array.isArray(raw) ? raw.map(mapHostAsset) : [];
+  },
+  async updateHostAsset(hostId: string, input: HostAssetPatch): Promise<HostAsset> {
+    return mapHostAsset(await request<any>(`/platform/hosts/${encodeURIComponent(hostId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(hostAssetPatchPayload(input)),
+    }));
+  },
+  async retireHostAsset(hostId: string): Promise<HostAsset> {
+    return mapHostAsset(await request<any>(`/platform/hosts/${encodeURIComponent(hostId)}/retire`, {
+      method: 'POST',
+    }));
+  },
+  async createCollectorInstallation(input: { hostAssetId: string; agentRole?: string }): Promise<CollectorInstallation> {
+    return mapCollectorInstallation(await request<any>('/collector/installations', {
+      method: 'POST',
+      body: JSON.stringify({ host_asset_id: input.hostAssetId, agent_role: input.agentRole ?? 'logs_agent' }),
+    }));
+  },
+  async getCollectorInstallations(): Promise<CollectorInstallation[]> {
+    const raw = await request<any[] | null>('/collector/installations');
+    return Array.isArray(raw) ? raw.map(mapCollectorInstallation) : [];
+  },
+  async issueCollectorEnrollmentToken(installationId: string): Promise<CollectorEnrollmentCredential> {
+    const raw = await request<any>(`/collector/installations/${encodeURIComponent(installationId)}/enrollment-token`, { method: 'POST' });
+    return {
+      installation: mapCollectorInstallation(raw.installation ?? {}),
+      token: raw.enrollment_token ?? '',
+    };
+  },
+  async rotateCollectorInstallationCredential(installationId: string): Promise<CollectorInstallationCredential> {
+    const raw = await request<any>(`/collector/installations/${encodeURIComponent(installationId)}/rotate-credential`, { method: 'POST' });
+    return {
+      installation: mapCollectorInstallation(raw.installation ?? {}),
+      credential: raw.installation_credential ?? '',
+    };
+  },
+  async revokeCollectorInstallation(installationId: string): Promise<CollectorInstallation> {
+    return mapCollectorInstallation(await request<any>(`/collector/installations/${encodeURIComponent(installationId)}/revoke`, { method: 'POST' }));
+  },
   async getServiceObservabilityGraph(productId: string, serviceId: string): Promise<ServiceObservabilityGraph> {
     const raw = await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/observability-graph`);
     return mapServiceObservabilityGraph(raw);
   },
   async getOpAMPAgents(): Promise<OpAMPAgent[]> {
     const raw = await request<any[]>('/opamp/agents');
-    return raw.map(mapAgent);
-  },
-  async getServiceAgents(productId: string, serviceId: string): Promise<OpAMPAgent[]> {
-    const raw = await request<any[]>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/agents`);
     return raw.map(mapAgent);
   },
   async getAgentDetail(uid: string): Promise<AgentDetail> {
@@ -1003,16 +1210,6 @@ export const api = {
   async getCollectorGroupConfigStatus(groupId: string): Promise<CollectorGroupConfigStatus> {
     const raw = await request<any>(`/collector-groups/${groupId}/config/status`);
     return mapCollectorGroupConfigStatus(raw);
-  },
-  async assignInstanceService(instanceUid: string, serviceId: string): Promise<CollectorInstance> {
-    const raw = await request<any>(`/opamp/instances/${instanceUid}/service`, {
-      method: 'POST',
-      body: JSON.stringify({ service_id: serviceId }),
-    });
-    return mapCollectorInstance(raw);
-  },
-  async unassignInstanceService(instanceUid: string): Promise<void> {
-    await request<any>(`/opamp/instances/${instanceUid}/service`, { method: 'DELETE' });
   },
   async assignInstanceGroup(instanceUid: string, groupId: string): Promise<CollectorInstance> {
     const raw = await request<any>(`/opamp/instances/${instanceUid}/group`, {

@@ -14,9 +14,9 @@ export interface ProductCatalogGroup {
   services: Service[];
 }
 
-export function graphStatItems(graph: Pick<ServiceObservabilityGraph, 'agents' | 'logRoutes' | 'alertRules'>) {
+export function graphStatItems(graph: Pick<ServiceObservabilityGraph, 'deployments' | 'logRoutes' | 'alertRules'>) {
   return [
-    { label: 'Agent', value: graph.agents.length },
+    { label: '部署目标', value: graph.deployments.length },
     { label: '日志路由', value: graph.logRoutes.total },
     { label: '告警规则', value: graph.alertRules.length },
   ];

@@ -117,8 +117,8 @@ function readExpandedPreference(storageKey: string): boolean {
     const raw = window.localStorage.getItem(storageKey);
     if (raw === '0') return false;
     if (raw === '1') return true;
-    return true;
+    return false;
   } catch {
-    return true;
+    return false;
   }
 }
