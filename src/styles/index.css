@@ -351,6 +351,10 @@ body {
     @apply inline-flex items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold;
   }
 
+  .status-inline {
+    @apply inline-flex items-center gap-1.5 whitespace-nowrap text-[11px] font-medium;
+  }
+
   .status-dot {
     @apply h-1.5 w-1.5 shrink-0 rounded-full bg-current;
   }
@@ -388,6 +392,88 @@ body {
 
   .console-table tbody tr:hover td {
     background: #edf4ff;
+  }
+
+  .product-catalog-product-row td {
+    @apply h-12 border-t-2 border-primary/20 bg-surface-low py-2.5;
+  }
+
+  .product-catalog-product-row:hover td {
+    background: #e5f0ff !important;
+  }
+
+  .product-catalog-service-row td {
+    @apply h-10 bg-surface-lowest py-1.5;
+  }
+
+  .product-catalog-service-cell {
+    position: relative;
+    padding-left: 2.5rem !important;
+  }
+
+  .product-catalog-service-cell::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1.25rem;
+    border-left: 1px solid #c5d3e5;
+    content: "";
+  }
+
+  .product-catalog-service-cell::after {
+    position: absolute;
+    top: 50%;
+    left: 1.25rem;
+    width: 0.75rem;
+    border-top: 1px solid #c5d3e5;
+    content: "";
+  }
+
+  .product-catalog-service-cell-last::before {
+    bottom: 50%;
+  }
+
+  .product-catalog-mobile-header {
+    @apply border-l-2 border-primary/45 bg-surface-low;
+  }
+
+  .product-catalog-mobile-service-row {
+    position: relative;
+    padding-left: 2rem;
+  }
+
+  .product-catalog-mobile-service-row::before {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 1rem;
+    border-left: 1px solid #c5d3e5;
+    content: "";
+  }
+
+  .product-catalog-mobile-service-row::after {
+    position: absolute;
+    top: 50%;
+    left: 1rem;
+    width: 0.625rem;
+    border-top: 1px solid #c5d3e5;
+    content: "";
+  }
+
+  .product-catalog-mobile-service-row-last::before {
+    bottom: 50%;
+  }
+
+  .product-catalog-row-action {
+    @apply inline-flex h-7 items-center justify-center gap-1 whitespace-nowrap rounded border-0 bg-transparent px-2 text-xs font-medium text-muted transition-colors hover:bg-primary-soft/70 hover:text-primary;
+  }
+
+  .product-catalog-row-action-icon {
+    @apply w-7 px-0;
+  }
+
+  .product-catalog-row-action-danger {
+    @apply text-muted hover:bg-red-50 hover:text-danger;
   }
 
   .console-table-action {
@@ -734,6 +820,7 @@ body {
 .console-field-help,
 .console-field-error,
 .status-badge,
+.status-inline,
 .console-audit-meta {
   font-size: 12px;
   line-height: 18px;

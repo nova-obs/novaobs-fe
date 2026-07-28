@@ -4,7 +4,7 @@ export interface PlatformScope {
   global: boolean;
   clusterId: string;
   namespace: string;
-	environmentId: string;
+  productId: string;
   serviceId: string;
 }
 
@@ -111,31 +111,13 @@ export interface PlatformImage {
   updatedAt: string;
 }
 
-export type EnvironmentStage = 'production' | 'staging' | 'test' | 'development';
-export type EnvironmentStatus = 'active' | 'archived';
-export type EnvironmentResourceKind = 'k8s_cluster' | 'host_group';
-
-export interface PlatformEnvironment {
-  id: string;
-  name: string;
-  stage: EnvironmentStage;
-  description: string;
-  status: EnvironmentStatus;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface EnvironmentResourceBinding {
-  id: string;
-  environmentId: string;
-  resourceKind: EnvironmentResourceKind;
-  resourceRef: string;
-  createdAt: string;
-}
-
-export interface PlatformEnvironmentDetail {
-  environment: PlatformEnvironment;
-  resourceBindings: EnvironmentResourceBinding[];
+export interface PlatformGrafanaSetting {
+	state: 'unconfigured' | 'disabled' | 'ready';
+	entryURL: string;
+  tokenConfigured: boolean;
+  tokenFingerprint: string;
+  tokenRotatedAt: string;
+	updatedAt: string;
 }
 
 export interface PlatformWriteResult<T> {
@@ -148,7 +130,7 @@ function mapScope(raw: any): PlatformScope {
     global: Boolean(raw?.global),
     clusterId: raw?.cluster_id ?? raw?.clusterId ?? '',
     namespace: raw?.namespace ?? '',
-		environmentId: raw?.environment_id ?? raw?.environmentId ?? '',
+    productId: raw?.product_id ?? raw?.productId ?? '',
     serviceId: raw?.service_id ?? raw?.serviceId ?? '',
   };
 }
@@ -276,26 +258,15 @@ function mapImage(raw: any): PlatformImage {
   };
 }
 
-function mapEnvironment(raw: any): PlatformEnvironment {
-  return {
-    id: String(raw.id ?? ''),
-    name: raw.name ?? '',
-    stage: raw.stage ?? 'development',
-    description: raw.description ?? '',
-    status: raw.status ?? 'active',
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
-function mapEnvironmentResourceBinding(raw: any): EnvironmentResourceBinding {
-  return {
-    id: String(raw.id ?? ''),
-    environmentId: raw.environment_id ?? raw.environmentId ?? '',
-    resourceKind: raw.resource_kind ?? raw.resourceKind ?? 'k8s_cluster',
-    resourceRef: raw.resource_ref ?? raw.resourceRef ?? '',
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-  };
+function mapGrafanaSetting(raw: any): PlatformGrafanaSetting {
+	return {
+		state: raw?.state ?? 'unconfigured',
+		entryURL: raw?.entry_url ?? raw?.entryURL ?? '',
+    tokenConfigured: Boolean(raw?.token_configured ?? raw?.tokenConfigured),
+    tokenFingerprint: raw?.token_fingerprint ?? raw?.tokenFingerprint ?? '',
+    tokenRotatedAt: raw?.token_rotated_at ?? raw?.tokenRotatedAt ?? '',
+		updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
+	};
 }
 
 function mapWriteResult<T>(raw: any, mapper: (value: any) => T): PlatformWriteResult<T> {
@@ -306,41 +277,6 @@ function mapWriteResult<T>(raw: any, mapper: (value: any) => T): PlatformWriteRe
 }
 
 export const platformApi = {
-	async listEnvironments(): Promise<PlatformEnvironment[]> {
-		const raw = await apiRequest<any[]>('/platform/environments');
-		return raw.map(mapEnvironment);
-	},
-	async getEnvironment(id: string): Promise<PlatformEnvironmentDetail> {
-		const raw = await apiRequest<any>(`/platform/environments/${encodeURIComponent(id)}`);
-		return {
-			environment: mapEnvironment(raw.environment ?? {}),
-			resourceBindings: Array.isArray(raw.resource_bindings) ? raw.resource_bindings.map(mapEnvironmentResourceBinding) : [],
-		};
-	},
-	async createEnvironment(input: { name: string; stage: EnvironmentStage; description?: string }): Promise<PlatformEnvironment> {
-		const raw = await apiRequest<any>('/platform/environments', {
-			method: 'POST',
-			body: JSON.stringify({ name: input.name, stage: input.stage, description: input.description ?? '' }),
-		});
-		return mapEnvironment(raw);
-	},
-	async updateEnvironment(id: string, input: Partial<{ name: string; stage: EnvironmentStage; description: string; status: EnvironmentStatus }>): Promise<PlatformEnvironment> {
-		const raw = await apiRequest<any>(`/platform/environments/${encodeURIComponent(id)}`, {
-			method: 'PATCH',
-			body: JSON.stringify(input),
-		});
-		return mapEnvironment(raw);
-	},
-	async bindEnvironmentResource(environmentId: string, input: { resourceKind: EnvironmentResourceKind; resourceRef: string }): Promise<EnvironmentResourceBinding> {
-		const raw = await apiRequest<any>(`/platform/environments/${encodeURIComponent(environmentId)}/resource-bindings`, {
-			method: 'POST',
-			body: JSON.stringify({ resource_kind: input.resourceKind, resource_ref: input.resourceRef }),
-		});
-		return mapEnvironmentResourceBinding(raw);
-	},
-	async unbindEnvironmentResource(environmentId: string, bindingId: string): Promise<void> {
-		await apiRequest(`/platform/environments/${encodeURIComponent(environmentId)}/resource-bindings/${encodeURIComponent(bindingId)}`, { method: 'DELETE' });
-	},
   async me(): Promise<PlatformSubject> {
     const raw = await apiRequest<any>('/platform/me');
     return mapSubject(raw);
@@ -448,7 +384,7 @@ export const platformApi = {
           global: Boolean(input.scope.global),
           cluster_id: input.scope.clusterId ?? '',
           namespace: input.scope.namespace ?? '',
-			environment_id: input.scope.environmentId ?? '',
+          product_id: input.scope.productId ?? '',
           service_id: input.scope.serviceId ?? '',
         },
       }),
@@ -474,5 +410,20 @@ export const platformApi = {
       body: JSON.stringify({ key: input.key, value: input.value }),
     });
     return mapImage(raw);
+  },
+	async getGrafanaSetting(): Promise<PlatformGrafanaSetting> {
+		const raw = await apiRequest<any>('/platform/settings/grafana');
+		return mapGrafanaSetting(raw);
+	},
+	async updateGrafanaSetting(entryURL: string, serviceAccountToken = ''): Promise<PlatformGrafanaSetting> {
+		const raw = await apiRequest<any>('/platform/settings/grafana', {
+			method: 'PUT',
+			body: JSON.stringify({ entry_url: entryURL, service_account_token: serviceAccountToken || undefined }),
+		});
+		return mapGrafanaSetting(raw);
+	},
+  async testGrafanaConnection(): Promise<boolean> {
+    const raw = await apiRequest<any>('/platform/settings/grafana/test', { method: 'POST' });
+    return Boolean(raw.healthy);
   },
 };

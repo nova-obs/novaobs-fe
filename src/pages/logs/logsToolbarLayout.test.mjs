@@ -15,7 +15,7 @@ test('资源列表工具栏具备左操作右检索语义', () => {
 
 test('采集路由工具栏先选择路由，再放刷新、新增', () => {
   const toolbarIndex = routesSource.indexOf('console-panel-header shrink-0');
-  const selectorIndex = routesSource.indexOf('logs-route-selector', toolbarIndex);
+  const selectorIndex = routesSource.indexOf('aria-label="采集路由"', toolbarIndex);
   const refreshIndex = routesSource.indexOf('刷新', toolbarIndex);
   const createIndex = routesSource.indexOf('创建采集路由', toolbarIndex);
 
@@ -23,10 +23,17 @@ test('采集路由工具栏先选择路由，再放刷新、新增', () => {
   assert.ok(selectorIndex > toolbarIndex);
   assert.ok(refreshIndex > selectorIndex);
   assert.ok(createIndex > refreshIndex);
-  assert.match(routesSource, /LogsEntitySelector<LogRouteView>/);
+  assert.match(routesSource, /aria-label="采集路由"/);
   assert.match(routesSource, /function selectRoute\(routeId: string\)/);
   assert.doesNotMatch(routesSource, /const \[routeQuery, setRouteQuery\]/);
   assert.doesNotMatch(routesSource, /搜索采集路由/);
+});
+
+test('采集路由与产品服务选择器使用一致的标签和控件基线', () => {
+  assert.match(
+    routesSource,
+    /<label className="min-w-0">\s*<span className="mb-1 block text-\[10px\] font-semibold uppercase tracking-wide text-muted">采集路由<\/span>\s*<select className="console-input h-9 w-full truncate text-xs font-semibold"/,
+  );
 });
 
 test('日志告警工具栏先选择服务，再放搜索、刷新、新增', () => {
@@ -47,14 +54,12 @@ test('日志告警工具栏先选择服务，再放搜索、刷新、新增', ()
   assert.match(alertsSource, /filteredRules/);
 });
 
-test('服务目录复用左操作右检索工具栏', () => {
-  const toolbarIndex = servicesSource.indexOf('console-list-toolbar');
-  const createIndex = servicesSource.indexOf('新增服务', toolbarIndex);
-  const refreshIndex = servicesSource.indexOf('刷新', toolbarIndex);
-  const searchIndex = servicesSource.indexOf('名称 / CMDB ID / 业务 / 负责人', toolbarIndex);
-
-  assert.ok(toolbarIndex >= 0);
-  assert.ok(createIndex > toolbarIndex);
-  assert.ok(refreshIndex > toolbarIndex);
-  assert.ok(searchIndex > createIndex);
+test('产品与服务使用产品服务树表和独立动作抽屉', () => {
+  assert.match(servicesSource, /console-resource-list/);
+  assert.match(servicesSource, /新增产品/);
+  assert.match(servicesSource, /ProductServiceRows/);
+  assert.match(servicesSource, /ProductDrawer/);
+  assert.match(servicesSource, /ServiceDrawer/);
+  assert.match(servicesSource, /ProductIntegrationDrawer/);
+  assert.match(servicesSource, /ServiceDetailDrawer/);
 });

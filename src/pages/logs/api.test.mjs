@@ -36,14 +36,14 @@ test('获取 Logs 接入工作台时调用统一 onboarding workspace 接口', a
   const { request, result } = await captureRequest(
 	() => logsApi.getWorkspace('product-001', 'svc-001'),
     {
-      services: [{ id: 'svc-001', name: 'order-api', environmentId: 'prod' }],
+      services: [{ id: 'svc-001', name: 'order-api' }],
       collector_groups: [{ id: 'ag-001', name: 'prod-ds', mode: 'daemonset', online_instances: 2 }],
       clusters: [{ id: 'test03', name: 'test03', version: 'v1.28.3', access_mode: 'direct/ro', read_only: true }],
       endpoints: [{ id: 'vl-001', name: 'vl-prod', sink_type: 'vl', stream_name: '', write_url: 'http://vl/insert', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527', scope_type: 'k8s_cluster', cluster_id: 'test03' }],
       routes: [],
       targets: [{
         target: { id: 'target-001', name: 'orders 自建 VL', service_id: 'svc-001', endpoint_id: 'vl-001', source_kind: 'external_vlogs', base_filter: '"stream":"orders"', status: 'verified' },
-        service: { id: 'svc-001', name: 'order-api', environmentId: 'prod' },
+        service: { id: 'svc-001', name: 'order-api' },
         endpoint: { id: 'vl-001', name: 'vl-prod', sink_type: 'vl', query_url: 'http://vl/select/logsql/query', vmui_url: 'http://vl/select/vmui', account_id: '9527', project_id: '9527' },
       }],
     },
@@ -107,7 +107,7 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
   const { result } = await captureRequest(
 	() => logsApi.getWorkspace('product-001', 'svc-001'),
     {
-      services: [{ id: 'svc-001', name: 'order-api', environmentId: 'prod', identity_type: 'k8s_workload' }],
+      services: [{ id: 'svc-001', name: 'order-api', identity_type: 'k8s_workload' }],
       collector_groups: [],
       clusters: [],
       endpoints: [{ id: 'sink-001', name: 'vl-prod', sink_type: 'vl', write_url: 'http://vl/insert' }],
@@ -124,11 +124,7 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
         source: {
           id: 'source-001',
           source_type: 'k8s_stdout',
-          cluster_id: 'test03',
-          namespace: 'logplatform',
           agent_namespace: 'novaapm-system',
-          workload_kind: 'Deployment',
-          workload_name: 'order-api',
           parse_rules: [{ name: 'json-parser', rule_type: 'json', enabled: true }],
           collector_config_hash: 'collector-hash-001',
           deployment_manifest_hash: 'manifest-hash-001',
@@ -138,9 +134,7 @@ test('获取 Logs 接入工作台时保留已登记路由草稿配置', async ()
     },
   );
 
-  assert.equal(result.routes[0].source?.clusterId, 'test03');
   assert.equal(result.routes[0].source?.agentNamespace, 'novaapm-system');
-  assert.equal(result.routes[0].source?.collectorYAML, '');
   assert.equal(result.routes[0].route.collectorConfigHash, 'collector-hash-001');
   assert.equal(result.routes[0].source?.deploymentManifestHash, 'manifest-hash-001');
   assert.equal(result.routes[0].source?.parseRules[0].ruleType, 'json');
@@ -232,29 +226,32 @@ test('日志下游端点列表返回 null 时按空列表处理', async () => {
   assert.deepEqual(result, []);
 });
 
-test('查询 logs_collector 运行时状态时映射真实集群资源状态', async () => {
+test('查询 logs_collector 运行时状态时只映射平台持久化的共享 DaemonSet 快照', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.getLogsCollectorRuntimeStatus({ clusterId: 'test03', namespace: 'novaapm-system' }),
     {
       cluster_id: 'test03',
       namespace: 'novaapm-system',
       ready: false,
-      status: 'missing_resources',
-      message: 'logs_collector 基础组件缺失：DaemonSet/novaapm-system/novaapm-logs-agent。请到 K8s / 观测接入重新部署。',
-      resources: [
-        { cluster_id: 'test03', namespace: 'novaapm-system', api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
-      missing_resources: [
-        { cluster_id: 'test03', namespace: 'novaapm-system', api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
+      status: 'degraded',
+      message: 'logs_collector DaemonSet 尚未收敛',
+      desired_nodes: 3,
+      updated_nodes: 2,
+      ready_nodes: 2,
+      available_nodes: 2,
+      config_status: 'pending',
+      observed_at: '2026-07-28T08:00:00Z',
     },
   );
 
   assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/status?cluster_id=test03&namespace=novaapm-system');
   assert.equal(result.ready, false);
-  assert.equal(result.status, 'missing_resources');
-  assert.equal(result.missingResources[0].kind, 'DaemonSet');
-  assert.equal(result.missingResources[0].exists, false);
+  assert.equal(result.status, 'degraded');
+  assert.equal(result.desiredNodes, 3);
+  assert.equal(result.readyNodes, 2);
+  assert.equal(result.configStatus, 'pending');
+  assert.equal(result.observedAt, '2026-07-28T08:00:00Z');
+  assert.equal('missingResources' in result, false);
 });
 
 test('logs_collector 运行时状态查询会迁移旧默认 namespace', async () => {
@@ -265,21 +262,46 @@ test('logs_collector 运行时状态查询会迁移旧默认 namespace', async (
       cluster_id: 'test03',
       namespace: legacyNamespace,
       ready: false,
-      status: 'missing_resources',
-      message: 'logs_collector 基础组件缺失：DaemonSet/novaapm-system/novaapm-logs-agent。请到 K8s / 观测接入重新部署。',
-      resources: [
-        { cluster_id: 'test03', namespace: legacyNamespace, api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
-      missing_resources: [
-        { cluster_id: 'test03', namespace: legacyNamespace, api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
+      status: 'not_deployed',
+      message: '该集群尚未发布 logs_collector 运行时',
     },
   );
 
   assert.equal(normalizeLogsCollectorNamespace(legacyNamespace), defaultLogsCollectorNamespace);
   assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/status?cluster_id=test03&namespace=novaapm-system');
   assert.equal(result.namespace, defaultLogsCollectorNamespace);
-  assert.equal(result.missingResources[0].namespace, defaultLogsCollectorNamespace);
+  assert.equal(result.status, 'not_deployed');
+});
+
+test('显式刷新 logs_collector 状态时只提交集群身份并调用独立 POST 入口', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.refreshLogsCollectorRuntimeStatus({
+      clusterId: 'test03',
+      namespace: 'novaapm-system',
+    }),
+    {
+      cluster_id: 'test03',
+      namespace: 'novaapm-system',
+      ready: true,
+      status: 'ready',
+      message: '集群共享 logs_collector DaemonSet 已就绪',
+      desired_nodes: 3,
+      updated_nodes: 3,
+      ready_nodes: 3,
+      available_nodes: 3,
+      config_status: 'applied',
+      observed_at: '2026-07-28T08:00:00Z',
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/status/refresh');
+  assert.equal(request.init.method, 'POST');
+  assert.deepEqual(request.body, {
+    cluster_id: 'test03',
+    namespace: 'novaapm-system',
+  });
+  assert.equal(result.status, 'ready');
+  assert.equal(result.readyNodes, 3);
 });
 
 test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', async () => {
@@ -328,12 +350,42 @@ test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', asy
   assert.equal(result.resources[0].kind, 'Deployment');
 });
 
-test('发布 K8s logs_collector Runtime 时使用观测运行时接口', async () => {
+test('预览 K8s logs_collector 增量发布时使用集群采集域作为发布边界', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.publishLogsCollectorRuntime({
       clusterId: 'test03',
       namespace: 'novaapm-system',
       taskType: 'incremental',
+    }),
+    {
+      runtime: { id: 'logs-collector:test03:novaapm-system', kind: 'logs_collector', status: 'previewed' },
+      task_type: 'incremental',
+      status: 'previewed',
+      message: '部署预览已生成',
+      requires_confirmation: true,
+      preview_id: 'preview-001',
+      confirmation_token: 'token-001',
+      changed_config_maps: ['novaapm-logs-agent-svc-orders-api-route-001'],
+      collector_config_files: {},
+      resources: [],
+      diffs: [],
+      warnings: [],
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/publish');
+  assert.deepEqual(request.body, {
+    cluster_id: 'test03',
+    namespace: 'novaapm-system',
+    task_type: 'incremental',
+  });
+  assert.equal(result.requiresConfirmation, true);
+  assert.equal(result.taskType, 'incremental');
+});
+
+test('确认 K8s logs_collector Runtime 时只提交不可变预览凭据', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.confirmLogsCollectorRuntime({
       previewId: 'preview-001',
       confirmationToken: 'token-001',
     }),
@@ -360,9 +412,7 @@ test('发布 K8s logs_collector Runtime 时使用观测运行时接口', async (
 
   assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/publish');
   assert.equal(request.init.method, 'POST');
-  assert.equal(request.body.cluster_id, 'test03');
-  assert.equal(request.body.namespace, 'novaapm-system');
-  assert.equal(request.body.task_type, 'incremental');
+  assert.deepEqual(Object.keys(request.body).sort(), ['confirmation_token', 'preview_id']);
   assert.equal(request.body.preview_id, 'preview-001');
   assert.equal(request.body.confirmation_token, 'token-001');
   assert.equal(result.auditId, 'audit-001');
@@ -411,10 +461,9 @@ test('Logs 接入来源只按 K8s 和 VM 展示', () => {
 test('同步 K8s namespace 服务时使用专用 logs onboarding 接口', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.syncK8sServices({
-	  productId: 'product-orders',
+      productId: 'product-orders',
       clusterId: 'test03',
       namespace: 'logplatform',
-      environmentId: 'prod',
       ownerTeam: 'sre',
       workloadKind: 'Deployment',
     }),
@@ -422,8 +471,7 @@ test('同步 K8s namespace 服务时使用专用 logs onboarding 接口', async 
       total: 1,
       services: [{
         created: true,
-        target_id: 'target-001',
-        service: { id: 'svc-001', name: 'utrace-api', identity_type: 'k8s_workload', service_type: 'k8s业务', source: 'k8s', sync_status: 'synced' },
+        service: { id: 'svc-001', key: 'utrace-api', name: 'utrace-api', source: 'k8s', sync_status: 'synced' },
         workload: { kind: 'Deployment', name: 'utrace-api', namespace: 'logplatform' },
       }],
     },
@@ -433,7 +481,7 @@ test('同步 K8s namespace 服务时使用专用 logs onboarding 接口', async 
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.cluster_id, 'test03');
   assert.equal(request.body.namespace, 'logplatform');
-  assert.equal(result.services[0].service.serviceType, 'k8s业务');
+  assert.equal(result.services[0].service.key, 'utrace-api');
   assert.equal(result.services[0].created, true);
 });
 
@@ -442,24 +490,12 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
     () => logsApi.previewRoute({
       routeId: 'route-001',
       serviceId: 'svc-001',
+      serviceDeploymentId: 'deployment-k8s-001',
       sourceType: 'k8s_stdout',
-      agentGroupId: 'ag-001',
       endpointId: '',
       k8s: {
-        clusterId: 'test03',
-        namespace: 'logplatform',
         agentNamespace: 'novaapm-system',
-        workloadKind: 'Deployment',
-        workloadName: 'api',
-        workloadSelector: { app: 'api' },
-        runtimeLogPaths: ['/data/docker/containers'],
-        collectorFragmentYAML: 'receivers:\n  file_log/api:\nservice:\n  pipelines:\n    logs/api:\n',
         parseRules: [{ name: 'text', ruleType: 'regex', pattern: '^(?P<level>[A-Z]+) (?P<message>.*)$' }],
-      },
-      vm: {
-        hostGroup: 'legacy-vms',
-        pathPattern: '/data/logs/*.log',
-        collectorYAML: 'legacy collector yaml',
       },
     }),
     {
@@ -485,15 +521,19 @@ test('预览 Logs route 时使用 snake_case body 并传递解析策略', async 
   assert.equal(request.path, '/api/v1/logs/routes/preview');
   assert.equal(request.init.method, 'POST');
   assert.equal(request.body.service_id, 'svc-001');
+  assert.equal(request.body.service_deployment_id, 'deployment-k8s-001');
+  assert.equal(request.body.environment_id, undefined);
+  assert.equal(request.body.target_id, undefined);
   assert.equal(request.body.route_id, 'route-001');
   assert.equal(request.body.source_type, 'k8s_stdout');
-  assert.equal(request.body.agent_group_id, 'ag-001');
   assert.equal(request.body.endpoint_id, '');
-  assert.equal(request.body.k8s.cluster_id, 'test03');
-  assert.deepEqual(request.body.k8s.workload_selector, { app: 'api' });
-  assert.equal(request.body.k8s.runtime_log_paths, undefined);
+  assert.equal('cluster_id' in request.body.k8s, false);
+  assert.equal('namespace' in request.body.k8s, false);
+  assert.equal('workload_kind' in request.body.k8s, false);
+  assert.equal('workload_name' in request.body.k8s, false);
+  assert.equal('workload_selector' in request.body.k8s, false);
   assert.equal(request.body.k8s.parse_rules[0].rule_type, 'regex');
-  assert.equal(request.body.k8s.collector_fragment_yaml.includes('file_log/api'), true);
+  assert.equal('collector_fragment_yaml' in request.body.k8s, false);
   assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(request.body.vm.collector_yaml, undefined);
   assert.equal(request.body.vm.host_group, undefined);
@@ -510,15 +550,11 @@ test('更新 Logs route 时使用 PATCH 并保留 route_id', async () => {
     () => logsApi.updateRoute('route-001', {
       routeId: 'route-001',
       serviceId: 'svc-001',
+      serviceDeploymentId: 'deployment-k8s-001',
       sourceType: 'k8s_stdout',
-      agentGroupId: 'ag-001',
       endpointId: 'sink-001',
       k8s: {
-        clusterId: 'test03',
-        namespace: 'logplatform',
         agentNamespace: 'novaapm-system',
-        workloadKind: 'Deployment',
-        workloadName: 'api',
       },
     }),
     {
@@ -533,7 +569,6 @@ test('更新 Logs route 时使用 PATCH 并保留 route_id', async () => {
   assert.equal(request.body.route_id, 'route-001');
   assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(result.route.id, 'route-001');
-  assert.equal(result.source?.collectorYAML, '');
 });
 
 test('查看 Logs route 采集配置 hash 对应服务 ConfigMap 片段', async () => {
@@ -572,6 +607,7 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
   const { request } = await captureRequest(
     () => logsApi.previewRoute({
       serviceId: 'svc-vm',
+      serviceDeploymentId: 'deployment-vm-001',
       sourceType: 'vm_file',
       agentGroupId: '',
       endpointId: 'sink-vm',
@@ -581,7 +617,6 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
       },
       vm: {
         pathPattern: '/data/logs/*.log',
-        collectorYAML: 'receivers:\n  file_log/vm:\n',
       },
     }),
     {
@@ -596,8 +631,11 @@ test('VM Logs route payload 不携带 K8s 残留配置', async () => {
   );
 
   assert.equal(request.body.source_type, 'vm_file');
-  assert.equal(request.body.vm.collector_yaml, 'receivers:\n  file_log/vm:\n');
-  assert.equal('host_group' in request.body.vm, false);
+  assert.equal(request.body.environment_id, undefined);
+  assert.equal(request.body.target_id, undefined);
+  assert.equal(request.body.service_deployment_id, 'deployment-vm-001');
+  assert.equal(request.body.vm.collector_yaml, undefined);
+  assert.equal(request.body.vm.host_group, undefined);
   assert.equal('host_selector' in request.body.vm, false);
   assert.equal(request.body.k8s.collector_yaml, undefined);
   assert.equal(request.body.k8s.cluster_id, undefined);
@@ -646,81 +684,45 @@ test('发布 VM Logs route 时传递 preview confirmation token', async () => {
   assert.equal('diffs' in result, false);
 });
 
-test('读取 VM 手工安装材料并映射 snake_case 字段', async () => {
-  const { request, result } = await captureRequest(
-    () => logsApi.getVMInstallation('route-vm-001'),
-    {
-      route_id: 'route-vm-001',
-      service_id: 'svc-001',
-      collector_config_hash: 'sha256:abc',
-      collector_yaml: 'receivers: {}',
-      install_script: '#!/bin/sh\necho install',
-      health_address_example: '10.0.0.8:13133',
-      prerequisites: ['Linux', 'root 权限'],
-    },
-  );
-
-  assert.equal(request.path, '/api/v1/logs/routes/route-vm-001/vm-installation');
-  assert.equal(request.init.method, undefined);
-  assert.deepEqual(result, {
-    routeId: 'route-vm-001',
-    serviceId: 'svc-001',
-    collectorConfigHash: 'sha256:abc',
-    collectorYAML: 'receivers: {}',
-    installScript: '#!/bin/sh\necho install',
-    healthAddressExample: '10.0.0.8:13133',
-    prerequisites: ['Linux', 'root 权限'],
-  });
-});
-
-test('VM Agent 节点支持列表、登记、校验和删除', async () => {
-  const listed = await captureRequest(
-    () => logsApi.listVMAgentEndpoints('route-vm-001'),
+test('VM Logs 发布历史按 generation 映射并通过新回滚入口创建发布', async () => {
+  const history = await captureRequest(
+    () => logsApi.getRouteRollouts('route-001'),
     [{
-      id: 'node-001',
-      route_id: 'route-vm-001',
-      service_id: 'svc-001',
-      name: 'vm-a',
-      address: '10.0.0.8:13133',
-      status: 'pending_probe',
-      last_probe_status: 'unreachable',
-      last_probe_message: 'connection refused',
-      last_probe_latency_ms: 24,
-      last_probe_at: '2026-07-12T08:00:00Z',
+      rollout: {
+        id: 'rollout-002', generation: 2, config_hash: 'aabbcc',
+        rollback_of: 'rollout-001', created_by: 'operator', created_at: '2026-07-27T06:00:00Z',
+      },
+      status: 'degraded', expected_targets: 3, converged_targets: 1, failed_targets: 1,
+      pending_targets: 1,
+      targets: [{
+        runtime_target_id: 'host-a', installation_id: 'installation-a',
+        desired_config_hash: 'host-a-v2', reported_config_hash: 'host-a-v1',
+        effective_config_hash: 'host-a-v1', status: 'failed', error_message: 'invalid config',
+      }],
     }],
   );
-  assert.equal(listed.request.path, '/api/v1/logs/routes/route-vm-001/vm-agent-endpoints');
-  assert.deepEqual(listed.result[0], {
-    id: 'node-001',
-    routeId: 'route-vm-001',
-    serviceId: 'svc-001',
-    name: 'vm-a',
-    address: '10.0.0.8:13133',
-    status: 'pending_probe',
-    lastProbeStatus: 'unreachable',
-    lastProbeMessage: 'connection refused',
-    lastProbeLatencyMs: 24,
-    lastProbeAt: '2026-07-12T08:00:00Z',
-  });
+  assert.equal(history.request.path, '/api/v1/logs/routes/route-001/rollouts');
+  assert.equal(history.result[0].generation, 2);
+  assert.equal(history.result[0].rollbackOf, 'rollout-001');
+  assert.equal(history.result[0].targets[0].targetId, 'host-a');
 
-  const created = await captureRequest(
-    () => logsApi.createVMAgentEndpoint('route-vm-001', { name: 'vm-b', address: '10.0.0.9:13133' }),
-    { id: 'node-002', route_id: 'route-vm-001', service_id: 'svc-001', name: 'vm-b', address: '10.0.0.9:13133', status: 'pending_probe' },
+  const rollback = await captureRequest(
+    () => logsApi.rollbackRoute('route-001', 'rollout-001'),
+    { status: 'pending', message: '等待 Agent 应用', warnings: [] },
   );
-  assert.equal(created.request.init.method, 'POST');
-  assert.deepEqual(created.request.body, { name: 'vm-b', address: '10.0.0.9:13133' });
+  assert.equal(rollback.request.path, '/api/v1/logs/routes/route-001/rollbacks');
+  assert.equal(rollback.request.init.method, 'POST');
+  assert.equal(rollback.request.body.source_rollout_id, 'rollout-001');
 
-  const probed = await captureRequest(
-    () => logsApi.probeVMAgentEndpoint('route-vm-001', 'node-002'),
-    { id: 'node-002', route_id: 'route-vm-001', service_id: 'svc-001', name: 'vm-b', address: '10.0.0.9:13133', status: 'reachable', last_probe_status: 'reachable' },
+  const retry = await captureRequest(
+    () => logsApi.retryRouteTarget('route-001', 'host-a'),
+    {
+      runtime_target_id: 'host-a', installation_id: 'installation-a',
+      rollout_id: 'rollout-002', generation: 2, sent: false, queued: true,
+    },
   );
-  assert.equal(probed.request.path, '/api/v1/logs/routes/route-vm-001/vm-agent-endpoints/node-002/probe');
-  assert.equal(probed.request.init.method, 'POST');
-  assert.equal(probed.result.lastProbeStatus, 'reachable');
-
-  const removed = await captureRequest(
-    () => logsApi.deleteVMAgentEndpoint('route-vm-001', 'node-002'),
-  );
-  assert.equal(removed.request.path, '/api/v1/logs/routes/route-vm-001/vm-agent-endpoints/node-002');
-  assert.equal(removed.request.init.method, 'DELETE');
+  assert.equal(retry.request.path, '/api/v1/logs/routes/route-001/retries');
+  assert.equal(retry.request.init.method, 'POST');
+  assert.equal(retry.request.body.runtime_target_id, 'host-a');
+  assert.equal(retry.result.queued, true);
 });

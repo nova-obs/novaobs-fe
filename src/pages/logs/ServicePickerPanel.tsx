@@ -5,19 +5,22 @@ import type { LogRouteView, LogsServiceSummary } from './api';
 export type StatusTone = 'success' | 'warning' | 'danger' | 'muted' | 'primary';
 
 export function serviceDisplayName(service: LogsServiceSummary) {
-  return service.displayName || service.name;
+  return service.name;
 }
 
 export function routeLifecycle(route: LogRouteView): { label: string; tone: StatusTone; detail: string } {
   const status = route.route.lastPublishStatus || route.route.status;
-  if (route.route.sourceType === 'vm_file') {
-    if (status === 'failed' || status === 'error') {
-      return { label: '配置失败', tone: 'danger', detail: route.route.lastPublishMessage || '采集配置生成失败' };
-    }
-    return { label: '手工接入', tone: 'muted', detail: '通过安装材料和节点回填完成接入' };
-  }
-  if (status === 'applied' || status === 'ready_for_agent_sync') {
+  if (status === 'applied' || status === 'converged' || status === 'ready_for_agent_sync') {
     return { label: '已发布', tone: 'success', detail: route.route.lastPublishMessage || '采集配置已下发' };
+  }
+  if (status === 'degraded') {
+    return { label: '部分异常', tone: 'warning', detail: route.route.lastPublishMessage || '部分预期目标尚未收敛' };
+  }
+  if (status === 'blocked') {
+    return { label: '已阻塞', tone: 'danger', detail: route.route.lastPublishMessage || '当前发布不满足执行条件' };
+  }
+  if (status === 'pending' || status === 'applying') {
+    return { label: '发布中', tone: 'primary', detail: route.route.lastPublishMessage || '等待预期目标应用配置' };
   }
   if (status === 'previewed') {
     return { label: '待确认', tone: 'primary', detail: '发布预览已生成' };
@@ -36,9 +39,9 @@ export function routeLifecycle(route: LogRouteView): { label: string; tone: Stat
 
 export function routeAccessPriority(route: LogRouteView) {
   const status = route.route.lastPublishStatus || route.route.status;
-  if (status === 'applied' || status === 'ready_for_agent_sync') return 0;
-  if (status === 'previewed' || status === 'pending_publish') return 1;
-  if (status === 'failed' || status === 'error') return 2;
+  if (status === 'applied' || status === 'converged' || status === 'ready_for_agent_sync') return 0;
+  if (status === 'previewed' || status === 'pending_publish' || status === 'pending' || status === 'applying') return 1;
+  if (status === 'degraded' || status === 'blocked' || status === 'failed' || status === 'error') return 2;
   if (route.route.collectorConfigHash) return 3;
   return 4;
 }
@@ -46,7 +49,7 @@ export function routeAccessPriority(route: LogRouteView) {
 export function isCollectingRoute(route: LogRouteView | null | undefined) {
   if (!route) return false;
   const status = route.route.lastPublishStatus || route.route.status;
-  return route.route.sourceType !== 'vm_file' && (status === 'applied' || status === 'ready_for_agent_sync');
+  return status === 'applied' || status === 'converged' || status === 'ready_for_agent_sync';
 }
 
 export function statusPillClass(tone: StatusTone) {
@@ -84,15 +87,22 @@ function serviceAccessState(serviceRoutes: LogRouteView[]) {
   };
 }
 
-function serviceWorkloadLabel(service: LogsServiceSummary) {
-  if (service.identityType === 'host_process') return service.serviceType || 'host process';
-  return service.serviceType || service.identityType || 'workload';
+function serviceSourceLabel(route?: LogRouteView) {
+  const source = route?.source;
+  if (!source) return '-';
+  if (source.sourceType === 'vm_file') return '主机部署';
+  return 'K8S Workload';
 }
 
-function serviceLogPath(service: LogsServiceSummary) {
-  if (service.identityType === 'host_process') return '/data/logs/*.log';
-  if (!service.namespace && !service.name) return '-';
-  return `/var/log/pods/${service.namespace || '*'}_${service.name || '*'}*/*/*.log`;
+function serviceLogPath(route?: LogRouteView) {
+  return route?.source?.pathPattern || '-';
+}
+
+function serviceScopeLabel(route?: LogRouteView) {
+  if (!route) return '-';
+  const source = route.source;
+  if (!source) return '-';
+  return route.route.serviceDeploymentId || '-';
 }
 
 function serviceFreshnessLabel(service: LogsServiceSummary) {
@@ -148,7 +158,7 @@ export function ServicePickerPanel({
             className="console-input h-9 w-full pl-8 text-sm disabled:cursor-not-allowed disabled:opacity-70"
             value={serviceQuery}
             onChange={(event) => onServiceQueryChange(event.target.value)}
-            placeholder={locked ? '当前路由服务' : '搜索服务、命名空间或标签'}
+            placeholder={locked ? '当前路由服务' : '搜索服务名称、Key 或 Owner'}
             disabled={locked}
           />
         </div>
@@ -165,9 +175,9 @@ export function ServicePickerPanel({
             <thead>
               <tr>
                 <th>服务</th>
-                <th>命名空间</th>
+                <th>来源位置</th>
                 <th className="w-24">状态</th>
-                <th>工作负载</th>
+                <th>采集来源</th>
                 <th>日志路径</th>
                 <th>最近发现</th>
                 <th className="w-24">操作</th>
@@ -177,6 +187,7 @@ export function ServicePickerPanel({
               {services.map((service) => {
                 const serviceRoutes = serviceRoutesByService.get(service.id) ?? [];
                 const serviceRoute = serviceRoutes.find(isCollectingRoute) ?? null;
+                const primaryRoute = serviceRoutes[0];
                 const accessState = serviceAccessState(serviceRoutes);
                 const selected = service.id === selectedServiceId;
                 const selectable = !locked;
@@ -203,18 +214,15 @@ export function ServicePickerPanel({
                         <div className="truncate font-semibold text-on-surface">{serviceDisplayName(service)}</div>
                       </div>
                     </td>
-                    <td className="font-mono text-xs text-muted">
-                      <div className="truncate">{service.namespace || '-'}</div>
-                      <div className="mt-0.5 truncate text-[11px]">{service.cluster || service.environmentId || '-'}</div>
-                    </td>
+                    <td className="font-mono text-xs text-muted">{serviceScopeLabel(primaryRoute)}</td>
                     <td>
                       <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border px-2 py-0.5 text-[11px] font-semibold ${statusPillClass(accessState.tone)}`}>
                         <span className={`h-1.5 w-1.5 rounded-full ${statusDotClass(accessState.tone)}`} />
                         {accessState.label}
                       </span>
                     </td>
-                    <td className="font-mono text-xs text-muted">{serviceWorkloadLabel(service)}</td>
-                    <td className="max-w-[300px] truncate font-mono text-xs text-muted">{serviceLogPath(service)}</td>
+                    <td className="font-mono text-xs text-muted">{serviceSourceLabel(primaryRoute)}</td>
+                    <td className="max-w-[300px] truncate font-mono text-xs text-muted">{serviceLogPath(primaryRoute)}</td>
                     <td className="font-mono text-xs text-muted">{serviceFreshnessLabel(service)}</td>
                     <td>
                       {serviceRoute ? (

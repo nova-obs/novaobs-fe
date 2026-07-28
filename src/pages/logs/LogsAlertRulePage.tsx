@@ -32,7 +32,7 @@ interface ServiceLogLink {
 }
 
 function serviceLabel(service?: LogsServiceSummary | null, fallback = '') {
-  return service?.displayName || service?.name || fallback || '-';
+  return service?.name || fallback || '-';
 }
 
 function buildServiceLogLinks(services: LogsServiceSummary[], routes: LogRouteView[], targets: LogTargetView[]): ServiceLogLink[] {
@@ -307,7 +307,7 @@ export function LogsAlertRuleEditorDrawer({ productId, serviceId: routeServiceId
               <ChevronDown className="h-4 w-4 text-muted" />
             </summary>
             <div className="grid gap-3 border-t border-outline p-4 md:grid-cols-3">
-              <Field label="按字段拆分（逗号分隔）" required={false}><input className={fieldClass} value={groupFields} onChange={(event) => setGroupFields(event.target.value)} placeholder="deployment.environment" /></Field>
+              <Field label="按字段拆分（逗号分隔）" required={false}><input className={fieldClass} value={groupFields} onChange={(event) => setGroupFields(event.target.value)} placeholder="k8s.namespace.name" /></Field>
               <Field label="评估延迟" required={false}><select className={fieldClass} value={evaluationDelay} onChange={(event) => setEvaluationDelay(event.target.value)}><option value="0s">不延迟</option><option value="5s">5 秒</option><option value="10s">10 秒</option></select></Field>
               <Field label="趋势指标" required={false}><select className={fieldClass} value={derivedMetric ? 'yes' : 'no'} onChange={(event) => { const enabled = event.target.value === 'yes'; setDerivedMetric(enabled); if (enabled) setGroupFields(''); }}><option value="no">不生成</option><option value="yes">生成规则级匹配计数</option></select></Field>
             </div>

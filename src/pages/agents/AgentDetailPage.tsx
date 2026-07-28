@@ -1,260 +1,185 @@
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { api } from '../../services/api';
-import type { AgentDetail } from '../../services/types';
-
-function sourceTypeLabel(value: string) {
-  const labels: Record<string, string> = {
-    platform_template: '平台模板',
-    group_override: 'Group Override',
-    service_enrichment_patch: '服务属性补齐',
-    service_pipeline_patch: '服务解析规则',
-  };
-  return labels[value] ?? value;
-}
-
-function runtimeStatusLabel(status: string) {
-  const labels: Record<string, string> = { online: '在线', stale: '心跳超时', offline: '离线' };
-  return labels[status] ?? status;
-}
-
-function runtimeStatusColor(status: string) {
-  if (status === 'online') return 'text-primary';
-  if (status === 'stale') return 'text-amber-500';
-  return 'text-muted';
-}
-
-function formatTime(value: string) {
-  return value ? value.replace('T', ' ').replace('Z', '') : '-';
-}
-
-function ageText(value: string) {
-  if (!value) return '-';
-  const seconds = Math.max(0, Math.round((Date.now() - new Date(value).getTime()) / 1000));
-  if (seconds < 60) return `${seconds}s ago`;
-  if (seconds < 3600) return `${Math.round(seconds / 60)}m ago`;
-  return `${Math.round(seconds / 3600)}h ago`;
-}
+import type { AgentAttribute, AgentDetail } from '../../services/types';
+import { safeLogsReturnPath } from '../logs/logsRuntimeViewModel';
 
 export function AgentDetailPage() {
   const { uid } = useParams<{ uid: string }>();
-  const navigate = useNavigate();
-
-  const { data: detail, isLoading, error, refetch } = useQuery({
+  const [searchParams] = useSearchParams();
+  const returnTo = safeLogsReturnPath(searchParams.get('return_to'));
+  const query = useQuery({
     queryKey: ['agent-detail', uid],
     queryFn: () => api.getAgentDetail(uid!),
-    enabled: !!uid,
+    enabled: Boolean(uid),
     refetchInterval: 10000,
   });
 
-  if (isLoading) {
+  if (query.isLoading) return <div className="console-skeleton h-72" />;
+  if (query.error) {
     return (
-      <div className="flex items-center gap-3 py-12 text-sm text-muted">
-        <RefreshCw className="h-4 w-4 animate-spin" />加载 Agent 详情...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <DataPanel title="加载失败" meta="Agent Detail">
-        <div className="flex items-center gap-3 py-4">
-          <XCircle className="h-5 w-5 text-danger" />
-          <p className="text-sm text-muted">{(error as Error).message || '无法加载 Agent 详情'}</p>
-          <button className="console-button console-button-primary" onClick={() => refetch()}>重试</button>
-        </div>
+      <DataPanel title="Agent 详情加载失败">
+        <div className="flex items-center gap-3 py-4"><XCircle className="h-5 w-5 text-danger" /><p className="text-sm text-muted">{(query.error as Error).message}</p><button className="console-button console-button-primary" onClick={() => query.refetch()}>重试</button></div>
       </DataPanel>
     );
   }
+  if (!query.data) return null;
 
-  if (!detail) return null;
-
-  const { runtime, agent, services, onboardings, configuration } = detail;
-  const service = services[0] ?? null;
-  const inSync = configuration.inSync;
+  const detail = query.data;
+  const { runtime, agent, configuration } = detail;
+  const connectionStatus = runtime.connectionStatus || (runtime.online ? 'online' : 'offline');
+  const processStatus = connectionStatus !== 'online' ? 'unknown' : runtime.processStatus || (runtime.healthy ? 'healthy' : 'unhealthy');
+  const configStatus = runtime.configStatus || configuration.applyStatus || runtime.remoteConfigStatus || 'pending';
+  const lastHeartbeatAt = runtime.lastSeenAt;
+  const healthDescription = runtime.healthObservedAt
+    ? `最后健康观测 ${formatTime(runtime.healthObservedAt)}`
+    : connectionStatus === 'online'
+      ? runtime.lastError || '尚未收到 Collector 健康上报'
+      : '离线时当前进程状态为未知';
 
   return (
-    <div className="space-y-4">
+    <div className="page-shell">
       <div className="page-header">
         <div className="min-w-0">
-          <div className="mb-1 flex items-center gap-2 text-xs font-medium text-muted">
-            <button className="inline-flex items-center gap-1 hover:text-primary" onClick={() => navigate(-1)}>
-              <ArrowLeft className="h-3 w-3" />返回
-            </button>
-            <span>/</span>
-            <Link className="hover:text-primary" to="/logs/agents">采集路由</Link>
-            <span>/</span>
-            <span className="text-primary">Agent Detail</span>
-          </div>
-          <h1 className="page-title truncate">{detail.instanceUid}</h1>
-          <div className="mt-2 flex flex-wrap items-center gap-3 text-xs">
-            <span className={`status-badge ${runtime.online ? 'border-emerald-600/20 bg-emerald-50 text-emerald-700' : 'border-outline bg-surface text-muted'}`}><span className="status-dot" aria-hidden />{runtime.online ? 'online' : 'offline'}</span>
-            <span className={`status-badge ${runtime.healthy ? 'border-emerald-600/20 bg-emerald-50 text-emerald-700' : 'border-warning/20 bg-amber-50 text-warning'}`}><span className="status-dot" aria-hidden />{runtime.healthy ? 'healthy' : 'unhealthy'}</span>
-            <span className={`font-semibold ${runtimeStatusColor(runtime.runtimeStatus)}`}>{runtimeStatusLabel(runtime.runtimeStatus)}</span>
-            <span className="text-muted">last seen: {ageText(runtime.lastSeenAt)}</span>
-          </div>
+          <Link className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-muted hover:text-primary" to={returnTo}><ArrowLeft className="h-3.5 w-3.5" />返回采集运行</Link>
+          <h1 className="page-title truncate">{runtime.hostname || runtime.nodeName || runtime.runtimeIdentity || detail.instanceUid}</h1>
+          <p className="page-description font-mono">{runtime.installationId || detail.instanceUid}</p>
         </div>
-        <button className="console-icon-button" aria-label="刷新 Agent 详情" onClick={() => refetch()} title="刷新">
-          <RefreshCw className="h-4 w-4" />
-        </button>
+        <button className="console-icon-button" aria-label="刷新 Agent 详情" title="刷新" onClick={() => void query.refetch()}><RefreshCw className={`h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} /></button>
       </div>
 
-      {!runtime.remoteConfigCapable ? (
-        <Notice tone="amber" title="Remote Config 不可用" message="Agent 未声明可接收远程配置，平台暂不能向它下发采集配置。" />
-      ) : null}
-      {configuration.expectedConfigHash && inSync ? (
-        <Notice tone="green" title="配置已对齐" message="发布目标与 Agent 当前生效配置一致。" />
-      ) : null}
-      {configuration.expectedConfigHash && !inSync ? (
-        <Notice tone="amber" title="配置存在差异" message="Agent 尚未应用最新发布目标，请查看最近下发状态与错误信息。" />
-      ) : null}
+      <div className="grid overflow-hidden rounded-md border border-outline bg-white sm:grid-cols-3">
+        <AxisSummary label="连接状态" value={connectionStatus} description={lastHeartbeatAt ? `最后心跳 ${formatTime(lastHeartbeatAt)}` : '尚未收到心跳'} />
+        <AxisSummary label="进程状态" value={processStatus} description={healthDescription} />
+        <AxisSummary label="配置状态" value={configStatus} description={configuration.inSync ? '生效配置与期望一致' : configuration.expectedConfigHash ? '尚未收敛到期望配置' : '尚无期望配置'} />
+      </div>
 
-      <div className="console-workbench grid items-start gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="console-detail-rail space-y-4">
-          <DataPanel title="运行态" meta={runtimeStatusLabel(runtime.runtimeStatus)}>
+      {!runtime.remoteConfigCapable ? <Notice tone="warning" title="Remote Config 不可用" message="该 Agent 未声明远程配置能力，平台不能向它下发采集配置。" /> : null}
+      {connectionStatus === 'online' && configuration.expectedConfigHash && !configuration.inSync ? <Notice tone="warning" title="配置尚未收敛" message="Agent 当前生效 hash 与发布目标不一致，请检查应用状态和最近错误。" /> : null}
+      <div className="grid gap-3 xl:grid-cols-[360px_minmax(0,1fr)]">
+        <div className="space-y-3">
+          <DataPanel title="安装与运行身份">
             <InfoGrid items={[
-              ['服务', service ? service.displayName || service.name : runtime.serviceId || '-'],
-              ['环境', service?.environmentId || '-'],
-              ['Service ID', runtime.serviceId || '-'],
-              ['Remote Config', runtime.remoteConfigStatus || 'unset'],
-              ['支持下发', String(runtime.remoteConfigCapable)],
-              ['版本', runtime.version || '-'],
+              ['Installation ID', runtime.installationId || '-'],
+              ['Host Asset ID', runtime.hostAssetId || '-'],
+              ['Agent Role', runtime.agentRole || '-'],
+              ['最后心跳', formatTime(lastHeartbeatAt)],
+              ['健康观测', formatTime(runtime.healthObservedAt)],
+              ['Instance UID', detail.instanceUid],
               ['Runtime Identity', runtime.runtimeIdentity || '-'],
-              ['opamp_instance_uid', runtime.opampInstanceUid || runtime.instanceUid || '-'],
+              ['版本', runtime.version || '-'],
               ['主机', runtime.hostname || '-'],
-              ['Pod', runtime.podName || '-'],
-              ['Pod UID', runtime.podUid || '-'],
               ['Node', runtime.nodeName || '-'],
-              ['Pod IP', runtime.podIp || runtime.ip || '-'],
-              ['Cluster', runtime.clusterId || '-'],
-              ['Namespace', runtime.namespace || '-'],
-              ['Agent Namespace', runtime.agentNamespace || '-'],
-              ['最后心跳', formatTime(runtime.lastSeenAt)],
-              ['能力位', String(runtime.capabilities)],
+              ['Pod', runtime.podName || '-'],
+              ['Cluster / Namespace', [runtime.clusterId, runtime.namespace].filter(Boolean).join(' / ') || '-'],
             ]} />
-            {runtime.lastError ? <p className="console-notice console-notice-danger mt-3 font-mono">{runtime.lastError}</p> : null}
-          </DataPanel>
-
-          <DataPanel title="服务绑定" meta={`${services.length} 个服务 · ${onboardings.length} 条接入记录`}>
-            {services.length === 0 ? <p className="py-3 text-sm text-muted">服务绑定为空</p> : (
-              <div className="space-y-2">
-                {services.map((item) => (
-                  <div key={item.id} className="rounded border border-outline bg-surface-lowest p-3">
-                    <div className="font-semibold text-primary">{item.displayName || item.name}</div>
-                    <div className="mt-1 text-xs text-muted">{item.environmentId || '-'} · {item.cluster || '-'} · {item.namespace || '-'}</div>
-                    <div className="mt-1 text-xs text-muted">owner: {item.ownerTeam || item.owner || '-'}</div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </DataPanel>
-
-          <DataPanel title="属性" meta={`${agent.identifyingAttributes.length} identifying · ${agent.nonIdentifyingAttributes.length} other`}>
-            <AttributeList title="Identifying" items={agent.identifyingAttributes} />
-            <AttributeList title="Non-identifying" items={agent.nonIdentifyingAttributes} />
           </DataPanel>
         </div>
 
-        <div className="space-y-4">
-          <DataPanel title="配置状态" meta={configuration.applyStatus || runtime.remoteConfigStatus || 'unset'}>
-            <div className="grid gap-3 xl:grid-cols-2">
-              <ConfigBlock title="当前生效配置" body={configuration.effectiveConfig} />
-              <ConfigBlock title="最近下发配置" body={configuration.lastRemoteConfig} />
-            </div>
+        <div className="space-y-3">
+          <DataPanel title="配置收敛">
+            <InfoGrid items={[
+              ['期望 Hash', configuration.expectedConfigHash || '-'],
+              ['生效 Hash', configuration.effectiveConfigHash || '-'],
+              ['最近下发 Hash', configuration.lastRemoteConfigHash || '-'],
+              ['应用状态', configuration.applyStatus || configStatus],
+            ]} />
+            {runtime.lastError ? <div className="console-notice console-notice-danger mt-3 font-mono text-xs">{runtime.lastError}</div> : null}
           </DataPanel>
 
-          <DataPanel title="配置来源" meta={`${configuration.configSources?.sourceBreakdown.length ?? 0} 个来源`}>
-            <SourceBreakdown detail={detail} />
-            <div className="console-audit-meta mt-3 border-t border-outline pt-3">
-              <span>运行实例 {runtime.hostname || runtime.podName || runtime.runtimeIdentity || '未上报'}</span>
-              <span>last seen {formatTime(runtime.lastSeenAt)}</span>
-              <span>apply {configuration.applyStatus || 'unset'}</span>
+          <details className="rounded-md border border-outline bg-white">
+            <summary className="cursor-pointer px-3 py-2.5 text-sm font-semibold text-on-surface">高级诊断</summary>
+            <div className="space-y-4 border-t border-outline p-3">
+              <p className="text-xs text-muted">以下内容用于排障，已对常见凭据字段脱敏；业务页面不以这些原始信息判断运行结果。</p>
+              <DiagnosticConfig title="当前生效配置" body={redactConfig(configuration.effectiveConfig)} />
+              <DiagnosticConfig title="最近下发配置" body={redactConfig(configuration.lastRemoteConfig)} />
+              <AttributeTable title="Identifying Attributes" items={agent.identifyingAttributes} />
+              <AttributeTable title="Non-identifying Attributes" items={agent.nonIdentifyingAttributes} />
+              <SourceBreakdown detail={detail} />
+              <div className="font-mono text-[11px] text-muted">capabilities: {runtime.capabilities} · opamp_instance_uid: {runtime.opampInstanceUid || runtime.instanceUid}</div>
             </div>
-          </DataPanel>
+          </details>
         </div>
       </div>
+    </div>
+  );
+}
+
+function AxisSummary({ label, value, description }: { label: string; value: string; description: string }) {
+  const tone = axisTone(value);
+  return (
+    <div className="border-b border-outline p-3 sm:border-r xl:border-b-0 last:border-r-0">
+      <div className="text-[11px] font-semibold text-muted">{label}</div>
+      <div className={`mt-1 inline-flex items-center gap-1.5 text-sm font-semibold ${tone}`}><span className="h-1.5 w-1.5 rounded-full bg-current" />{axisLabel(value)}</div>
+      <div className="mt-1 text-xs text-muted">{description}</div>
     </div>
   );
 }
 
 function InfoGrid({ items }: { items: Array<[string, string]> }) {
-  return (
-    <div className="grid grid-cols-2 gap-3 text-xs">
-      {items.map(([label, value]) => (
-        <div key={label} className="min-w-0">
-          <div className="text-muted">{label}</div>
-          <div className="mt-0.5 break-all font-mono text-on-surface">{value}</div>
-        </div>
-      ))}
-    </div>
-  );
+  return <div className="grid grid-cols-2 gap-3 text-xs">{items.map(([label, value]) => <div key={label} className="min-w-0"><div className="text-muted">{label}</div><div className="mt-1 break-all font-mono text-on-surface">{value}</div></div>)}</div>;
 }
 
-function ConfigBlock({ title, body }: { title: string; body: string }) {
-  return (
-    <div>
-      <div className="mb-1 text-xs font-semibold text-muted">{title}</div>
-      <pre className="max-h-80 overflow-auto rounded border border-outline bg-white p-3 font-mono text-[11px] text-on-surface whitespace-pre-wrap break-all">
-        {body || '(empty)'}
-      </pre>
-    </div>
-  );
+function DiagnosticConfig({ title, body }: { title: string; body: string }) {
+  return <section><h3 className="mb-1 text-xs font-semibold">{title}</h3><pre className="max-h-72 overflow-auto rounded border border-outline bg-surface p-3 font-mono text-[11px] leading-5 whitespace-pre-wrap">{body || '(empty)'}</pre></section>;
 }
 
-function AttributeList({ title, items }: { title: string; items: Array<{ key: string; valueText: string }> }) {
-  if (items.length === 0) return null;
+function AttributeTable({ title, items }: { title: string; items: AgentAttribute[] }) {
   return (
-    <div className="mb-4 last:mb-0">
-      <div className="mb-2 text-xs font-semibold text-on-surface">{title}</div>
-      <div className="space-y-1 max-h-56 overflow-auto">
-        {items.map((item, index) => (
-          <div key={`${item.key}-${index}`} className="rounded border border-outline bg-surface-lowest p-2 text-xs">
-            <div className="font-mono text-primary">{item.key}</div>
-            <div className="mt-1 break-all font-mono text-on-surface">{item.valueText}</div>
-          </div>
-        ))}
-      </div>
-    </div>
+    <section>
+      <h3 className="mb-1 text-xs font-semibold">{title}</h3>
+      {items.length === 0 ? <div className="text-xs text-muted">无属性</div> : <div className="max-h-64 overflow-auto rounded border border-outline"><table className="console-table w-full"><tbody>{items.map((item, index) => <tr key={`${item.key}-${index}`}><td className="font-mono text-xs text-primary">{item.key}</td><td className="break-all font-mono text-xs">{redactValue(item.key, item.valueText)}</td></tr>)}</tbody></table></div>}
+    </section>
   );
 }
 
 function SourceBreakdown({ detail }: { detail: AgentDetail }) {
-  const sources = detail.configuration.configSources;
-  if (!sources || sources.sourceBreakdown.length === 0) {
-    return <p className="py-3 text-sm text-muted">配置来源为空</p>;
-  }
+  const sources = detail.configuration.configSources?.sourceBreakdown ?? [];
   return (
-    <div className="space-y-2">
-      {sources.sourceBreakdown.map((source) => (
-        <div key={`${source.type}-${source.id}`} className="rounded border border-outline bg-surface-lowest p-3 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-semibold text-primary">{sourceTypeLabel(source.type)}</span>
-            {source.status ? <span className="text-muted">{source.status}</span> : null}
-          </div>
-          <div className="mt-1 text-muted">{source.name || source.id} · {source.status || '-'}</div>
-          {source.warnings.length > 0 ? <div className="mt-1 text-warning">{source.warnings.join('; ')}</div> : null}
-        </div>
-      ))}
-    </div>
+    <section>
+      <h3 className="mb-1 text-xs font-semibold">配置来源</h3>
+      {sources.length === 0 ? <div className="text-xs text-muted">无配置来源</div> : <div className="divide-y divide-outline rounded border border-outline">{sources.map((source) => <div key={`${source.type}-${source.id}`} className="p-2 text-xs"><div className="font-semibold">{source.name || source.id}</div><div className="mt-1 font-mono text-muted">{source.type} · {source.status || '-'}</div>{source.warnings.length ? <div className="mt-1 text-warning">{source.warnings.join('；')}</div> : null}</div>)}</div>}
+    </section>
   );
 }
 
-function Notice({ tone, title, message }: { tone: 'amber' | 'red' | 'green'; title: string; message: string }) {
-  const color = tone === 'red'
-    ? 'console-notice-danger'
-    : tone === 'green'
-      ? 'console-notice-success'
-      : 'console-notice-warning';
-  const Icon = tone === 'red' ? XCircle : tone === 'green' ? CheckCircle : AlertTriangle;
-  return (
-    <div className={`console-notice mt-3 ${color}`}>
-      <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-      <div>
-        <p className="text-sm font-semibold">{title}</p>
-        <p className="mt-1 text-xs">{message}</p>
-      </div>
-    </div>
-  );
+function Notice({ tone, title, message }: { tone: 'warning' | 'danger' | 'success'; title: string; message: string }) {
+  const Icon = tone === 'danger' ? XCircle : tone === 'success' ? CheckCircle : AlertTriangle;
+  const className = tone === 'danger' ? 'console-notice-danger' : tone === 'success' ? 'console-notice-success' : 'console-notice-warning';
+  return <div className={`console-notice ${className}`}><Icon className="mt-0.5 h-4 w-4 shrink-0" /><div><div className="text-sm font-semibold">{title}</div><div className="mt-1 text-xs">{message}</div></div></div>;
+}
+
+function axisTone(value: string) {
+  if (['online', 'healthy', 'applied'].includes(value)) return 'text-emerald-700';
+  if (['unhealthy', 'failed', 'drift'].includes(value)) return 'text-danger';
+  if (['applying'].includes(value)) return 'text-primary';
+  return 'text-muted';
+}
+
+function axisLabel(value: string) {
+  const labels: Record<string, string> = {
+    online: '在线', offline: '离线', revoked: '已吊销',
+    healthy: '健康', unhealthy: '异常', unknown: '未知',
+    pending: '待下发', applying: '应用中', applied: '已应用', failed: '失败', drift: '配置漂移',
+  };
+  return (labels[value] ?? value) || '-';
+}
+
+function redactValue(key: string, value: string) {
+  return /(token|secret|password|authorization|api[_-]?key|credential)/i.test(key) ? '******' : value;
+}
+
+function redactConfig(value: string) {
+  return value
+    .split('\n')
+    .map((line) => /(token|secret|password|authorization|api[_-]?key|credential)\s*:/i.test(line) ? `${line.split(':')[0]}: ******` : line)
+    .join('\n');
+}
+
+function formatTime(value: string) {
+  if (!value) return '-';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleString('zh-CN', { hour12: false });
 }

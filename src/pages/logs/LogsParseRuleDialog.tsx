@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { AlertTriangle, Play, RefreshCw, Settings2, XCircle } from 'lucide-react';
 import type { LogParsePreviewResult } from './api';
 
-export type ParserMode = 'none' | 'json' | 'regex';
+export type ParserMode = 'none' | 'json' | 'regex' | 'otel_json';
 
 interface ParsePreviewMutationState {
   isPending: boolean;
@@ -48,6 +48,15 @@ export function LogsParseRuleDialog({
 }: LogsParseRuleDialogProps) {
   if (!open || typeof document === 'undefined') return null;
 
+  function changeParserMode(value: ParserMode) {
+    onParserDraftModeChange(value);
+    if (value === 'otel_json' && (!parserDraftRuleName || parserDraftRuleName === 'default-parser')) {
+      onParserDraftRuleNameChange('novaapm-json-v1');
+    } else if (value !== 'otel_json' && parserDraftRuleName === 'novaapm-json-v1') {
+      onParserDraftRuleNameChange('default-parser');
+    }
+  }
+
   return createPortal((
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/32 px-4 py-6">
       <div className="flex max-h-[88vh] w-full max-w-[1080px] flex-col overflow-hidden rounded-lg border border-outline bg-white shadow-[0_24px_80px_rgba(24,52,96,0.28)]">
@@ -79,8 +88,9 @@ export function LogsParseRuleDialog({
             <div className="grid gap-3 overflow-auto p-4">
               <label className="text-xs font-semibold text-muted">
                 规则类型
-                <select className="console-input mt-1 w-full" value={parserDraftMode} onChange={(event) => onParserDraftModeChange(event.target.value as ParserMode)}>
+                <select className="console-input mt-1 w-full" value={parserDraftMode} onChange={(event) => changeParserMode(event.target.value as ParserMode)}>
                   <option value="none">不解析</option>
+                  <option value="otel_json">OTel JSON（novaapm-json-v1）</option>
                   <option value="json">JSON</option>
                   <option value="regex">Regex</option>
                 </select>
@@ -89,10 +99,17 @@ export function LogsParseRuleDialog({
                 规则名
                 <input className="console-input mt-1 w-full" value={parserDraftRuleName} onChange={(event) => onParserDraftRuleNameChange(event.target.value)} disabled={parserDraftMode === 'none'} />
               </label>
-              <label className="text-xs font-semibold text-muted">
-                Regex Pattern
-                <textarea className="console-input mt-1 min-h-[120px] w-full resize-y font-mono text-xs leading-5" value={parserDraftPattern} onChange={(event) => onParserDraftPatternChange(event.target.value)} disabled={parserDraftMode !== 'regex'} />
-              </label>
+              {parserDraftMode === 'regex' ? (
+                <label className="text-xs font-semibold text-muted">
+                  Regex Pattern
+                  <textarea className="console-input mt-1 min-h-[120px] w-full resize-y font-mono text-xs leading-5" value={parserDraftPattern} onChange={(event) => onParserDraftPatternChange(event.target.value)} />
+                </label>
+              ) : null}
+              {parserDraftMode === 'otel_json' ? (
+                <div className="console-notice console-notice-info">
+                  OTel JSON 会把 timestamp、level、message 映射到日志时间、严重度和正文，并保留 event_name 与链路字段。
+                </div>
+              ) : null}
               {parserDraftMode === 'regex' && !parseDraftValid ? <WarnLine message="Regex 需要使用命名捕获组，例如 (?P<level>INFO)。" /> : null}
             </div>
           </section>

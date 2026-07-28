@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseVMEndpointDraft, renderK8sRouteFragmentDraft } from './LogsOnboardingPage.tsx';
+import { renderK8sRouteFragmentDraft } from './LogsOnboardingPage.tsx';
+import { issueHostEnrollmentToken, validateHostLogPath } from './VMOnboardingFlow.tsx';
 import { isCollectingRoute, routeLifecycle } from './ServicePickerPanel.tsx';
 
 const baseInput = {
@@ -8,7 +9,6 @@ const baseInput = {
   workloadName: 'payment-api',
 	serviceId: 'svc-payment',
   serviceName: 'payment-api',
-  environmentId: 'prod',
   endpointWriteURL: 'http://vl.prod:9428/insert/opentelemetry/v1/logs',
   accountId: '',
   projectId: '',
@@ -39,42 +39,94 @@ test('业务 Collector 使用 service.name 区分同一产品内服务并保留�
 	assert.match(yaml, /key: novaapm\.service_id\n        value: "svc-payment"/);
 });
 
-test('VM 节点批量录入支持名称加地址或仅地址', () => {
-  assert.deepEqual(parseVMEndpointDraft('vm-a,10.0.0.8:13133\n10.0.0.9:13133'), {
-    items: [
-      { name: 'vm-a', address: '10.0.0.8:13133' },
-      { name: '10.0.0.9:13133', address: '10.0.0.9:13133' },
-    ],
-    error: '',
-  });
+test('VM 日志路径必须位于部署目标允许根目录内', () => {
+  assert.equal(validateHostLogPath('/data/logs/orders/*.log', ['/data/logs']), '');
+  assert.equal(validateHostLogPath('/data/logs2/orders.log', ['/data/logs']), '日志路径必须位于部署目标允许的日志根目录内');
+  assert.equal(validateHostLogPath('../orders.log', ['/data/logs']), '日志路径必须是绝对路径');
+  assert.equal(validateHostLogPath('/data/logs/../secret', ['/data/logs']), '日志路径不能包含 ..');
 });
 
-test('VM 节点批量录入就地报告错误行', () => {
-  assert.deepEqual(parseVMEndpointDraft('vm-a,10.0.0.8'), {
-    items: [],
-    error: '第 1 行地址格式错误，请填写 host:port',
-  });
-  assert.equal(parseVMEndpointDraft('').error, '请至少填写一个 VM 节点地址');
+test('注册令牌过期后复用同一条待注册 Installation 重新签发', async () => {
+  const calls = [];
+  const client = {
+    getCollectorInstallations: async () => [{
+      installationId: 'installation-pending',
+      hostAssetId: 'host-1',
+      agentRole: 'logs_agent',
+      status: 'pending',
+    }],
+    createCollectorInstallation: async () => {
+      calls.push('create');
+      throw new Error('不应创建第二条 Installation');
+    },
+    issueCollectorEnrollmentToken: async (installationId) => {
+      calls.push(`issue:${installationId}`);
+      return { installation: { installationId }, token: 'stub-token' };
+    },
+  };
+
+  const result = await issueHostEnrollmentToken(client, 'host-1');
+
+  assert.equal(result.token, 'stub-token');
+  assert.deepEqual(calls, ['issue:installation-pending']);
 });
 
-test('历史 VM 自动下发状态统一解释为手工接入且不算采集中', () => {
+test('主机尚无 Installation 时先创建再签发注册令牌', async () => {
+  const calls = [];
+  const client = {
+    getCollectorInstallations: async () => [],
+    createCollectorInstallation: async ({ hostAssetId, agentRole }) => {
+      calls.push(`create:${hostAssetId}:${agentRole}`);
+      return { installationId: 'installation-new' };
+    },
+    issueCollectorEnrollmentToken: async (installationId) => {
+      calls.push(`issue:${installationId}`);
+      return { installation: { installationId }, token: 'new-token' };
+    },
+  };
+
+  const result = await issueHostEnrollmentToken(client, 'host-1');
+
+  assert.equal(result.token, 'new-token');
+  assert.deepEqual(calls, ['create:host-1:logs_agent', 'issue:installation-new']);
+});
+
+test('已经完成注册的日志 Agent 不允许重新走 Enrollment 流程', async () => {
+  const client = {
+    getCollectorInstallations: async () => [{
+      installationId: 'installation-active',
+      hostAssetId: 'host-1',
+      agentRole: 'logs_agent',
+      status: 'active',
+    }],
+    createCollectorInstallation: async () => {
+      throw new Error('不应创建第二条 Installation');
+    },
+    issueCollectorEnrollmentToken: async () => {
+      throw new Error('不应签发 Enrollment Token');
+    },
+  };
+
+  await assert.rejects(
+    issueHostEnrollmentToken(client, 'host-1'),
+    /已完成注册.*轮换安装凭据/,
+  );
+});
+
+test('VM 已应用状态按平台发布结果解释为采集中', () => {
   const route = {
     route: {
       sourceType: 'vm_file',
-      status: 'awaiting_nodes',
-      lastPublishStatus: 'ready_for_agent_sync',
+      status: 'active',
+      lastPublishStatus: 'applied',
       lastPublishMessage: '旧状态',
       collectorConfigHash: 'hash-001',
     },
     source: { sourceType: 'vm_file', pathPattern: '/data/logs/*.log' },
   };
 
-  assert.deepEqual(routeLifecycle(route), {
-    label: '手工接入',
-    tone: 'muted',
-    detail: '通过安装材料和节点回填完成接入',
-  });
-  assert.equal(isCollectingRoute(route), false);
+  assert.equal(routeLifecycle(route).label, '已发布');
+  assert.equal(isCollectingRoute(route), true);
 });
 
 test('历史 K8s 已应用状态仍按采集中处理', () => {
@@ -83,4 +135,28 @@ test('历史 K8s 已应用状态仍按采集中处理', () => {
   };
   assert.equal(routeLifecycle(route).label, '已发布');
   assert.equal(isCollectingRoute(route), true);
+});
+
+test('逐目标发布汇总状态不会退化成未发布', () => {
+  const degraded = {
+    route: {
+      sourceType: 'vm_file',
+      status: 'awaiting_nodes',
+      lastPublishStatus: 'degraded',
+      lastPublishMessage: '部分预期主机异常或尚未安装',
+      collectorConfigHash: 'hash-002',
+    },
+  };
+  const blocked = {
+    route: {
+      sourceType: 'vm_file',
+      status: 'awaiting_nodes',
+      lastPublishStatus: 'blocked',
+      lastPublishMessage: '没有预期主机',
+      collectorConfigHash: 'hash-003',
+    },
+  };
+
+  assert.equal(routeLifecycle(degraded).label, '部分异常');
+  assert.equal(routeLifecycle(blocked).label, '已阻塞');
 });

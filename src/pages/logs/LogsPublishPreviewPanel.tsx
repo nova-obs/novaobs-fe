@@ -28,6 +28,7 @@ function publishTaskLabel(value: string) {
 
 export function LogsPublishPreviewPanel({ preview }: { preview: LogsCollectorRuntimePublishResult }) {
   const hasManifestYAML = Boolean(preview.manifestYAML.trim());
+  const expiresAt = preview.expiresAt ? new Date(preview.expiresAt).toLocaleString() : '';
   const rows = preview.diffs.length > 0
     ? preview.diffs.map((item) => ({
       key: `${item.clusterId}/${item.namespace}/${item.apiVersion}/${item.kind}/${item.name}`,
@@ -53,7 +54,9 @@ export function LogsPublishPreviewPanel({ preview }: { preview: LogsCollectorRun
       <div className="flex flex-col gap-3 border-b border-outline bg-white px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <div className="text-sm font-semibold text-on-surface">{publishTaskLabel(preview.taskType)}</div>
-          <div className="mt-1 text-[11px] text-muted">{rows.length} 个资源待确认</div>
+          <div className="mt-1 text-[11px] text-muted">
+            {rows.length} 个资源待确认{expiresAt ? ` · ${expiresAt} 前有效` : ''}
+          </div>
         </div>
         <span className="inline-flex w-fit rounded border border-primary/20 bg-white px-2 py-1 text-[11px] font-semibold text-primary">等待确认</span>
       </div>

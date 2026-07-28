@@ -16,7 +16,6 @@ type AlertServiceLogKind = 'external' | 'platform' | 'none';
 interface AlertServiceRow {
   id: string;
   name: string;
-  environmentId: string;
   ownerTeam: string;
   ruleCount: number;
   enabledCount: number;
@@ -45,7 +44,7 @@ const emptyLogMeta: AlertServiceLogMeta = {
 };
 
 function serviceDisplayName(service: LogsServiceSummary) {
-  return service.displayName || service.name || service.id;
+  return service.name || service.id;
 }
 
 function buildAlertServices(services: LogsServiceSummary[], rules: AlertRule[], routes: LogRouteView[], targets: LogTargetView[]): AlertServiceRow[] {
@@ -56,7 +55,6 @@ function buildAlertServices(services: LogsServiceSummary[], rules: AlertRule[], 
     rows.set(service.id, {
       id: service.id,
       name: serviceDisplayName(service),
-      environmentId: service.environmentId,
       ownerTeam: service.ownerTeam,
       ruleCount: 0,
       enabledCount: 0,
@@ -69,7 +67,6 @@ function buildAlertServices(services: LogsServiceSummary[], rules: AlertRule[], 
     const current = rows.get(serviceId) ?? {
       id: serviceId,
       name: rule.spec.scope.serviceName || serviceId,
-      environmentId: '',
       ownerTeam: rule.spec.notification.ownerTeam,
       ruleCount: 0,
       enabledCount: 0,

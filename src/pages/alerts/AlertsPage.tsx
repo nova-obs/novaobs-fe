@@ -37,7 +37,7 @@ export function AlertsPage() {
   const policies = policiesQuery.data ?? [];
   const services = servicesQuery.data ?? [];
   const ruleNames = useMemo(() => new Map(rules.map((rule) => [rule.id, rule.spec.name])), [rules]);
-  const serviceNames = useMemo(() => new Map(services.map((service) => [service.id, service.displayName || service.name])), [services]);
+  const serviceNames = useMemo(() => new Map(services.map((service) => [service.id, service.name])), [services]);
   const policyNames = useMemo(() => new Map(policies.map((policy) => [policy.id, policy.name])), [policies]);
   const activeCount = instances.filter((item) => item.state === 'firing' || item.state === 'pending').length;
   const createPolicyMutation = useMutation({
@@ -391,7 +391,7 @@ function NotificationPolicyDrawer({
           适用范围
           <select className="console-input mt-1.5 w-full" value={policyServiceId} onChange={(event) => setPolicyServiceId(event.target.value)}>
             <option value="">全局策略</option>
-            {services.map((service) => <option key={service.id} value={service.id}>{service.displayName || service.name}</option>)}
+            {services.map((service) => <option key={service.id} value={service.id}>{service.name}</option>)}
           </select>
         </label>
         <label className="block text-xs font-semibold text-on-surface">

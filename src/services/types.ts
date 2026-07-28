@@ -1,71 +1,135 @@
-export type ServiceStatus = 'active' | 'pending' | 'degraded' | 'deleted';
+export type ServiceStatus = 'active' | 'archived';
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
 export type ServiceSource = 'manual' | 'cmdb' | 'k8s';
 export type SyncStatus = 'local' | 'synced';
 export type ServiceIdentityType = 'k8s_workload' | 'host_process';
-export type ServiceTargetType = 'cloud_native_workload' | 'host_process' | 'physical_or_network_device';
 
 export interface Service {
   id: string;
   productId: string;
-  accountId: string;
-  projectId: string;
+  key: string;
+  name: string;
+  description: string;
   cmdbServiceId: string;
   businessId: string;
   applicationId: string;
-  name: string;
-  displayName: string;
-  description: string;
-  environmentId: string;
-  cluster: string;
-  namespace: string;
   ownerTeam: string;
   owner: string;
   alertRoute: string;
   sloLevel: string;
-  identityType: ServiceIdentityType;
-  serviceType: string;
   source: ServiceSource;
   syncStatus: SyncStatus;
   lastSyncedAt?: string;
   status: ServiceStatus;
   createdAt: string;
   updatedAt: string;
+  deploymentKinds: ServiceDeploymentKind[];
+}
+
+export type ServiceDeploymentKind = 'kubernetes_workload' | 'host_set';
+export type ServiceDeploymentStatus = 'active' | 'retired';
+
+export interface ServiceDeploymentK8sRef {
+  clusterId: string;
+  namespace: string;
+  apiVersion: string;
+  workloadKind: string;
+  workloadName: string;
+  workloadUid: string;
+}
+
+export interface HostAsset {
+  id: string;
+  identitySource: 'manual' | 'cmdb' | 'cloud' | string;
+  identityScope: string;
+  externalId: string;
+  displayName: string;
+  hostname: string;
+  ipAddresses: string[];
+  status: 'active' | 'retired' | string;
+  region: string;
+  zone: string;
+  labels: Record<string, string>;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type HostAssetInput = Omit<HostAsset, 'id' | 'createdAt' | 'updatedAt'>;
+
+export type HostAssetPatch = Pick<HostAsset, 'displayName' | 'hostname' | 'ipAddresses' | 'region' | 'zone' | 'labels'>;
+
+export interface ServiceDeployment {
+  id: string;
+  productId: string;
+  serviceId: string;
+  name: string;
+  kind: ServiceDeploymentKind;
+  status: ServiceDeploymentStatus;
+  source: 'manual' | 'k8s' | 'cmdb' | string;
+  k8sRef: ServiceDeploymentK8sRef | null;
+  allowedLogRoots: string[];
+  hostTargets: HostAsset[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceDeploymentTarget {
+  id: string;
+  serviceDeploymentId: string;
+  hostAssetId: string;
+  status: 'active' | 'retired' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ServiceDeploymentInput {
+  name: string;
+  kind: ServiceDeploymentKind;
+  source?: string;
+  allowedLogRoots?: string[];
+  hostIds?: string[];
+  k8sRef?: Partial<ServiceDeploymentK8sRef>;
+}
+
+export interface CollectorInstallation {
+  id: string;
+  installationId: string;
+  hostAssetId: string;
+  agentRole: 'logs_agent' | 'metrics_agent' | 'gateway' | string;
+  status: 'pending' | 'active' | 'revoked' | string;
+  version: string;
+  connectionStatus: 'online' | 'offline' | 'revoked' | string;
+  processStatus: 'healthy' | 'unhealthy' | 'unknown' | string;
+  configStatus: 'pending' | 'applying' | 'applied' | 'failed' | 'drift' | string;
+  lastSeenAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CollectorEnrollmentCredential {
+  installation: CollectorInstallation;
+  token: string;
+}
+
+export interface CollectorInstallationCredential {
+  installation: CollectorInstallation;
+  credential: string;
 }
 
 export interface Product {
   id: string;
+  key: string;
   name: string;
-  displayName: string;
   description: string;
-  projectId: string;
-  status: string;
+  tenant: {
+    accountId: string;
+    projectId: string;
+  };
+  status: 'active' | 'archived';
   createdAt: string;
   updatedAt: string;
-}
-
-export interface ServiceTarget {
-  id: string;
-  serviceId: string;
-  targetType: ServiceTargetType;
-  environmentId: string;
-  displayName: string;
-  identityAttributes: Record<string, string>;
-  matchRules: Record<string, string>;
-  source: ServiceSource | 'discovered';
-  syncStatus: SyncStatus | 'stale' | 'conflict';
-  lastSyncedAt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateServiceTargetInput {
-  targetType: ServiceTargetType;
-  displayName?: string;
-  identityAttributes: Record<string, string>;
-  matchRules?: Record<string, string>;
 }
 
 export interface ServiceGraphLogRouteSummary {
@@ -74,71 +138,87 @@ export interface ServiceGraphLogRouteSummary {
     route: {
       id: string;
       sourceType: string;
-      agentGroupId: string;
+      serviceDeploymentId: string;
       endpointId: string;
       status: string;
       collectorConfigHash: string;
       lastPublishStatus: string;
     };
-    source?: {
-      sourceType: string;
-      clusterId: string;
-      namespace: string;
-      workloadKind: string;
-      workloadName: string;
-      hostGroup: string;
-      pathPattern: string;
-    } | null;
     endpoint?: { id: string; name: string; sinkType: string; streamName: string; vmuiURL: string } | null;
   }>;
 }
 
 export interface ServiceObservabilityGraph {
   service: Service;
-  targets: ServiceTarget[];
-  agents: CollectorInstance[];
+  deployments: ServiceDeployment[];
   logRoutes: ServiceGraphLogRouteSummary;
   alertRules: AlertRule[];
 }
 
 export interface CreateServiceInput {
   productId: string;
+  key: string;
   name: string;
-  environmentId: string;
-  displayName?: string;
-  cluster?: string;
-  namespace?: string;
+  description?: string;
   ownerTeam?: string;
   owner?: string;
   alertRoute?: string;
   sloLevel?: string;
-  identityType?: ServiceIdentityType;
-  serviceType?: string;
+}
+
+export interface ImportK8sDeploymentServiceInput {
+  productId: string;
+  clusterId: string;
+  namespace: string;
+  deploymentName: string;
+  deploymentUid: string;
 }
 
 export interface UpdateServiceInput {
+  key?: string;
   cmdbServiceId?: string;
   businessId?: string;
   applicationId?: string;
   name?: string;
-  displayName?: string;
   description?: string;
-  environmentId?: string;
-  cluster?: string;
-  namespace?: string;
   ownerTeam?: string;
   owner?: string;
   alertRoute?: string;
   sloLevel?: string;
-  identityType?: ServiceIdentityType;
-  serviceType?: string;
   status?: ServiceStatus;
+}
+
+export interface GrafanaDatasourceBinding {
+  endpointId: string;
+  endpointName: string;
+  uid: string;
+  name: string;
+  url: string;
+  state: 'pending' | 'ready' | 'degraded' | 'conflict' | 'retained_unused';
+  health: string;
+  lastError: string;
+  lastCheckedAt: string;
+}
+
+export interface GrafanaProductIntegration {
+  productId: string;
+  state: 'pending' | 'ready' | 'degraded' | 'conflict' | 'retained_unused';
+  folder: {
+    uid: string;
+    title: string;
+    state: string;
+  };
+  datasources: GrafanaDatasourceBinding[];
+  lastError: string;
+  attempts: number;
+  nextRetryAt: string;
+  lastReconciledAt: string;
+  updatedAt: string;
 }
 
 export interface OpAMPAgent {
   instanceUid: string;
   collectorGroupId: string;
-  serviceId: string;
   online: boolean;
   healthy: boolean;
   capabilities: number;
@@ -160,7 +240,6 @@ export interface AgentAttribute {
 export interface AgentState {
   instanceUid: string;
   collectorGroupId: string;
-  serviceId: string;
   online: boolean;
   healthy: boolean;
   capabilities: number;
@@ -202,8 +281,6 @@ export interface AgentDetail {
   runtime: CollectorInstance;
   agent: AgentRuntimeDetail;
   collectorGroup: CollectorGroup | null;
-  services: Service[];
-  onboardings: ServiceOnboarding[];
   configuration: AgentDetailConfiguration;
 }
 
@@ -241,7 +318,6 @@ export interface ServiceSummary {
   name: string;
   displayName: string;
   identityType: ServiceIdentityType;
-  environmentId: string;
   cluster: string;
   namespace: string;
   ownerTeam: string;
@@ -255,7 +331,6 @@ export interface IdentitySummary {
   identityType: string;
   enabled: boolean;
   tenantId: string;
-  environmentId: string;
   k8sNamespace: string;
   k8sWorkload: string;
   expiresAt: string;
@@ -268,7 +343,6 @@ export interface CollectorTarget {
   groupId: string;
   name: string;
   mode: string;
-  environmentId: string;
   cluster: string;
   namespace: string;
   status: string;
@@ -318,7 +392,6 @@ export interface CollectorGroup {
   displayName: string;
   description: string;
   mode: CollectorGroupMode;
-  environmentId: string;
   cluster: string;
   namespace: string;
   tenantId: string;
@@ -351,7 +424,9 @@ export interface CollectorInstance {
   opampInstanceUid: string;
   runtimeIdentity: string;
   collectorGroupId: string;
-  serviceId: string;
+  installationId: string;
+  hostAssetId: string;
+  agentRole: string;
   clusterId: string;
   namespace: string;
   agentNamespace: string;
@@ -365,11 +440,15 @@ export interface CollectorInstance {
   capabilities: number;
   online: boolean;
   healthy: boolean;
+  healthObservedAt: string;
   remoteConfigCapable: boolean;
   effectiveConfigHash: string;
   lastConfigHash: string;
   remoteConfigStatus: 'unset' | 'applying' | 'applied' | 'failed';
   runtimeStatus: 'online' | 'stale' | 'offline';
+  connectionStatus: 'online' | 'offline' | 'revoked' | string;
+  processStatus: 'healthy' | 'unhealthy' | 'unknown' | string;
+  configStatus: 'pending' | 'applying' | 'applied' | 'failed' | 'drift' | string;
   lastSeenAgeSeconds: number;
   lastError: string;
   lastSeenAt: string;
@@ -497,10 +576,9 @@ export interface AlertRuleSpec {
   name: string;
   description: string;
   scope: {
+    productId?: string;
     serviceId: string;
     serviceName: string;
-		environmentId?: string;
-		environmentName?: string;
 		scopeLabels?: Record<string, string>;
     logRouteId: string;
     logTargetId?: string;

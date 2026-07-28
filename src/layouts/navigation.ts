@@ -7,7 +7,6 @@ import {
   Gauge,
   GitBranch,
   LayoutDashboard,
-  Layers3,
   Monitor,
   RadioTower,
   Search,
@@ -52,7 +51,7 @@ const navigationDomains: NavigationDomain[] = [
         label: '工作区',
         items: [
           { id: 'overview', label: '平台总览', description: '服务、告警与平台状态', path: '/', icon: Gauge },
-          { id: 'services', label: '服务目录', description: '服务真值与观测关系', path: '/services', icon: Boxes },
+          { id: 'products', label: '产品与服务', description: '产品边界与逻辑服务', path: '/products', icon: Boxes },
         ],
       },
     ],
@@ -82,14 +81,14 @@ const navigationDomains: NavigationDomain[] = [
           {
             id: 'metrics',
             label: '监控',
-            description: '指标观测与环境接入',
+            description: '指标观测与产品接入',
             path: '/metrics',
             icon: Monitor,
             children: [
-              { id: 'metrics-overview', label: '监控总览', description: '查看环境接入健康与关键信号', path: '/metrics/overview', icon: Gauge },
-              { id: 'metrics-monitoring', label: '指标监控', description: '查看指标监控视图', path: '/metrics/monitoring', icon: Activity },
-              { id: 'metrics-alerts', label: '指标告警', description: '管理环境级指标告警规则', path: '/metrics/alerts', icon: Bell },
-              { id: 'metrics-environments', label: '环境接入', description: '管理环境指标来源和写入目标', path: '/metrics/environments', icon: RadioTower },
+              { id: 'metrics-overview', label: '监控总览', description: '查看产品指标健康与关键信号', path: '/metrics/overview', icon: Gauge },
+              { id: 'metrics-dashboard', label: 'Dashboard', description: '打开 Grafana 工作区', path: '/metrics/dashboard', icon: LayoutDashboard },
+              { id: 'metrics-alerts', label: '指标告警', description: '管理产品级指标告警规则', path: '/metrics/alerts', icon: Bell },
+              { id: 'metrics-integrations', label: '指标接入', description: '管理产品指标来源和写入目标', path: '/metrics/integrations', icon: RadioTower },
             ],
           },
           { id: 'traces', label: 'Trace', description: '链路查询与 Span 分析', path: '/traces', icon: GitBranch },
@@ -143,7 +142,6 @@ const navigationDomains: NavigationDomain[] = [
         id: 'platform-settings',
         label: '平台设置',
         items: [
-          { id: 'platform-environments', label: '环境管理', description: '统一环境身份与运行资源归属', path: '/platform/environments', icon: Layers3 },
           { id: 'platform-settings', label: '平台设置', description: '平台级模板与运行配置', path: '/platform/settings', icon: Settings },
           { id: 'platform-access', label: '访问控制', description: '用户、组、角色与授权', path: '/platform/access', icon: ShieldCheck },
         ],
@@ -178,6 +176,10 @@ function cloneNavigationItem(item: NavigationItem): NavigationItem {
 
 export const getNavigationByPath = (path: string) => {
   const normalizedPath = path.split('?')[0] || '/';
+	const metricsEntryMatch = normalizedPath.match(/^\/metrics\/([^/]+)/);
+	if (metricsEntryMatch && !metricsNavigationChildID(metricsEntryMatch[1])) {
+		return metricsEntryMatch[1] === 'explore' ? allNavigationItems.find((item) => item.id === 'metrics') : undefined;
+	}
 	const logsServiceMatch = normalizedPath.match(/^\/products\/[^/]+\/services\/[^/]+\/logs(?:\/([^/]+))?/);
 	if (logsServiceMatch) {
 		const childID = logsNavigationChildID(logsServiceMatch[1] ?? '');
@@ -220,9 +222,9 @@ function logsNavigationChildID(segment: string): string | undefined {
 
 function metricsNavigationChildID(segment: string): string | undefined {
 	if (segment === 'overview') return 'metrics-overview';
-	if (segment === 'monitoring') return 'metrics-monitoring';
+	if (segment === 'dashboard') return 'metrics-dashboard';
 	if (segment === 'alerts') return 'metrics-alerts';
-	if (segment === 'environments') return 'metrics-environments';
+	if (segment === 'integrations') return 'metrics-integrations';
 	return undefined;
 }
 
@@ -246,7 +248,7 @@ export const getNavigationDomainByPath = (path: string) => {
   if (normalizedPath.startsWith('/platform')) {
     return navigationDomains.find((domain) => domain.id === 'platform');
   }
-  if (normalizedPath === '/' || normalizedPath.startsWith('/services')) {
+  if (normalizedPath === '/' || normalizedPath.startsWith('/services') || normalizedPath.startsWith('/products')) {
     return navigationDomains.find((domain) => domain.id === 'workspace');
   }
   return undefined;
