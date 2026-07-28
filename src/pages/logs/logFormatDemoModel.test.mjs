@@ -8,10 +8,12 @@ import {
 } from './logFormatDemoModel.ts';
 
 const platformContext = {
+  productId: 'product-commerce',
   serviceKey: 'orders-api',
   serviceId: 'svc-orders-api-01',
-  ownerTeam: '交易平台',
-  alertRoute: 'trade-oncall',
+  serviceDeploymentId: 'deployment-orders-prod',
+  logRouteId: 'route-orders-prod',
+  sourceType: 'k8s',
 };
 
 test('标准业务 JSON 满足必填与推荐字段时可直接进入联调', () => {
@@ -19,6 +21,7 @@ test('标准业务 JSON 满足必填与推荐字段时可直接进入联调', ()
     timestamp: '2026-07-24T10:32:18.245+08:00',
     level: 'error',
     message: 'create order failed',
+    event_name: 'order.create.failed',
     trace_id: '4bf92f3577b34da6a3ce929d0e0e4736',
     span_id: '00f067aa0ba902b7',
     request_id: 'req-20260724-001',
@@ -37,6 +40,7 @@ test('旧日志级别会规范为小写且不会改写输入对象', () => {
     timestamp: '2026-07-24T10:32:18+08:00',
     level: 'WARNING',
     message: 'payment timeout',
+    event_name: 'payment.timeout',
     order_id: 'order-1',
   };
   const snapshot = structuredClone(input);
@@ -48,26 +52,28 @@ test('旧日志级别会规范为小写且不会改写输入对象', () => {
   assert.match(assessment.advice.join('\n'), /level.*warn/i);
 });
 
-test('缺少 level 或 message 会阻断联调', () => {
+test('缺少标准契约必填字段会阻断联调', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
-    timestamp: '2026-07-24T10:32:18+08:00',
     trace_id: '4bf92f3577b34da6a3ce929d0e0e4736',
   }));
 
   assert.equal(assessment.status, 'blocked');
+  assert.match(assessment.blockingIssues.join('\n'), /timestamp/);
   assert.match(assessment.blockingIssues.join('\n'), /level/);
   assert.match(assessment.blockingIssues.join('\n'), /message/);
+  assert.match(assessment.blockingIssues.join('\n'), /event_name/);
 });
 
 test('推荐字段缺失只给改造建议，不误判业务格式不可用', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'order created',
+    event_name: 'order.created',
   }));
 
   assert.equal(assessment.status, 'ready_with_advice');
   assert.equal(assessment.blockingIssues.length, 0);
-  assert.match(assessment.advice.join('\n'), /timestamp/);
   assert.match(assessment.advice.join('\n'), /trace_id/);
   assert.match(assessment.advice.join('\n'), /span_id/);
   assert.match(assessment.advice.join('\n'), /request_id/);
@@ -83,8 +89,10 @@ test('格式错误给出稳定校验结果且不抛出异常', () => {
 
 test('敏感字段会阻断并从推荐结果中移除，同时保留其他业务字段', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'login success',
+    event_name: 'auth.login.succeeded',
     user_id: 'user-1',
     auth: {
       access_token: 'secret-value',
@@ -100,8 +108,10 @@ test('敏感字段会阻断并从推荐结果中移除，同时保留其他业�
 
 test('驼峰凭据、会话和个人信息字段以及正文中的 Bearer 凭据均会阻断并脱敏', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.signature',
+    event_name: 'auth.login.succeeded',
     accessToken: 'token-value',
     clientSecret: 'secret-value',
     session_id: 'session-1',
@@ -128,8 +138,10 @@ test('驼峰凭据、会话和个人信息字段以及正文中的 Bearer 凭据
 
 test('业务不能输出平台保留字段，推荐结果只保留业务真值', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'order created',
+    event_name: 'order.created',
     'service.name': 'forged-service',
     novaapm: { service_id: 'forged-service-id' },
     owner_team: 'forged-team',
@@ -148,8 +160,10 @@ test('业务不能输出平台保留字段，推荐结果只保留业务真值',
 
 test('计数、版本和状态类业务字段不会被误判为敏感字段', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'delivery finished',
+    event_name: 'delivery.finished',
     token_count: 12,
     secretary_id: 'employee-1',
     mobile_version: '2.1.0',
@@ -165,8 +179,10 @@ test('计数、版本和状态类业务字段不会被误判为敏感字段', ()
 
 test('带业务前缀的密码、密钥和凭据字段仍会被识别并移除', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'integration ready',
+    event_name: 'integration.ready',
     dbPassword: 'plain-credential',
     openaiApiKey: 'sk-proj-123456789',
     awsSecretKey: 'aws-secret',
@@ -200,8 +216,10 @@ test('带业务前缀的密码、密钥和凭据字段仍会被识别并移除',
 
 test('正文中的 Basic Authorization 凭据会阻断并脱敏', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'Authorization: Basic dXNlcjpwYXNzd29yZA==',
+    event_name: 'auth.login.failed',
   }));
 
   assert.equal(assessment.status, 'blocked');
@@ -211,20 +229,26 @@ test('正文中的 Basic Authorization 凭据会阻断并脱敏', () => {
 
 test('超长、字段过多或嵌套过深的 JSON 返回稳定阻断结果', () => {
   const oversized = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'ok',
+    event_name: 'test.oversized',
     padding: 'a'.repeat(21_000),
   }));
   const tooManyFields = assessBusinessLogProposal(JSON.stringify(Object.fromEntries([
     ['level', 'info'],
     ['message', 'ok'],
+    ['timestamp', '2026-07-24T10:32:18+08:00'],
+    ['event_name', 'test.too_many_fields'],
     ...Array.from({ length: 205 }, (_, index) => [`field_${index}`, index]),
   ])));
   let nested = { value: 'end' };
   for (let index = 0; index < 25; index += 1) nested = { child: nested };
   const tooDeep = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'ok',
+    event_name: 'test.too_deep',
     nested,
   }));
 
@@ -238,19 +262,24 @@ test('超长、字段过多或嵌套过深的 JSON 返回稳定阻断结果', ()
 
 test('平台字段只在采集后目标视图中补齐，不写回业务推荐 JSON', () => {
   const assessment = assessBusinessLogProposal(JSON.stringify({
+    timestamp: '2026-07-24T10:32:18+08:00',
     level: 'info',
     message: 'order created',
+    event_name: 'order.created',
     order_id: 'order-1',
   }));
   const collected = buildCollectedLogPreview(assessment.recommendation, platformContext);
 
   assert.equal(assessment.recommendation?.['service.name'], undefined);
   assert.equal(collected.business.order_id, 'order-1');
+  assert.equal(collected.platform['novaapm.product_id'], 'product-commerce');
   assert.equal(collected.platform['service.name'], 'orders-api');
   assert.equal(collected.platform['novaapm.service_id'], 'svc-orders-api-01');
-  assert.equal(collected.platform.owner_team, '交易平台');
-  assert.equal(collected.platform.alert_route, 'trade-oncall');
-  assert.match(collected.platform['novaapm.source_type'], /采集路由/);
+  assert.equal(collected.platform['novaapm.service_deployment_id'], 'deployment-orders-prod');
+  assert.equal(collected.platform['novaapm.log_route_id'], 'route-orders-prod');
+  assert.equal(collected.platform['novaapm.source_type'], 'k8s');
+  assert.equal(collected.platform.owner_team, undefined);
+  assert.equal(collected.platform.alert_route, undefined);
 });
 
 test('内置洽谈样例同时覆盖文本现状、旧 JSON 和达标 JSON', () => {

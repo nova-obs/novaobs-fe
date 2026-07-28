@@ -24,12 +24,11 @@ test('K8S 接入从 ServiceDeployment 读取 Workload 范围', () => {
   assert.doesNotMatch(onboarding, /listK8sWorkloads|writableClusters|workloadKey/);
 });
 
-test('VM 接入使用主机部署和 Supervisor 安装身份而不是手工 Endpoint', () => {
+test('VM 编辑使用主机部署，Supervisor 安装身份在运行页管理', () => {
   assert.match(vmFlow, /deployment\.kind === 'host_set'/);
   assert.match(vmFlow, /allowedLogRoots/);
-  assert.match(vmFlow, /OpAMP Supervisor/);
-  assert.match(vmFlow, /createCollectorInstallation/);
-  assert.match(vmFlow, /issueCollectorEnrollmentToken/);
+  assert.match(agents, /issueHostEnrollmentToken/);
+  assert.match(agents, /签发安装令牌/);
   assert.doesNotMatch(vmFlow, /hostGroup|listVMAgentEndpoints|createVMAgentEndpoint|probeVMAgentEndpoint|13133/);
 });
 
@@ -57,17 +56,38 @@ test('接入页使用主工作面加连续摘要，不平铺原始 Collector YAM
   assert.doesNotMatch(onboarding, /logs-route-config-editor|完整 collector\.yaml|采集域合并视图/);
 });
 
-test('运行页统一展示覆盖与四轴目标状态', () => {
+test('运行页按 VM 与 K8S 的真实来源分型展示状态', () => {
   assert.match(agents, /getRouteRuntimeStatus/);
   assert.match(agents, /预期目标/);
   assert.match(agents, /已注册/);
+  assert.match(agents, /进程健康/);
   assert.match(agents, /配置收敛/);
-  assert.match(agents, /日志流入/);
+  assert.doesNotMatch(agents, /日志流入/);
+  assert.doesNotMatch(agents, /最后日志/);
   assert.match(agents, /仅看异常/);
   assert.match(agents, /connectionStatus/);
   assert.match(agents, /processStatus/);
   assert.match(agents, /configStatus/);
-  assert.match(agents, /dataStatus/);
+  assert.doesNotMatch(agents, /dataStatus/);
+  assert.match(agents, /DaemonSet/);
+  assert.match(agents, /readyNodes/);
+  assert.match(agents, /observedAt/);
+  assert.match(agents, /签发安装令牌/);
+  assert.match(agents, /retryRouteTarget/);
+  assert.match(agents, /发布历史/);
+  assert.match(agents, /回滚到此版本/);
+  assert.match(agents, /deploymentName/);
+  assert.match(agents, /getLogsCollectorRuntimeStatus/);
+  assert.match(agents, /路由引用的服务部署不存在/);
+  assert.match(agents, /返回服务详情修复部署/);
+});
+
+test('一次性令牌弹窗明确控制面入口与过期后的正确操作', () => {
+  assert.match(agents, /Collector 控制面的内网地址/);
+  assert.match(agents, /节点 IP.*30081/);
+  assert.match(agents, /不能使用前端 30080/);
+  assert.match(agents, /令牌过期但尚未注册/);
+  assert.match(agents, /已注册后请轮换安装凭据/);
 });
 
 test('观测接入发布预览继续展示完整 K8S 资源部署 YAML', () => {
@@ -82,4 +102,17 @@ test('Logs 工作台继续传递可用高度且 Explore 固定服务查询上下
   assert.match(agents, /logs-routes-workbench flex min-h-\[720px\] flex-col xl:h-full xl:min-h-0/);
   assert.match(explore, /ServiceContextSelector/);
   assert.match(explore, /buildGrafanaExploreURL/);
+});
+
+test('路由编辑页只保留配置预览保存发布，不平铺安装与发布历史', () => {
+  assert.doesNotMatch(vmFlow, /主机覆盖与安装/);
+  assert.doesNotMatch(vmFlow, /发布历史/);
+  assert.doesNotMatch(vmFlow, /签发安装令牌/);
+  assert.doesNotMatch(vmFlow, /回滚到此版本/);
+});
+
+test('移动端摘要压缩且目标状态使用移动卡片降级', () => {
+  assert.match(agents, /grid-cols-2 sm:grid-cols-3 xl:grid-cols-5/);
+  assert.match(agents, /runtime-target-mobile-card/);
+  assert.match(agents, /hidden md:table/);
 });

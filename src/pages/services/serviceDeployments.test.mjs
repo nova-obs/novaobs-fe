@@ -66,6 +66,38 @@ test('替换部署主机时提交稳定 HostAsset 身份', async () => {
   assert.deepEqual(request.body, { host_asset_ids: ['host-1', 'host-2'] });
 });
 
+test('编辑部署通过独立 hosts 关系和 HostAsset 真值加载已绑定主机', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path) => {
+    requests.push(path);
+    if (path.endsWith('/deployments/deployment-1/hosts')) {
+      return response([
+        { id: 'target-1', service_deployment_id: 'deployment-1', host_asset_id: 'host-1', status: 'active' },
+        { id: 'target-2', service_deployment_id: 'deployment-1', host_asset_id: 'host-2', status: 'active' },
+      ]);
+    }
+    if (path.endsWith('/platform/hosts/host-1')) {
+      return response({ id: 'host-1', display_name: 'orders-01', hostname: 'orders-01.local', status: 'active' });
+    }
+    if (path.endsWith('/platform/hosts/host-2')) {
+      return response({ id: 'host-2', display_name: 'orders-02', hostname: 'orders-02.local', status: 'active' });
+    }
+    throw new Error(`unexpected request: ${path}`);
+  };
+  try {
+    const hosts = await api.getServiceDeploymentHostAssets('product-1', 'service-1', 'deployment-1');
+    assert.deepEqual(requests, [
+      '/api/v1/products/product-1/services/service-1/deployments/deployment-1/hosts',
+      '/api/v1/platform/hosts/host-1',
+      '/api/v1/platform/hosts/host-2',
+    ]);
+    assert.deepEqual(hosts.map((host) => host.id), ['host-1', 'host-2']);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('主机库 API 通过平台统一请求路径读取主机资产', async () => {
   const { request, result } = await captureRequest(
     () => api.getHostAssets({ q: 'orders', status: 'active' }),

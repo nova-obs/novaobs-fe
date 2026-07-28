@@ -6,7 +6,7 @@ import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api, ApiRequestError } from '../../services/api';
 import { LogsPublishPreviewPanel } from '../logs/LogsPublishPreviewPanel';
-import { defaultLogsCollectorNamespace, logsApi, normalizeLogsCollectorNamespace, type LogRouteView, type LogsCollectorRuntimePublishResult, type LogsCollectorRuntimeResourceStatus, type LogsCollectorRuntimeStatus, type LogsServiceSummary } from '../logs/api';
+import { defaultLogsCollectorNamespace, logsApi, type K8sPublishResource, type LogRouteView, type LogsCollectorRuntimePublishResult, type LogsCollectorRuntimeStatus, type LogsServiceSummary } from '../logs/api';
 import { findSameNameClusterReplacement, formatClusterIdentity, resolveObservabilityClusterId } from './clusterIdentity';
 import { useK8sOpsContext } from './context';
 
@@ -27,9 +27,8 @@ function LogsCollectorAccessPanel() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { activeClusterId, activeCluster, clusters, isLoadingClusters, clusterError } = useK8sOpsContext();
   const requestedClusterId = searchParams.get('cluster_id') || '';
-  const requestedNamespace = normalizeLogsCollectorNamespace(searchParams.get('namespace'));
   const requestedTaskType = searchParams.get('task') === 'incremental' ? 'incremental' : searchParams.get('task') === 'base' ? 'base' : '';
-  const [namespace, setNamespace] = useState(requestedNamespace);
+  const namespace = defaultLogsCollectorNamespace;
   const [pendingPublish, setPendingPublish] = useState<LogsCollectorRuntimePublishResult | null>(null);
   const [lastResult, setLastResult] = useState<LogsCollectorRuntimePublishResult | null>(null);
   const [showResourceDetails, setShowResourceDetails] = useState(false);
@@ -45,6 +44,18 @@ function LogsCollectorAccessPanel() {
     enabled: Boolean(effectiveClusterId && namespace.trim() && selectedCluster),
     retry: false,
   });
+  const refreshRuntimeStatusMutation = useMutation({
+    mutationFn: () => logsApi.refreshLogsCollectorRuntimeStatus({
+      clusterId: effectiveClusterId,
+      namespace,
+    }),
+    onSuccess: (status) => {
+      queryClient.setQueryData(
+        ['logs-collector-runtime-status', effectiveClusterId, namespace],
+        status,
+      );
+    },
+  });
 
   const workspaceQuery = useQuery({
 	queryKey: ['logs-service-workspaces'],
@@ -53,7 +64,7 @@ function LogsCollectorAccessPanel() {
 		const workspaces = await Promise.all(services.filter((service) => service.productId).map((service) => logsApi.getWorkspace(service.productId, service.id)));
 		return { services: workspaces.flatMap((workspace) => workspace.services), routes: workspaces.flatMap((workspace) => workspace.routes) };
 	},
-    enabled: Boolean(runtimeStatusQuery.data?.ready),
+    enabled: Boolean(runtimeStatusQuery.data?.runtime?.lastPublishedAt),
   });
 
   const serviceRouteGroups = useMemo(() => {
@@ -83,12 +94,6 @@ function LogsCollectorAccessPanel() {
   const serviceConfigReady = serviceRouteGroups.length > 0 && pendingServiceCount === 0;
 
   useEffect(() => {
-    if (requestedNamespace) {
-      setNamespace(requestedNamespace);
-    }
-  }, [requestedNamespace]);
-
-  useEffect(() => {
     setPendingPublish(null);
     setLastResult(null);
   }, [effectiveClusterId]);
@@ -99,22 +104,22 @@ function LogsCollectorAccessPanel() {
   );
   const runtimeStatusMessage = runtimeStatusQuery.data?.message ?? '';
   const runtimeStatus = runtimeStatusQuery.data;
+  const runtimePublished = Boolean(runtimeStatus?.runtime?.lastPublishedAt);
   const runtimeStatusTone = runtimeStatusQuery.data?.ready
     ? 'success'
     : runtimeStatusQuery.data?.status === 'unavailable'
       ? 'danger'
       : 'warning';
 
-  const namespaceReady = Boolean(namespace.trim());
   const clusterReadOnly = Boolean(selectedCluster?.readOnly);
   const clusterUnknown = Boolean(effectiveClusterId && !selectedCluster && !isLoadingClusters);
   const sameNameReplacement = clusterUnknown
     ? findSameNameClusterReplacement(effectiveClusterId, clusters)
     : undefined;
   const hasPendingConfirmation = Boolean(pendingPublish?.requiresConfirmation);
-  const canPublish = Boolean(effectiveClusterId && selectedCluster && namespaceReady && !clusterReadOnly && !hasPendingConfirmation);
-  const canPreviewBase = canPublish && runtimeStatus?.status === 'missing_resources';
-  const canPreviewIncremental = canPublish && Boolean(runtimeStatus?.ready);
+  const canPublish = Boolean(effectiveClusterId && selectedCluster && !clusterReadOnly && !hasPendingConfirmation);
+  const canPreviewBase = canPublish;
+  const canPreviewIncremental = canPublish && runtimePublished;
   const publishMutation = useMutation({
     mutationFn: (input: { taskType?: PublishTaskType; previewId?: string; confirmationToken?: string }) => (
       input.previewId && input.confirmationToken
@@ -156,14 +161,12 @@ function LogsCollectorAccessPanel() {
         ? `目标集群 ID“${effectiveClusterId}”未登记；平台不会按名称自动改绑`
         : clusterReadOnly
           ? '当前集群为只读接入，不能部署平台运行时'
-          : !namespaceReady
-            ? '请填写平台运行时 namespace'
-            : '';
+          : '';
 
   function selectCluster(nextClusterId: string) {
     setPendingPublish(null);
     setLastResult(null);
-    setSearchParams(nextClusterId ? { cluster_id: nextClusterId, namespace: normalizeLogsCollectorNamespace(namespace) } : {});
+    setSearchParams(nextClusterId ? { cluster_id: nextClusterId } : {});
   }
 
   function previewRuntime(taskType: PublishTaskType) {
@@ -207,9 +210,15 @@ function LogsCollectorAccessPanel() {
                 ))}
               </select>
             ) : null}
-            <button className="console-button" onClick={() => runtimeStatusQuery.refetch()} disabled={runtimeStatusQuery.isFetching || !effectiveClusterId || !namespaceReady || !selectedCluster} aria-label="刷新观测运行时">
-              {runtimeStatusQuery.isFetching ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
-              刷新
+            <button
+              className="console-button"
+              onClick={() => refreshRuntimeStatusMutation.mutate()}
+              disabled={refreshRuntimeStatusMutation.isPending || !runtimePublished || !effectiveClusterId || !selectedCluster}
+              aria-label="刷新 DaemonSet 状态"
+              title="显式读取一次共享 DaemonSet；服务端冷却窗口内复用已有快照"
+            >
+              {refreshRuntimeStatusMutation.isPending ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
+              刷新 DaemonSet 状态
             </button>
           </div>
         )}
@@ -232,6 +241,7 @@ function LogsCollectorAccessPanel() {
             />
           ) : null}
           {runtimeStatusQuery.error ? <InlineNotice tone="danger" message={(runtimeStatusQuery.error as Error).message} /> : null}
+          {refreshRuntimeStatusMutation.error ? <InlineNotice tone="danger" message={(refreshRuntimeStatusMutation.error as Error).message} /> : null}
           {runtimeStatusMessage ? <InlineNotice tone={runtimeStatusTone} message={runtimeStatusMessage} /> : null}
           {publishMutation.error ? <InlineNotice tone="danger" message={(publishMutation.error as Error).message} /> : null}
           {lastResult && !lastResult.requiresConfirmation ? (
@@ -275,19 +285,8 @@ function LogsCollectorAccessPanel() {
                 <ServerCog className="h-4 w-4 text-primary" />
                 平台运行时
               </div>
-              <label className="block">
-                <span className="text-xs font-semibold text-muted">Namespace</span>
-                <input
-                  className="console-input mt-1 h-9 w-full font-mono text-sm"
-                  value={namespace}
-                  onChange={(event) => {
-                    setNamespace(normalizeLogsCollectorNamespace(event.target.value));
-                    setPendingPublish(null);
-                    setLastResult(null);
-                  }}
-                />
-              </label>
-              <div className="mt-3 space-y-2 text-xs text-muted">
+              <div className="space-y-2 text-xs text-muted">
+                <RuntimeFact label="Namespace" value={namespace} />
                 <RuntimeFact label="部署集群" value={effectiveClusterId || '-'} />
                 <RuntimeFact label="写入策略" value={clusterReadOnly ? '只读' : '允许写入'} />
                 <RuntimeFact label="采集器" value="logs_collector" />
@@ -298,19 +297,19 @@ function LogsCollectorAccessPanel() {
 
           <div className="space-y-4">
             <RuntimeStepperHeader
-              step1Complete={runtimeStatus?.ready ?? false}
-              activeStep={runtimeStatus?.ready ? 2 : 1}
+              step1Complete={runtimePublished}
+              activeStep={runtimePublished ? 2 : 1}
             />
 
             <RuntimeStepPanel
               stepNumber={1}
               title="基础组件发布"
-              complete={runtimeStatus?.ready ?? false}
-              active={!runtimeStatus?.ready}
-              description={runtimeStatus?.ready
-                ? `基础资源已就绪 · 最后发布时间：${runtimeStatus.runtime?.lastPublishedAt || '-'}`
-                : '检测到基础资源缺失，预览将生成 Namespace、RBAC、ServiceAccount、基础 ConfigMap、Service 和 DaemonSet。'}
-              action={runtimeStatus?.ready ? (
+              complete={runtimePublished}
+              active={!runtimePublished}
+              description={runtimePublished
+                ? `基础运行时已发布 · DaemonSet ${runtimeStatus?.readyNodes ?? 0}/${runtimeStatus?.desiredNodes || '-'} · 快照时间：${runtimeStatus?.observedAt || '-'}`
+                : '尚未发布共享运行时；基础发布将生成 Namespace、RBAC、ServiceAccount、基础 ConfigMap、Service 和 DaemonSet。'}
+              action={runtimePublished ? (
                 <button
                   className="console-button text-xs"
                   disabled={publishMutation.isPending}
@@ -338,12 +337,12 @@ function LogsCollectorAccessPanel() {
                 onClick={() => setShowResourceDetails(!showResourceDetails)}
               >
                 {showResourceDetails ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
-                查看基础资源清单
-                <span className="ml-auto"><StatusBadge value={runtimeStatus?.ready ? 'ready' : runtimeStatus?.status || 'checking'} /></span>
+                查看已发布资源清单
+                <span className="ml-auto"><StatusBadge value={runtimePublished ? 'ready' : 'not_started'} /></span>
               </button>
               {showResourceDetails ? (
                 <div className="mt-2 overflow-hidden rounded border border-outline">
-                  <RuntimeResourceStatusTable resources={runtimeStatus?.resources ?? []} />
+                  <PublishedRuntimeResourceTable resources={runtimeStatus?.runtime?.resources ?? []} />
                 </div>
               ) : null}
             </RuntimeStepPanel>
@@ -352,15 +351,15 @@ function LogsCollectorAccessPanel() {
               stepNumber={2}
               title="服务配置发布"
               complete={serviceConfigReady}
-              active={Boolean(runtimeStatus?.ready && !serviceConfigReady)}
-              description={runtimeStatus?.ready
+              active={Boolean(runtimePublished && !serviceConfigReady)}
+              description={runtimePublished
                 ? pendingServiceCount > 0
                   ? `${pendingServiceCount} 个服务配置待发布，确认后将一致性协调当前集群采集域`
                   : serviceRouteGroups.length > 0
                     ? '当前服务配置已与集群运行时一致'
                     : '当前集群暂无采集路由'
-                : '基础组件缺失时不能执行增量发布，请先完成 Step 1。'}
-              action={runtimeStatus?.ready && pendingServiceCount > 0 ? (
+                : '基础组件尚未发布，不能执行增量发布，请先完成 Step 1。'}
+              action={runtimePublished && pendingServiceCount > 0 ? (
                 <button
                   className="console-button"
                   disabled={!canPreviewIncremental || publishMutation.isPending}
@@ -370,16 +369,16 @@ function LogsCollectorAccessPanel() {
                   <Rocket className="h-3.5 w-3.5" />
                   预览采集域变更
                 </button>
-              ) : runtimeStatus?.ready ? (
+              ) : runtimePublished ? (
                 <StatusBadge value={serviceConfigReady ? 'ready' : 'not_started'} />
               ) : (
-                <button className="console-button" disabled title="基础组件未就绪">
+                <button className="console-button" disabled title="基础组件尚未发布">
                   <Rocket className="h-3.5 w-3.5" />
                   预览增量发布
                 </button>
               )}
             >
-              {runtimeStatus?.ready && serviceRouteGroups.length > 0 ? (
+              {runtimePublished && serviceRouteGroups.length > 0 ? (
                 <div className="mt-3 divide-y divide-outline overflow-hidden rounded border border-outline">
                   {serviceRouteGroups.map((group) => (
                     <ServicePublishRow
@@ -391,7 +390,7 @@ function LogsCollectorAccessPanel() {
                     />
                   ))}
                 </div>
-              ) : runtimeStatus?.ready ? (
+              ) : runtimePublished ? (
                 <div className="mt-3 rounded border border-outline bg-white px-3 py-4 text-center text-xs text-muted">
                   当前集群暂无采集路由。在采集路由页创建路由后，此处将按服务展示待发布配置。
                 </div>
@@ -449,9 +448,9 @@ function publishTaskLabel(value: string) {
   return value === 'base' ? '基础组件发布' : value === 'incremental' ? '服务配置增量发布' : '发布任务';
 }
 
-function RuntimeResourceStatusTable({ resources }: { resources: LogsCollectorRuntimeResourceStatus[] }) {
+function PublishedRuntimeResourceTable({ resources }: { resources: K8sPublishResource[] }) {
   if (!resources.length) {
-    return <div className="px-3 py-6 text-center text-xs text-muted">等待读取集群基础组件状态</div>;
+    return <div className="px-3 py-6 text-center text-xs text-muted">尚无已发布资源记录</div>;
   }
   return (
     <div className="overflow-auto">
@@ -459,7 +458,6 @@ function RuntimeResourceStatusTable({ resources }: { resources: LogsCollectorRun
         <thead>
           <tr>
             <th>资源</th>
-            <th>状态</th>
             <th>Namespace</th>
             <th>API</th>
           </tr>
@@ -468,7 +466,6 @@ function RuntimeResourceStatusTable({ resources }: { resources: LogsCollectorRun
           {resources.map((item) => (
             <tr key={`${item.apiVersion}/${item.kind}/${item.namespace}/${item.name}`}>
               <td className="font-mono text-xs font-semibold text-on-surface">{item.kind}/{item.name}</td>
-              <td><StatusBadge value={item.exists ? 'ready' : 'missing_resources'} /></td>
               <td className="font-mono text-xs text-muted">{item.namespace || 'cluster'}</td>
               <td className="font-mono text-xs text-muted">{item.apiVersion}</td>
             </tr>

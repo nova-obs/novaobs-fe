@@ -28,21 +28,17 @@ export interface BusinessLogAssessment {
 }
 
 export interface PlatformLogContext {
+  productId: string;
   serviceKey: string;
   serviceId: string;
-  ownerTeam: string;
-  alertRoute: string;
+  serviceDeploymentId: string;
+  logRouteId: string;
+  sourceType: 'k8s' | 'vm' | '';
 }
 
 export interface CollectedLogPreview {
   business: Record<string, unknown>;
-  platform: {
-    'service.name': string;
-    'novaapm.service_id': string;
-    'novaapm.source_type': string;
-    owner_team: string;
-    alert_route: string;
-  };
+  platform: Record<string, string>;
 }
 
 const canonicalLevels = new Set(['debug', 'info', 'warn', 'error', 'fatal']);
@@ -50,7 +46,7 @@ const levelAliases: Record<string, string> = {
   warning: 'warn',
   err: 'error',
 };
-const orderedBusinessFields = ['timestamp', 'level', 'message', 'trace_id', 'span_id', 'request_id'];
+const orderedBusinessFields = ['timestamp', 'level', 'message', 'event_name', 'trace_id', 'span_id', 'request_id'];
 const sensitiveKeyPatterns = [
   /^(?:[a-z0-9]+_)*(?:password|passwd|pwd)(?:_value)?$/,
   /^(?:[a-z0-9]+_)*token(?:_value)?$/,
@@ -66,6 +62,8 @@ const sensitiveKeyPatterns = [
 const platformReservedFields = new Set([
   'novaapm.product_id',
   'novaapm.service_id',
+  'novaapm.service_deployment_id',
+  'novaapm.log_route_id',
   'novaapm.source_type',
   'novaapm.collector_group',
   'service.name',
@@ -96,6 +94,7 @@ export const formatDemoScenarios: FormatDemoScenario[] = [
       timestamp: '2026-07-24T10:32:18.245+08:00',
       level: 'error',
       message: 'create order failed',
+      event_name: 'order.create.failed',
       trace_id: '4bf92f3577b34da6a3ce929d0e0e4736',
       span_id: '00f067aa0ba902b7',
       request_id: 'req-20260724-001',
@@ -112,6 +111,7 @@ export const formatDemoScenarios: FormatDemoScenario[] = [
       timestamp: '2026-07-24T10:32:18+08:00',
       level: 'WARNING',
       message: 'payment timeout',
+      event_name: 'payment.timeout',
       trace_id: '4bf92f3577b34da6a3ce929d0e0e4736',
       order_id: 'order-20260724-001',
     }, null, 2),
@@ -120,11 +120,12 @@ export const formatDemoScenarios: FormatDemoScenario[] = [
     id: 'standard-json',
     label: '达标 JSON',
     summary: '用于向业务方展示最小推荐输出。',
-    currentSample: '{"timestamp":"2026-07-24T10:32:18.245+08:00","level":"error","message":"create order failed","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","request_id":"req-20260724-001","error_code":"ORDER_CREATE_FAILED"}',
+    currentSample: '{"timestamp":"2026-07-24T10:32:18.245+08:00","level":"error","message":"create order failed","event_name":"order.create.failed","trace_id":"4bf92f3577b34da6a3ce929d0e0e4736","span_id":"00f067aa0ba902b7","request_id":"req-20260724-001","error_code":"ORDER_CREATE_FAILED"}',
     proposal: JSON.stringify({
       timestamp: '2026-07-24T10:32:18.245+08:00',
       level: 'error',
       message: 'create order failed',
+      event_name: 'order.create.failed',
       trace_id: '4bf92f3577b34da6a3ce929d0e0e4736',
       span_id: '00f067aa0ba902b7',
       request_id: 'req-20260724-001',
@@ -145,9 +146,10 @@ export function assessBusinessLogProposal(source: string): BusinessLogAssessment
   const blockingIssues: string[] = [];
   const advice: string[] = [];
   const checks = [
+    assessRequiredField('timestamp', parsed.value.timestamp, isRFC3339WithTimezone, '使用 RFC 3339 且必须带时区。', blockingIssues),
     assessLevel(parsed.value.level, blockingIssues, advice),
     assessMessage(parsed.value.message, blockingIssues),
-    assessRecommendedField('timestamp', parsed.value.timestamp, isRFC3339WithTimezone, '使用 RFC 3339 且必须带时区。', advice),
+    assessRequiredField('event_name', parsed.value.event_name, isValidEventName, '使用稳定的小写事件名，例如 http.server.request。', blockingIssues),
     assessRecommendedField('trace_id', parsed.value.trace_id, (value) => /^[a-f0-9]{32}$/i.test(value), '使用 32 位十六进制 Trace ID。', advice),
     assessRecommendedField('span_id', parsed.value.span_id, (value) => /^[a-f0-9]{16}$/i.test(value), '使用 16 位十六进制 Span ID。', advice),
     assessRecommendedField('request_id', parsed.value.request_id, (value) => Boolean(value.trim()), '保持请求链路内稳定且非空。', advice),
@@ -179,11 +181,12 @@ export function buildCollectedLogPreview(
   return {
     business: recommendation ?? {},
     platform: {
+      'novaapm.product_id': context.productId || '<当前稳定产品 ID>',
       'service.name': context.serviceKey || '<当前服务 Key>',
       'novaapm.service_id': context.serviceId || '<当前稳定服务 ID>',
-      'novaapm.source_type': '<由采集路由注入：k8s 或 vm>',
-      owner_team: context.ownerTeam || '<由服务目录注入>',
-      alert_route: context.alertRoute || '<由服务目录/采集配置注入>',
+      'novaapm.service_deployment_id': context.serviceDeploymentId || '<由日志路由绑定的部署 ID>',
+      'novaapm.log_route_id': context.logRouteId || '<当前日志路由 ID>',
+      'novaapm.source_type': context.sourceType || '<由采集路由注入：k8s 或 vm>',
     },
   };
 }
@@ -235,6 +238,25 @@ function assessMessage(value: unknown, blockingIssues: string[]): FormatCheck {
   return createCheck('message', '必填', 'pass', isSensitiveString(value) ? '<敏感内容已隐藏>' : value, '格式符合规范。');
 }
 
+function assessRequiredField(
+  field: string,
+  value: unknown,
+  validate: (value: string) => boolean,
+  guidance: string,
+  blockingIssues: string[],
+): FormatCheck {
+  if (typeof value !== 'string' || !value.trim()) {
+    blockingIssues.push(`缺少必填字段 ${field}。`);
+    return createCheck(field, '必填', 'missing', '', guidance);
+  }
+  const currentValue = value.trim();
+  if (!validate(currentValue)) {
+    blockingIssues.push(`${field} 格式不符合 novaapm-json-v1。`);
+    return createCheck(field, '必填', 'invalid', currentValue, guidance);
+  }
+  return createCheck(field, '必填', 'pass', currentValue, '格式符合规范。');
+}
+
 function assessRecommendedField(
   field: string,
   value: unknown,
@@ -273,6 +295,10 @@ function normalizeLevel(value: string): string {
 function isRFC3339WithTimezone(value: string): boolean {
   return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)
     && !Number.isNaN(Date.parse(value));
+}
+
+function isValidEventName(value: string): boolean {
+  return /^[a-z][a-z0-9_.-]{2,127}$/.test(value);
 }
 
 function buildRecommendation(value: Record<string, unknown>): Record<string, unknown> {

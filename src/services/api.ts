@@ -37,6 +37,7 @@ import type {
   Service,
   ServiceDeployment,
   ServiceDeploymentInput,
+  ServiceDeploymentTarget,
   HostAsset,
   HostAssetInput,
   HostAssetPatch,
@@ -277,6 +278,17 @@ function mapServiceDeployment(raw: any): ServiceDeployment {
   };
 }
 
+function mapServiceDeploymentTarget(raw: any): ServiceDeploymentTarget {
+  return {
+    id: String(raw.id ?? ''),
+    serviceDeploymentId: String(raw.service_deployment_id ?? raw.serviceDeploymentId ?? ''),
+    hostAssetId: String(raw.host_asset_id ?? raw.hostAssetId ?? ''),
+    status: raw.status ?? 'active',
+    createdAt: raw.created_at ?? raw.createdAt ?? '',
+    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
+  };
+}
+
 function serviceDeploymentPayload(input: ServiceDeploymentInput) {
   return {
     name: input.name,
@@ -314,7 +326,6 @@ function mapCollectorInstallation(raw: any): CollectorInstallation {
     connectionStatus: raw.connection_status ?? raw.connectionStatus ?? 'offline',
     processStatus: raw.process_status ?? raw.processStatus ?? 'unknown',
     configStatus: raw.config_status ?? raw.configStatus ?? 'pending',
-    dataStatus: raw.data_status ?? raw.dataStatus ?? 'unknown',
     lastSeenAt: raw.last_seen_at ?? raw.lastSeenAt ?? '',
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
@@ -595,6 +606,7 @@ function mapCollectorInstance(raw: any): CollectorInstance {
     capabilities: raw.capabilities ?? 0,
     online: raw.online ?? false,
     healthy: raw.healthy ?? false,
+    healthObservedAt: raw.health_observed_at ?? raw.healthObservedAt ?? '',
     remoteConfigCapable: raw.remote_config_capable ?? false,
     effectiveConfigHash: raw.effective_config_hash ?? '',
     lastConfigHash: raw.last_config_hash ?? raw.lastConfigHash ?? '',
@@ -603,8 +615,6 @@ function mapCollectorInstance(raw: any): CollectorInstance {
     connectionStatus: raw.connection_status ?? raw.connectionStatus ?? (raw.online ? 'online' : 'offline'),
     processStatus: raw.process_status ?? raw.processStatus ?? (raw.online ? (raw.healthy ? 'healthy' : 'unhealthy') : 'unknown'),
     configStatus: raw.config_status ?? raw.configStatus ?? raw.remote_config_status ?? 'pending',
-    dataStatus: raw.data_status ?? raw.dataStatus ?? 'unknown',
-    lastLogAt: raw.last_log_at ?? raw.lastLogAt ?? '',
     lastSeenAgeSeconds: local.lastSeenAgeSeconds,
     lastError: raw.last_error ?? raw.lastError ?? '',
     lastSeenAt: raw.last_seen_at ?? raw.lastSeenAt ?? '',
@@ -993,6 +1003,18 @@ export const api = {
   async getServiceDeployment(productId: string, serviceId: string, deploymentId: string): Promise<ServiceDeployment> {
     return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}`));
   },
+  async getServiceDeploymentTargets(productId: string, serviceId: string, deploymentId: string): Promise<ServiceDeploymentTarget[]> {
+    const raw = await request<any[] | null>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}/hosts`);
+    return Array.isArray(raw) ? raw.map(mapServiceDeploymentTarget) : [];
+  },
+  async getServiceDeploymentHostAssets(productId: string, serviceId: string, deploymentId: string): Promise<HostAsset[]> {
+    const targets = await api.getServiceDeploymentTargets(productId, serviceId, deploymentId);
+    return Promise.all(
+      targets
+        .filter((target) => target.status === 'active')
+        .map((target) => api.getHostAsset(target.hostAssetId)),
+    );
+  },
   async createServiceDeployment(productId: string, serviceId: string, input: ServiceDeploymentInput): Promise<ServiceDeployment> {
     return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments`, {
       method: 'POST',
@@ -1005,11 +1027,12 @@ export const api = {
       body: JSON.stringify(serviceDeploymentPayload(input)),
     }));
   },
-  async replaceServiceDeploymentHosts(productId: string, serviceId: string, deploymentId: string, hostIds: string[]): Promise<ServiceDeployment> {
-    return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}/hosts`, {
+  async replaceServiceDeploymentHosts(productId: string, serviceId: string, deploymentId: string, hostIds: string[]): Promise<ServiceDeploymentTarget[]> {
+    const raw = await request<any[] | null>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}/hosts`, {
       method: 'PUT',
       body: JSON.stringify({ host_asset_ids: hostIds }),
-    }));
+    });
+    return Array.isArray(raw) ? raw.map(mapServiceDeploymentTarget) : [];
   },
   async retireServiceDeployment(productId: string, serviceId: string, deploymentId: string): Promise<ServiceDeployment> {
     return mapServiceDeployment(await request<any>(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/deployments/${encodeURIComponent(deploymentId)}`, {

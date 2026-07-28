@@ -75,6 +75,15 @@ export interface ServiceDeployment {
   updatedAt: string;
 }
 
+export interface ServiceDeploymentTarget {
+  id: string;
+  serviceDeploymentId: string;
+  hostAssetId: string;
+  status: 'active' | 'retired' | string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ServiceDeploymentInput {
   name: string;
   kind: ServiceDeploymentKind;
@@ -94,7 +103,6 @@ export interface CollectorInstallation {
   connectionStatus: 'online' | 'offline' | 'revoked' | string;
   processStatus: 'healthy' | 'unhealthy' | 'unknown' | string;
   configStatus: 'pending' | 'applying' | 'applied' | 'failed' | 'drift' | string;
-  dataStatus: 'flowing' | 'stale' | 'no_data' | 'unknown' | string;
   lastSeenAt: string;
   createdAt: string;
   updatedAt: string;
@@ -432,6 +440,7 @@ export interface CollectorInstance {
   capabilities: number;
   online: boolean;
   healthy: boolean;
+  healthObservedAt: string;
   remoteConfigCapable: boolean;
   effectiveConfigHash: string;
   lastConfigHash: string;
@@ -440,8 +449,6 @@ export interface CollectorInstance {
   connectionStatus: 'online' | 'offline' | 'revoked' | string;
   processStatus: 'healthy' | 'unhealthy' | 'unknown' | string;
   configStatus: 'pending' | 'applying' | 'applied' | 'failed' | 'drift' | string;
-  dataStatus: 'flowing' | 'stale' | 'no_data' | 'unknown' | string;
-  lastLogAt: string;
   lastSeenAgeSeconds: number;
   lastError: string;
   lastSeenAt: string;

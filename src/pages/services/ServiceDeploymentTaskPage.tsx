@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Plus, RefreshCw, Server } from 'lucide-react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
@@ -21,6 +21,7 @@ export function ServiceDeploymentTaskPage() {
   const [workloadUid, setWorkloadUid] = useState('');
   const [creatingHost, setCreatingHost] = useState(false);
   const [confirmRetire, setConfirmRetire] = useState(false);
+  const initializedBoundDeploymentId = useRef('');
 
   const serviceQuery = useQuery({
     queryKey: ['service', productId, serviceId],
@@ -36,6 +37,11 @@ export function ServiceDeploymentTaskPage() {
     queryKey: ['platform-hosts', 'active'],
     queryFn: () => api.getHostAssets({ status: 'active' }),
     enabled: kind === 'host_set',
+  });
+  const boundHostsQuery = useQuery({
+    queryKey: ['service-deployment-host-assets', productId, serviceId, deploymentId],
+    queryFn: () => api.getServiceDeploymentHostAssets(productId, serviceId, deploymentId),
+    enabled: editing && deploymentQuery.data?.kind === 'host_set',
   });
   const clustersQuery = useQuery({
     queryKey: ['k8s-clusters', 'service-deployment'],
@@ -59,11 +65,22 @@ export function ServiceDeploymentTaskPage() {
     setKind(deployment.kind);
     setName(deployment.name);
     setAllowedLogRootsText(deployment.allowedLogRoots.join('\n'));
-    setSelectedHostIds(deployment.hostTargets.map((host) => host.id));
     setClusterId(deployment.k8sRef?.clusterId ?? '');
     setNamespace(deployment.k8sRef?.namespace ?? '');
     setWorkloadUid(deployment.k8sRef?.workloadUid ?? '');
   }, [deploymentQuery.data]);
+
+  useEffect(() => {
+    if (!boundHostsQuery.data || initializedBoundDeploymentId.current === deploymentId) return;
+    setSelectedHostIds(boundHostsQuery.data.map((host) => host.id));
+    initializedBoundDeploymentId.current = deploymentId;
+  }, [boundHostsQuery.data, deploymentId]);
+
+  const availableHosts = useMemo(() => {
+    const hosts = hostsQuery.data ?? [];
+    const knownIds = new Set(hosts.map((host) => host.id));
+    return [...hosts, ...(boundHostsQuery.data ?? []).filter((host) => !knownIds.has(host.id))];
+  }, [boundHostsQuery.data, hostsQuery.data]);
 
   const roots = useMemo(
     () => allowedLogRootsText.split('\n').map((item) => item.trim()).filter(Boolean),
@@ -75,7 +92,7 @@ export function ServiceDeploymentTaskPage() {
   const workload = workloadsQuery.data?.find((item) => item.identity.uid === workloadUid);
   const canSubmit = Boolean(name.trim() && (
     kind === 'host_set'
-      ? selectedHostIds.length > 0 && !rootsError
+      ? selectedHostIds.length > 0 && !rootsError && !hostsQuery.error && !boundHostsQuery.error
       : clusterId && namespace && workload
   ));
 
@@ -122,7 +139,15 @@ export function ServiceDeploymentTaskPage() {
     };
   }
 
-  const error = serviceQuery.error ?? deploymentQuery.error ?? saveMutation.error ?? retireMutation.error;
+  const error = serviceQuery.error
+    ?? deploymentQuery.error
+    ?? hostsQuery.error
+    ?? boundHostsQuery.error
+    ?? clustersQuery.error
+    ?? namespacesQuery.error
+    ?? workloadsQuery.error
+    ?? saveMutation.error
+    ?? retireMutation.error;
   const back = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}`;
 
   return (
@@ -136,7 +161,7 @@ export function ServiceDeploymentTaskPage() {
       </div>
 
       {error ? <div className="console-notice console-notice-danger">{(error as Error).message}</div> : null}
-      {serviceQuery.isLoading || (editing && deploymentQuery.isLoading) ? <div className="console-skeleton h-64" /> : (
+      {serviceQuery.isLoading || (editing && (deploymentQuery.isLoading || (kind === 'host_set' && boundHostsQuery.isLoading))) ? <div className="console-skeleton h-64" /> : (
         <div className="grid gap-3 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="space-y-3">
             <section className="rounded-md border border-outline bg-white">
@@ -155,8 +180,9 @@ export function ServiceDeploymentTaskPage() {
 
             {kind === 'host_set' ? (
               <HostSetEditor
-                hosts={hostsQuery.data ?? []}
-                loading={hostsQuery.isLoading}
+                hosts={availableHosts}
+                loading={hostsQuery.isLoading || (editing && boundHostsQuery.isLoading)}
+                error={hostsQuery.error ?? boundHostsQuery.error}
                 selectedHostIds={selectedHostIds}
                 onSelectedHostIdsChange={setSelectedHostIds}
                 allowedLogRootsText={allowedLogRootsText}
@@ -210,9 +236,10 @@ export function ServiceDeploymentTaskPage() {
   );
 }
 
-function HostSetEditor({ hosts, loading, selectedHostIds, onSelectedHostIdsChange, allowedLogRootsText, onAllowedLogRootsTextChange, rootsError, creatingHost, onCreatingHostChange, onHostCreated }: {
+function HostSetEditor({ hosts, loading, error, selectedHostIds, onSelectedHostIdsChange, allowedLogRootsText, onAllowedLogRootsTextChange, rootsError, creatingHost, onCreatingHostChange, onHostCreated }: {
   hosts: HostAsset[];
   loading: boolean;
+  error: unknown;
   selectedHostIds: string[];
   onSelectedHostIdsChange: (ids: string[]) => void;
   allowedLogRootsText: string;
@@ -231,7 +258,7 @@ function HostSetEditor({ hosts, loading, selectedHostIds, onSelectedHostIdsChang
       {creatingHost ? <CreateHostForm onCreated={() => { onCreatingHostChange(false); onHostCreated(); }} /> : null}
       <div className="grid gap-3 p-3 lg:grid-cols-[minmax(0,1fr)_320px]">
         <div className="overflow-hidden rounded border border-outline">
-          {loading ? <div className="console-skeleton h-24" /> : hosts.length === 0 ? <EmptyState title="主机库为空" action={<span className="text-xs text-muted">先新增平台主机资产。</span>} /> : (
+          {loading ? <div className="console-skeleton h-24" /> : error ? <div className="console-notice console-notice-danger m-3">主机绑定读取失败，当前选择不可编辑。请重试后再保存。</div> : hosts.length === 0 ? <EmptyState title="主机库为空" action={<span className="text-xs text-muted">先新增平台主机资产。</span>} /> : (
             <div className="max-h-72 overflow-auto">
               <table className="console-table w-full min-w-[560px]">
                 <thead><tr><th className="w-12">选择</th><th>主机</th><th>地址</th><th>地域 / 可用区</th></tr></thead>

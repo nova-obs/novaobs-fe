@@ -226,29 +226,32 @@ test('日志下游端点列表返回 null 时按空列表处理', async () => {
   assert.deepEqual(result, []);
 });
 
-test('查询 logs_collector 运行时状态时映射真实集群资源状态', async () => {
+test('查询 logs_collector 运行时状态时只映射平台持久化的共享 DaemonSet 快照', async () => {
   const { request, result } = await captureRequest(
     () => logsApi.getLogsCollectorRuntimeStatus({ clusterId: 'test03', namespace: 'novaapm-system' }),
     {
       cluster_id: 'test03',
       namespace: 'novaapm-system',
       ready: false,
-      status: 'missing_resources',
-      message: 'logs_collector 基础组件缺失：DaemonSet/novaapm-system/novaapm-logs-agent。请到 K8s / 观测接入重新部署。',
-      resources: [
-        { cluster_id: 'test03', namespace: 'novaapm-system', api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
-      missing_resources: [
-        { cluster_id: 'test03', namespace: 'novaapm-system', api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
+      status: 'degraded',
+      message: 'logs_collector DaemonSet 尚未收敛',
+      desired_nodes: 3,
+      updated_nodes: 2,
+      ready_nodes: 2,
+      available_nodes: 2,
+      config_status: 'pending',
+      observed_at: '2026-07-28T08:00:00Z',
     },
   );
 
   assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/status?cluster_id=test03&namespace=novaapm-system');
   assert.equal(result.ready, false);
-  assert.equal(result.status, 'missing_resources');
-  assert.equal(result.missingResources[0].kind, 'DaemonSet');
-  assert.equal(result.missingResources[0].exists, false);
+  assert.equal(result.status, 'degraded');
+  assert.equal(result.desiredNodes, 3);
+  assert.equal(result.readyNodes, 2);
+  assert.equal(result.configStatus, 'pending');
+  assert.equal(result.observedAt, '2026-07-28T08:00:00Z');
+  assert.equal('missingResources' in result, false);
 });
 
 test('logs_collector 运行时状态查询会迁移旧默认 namespace', async () => {
@@ -259,21 +262,46 @@ test('logs_collector 运行时状态查询会迁移旧默认 namespace', async (
       cluster_id: 'test03',
       namespace: legacyNamespace,
       ready: false,
-      status: 'missing_resources',
-      message: 'logs_collector 基础组件缺失：DaemonSet/novaapm-system/novaapm-logs-agent。请到 K8s / 观测接入重新部署。',
-      resources: [
-        { cluster_id: 'test03', namespace: legacyNamespace, api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
-      missing_resources: [
-        { cluster_id: 'test03', namespace: legacyNamespace, api_version: 'apps/v1', kind: 'DaemonSet', name: 'novaapm-logs-agent', required: true, exists: false },
-      ],
+      status: 'not_deployed',
+      message: '该集群尚未发布 logs_collector 运行时',
     },
   );
 
   assert.equal(normalizeLogsCollectorNamespace(legacyNamespace), defaultLogsCollectorNamespace);
   assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/status?cluster_id=test03&namespace=novaapm-system');
   assert.equal(result.namespace, defaultLogsCollectorNamespace);
-  assert.equal(result.missingResources[0].namespace, defaultLogsCollectorNamespace);
+  assert.equal(result.status, 'not_deployed');
+});
+
+test('显式刷新 logs_collector 状态时只提交集群身份并调用独立 POST 入口', async () => {
+  const { request, result } = await captureRequest(
+    () => logsApi.refreshLogsCollectorRuntimeStatus({
+      clusterId: 'test03',
+      namespace: 'novaapm-system',
+    }),
+    {
+      cluster_id: 'test03',
+      namespace: 'novaapm-system',
+      ready: true,
+      status: 'ready',
+      message: '集群共享 logs_collector DaemonSet 已就绪',
+      desired_nodes: 3,
+      updated_nodes: 3,
+      ready_nodes: 3,
+      available_nodes: 3,
+      config_status: 'applied',
+      observed_at: '2026-07-28T08:00:00Z',
+    },
+  );
+
+  assert.equal(request.path, '/api/v1/observability/runtimes/logs-collector/status/refresh');
+  assert.equal(request.init.method, 'POST');
+  assert.deepEqual(request.body, {
+    cluster_id: 'test03',
+    namespace: 'novaapm-system',
+  });
+  assert.equal(result.status, 'ready');
+  assert.equal(result.readyNodes, 3);
 });
 
 test('发布端点 vmalert Runtime 时使用端点级接口和确认 token', async () => {

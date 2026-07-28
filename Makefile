@@ -3,7 +3,7 @@
 DOCKER ?= docker
 REGISTRY ?= hub-test.service.ucloud.cn/logsplatfrom
 IMAGE_NAME ?= novaapm-frontend
-TAG ?= 0.1.4
+TAG ?= 0.1.5
 PLATFORM ?= linux/amd64
 IMAGE ?= $(REGISTRY)/$(IMAGE_NAME):$(TAG)
 

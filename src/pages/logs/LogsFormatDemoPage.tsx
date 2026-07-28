@@ -29,10 +29,12 @@ export function LogsFormatDemoPage() {
   const [copyStatus, setCopyStatus] = useState('');
   const assessment = useMemo(() => assessBusinessLogProposal(proposal), [proposal]);
   const collectedPreview = useMemo(() => buildCollectedLogPreview(assessment.recommendation, {
+    productId: activeService?.productId ?? '',
     serviceKey: activeService?.key ?? '',
     serviceId: activeService?.id ?? '',
-    ownerTeam: activeService?.ownerTeam ?? '',
-    alertRoute: activeService?.alertRoute ?? '',
+    serviceDeploymentId: '',
+    logRouteId: '',
+    sourceType: '',
   }), [activeService, assessment.recommendation]);
   const passedRequired = assessment.checks.filter((item) => item.requirement === '必填' && item.status === 'pass').length;
   const passedRecommended = assessment.checks.filter((item) => item.requirement === '推荐' && item.status === 'pass').length;
@@ -142,8 +144,8 @@ export function LogsFormatDemoPage() {
         <div className="flex shrink-0 flex-col gap-3 border-y border-outline bg-surface-lowest px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2" role="status" aria-live="polite">
             <AssessmentStatus status={assessment.status} />
-            <span className="text-xs text-muted">必填 <strong className="text-on-surface">{passedRequired}/2</strong></span>
-            <span className="text-xs text-muted">推荐 <strong className="text-on-surface">{passedRecommended}/4</strong></span>
+            <span className="text-xs text-muted">必填 <strong className="text-on-surface">{passedRequired}/4</strong></span>
+            <span className="text-xs text-muted">推荐 <strong className="text-on-surface">{passedRecommended}/3</strong></span>
             {assessment.parseError ? <span className="truncate text-xs text-danger">{assessment.parseError}</span> : null}
           </div>
           <div className="flex shrink-0 items-center gap-2">
@@ -197,7 +199,7 @@ export function LogsFormatDemoPage() {
             {activeTab === 'collected' ? (
               <CodePreview
                 title="平台补齐"
-                description="这是采集后的目标字段视图；来源、服务身份、责任团队和告警路由由 NovaAPM 采集链路注入，不要求业务重复输出。"
+                description="这是采集后的目标字段视图；产品、服务、部署、路由和来源身份由 NovaAPM 采集链路注入，不要求业务重复输出。"
                 value={collectedPreview}
               />
             ) : null}

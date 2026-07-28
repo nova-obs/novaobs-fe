@@ -20,6 +20,8 @@ import { HelpTip } from '../../components/HelpTip';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
 import { k8sApi } from '../k8s/api';
+import { defaultLogsCollectorNamespace, logsApi } from '../logs/api';
+import { buildLogsRuntimeURL, summarizeK8sRuntimeStatus } from '../logs/logsRuntimeViewModel';
 import { buildProductCatalogGroups, type ProductCatalogSort } from './servicesViewModel';
 import type {
   GrafanaProductIntegration,
@@ -579,6 +581,49 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
         <div className="min-h-0 flex-1 space-y-4 overflow-auto bg-surface px-4 py-4">
           {loading ? <div className="console-skeleton h-52" /> : error ? <div className="console-notice console-notice-danger">{errorMessage(error)}</div> : !service ? <EmptyState title="服务不存在或不属于当前产品" /> : (
             <>
+              <DetailSection title="部署与日志采集" description="先确认服务运行在哪里，再查看各部署的日志接入和发布状态。">
+                <div className="mb-3 flex justify-end">
+                  <Link className="console-button console-button-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/new`}>
+                    <Plus className="h-3.5 w-3.5" />新增部署
+                  </Link>
+                </div>
+                {deploymentsLoading ? <div className="console-skeleton h-24" /> : deploymentsError ? (
+                  <div className="console-notice console-notice-danger">{errorMessage(deploymentsError)}</div>
+                ) : !deployments?.length ? (
+                  <EmptyState title="尚未登记部署目标" action={<span className="text-xs text-muted">创建 K8S Workload 或主机部署后，日志路由才能绑定实际采集范围。</span>} />
+                ) : (
+                  <div className="console-resource-list overflow-x-auto">
+                    <table className="console-table w-full min-w-[700px]">
+                      <thead><tr><th>部署目标</th><th>类型</th><th>范围</th><th>日志状态</th><th className="text-right">操作</th></tr></thead>
+                      <tbody>{deployments.map((deployment) => {
+                        const deploymentRoutes = graph?.logRoutes.routes.filter((item) => item.route.serviceDeploymentId === deployment.id) ?? [];
+                        const route = deploymentRoutes[0];
+                        const source = deployment.kind === 'host_set' ? 'vm' : 'k8s';
+                        const configureURL = deploymentRoutes.length === 1
+                          ? `/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/logs/agents/${encodeURIComponent(route.route.id)}/edit`
+                          : deploymentRoutes.length > 1
+                            ? buildLogsRuntimeURL(product.id, service.id, { deploymentId: deployment.id, routeId: route.route.id })
+                            : `/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/logs/agents/new?deployment_id=${encodeURIComponent(deployment.id)}&source=${source}`;
+                        return (
+                          <tr key={deployment.id}>
+                            <td><div className="font-semibold">{deployment.name}</div><div className="mt-1 font-mono text-[11px] text-muted">{deployment.id}</div></td>
+                            <td>{deployment.kind === 'host_set' ? 'VM / 物理机' : 'K8S Workload'}</td>
+                            <td className="font-mono text-xs"><DeploymentScope productId={product.id} serviceId={service.id} deployment={deployment} /></td>
+                            <td>{graphLoading ? <span className="text-xs text-muted">读取中…</span> : graphError ? <span className="text-xs text-danger">读取失败</span> : <DeploymentLogSummary deployment={deployment} routes={deploymentRoutes} />}</td>
+                            <td className="text-right">
+                              <div className="flex justify-end gap-3">
+                                {!graphLoading && !graphError ? <Link className="text-xs font-semibold text-primary hover:underline" to={configureURL}>{deploymentRoutes.length > 1 ? `管理 ${deploymentRoutes.length} 条路由` : '配置采集'}</Link> : null}
+                                {!graphLoading && !graphError && route ? <Link className="text-xs font-semibold text-primary hover:underline" to={buildLogsRuntimeURL(product.id, service.id, { deploymentId: deployment.id, routeId: route.route.id })}>查看采集</Link> : null}
+                                <Link className="text-xs font-semibold text-muted hover:text-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/${encodeURIComponent(deployment.id)}/edit`}>编辑部署</Link>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}</tbody>
+                    </table>
+                  </div>
+                )}
+              </DetailSection>
               <DetailSection title="服务身份">
                 <div className="grid gap-x-6 gap-y-3 md:grid-cols-2">
                   <Info label="服务 Key" value={service.key} mono />
@@ -593,45 +638,6 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
                 <Capability icon={Database} label="Logs" ready={Boolean(graph?.logRoutes.total)} reason="需要已配置的日志路由" />
                 <Capability icon={Activity} label="Metrics" ready={false} reason="当前后端尚未支持服务作用域指标" />
                 <Capability icon={GitBranch} label="Traces" ready={false} reason="当前后端尚未支持服务作用域链路" />
-              </DetailSection>
-              <DetailSection title="部署目标" description="Service 是逻辑身份；每个部署目标描述一处真实运行位置。">
-                <div className="mb-3 flex justify-end">
-                  <Link className="console-button console-button-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/new`}>
-                    <Plus className="h-3.5 w-3.5" />新增部署
-                  </Link>
-                </div>
-                {deploymentsLoading ? <div className="console-skeleton h-24" /> : deploymentsError ? (
-                  <div className="console-notice console-notice-danger">{errorMessage(deploymentsError)}</div>
-                ) : !deployments?.length ? (
-                  <EmptyState title="尚未登记部署目标" action={<span className="text-xs text-muted">创建 K8S Workload 或主机部署后，日志路由才能绑定实际采集范围。</span>} />
-                ) : (
-                  <div className="console-resource-list overflow-x-auto">
-                    <table className="console-table w-full min-w-[680px]">
-                      <thead><tr><th>部署目标</th><th>类型</th><th>范围</th><th>状态</th><th>更新时间</th><th className="text-right">操作</th></tr></thead>
-                      <tbody>{deployments.map((deployment) => (
-                        <tr key={deployment.id}>
-                          <td><div className="font-semibold">{deployment.name}</div><div className="mt-1 font-mono text-[11px] text-muted">{deployment.id}</div></td>
-                          <td>{deployment.kind === 'host_set' ? 'VM / 物理机' : 'K8S Workload'}</td>
-                          <td className="font-mono text-xs">{deploymentScope(deployment)}</td>
-                          <td><StatusBadge value={deployment.status} appearance="inline" /></td>
-                          <td className="text-xs text-muted">{formatTime(deployment.updatedAt)}</td>
-                          <td className="text-right">
-                            <Link className="text-xs font-semibold text-primary hover:underline" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/${encodeURIComponent(deployment.id)}/edit`}>编辑</Link>
-                          </td>
-                        </tr>
-                      ))}</tbody>
-                    </table>
-                  </div>
-                )}
-              </DetailSection>
-              <DetailSection title="观测关系" description="服务 → 日志路由 → 采集 → 下游 → 告警">
-                {graphLoading ? <div className="console-skeleton h-32" /> : graphError ? <div className="console-notice console-notice-danger">{errorMessage(graphError)}</div> : !graph || graph.logRoutes.routes.length === 0 ? <EmptyState title="暂无已登记日志路由" /> : (
-                  <div className="console-resource-list overflow-x-auto">
-                    <table className="console-table w-full min-w-[620px]"><thead><tr><th>路由</th><th>来源</th><th>下游</th><th>发布状态</th></tr></thead><tbody>
-                      {graph.logRoutes.routes.map((item) => <tr key={item.route.id}><td className="font-mono text-xs">{item.route.id}</td><td>{item.route.sourceType}</td><td>{item.endpoint?.name || item.route.endpointId}</td><td><StatusBadge value={item.route.lastPublishStatus || item.route.status} /></td></tr>)}
-                    </tbody></table>
-                  </div>
-                )}
               </DetailSection>
               <DetailSection title="设置">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-red-200 bg-red-50/50 p-3">
@@ -650,9 +656,89 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
   );
 }
 
-function deploymentScope(deployment: ServiceDeployment) {
-  if (deployment.kind === 'host_set') return `${deployment.hostTargets.length} 台主机`;
-  return `${deployment.k8sRef?.clusterId || '-'} / ${deployment.k8sRef?.namespace || '-'} / ${deployment.k8sRef?.workloadKind || '-'}:${deployment.k8sRef?.workloadName || '-'}`;
+function DeploymentScope({ productId, serviceId, deployment }: {
+  productId: string;
+  serviceId: string;
+  deployment: ServiceDeployment;
+}) {
+  const targetsQuery = useQuery({
+    queryKey: ['service-deployment-targets', productId, serviceId, deployment.id],
+    queryFn: () => api.getServiceDeploymentTargets(productId, serviceId, deployment.id),
+    enabled: deployment.kind === 'host_set',
+  });
+  if (deployment.kind === 'host_set') {
+    if (targetsQuery.isLoading) return <span className="text-muted">读取中…</span>;
+    if (targetsQuery.error) return <span className="text-danger" title={errorMessage(targetsQuery.error)}>读取失败</span>;
+    return <>{(targetsQuery.data ?? []).filter((target) => target.status === 'active').length} 台主机</>;
+  }
+  return <>{`${deployment.k8sRef?.clusterId || '-'} / ${deployment.k8sRef?.namespace || '-'} / ${deployment.k8sRef?.workloadKind || '-'}:${deployment.k8sRef?.workloadName || '-'}`}</>;
+}
+
+function DeploymentLogSummary({ deployment, routes }: {
+  deployment: ServiceDeployment;
+  routes: ServiceObservabilityGraph['logRoutes']['routes'];
+}) {
+  if (!routes.length) return <span className="text-xs text-muted">未配置</span>;
+  return deployment.kind === 'host_set'
+    ? <VMDeploymentLogSummary deployment={deployment} routes={routes} />
+    : <K8sDeploymentLogSummary deployment={deployment} routes={routes} />;
+}
+
+function VMDeploymentLogSummary({ deployment, routes }: {
+  deployment: ServiceDeployment;
+  routes: ServiceObservabilityGraph['logRoutes']['routes'];
+}) {
+  const runtimeQueries = useQueries({
+    queries: routes.map((route) => ({
+      queryKey: ['service-deployment-log-runtime', route.route.id, deployment.id],
+      queryFn: () => logsApi.getRouteRuntimeStatus(route.route.id),
+    })),
+  });
+  if (runtimeQueries.some((query) => query.isLoading)) return <span className="text-xs text-muted">读取中…</span>;
+  const queryError = runtimeQueries.find((query) => query.error)?.error;
+  if (queryError) return <span className="text-xs text-danger" title={errorMessage(queryError)}>读取失败</span>;
+  const runtimes = runtimeQueries.flatMap((query) => query.data ? [query.data] : []);
+  if (!runtimes.length || runtimes.some((runtime) => runtime.expected === 0)) return <StatusBadge value="blocked" appearance="inline" />;
+  const expected = Math.max(...runtimes.map((runtime) => runtime.expected));
+  const registered = Math.min(...runtimes.map((runtime) => runtime.registered));
+  const healthy = Math.min(...runtimes.map((runtime) => runtime.healthy));
+  const convergedTargets = Math.min(...runtimes.map((runtime) => runtime.converged));
+  const converged = runtimes.every((runtime) => runtime.converged === runtime.expected);
+  return (
+    <div className="space-y-1">
+      <StatusBadge value={converged ? 'converged' : 'degraded'} appearance="inline" />
+      <div className="whitespace-nowrap text-[11px] text-muted">
+        覆盖 {registered}/{expected} · 健康 {healthy}/{expected} · 配置 {convergedTargets}/{expected}
+      </div>
+    </div>
+  );
+}
+
+function K8sDeploymentLogSummary({ deployment, routes }: {
+  deployment: ServiceDeployment;
+  routes: ServiceObservabilityGraph['logRoutes']['routes'];
+}) {
+  const agentNamespace = defaultLogsCollectorNamespace;
+  const runtimeQuery = useQuery({
+    queryKey: ['service-deployment-log-runtime', 'k8s', deployment.k8sRef?.clusterId, agentNamespace],
+    queryFn: () => logsApi.getLogsCollectorRuntimeStatus({
+      clusterId: deployment.k8sRef?.clusterId ?? '',
+      namespace: agentNamespace,
+    }),
+    enabled: Boolean(deployment.k8sRef?.clusterId),
+  });
+  if (runtimeQuery.isLoading) return <span className="text-xs text-muted">读取中…</span>;
+  if (runtimeQuery.error) return <span className="text-xs text-danger" title={errorMessage(runtimeQuery.error)}>读取失败</span>;
+  if (!runtimeQuery.data) return <StatusBadge value="unknown" appearance="inline" />;
+  const summary = summarizeK8sRuntimeStatus(runtimeQuery.data);
+  return (
+    <div className="space-y-1">
+      <StatusBadge value={runtimeQuery.data.ready ? 'ready' : runtimeQuery.data.status} appearance="inline" />
+      <div className="whitespace-nowrap text-[11px] text-muted">
+        共享 DaemonSet · 节点 {summary.nodes} · 配置 {summary.configStatus === 'applied' ? '已收敛' : '待收敛'}
+      </div>
+    </div>
+  );
 }
 
 function DetailSection({ title, description, children }: { title: string; description?: string; children: ReactNode }) {

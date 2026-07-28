@@ -43,6 +43,8 @@ test('共享面板、状态和空态组件遵循控制台语义', () => {
   assert.equal(statusBadge.includes('status-badge'), true);
   assert.equal(statusBadge.includes('status-inline'), true);
   assert.equal(statusBadge.includes('status-dot'), true);
+  assert.match(statusBadge, /converged:\s*'[^']*text-emerald-700'/);
+  assert.match(statusBadge, /converged:\s*'已收敛'/);
   assert.equal(styles.includes('.status-inline'), true);
 });
 

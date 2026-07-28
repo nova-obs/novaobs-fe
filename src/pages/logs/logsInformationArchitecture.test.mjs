@@ -72,11 +72,13 @@ test('采集路由使用单一工作面突出列表选择和当前路由功能',
   assert.doesNotMatch(agents, /路由运行状态/);
 });
 
-test('VM 与 K8S 运行状态使用统一目标摘要且不再读取手工 Endpoint', () => {
+test('VM 与 K8S 运行状态按执行器分型且不再读取手工 Endpoint', () => {
 	assert.match(agents, /runtime\?\.targets/);
 	assert.match(agents, /target\.installationId/);
 	assert.match(agents, /target\.connectionStatus/);
-	assert.match(agents, /target\.dataStatus/);
+	assert.doesNotMatch(agents, /target\.dataStatus/);
+	assert.match(agents, /k8sRuntime/);
+	assert.match(agents, /DaemonSet/);
 	assert.doesNotMatch(agents, /listVMAgentEndpoints|地址可达|13133|source\.hostGroup/);
 });
 

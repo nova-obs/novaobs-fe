@@ -1,13 +1,15 @@
-import { useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { AlertTriangle, ArrowLeft, CheckCircle, RefreshCw, XCircle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { api } from '../../services/api';
 import type { AgentAttribute, AgentDetail } from '../../services/types';
+import { safeLogsReturnPath } from '../logs/logsRuntimeViewModel';
 
 export function AgentDetailPage() {
   const { uid } = useParams<{ uid: string }>();
-  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const returnTo = safeLogsReturnPath(searchParams.get('return_to'));
   const query = useQuery({
     queryKey: ['agent-detail', uid],
     queryFn: () => api.getAgentDetail(uid!),
@@ -30,29 +32,32 @@ export function AgentDetailPage() {
   const connectionStatus = runtime.connectionStatus || (runtime.online ? 'online' : 'offline');
   const processStatus = connectionStatus !== 'online' ? 'unknown' : runtime.processStatus || (runtime.healthy ? 'healthy' : 'unhealthy');
   const configStatus = runtime.configStatus || configuration.applyStatus || runtime.remoteConfigStatus || 'pending';
-  const dataStatus = runtime.dataStatus || 'unknown';
+  const lastHeartbeatAt = runtime.lastSeenAt;
+  const healthDescription = runtime.healthObservedAt
+    ? `最后健康观测 ${formatTime(runtime.healthObservedAt)}`
+    : connectionStatus === 'online'
+      ? runtime.lastError || '尚未收到 Collector 健康上报'
+      : '离线时当前进程状态为未知';
 
   return (
     <div className="page-shell">
       <div className="page-header">
         <div className="min-w-0">
-          <button className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-muted hover:text-primary" onClick={() => navigate(-1)}><ArrowLeft className="h-3.5 w-3.5" />返回采集运行</button>
+          <Link className="mb-2 inline-flex items-center gap-1 text-xs font-semibold text-muted hover:text-primary" to={returnTo}><ArrowLeft className="h-3.5 w-3.5" />返回采集运行</Link>
           <h1 className="page-title truncate">{runtime.hostname || runtime.nodeName || runtime.runtimeIdentity || detail.instanceUid}</h1>
           <p className="page-description font-mono">{runtime.installationId || detail.instanceUid}</p>
         </div>
-        <button className="console-icon-button" aria-label="刷新 Agent 详情" title="刷新" onClick={() => query.refetch()}><RefreshCw className={`h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} /></button>
+        <button className="console-icon-button" aria-label="刷新 Agent 详情" title="刷新" onClick={() => void query.refetch()}><RefreshCw className={`h-4 w-4 ${query.isFetching ? 'animate-spin' : ''}`} /></button>
       </div>
 
-      <div className="grid overflow-hidden rounded-md border border-outline bg-white sm:grid-cols-2 xl:grid-cols-4">
-        <AxisSummary label="连接状态" value={connectionStatus} description={runtime.lastSeenAt ? `最后心跳 ${formatTime(runtime.lastSeenAt)}` : '尚未收到心跳'} />
-        <AxisSummary label="进程状态" value={processStatus} description={connectionStatus === 'online' ? runtime.lastError || 'Collector 进程状态' : '离线时进程状态为未知'} />
+      <div className="grid overflow-hidden rounded-md border border-outline bg-white sm:grid-cols-3">
+        <AxisSummary label="连接状态" value={connectionStatus} description={lastHeartbeatAt ? `最后心跳 ${formatTime(lastHeartbeatAt)}` : '尚未收到心跳'} />
+        <AxisSummary label="进程状态" value={processStatus} description={healthDescription} />
         <AxisSummary label="配置状态" value={configStatus} description={configuration.inSync ? '生效配置与期望一致' : configuration.expectedConfigHash ? '尚未收敛到期望配置' : '尚无期望配置'} />
-        <AxisSummary label="数据状态" value={dataStatus} description={runtime.lastLogAt ? `最后日志 ${formatTime(runtime.lastLogAt)}` : '尚无日志流入时间'} />
       </div>
 
       {!runtime.remoteConfigCapable ? <Notice tone="warning" title="Remote Config 不可用" message="该 Agent 未声明远程配置能力，平台不能向它下发采集配置。" /> : null}
       {connectionStatus === 'online' && configuration.expectedConfigHash && !configuration.inSync ? <Notice tone="warning" title="配置尚未收敛" message="Agent 当前生效 hash 与发布目标不一致，请检查应用状态和最近错误。" /> : null}
-
       <div className="grid gap-3 xl:grid-cols-[360px_minmax(0,1fr)]">
         <div className="space-y-3">
           <DataPanel title="安装与运行身份">
@@ -60,6 +65,8 @@ export function AgentDetailPage() {
               ['Installation ID', runtime.installationId || '-'],
               ['Host Asset ID', runtime.hostAssetId || '-'],
               ['Agent Role', runtime.agentRole || '-'],
+              ['最后心跳', formatTime(lastHeartbeatAt)],
+              ['健康观测', formatTime(runtime.healthObservedAt)],
               ['Instance UID', detail.instanceUid],
               ['Runtime Identity', runtime.runtimeIdentity || '-'],
               ['版本', runtime.version || '-'],
@@ -145,8 +152,8 @@ function Notice({ tone, title, message }: { tone: 'warning' | 'danger' | 'succes
 }
 
 function axisTone(value: string) {
-  if (['online', 'healthy', 'applied', 'flowing'].includes(value)) return 'text-emerald-700';
-  if (['unhealthy', 'failed', 'drift', 'stale'].includes(value)) return 'text-danger';
+  if (['online', 'healthy', 'applied'].includes(value)) return 'text-emerald-700';
+  if (['unhealthy', 'failed', 'drift'].includes(value)) return 'text-danger';
   if (['applying'].includes(value)) return 'text-primary';
   return 'text-muted';
 }
@@ -156,7 +163,6 @@ function axisLabel(value: string) {
     online: '在线', offline: '离线', revoked: '已吊销',
     healthy: '健康', unhealthy: '异常', unknown: '未知',
     pending: '待下发', applying: '应用中', applied: '已应用', failed: '失败', drift: '配置漂移',
-    flowing: '有数据', stale: '数据中断', no_data: '暂无数据',
   };
   return (labels[value] ?? value) || '-';
 }

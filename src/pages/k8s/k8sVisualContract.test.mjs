@@ -71,7 +71,7 @@ test('K8s 观测接入页面承载集群级 runtime 发布入口', () => {
   assert.equal(observabilitySource.includes('confirmation_mismatch'), true);
   assert.equal(observabilitySource.includes('放弃预览'), true);
   assert.equal(observabilitySource.includes('LogsPublishPreviewPanel'), true);
-  assert.equal(observabilitySource.includes('查看基础资源清单'), true);
+  assert.equal(observabilitySource.includes('查看已发布资源清单'), true);
   assert.equal(observabilitySource.includes('RuntimeStepperHeader'), true);
   assert.equal(observabilitySource.includes('RuntimeStepPanel'), true);
   assert.equal(observabilitySource.includes('预览基础组件发布'), true);
@@ -80,7 +80,8 @@ test('K8s 观测接入页面承载集群级 runtime 发布入口', () => {
   assert.equal(observabilitySource.includes('当前服务配置已与集群运行时一致'), true);
   assert.equal(observabilitySource.includes('共 ${serviceRouteGroups.length} 个服务'), false);
   assert.equal(observabilitySource.includes('defaultLogsCollectorNamespace'), true);
-  assert.equal(observabilitySource.includes('normalizeLogsCollectorNamespace'), true);
+  assert.equal(observabilitySource.includes('normalizeLogsCollectorNamespace'), false);
+  assert.equal(observabilitySource.includes('setNamespace'), false);
   assert.equal(observabilitySource.includes('useSearchParams'), true);
   assert.equal(observabilitySource.includes('selectedCluster?.readOnly'), true);
   assert.equal(observabilitySource.includes('选择观测接入集群'), true);

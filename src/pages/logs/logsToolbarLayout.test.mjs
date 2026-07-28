@@ -29,6 +29,13 @@ test('采集路由工具栏先选择路由，再放刷新、新增', () => {
   assert.doesNotMatch(routesSource, /搜索采集路由/);
 });
 
+test('采集路由与产品服务选择器使用一致的标签和控件基线', () => {
+  assert.match(
+    routesSource,
+    /<label className="min-w-0">\s*<span className="mb-1 block text-\[10px\] font-semibold uppercase tracking-wide text-muted">采集路由<\/span>\s*<select className="console-input h-9 w-full truncate text-xs font-semibold"/,
+  );
+});
+
 test('日志告警工具栏先选择服务，再放搜索、刷新、新增', () => {
   const toolbarIndex = alertsSource.indexOf('console-panel-header shrink-0');
   const serviceIndex = alertsSource.indexOf('logs-alert-service-selector', toolbarIndex);

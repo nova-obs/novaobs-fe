@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
+import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { CheckCircle, Play, RefreshCw, Save, Server, Settings2 } from 'lucide-react';
 import { api } from '../../services/api';
@@ -17,13 +17,16 @@ import {
 import { LogsParseRuleDialog, type ParserMode } from './LogsParseRuleDialog';
 import { LogsErrorLine, LogsTaskPageHeader } from './LogsPrimitives';
 import { VMOnboardingFlow } from './VMOnboardingFlow';
+import { buildLogsRuntimeURL } from './logsRuntimeViewModel';
 
-const defaultParseSample = '{"level":"INFO","message":"service started"}';
+const defaultParseSample = '{"timestamp":"2026-07-28T10:32:18.245+08:00","level":"info","message":"service started","event_name":"service.started"}';
 const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
 
 export function LogsOnboardingPage() {
   const { productId = '', serviceId = '', id = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  const preferredDeploymentId = searchParams.get('deployment_id') ?? '';
   const workspaceQuery = useQuery({
     queryKey: ['logs-onboarding-workspace', productId, serviceId],
     queryFn: () => logsApi.getWorkspace(productId, serviceId),
@@ -34,9 +37,14 @@ export function LogsOnboardingPage() {
 
   useEffect(() => {
     if (editRoute) setSourceMode(editRoute.route.sourceType === 'vm_file' ? 'vm' : 'k8s');
-  }, [editRoute]);
+    else if (searchParams.get('source') === 'vm') setSourceMode('vm');
+    else if (searchParams.get('source') === 'k8s') setSourceMode('k8s');
+  }, [editRoute, searchParams]);
 
-  const base = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs`;
+  const returnTo = buildLogsRuntimeURL(productId, serviceId, {
+    deploymentId: editRoute?.route.serviceDeploymentId || preferredDeploymentId,
+    routeId: editRoute?.route.id || '',
+  });
   const sourceModeSwitch = (
     <div className="logs-source-mode-switch inline-flex rounded-md border border-outline bg-surface-lowest p-0.5" aria-label="采集来源">
       {([
@@ -64,26 +72,27 @@ export function LogsOnboardingPage() {
         title={id ? '更新采集路由' : '创建采集路由'}
         description="绑定服务部署目标后，由平台生成、校验并发布采集配置。"
         context={sourceModeSwitch}
-        action={<Link className="console-button h-8" to={`${base}/agents`}>退出</Link>}
+        action={<Link className="console-button h-8" to={returnTo}>退出</Link>}
       />
       <div className="mt-3 min-h-0 flex-1 overflow-auto">
         {sourceMode === 'vm'
-          ? <VMOnboardingFlow />
-          : <K8sOnboardingFlow workspaceQuery={workspaceQuery} editRouteId={id} />}
+          ? <VMOnboardingFlow preferredDeploymentId={preferredDeploymentId} />
+          : <K8sOnboardingFlow workspaceQuery={workspaceQuery} editRouteId={id} preferredDeploymentId={preferredDeploymentId} />}
       </div>
     </div>
   );
 }
 
-function K8sOnboardingFlow({ workspaceQuery, editRouteId }: {
+function K8sOnboardingFlow({ workspaceQuery, editRouteId, preferredDeploymentId }: {
   workspaceQuery: ReturnType<typeof useQuery<Awaited<ReturnType<typeof logsApi.getWorkspace>>>>;
   editRouteId: string;
+  preferredDeploymentId: string;
 }) {
   const queryClient = useQueryClient();
   const { productId = '', serviceId = '' } = useParams();
   const [deploymentId, setDeploymentId] = useState('');
   const [endpointId, setEndpointId] = useState('');
-  const [agentNamespace, setAgentNamespace] = useState(defaultLogsCollectorNamespace);
+  const agentNamespace = defaultLogsCollectorNamespace;
   const [parserMode, setParserMode] = useState<ParserMode>('none');
   const [parserRuleName, setParserRuleName] = useState(defaultParserRuleName);
   const [parserPattern, setParserPattern] = useState(defaultParserPattern);
@@ -120,15 +129,16 @@ function K8sOnboardingFlow({ workspaceQuery, editRouteId }: {
     if (editRoute?.route.serviceDeploymentId && deployments.some((deployment) => deployment.id === editRoute.route.serviceDeploymentId)) {
       setDeploymentId(editRoute.route.serviceDeploymentId);
       setEndpointId(editRoute.route.endpointId);
-      setAgentNamespace(editRoute.source?.agentNamespace || defaultLogsCollectorNamespace);
       const parser = editRoute.source?.parseRules.find((rule) => rule.enabled !== false);
       setParserMode(parser?.ruleType ?? 'none');
       setParserRuleName(parser?.name || defaultParserRuleName);
       setParserPattern(parser?.pattern || defaultParserPattern);
       return;
     }
-    setDeploymentId((current) => deployments.some((deployment) => deployment.id === current) ? current : deployments[0]?.id ?? '');
-  }, [deployments, editRoute]);
+    setDeploymentId((current) => deployments.some((deployment) => deployment.id === current)
+      ? current
+      : deployments.find((deployment) => deployment.id === preferredDeploymentId)?.id ?? deployments[0]?.id ?? '');
+  }, [deployments, editRoute, preferredDeploymentId]);
 
   useEffect(() => {
     setEndpointId((current) => endpoints.some((endpoint) => endpoint.id === current) ? current : endpoints[0]?.id ?? '');
@@ -152,7 +162,7 @@ function K8sOnboardingFlow({ workspaceQuery, editRouteId }: {
       parseRules,
     },
   });
-  const canPreview = Boolean(selectedDeployment && selectedEndpoint && agentNamespace.trim() && parserValid(parserMode, parserPattern));
+  const canPreview = Boolean(selectedDeployment && selectedEndpoint && parserValid(parserMode, parserPattern));
 
   const previewMutation = useMutation({
     mutationFn: () => logsApi.previewRoute(buildInput()),
@@ -209,12 +219,6 @@ function K8sOnboardingFlow({ workspaceQuery, editRouteId }: {
       savedRouteId={savedRouteId}
       publishMutation={publishMutation}
       publishConfirmation={publishConfirmation}
-      extraConfig={(
-        <label className="block text-xs font-semibold text-on-surface">
-          Agent Namespace
-          <input className="console-input mt-1.5 w-full font-mono" value={agentNamespace} onChange={(event) => setAgentNamespace(event.target.value)} />
-        </label>
-      )}
     />
   );
 }
@@ -382,6 +386,7 @@ function parserValid(mode: ParserMode, pattern: string) {
 }
 
 function parserLabel(mode: ParserMode) {
+  if (mode === 'otel_json') return 'OTel JSON · novaapm-json-v1';
   if (mode === 'json') return 'JSON';
   if (mode === 'regex') return 'Regex';
   return '不解析';

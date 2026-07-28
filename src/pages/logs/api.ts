@@ -75,7 +75,7 @@ export function buildVictoriaLogsVMUIURL(endpoint?: Pick<LogEndpoint, 'vmuiURL' 
 export interface LogParseRule {
   id?: string;
   name: string;
-  ruleType: 'regex' | 'json';
+  ruleType: 'regex' | 'json' | 'otel_json';
   pattern?: string;
   fields?: Record<string, string>;
   enabled?: boolean;
@@ -225,7 +225,6 @@ export interface LogRouteInput {
 export type CollectorConnectionStatus = 'online' | 'offline' | 'revoked';
 export type CollectorProcessStatus = 'healthy' | 'unhealthy' | 'unknown';
 export type CollectorConfigStatus = 'pending' | 'applying' | 'applied' | 'failed' | 'drift';
-export type CollectorDataStatus = 'flowing' | 'stale' | 'no_data' | 'unknown';
 
 export interface LogRouteRuntimeTarget {
   targetId: string;
@@ -235,10 +234,9 @@ export interface LogRouteRuntimeTarget {
   connectionStatus: CollectorConnectionStatus;
   processStatus: CollectorProcessStatus;
   configStatus: CollectorConfigStatus;
-  dataStatus: CollectorDataStatus;
   blockingReason: string;
   lastSeenAt: string;
-  lastLogAt: string;
+  lastHealthAt: string;
 }
 
 export interface LogRouteRuntimeStatus {
@@ -247,7 +245,6 @@ export interface LogRouteRuntimeStatus {
   online: number;
   healthy: number;
   converged: number;
-  flowing: number;
   blockingReason: string;
   targets: LogRouteRuntimeTarget[];
 }
@@ -393,16 +390,6 @@ export interface ObservabilityRuntime {
   resources: K8sPublishResource[];
 }
 
-export interface LogsCollectorRuntimeResourceStatus {
-  clusterId: string;
-  namespace: string;
-  apiVersion: string;
-  kind: string;
-  name: string;
-  required: boolean;
-  exists: boolean;
-}
-
 export interface LogsCollectorRuntimeStatus {
   clusterId: string;
   namespace: string;
@@ -410,8 +397,12 @@ export interface LogsCollectorRuntimeStatus {
   status: string;
   message: string;
   runtime?: ObservabilityRuntime;
-  resources: LogsCollectorRuntimeResourceStatus[];
-  missingResources: LogsCollectorRuntimeResourceStatus[];
+  desiredNodes: number;
+  updatedNodes: number;
+  readyNodes: number;
+  availableNodes: number;
+  configStatus: 'pending' | 'applied' | string;
+  observedAt: string;
 }
 
 export interface LogsCollectorRuntimePublishResult extends LogRoutePublishResult {
@@ -787,18 +778,6 @@ function mapObservabilityRuntime(raw: any): ObservabilityRuntime {
   };
 }
 
-function mapCollectorRuntimeResourceStatus(raw: any): LogsCollectorRuntimeResourceStatus {
-  return {
-    clusterId: raw.cluster_id ?? '',
-    namespace: normalizeExistingLogsCollectorNamespace(raw.namespace),
-    apiVersion: raw.api_version ?? '',
-    kind: raw.kind ?? '',
-    name: raw.name ?? '',
-    required: Boolean(raw.required),
-    exists: Boolean(raw.exists),
-  };
-}
-
 function mapCollectorRuntimeStatus(raw: any): LogsCollectorRuntimeStatus {
   return {
     clusterId: raw.cluster_id ?? '',
@@ -807,10 +786,12 @@ function mapCollectorRuntimeStatus(raw: any): LogsCollectorRuntimeStatus {
     status: raw.status ?? '',
     message: raw.message ?? '',
     runtime: raw.runtime ? mapObservabilityRuntime(raw.runtime) : undefined,
-    resources: Array.isArray(raw.resources) ? raw.resources.map(mapCollectorRuntimeResourceStatus) : [],
-    missingResources: Array.isArray(raw.missing_resources)
-      ? raw.missing_resources.map(mapCollectorRuntimeResourceStatus)
-      : [],
+    desiredNodes: Number(raw.desired_nodes ?? 0),
+    updatedNodes: Number(raw.updated_nodes ?? 0),
+    readyNodes: Number(raw.ready_nodes ?? 0),
+    availableNodes: Number(raw.available_nodes ?? 0),
+    configStatus: raw.config_status ?? 'pending',
+    observedAt: raw.observed_at ?? '',
   };
 }
 
@@ -865,7 +846,6 @@ function mapRouteRuntimeStatus(raw: any): LogRouteRuntimeStatus {
     online: Number(raw.online ?? 0),
     healthy: Number(raw.healthy ?? 0),
     converged: Number(raw.converged ?? 0),
-    flowing: Number(raw.flowing ?? 0),
     blockingReason: raw.blocking_reason ?? raw.blockingReason ?? '',
     targets: Array.isArray(raw.targets) ? raw.targets.map((target: any) => ({
       targetId: String(target.target_id ?? target.targetId ?? ''),
@@ -875,10 +855,9 @@ function mapRouteRuntimeStatus(raw: any): LogRouteRuntimeStatus {
       connectionStatus: target.connection_status ?? target.connectionStatus ?? 'offline',
       processStatus: target.process_status ?? target.processStatus ?? 'unknown',
       configStatus: target.config_status ?? target.configStatus ?? 'pending',
-      dataStatus: target.data_status ?? target.dataStatus ?? 'unknown',
       blockingReason: target.blocking_reason ?? target.blockingReason ?? '',
       lastSeenAt: target.last_seen_at ?? target.lastSeenAt ?? '',
-      lastLogAt: target.last_log_at ?? target.lastLogAt ?? '',
+      lastHealthAt: target.last_health_at ?? target.lastHealthAt ?? '',
     })) : [],
   };
 }
@@ -1039,6 +1018,15 @@ export const logsApi = {
     const params = new URLSearchParams({ cluster_id: input.clusterId });
     params.set('namespace', normalizeLogsCollectorNamespace(input.namespace));
     return mapCollectorRuntimeStatus(await apiRequest<any>(`/observability/runtimes/logs-collector/status?${params.toString()}`));
+  },
+  async refreshLogsCollectorRuntimeStatus(input: { clusterId: string; namespace?: string }): Promise<LogsCollectorRuntimeStatus> {
+    return mapCollectorRuntimeStatus(await apiRequest<any>('/observability/runtimes/logs-collector/status/refresh', {
+      method: 'POST',
+      body: JSON.stringify({
+        cluster_id: input.clusterId,
+        namespace: normalizeLogsCollectorNamespace(input.namespace),
+      }),
+    }));
   },
   async previewRoute(input: LogRouteInput): Promise<LogRoutePreview> {
     return mapPreview(await apiRequest<any>('/logs/routes/preview', {

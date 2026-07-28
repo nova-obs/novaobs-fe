@@ -51,8 +51,9 @@ test('产品与服务行操作使用无常驻描边的轻量动作', () => {
 });
 
 test('服务详情使用部署目标作为运行位置生产真值并保留独立维护任务路由', () => {
-  assert.equal(source.includes('观测关系'), true);
+  assert.equal(source.includes('<DetailSection title="观测关系"'), false);
   assert.equal(source.includes('部署目标'), true);
+  assert.equal(source.includes('DeploymentLogSummary'), true);
   assert.equal(source.includes('ServiceDeployment'), true);
   assert.equal(source.includes('getServiceDeployments'), true);
   assert.equal(source.includes('/deployments/new'), true);
@@ -66,6 +67,18 @@ test('服务详情使用部署目标作为运行位置生产真值并保留独�
   assert.equal(source.includes('确认归档服务'), true);
   assert.equal(source.includes('syslog_device'), false);
   assert.equal(source.includes('environmentId: input.environmentId'), false);
+});
+
+test('服务详情先展示部署与日志状态再展示身份细节，并提供采集深链', () => {
+  const deploymentsIndex = source.indexOf('<DetailSection title="部署与日志采集"');
+  const identityIndex = source.indexOf('<DetailSection title="服务身份"');
+  assert.ok(deploymentsIndex >= 0);
+  assert.ok(identityIndex > deploymentsIndex);
+  assert.match(source, /<table className="console-table w-full min-w-\[700px\]">/);
+  assert.doesNotMatch(source, /<table className="console-table w-full min-w-\[760px\]">/);
+  assert.match(source, /配置采集/);
+  assert.match(source, /查看采集/);
+  assert.match(source, /buildLogsRuntimeURL/);
 });
 
 test('新增服务提供手动创建与 Kubernetes Deployment 导入两种入口', () => {
