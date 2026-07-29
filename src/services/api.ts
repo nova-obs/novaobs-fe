@@ -270,9 +270,6 @@ function mapServiceDeployment(raw: any): ServiceDeployment {
       workloadUid: ref.workload_uid ?? ref.workloadUid ?? '',
     } : null,
     allowedLogRoots: parseStringList(raw.allowed_log_roots ?? raw.allowedLogRoots),
-    hostTargets: Array.isArray(raw.host_targets ?? raw.hostTargets)
-      ? (raw.host_targets ?? raw.hostTargets).map(mapHostAsset)
-      : [],
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };

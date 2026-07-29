@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Navigate, useParams } from 'react-router-dom';
+import { Navigate, useParams, useSearchParams } from 'react-router-dom';
+import { buildLogsExplorePath } from '../components/navigation/serviceScope';
 import { AgentDetailPage } from '../pages/agents/AgentDetailPage';
 import { AlertsPage } from '../pages/alerts/AlertsPage';
 import { K8sAuditPage } from '../pages/k8s/AuditPage';
@@ -84,7 +85,7 @@ const k8sChildRoutes: RouteDefinition[] = [
 
 const logsChildRoutes: RouteDefinition[] = [
   { index: true, title: 'Logs 日志分析', element: <ServiceLogsIndexRedirect /> },
-  { path: 'explore', title: 'Logs 日志分析', element: <LogsExplorePage /> },
+  { path: 'explore', title: 'Logs 日志分析', element: <LegacyLogsExploreRedirect /> },
   { path: 'format-demo', title: '日志格式改造演示', element: <LogsFormatDemoPage /> },
   { path: 'onboarding', title: '创建日志采集路由', element: <Navigate to="../agents/new" replace /> },
   { path: 'agents/new', title: '创建日志采集路由', element: <LogsOnboardingPage /> },
@@ -195,7 +196,13 @@ function K8sObservabilityRedirect() {
 
 function ServiceLogsIndexRedirect() {
 	const { productId = '', serviceId = '' } = useParams();
-	return <Navigate to={`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs/explore`} replace />;
+	return <Navigate to={buildLogsExplorePath(productId, serviceId)} replace />;
+}
+
+function LegacyLogsExploreRedirect() {
+  const { productId = '', serviceId = '' } = useParams();
+  const [searchParams] = useSearchParams();
+  return <Navigate to={buildLogsExplorePath(productId, serviceId, searchParams.get('endpoint_id') ?? '')} replace />;
 }
 
 function LegacyServiceSectionRedirect() {

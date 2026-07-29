@@ -88,6 +88,7 @@ test('Logs 保留服务级能力，旧接入配置路径统一跳转观测端点
 	assert.deepEqual(logsEntry?.children?.map((item) => item.path ?? 'index'), ['index', 'explore', 'format-demo', 'agents', 'alerts', 'endpoints']);
   assert.equal(logsEntry?.element?.type?.name, 'LogsWorkspace');
   assert.equal(logsEntry?.children?.find((item) => item.path === 'explore')?.element?.type?.name, 'LogsExplorePage');
+  assert.equal(logs?.children?.find((item) => item.path === 'explore')?.element?.type?.name, 'LegacyLogsExploreRedirect');
   assert.equal(logsEntry?.children?.find((item) => item.path === 'format-demo')?.element?.type?.name, 'LogsFormatDemoPage');
   assert.equal(logsEntry?.children?.find((item) => item.path === 'agents')?.element?.type?.name, 'LogsAgentsPage');
 	assert.equal(logsEntry?.children?.find((item) => item.path === 'endpoints')?.element?.type?.name, 'Navigate');

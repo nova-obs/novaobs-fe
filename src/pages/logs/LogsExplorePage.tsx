@@ -1,31 +1,29 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Database, RefreshCw, ShieldAlert } from 'lucide-react';
 import { useEffect, useMemo } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
+import { useServiceScope } from '../../components/navigation/ServiceScopeContext';
 import { api } from '../../services/api';
 import type { GrafanaDatasourceBinding } from '../../services/types';
 import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsSection } from './LogsPrimitives';
 
 export function LogsExplorePage() {
   const queryClient = useQueryClient();
-  const { productId = '', serviceId = '' } = useParams();
+  const { activeProduct, activeService, services } = useServiceScope();
   const [searchParams, setSearchParams] = useSearchParams();
+  const productId = activeProduct?.id ?? '';
+  const serviceId = activeService?.id ?? '';
+  const contextReady = Boolean(productId && serviceId);
+  const productServices = useMemo(
+    () => services.filter((service) => service.productId === productId),
+    [productId, services],
+  );
   const integrationQuery = useQuery({
     queryKey: ['product-grafana', productId],
     queryFn: () => api.getGrafanaProductIntegration(productId),
-    enabled: Boolean(productId),
+    enabled: contextReady,
     refetchInterval: (query) => query.state.data?.state === 'pending' || query.state.data?.state === 'degraded' ? 5_000 : false,
-  });
-  const productQuery = useQuery({
-    queryKey: ['product', productId],
-    queryFn: () => api.getProduct(productId),
-    enabled: Boolean(productId),
-  });
-  const serviceQuery = useQuery({
-    queryKey: ['service', productId, serviceId],
-    queryFn: () => api.getService(productId, serviceId),
-    enabled: Boolean(productId && serviceId),
   });
   const reconcile = useMutation({
     mutationFn: () => api.reconcileGrafanaProductIntegration(productId),
@@ -45,8 +43,8 @@ export function LogsExplorePage() {
     setSearchParams(next, { replace: true });
   }, [datasources, endpointId, searchParams, setSearchParams]);
 
-  const filter = buildLogsServiceFilter(serviceQuery.data?.name, serviceId);
-  const exploreURL = selectedDatasource ? buildGrafanaExploreURL(selectedDatasource, filter) : '';
+  const filter = contextReady ? buildLogsServiceFilter(activeService?.name, serviceId) : '';
+  const exploreURL = contextReady && selectedDatasource ? buildGrafanaExploreURL(selectedDatasource, filter) : '';
   const integration = integrationQuery.data;
   const unavailable = !integrationQuery.isLoading && (
     !integration
@@ -76,17 +74,25 @@ export function LogsExplorePage() {
                   next.set('endpoint_id', event.target.value);
                   setSearchParams(next);
                 }}
-                disabled={datasources.length === 0}
+                disabled={!contextReady || datasources.length === 0}
                 aria-label="选择日志 Endpoint"
               >
-                <option value="">{datasources.length ? '请选择 Endpoint' : '数据源尚未就绪'}</option>
+                <option value="">{!contextReady ? '请先选择产品和服务' : datasources.length ? '请选择 Endpoint' : '数据源尚未就绪'}</option>
                 {datasources.map((item) => <option key={item.endpointId} value={item.endpointId}>{item.endpointName || item.endpointId}</option>)}
               </select>
             </label>
           </div>
         </div>
 
-        {exploreURL ? (
+        {!activeProduct ? (
+          <LogsEmptyState title="请选择产品" description="选择查询产品后，可继续选择该产品内的服务。" />
+        ) : !activeService ? (
+          <LogsEmptyState
+            title={productServices.length ? '请选择服务' : '当前产品暂无服务'}
+            description={productServices.length ? '服务是当前日志查询的过滤边界。' : '创建服务后才能建立稳定的日志查询上下文。'}
+            action={!productServices.length ? <Link className="console-button" to={`/products/${encodeURIComponent(productId)}/services`}>前往创建服务</Link> : undefined}
+          />
+        ) : exploreURL ? (
           <iframe className="min-h-[460px] w-full flex-1 border-0 bg-white xl:min-h-0" src={exploreURL} title="Grafana Logs Explore" />
         ) : integrationQuery.isLoading ? (
           <div className="m-4 console-skeleton min-h-[360px]" />
@@ -109,9 +115,9 @@ export function LogsExplorePage() {
       </section>
 
       <LogsSection title="查询详情" meta="Grafana Explore" className="min-h-0 flex flex-col" bodyClassName="min-h-0 flex-1 overflow-y-auto p-0">
-        <LogsInfoCell label="产品" value={productQuery.data?.name || '-'} />
-        <LogsInfoCell label="产品租户" value={productQuery.data ? `${productQuery.data.tenant.accountId}:${productQuery.data.tenant.projectId}` : '-'} />
-        <LogsInfoCell label="服务" value={serviceQuery.data?.name || '-'} tone="primary" />
+        <LogsInfoCell label="产品" value={activeProduct?.name || '-'} />
+        <LogsInfoCell label="产品租户" value={activeProduct ? `${activeProduct.tenant.accountId}:${activeProduct.tenant.projectId}` : '-'} />
+        <LogsInfoCell label="服务" value={activeService?.name || '-'} tone="primary" />
         <LogsInfoCell label="稳定服务 ID" value={serviceId || '-'} />
         <LogsInfoCell label="LogsQL 预填过滤" value={filter} />
         <LogsInfoCell label="Datasource UID" value={selectedDatasource?.uid || '-'} />

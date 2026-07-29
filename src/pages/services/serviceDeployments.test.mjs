@@ -1,6 +1,11 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { api } from '../../services/api.ts';
+
+const serviceApiSource = readFileSync(new URL('../../services/api.ts', import.meta.url), 'utf8');
+const serviceTypesSource = readFileSync(new URL('../../services/types.ts', import.meta.url), 'utf8');
+const deploymentTaskSource = readFileSync(new URL('./ServiceDeploymentTaskPage.tsx', import.meta.url), 'utf8');
 
 function response(data) {
   return { ok: true, status: 200, headers: { get: () => null }, json: async () => ({ success: true, data, error: null }) };
@@ -22,24 +27,27 @@ async function captureRequest(callApi, responseData = {}) {
   }
 }
 
-test('读取服务部署目标并映射 host_set 生产真值', async () => {
+test('读取服务部署身份但不伪造内嵌主机关联', async () => {
   const { request, result } = await captureRequest(
     () => api.getServiceDeployments('product-1', 'service-1'),
     [{
       id: 'deployment-1', product_id: 'product-1', service_id: 'service-1',
       name: '华东二进制集群', kind: 'host_set', status: 'active', source: 'manual',
       allowed_log_roots: ['/data/logs', '/var/log/orders'],
-      host_targets: [{
-        id: 'host-1', identity_source: 'manual', identity_scope: 'global',
-        external_id: 'cmdb-100', display_name: 'orders-01', hostname: 'orders-01.local',
-        status: 'active', ip_addresses: ['10.0.0.8'],
-      }],
     }],
   );
   assert.equal(request.path, '/api/v1/products/product-1/services/service-1/deployments');
   assert.equal(result[0].kind, 'host_set');
   assert.deepEqual(result[0].allowedLogRoots, ['/data/logs', '/var/log/orders']);
-  assert.equal(result[0].hostTargets[0].id, 'host-1');
+  assert.equal('hostTargets' in result[0], false);
+  assert.doesNotMatch(serviceApiSource, /host_targets\s*\?\?/);
+  assert.doesNotMatch(serviceTypesSource, /hostTargets:\s*HostAsset\[\]/);
+});
+
+test('主机范围页面说明保存后会自动收敛已发布路由', () => {
+  assert.match(deploymentTaskSource, /保存主机范围后，平台会按当前已发布路由自动生成新的主机配置/);
+  assert.match(deploymentTaskSource, /queryKey: \['service-deployment-targets', productId, serviceId\]/);
+  assert.match(deploymentTaskSource, /queryKey: \['logs-route-runtime'\]/);
 });
 
 test('创建 host_set 部署时只提交主机部署字段', async () => {

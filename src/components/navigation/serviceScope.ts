@@ -1,7 +1,14 @@
 export type ServiceScopedModule = 'logs';
 
-export function serviceScopePreferenceKey(module: ServiceScopedModule): string {
-  return `novaapm.service-scope.${module}`;
+export interface LogsQueryContext {
+  productId: string;
+  serviceId: string;
+  endpointId: string;
+}
+
+export function serviceScopePreferenceKey(module: ServiceScopedModule, productId = ''): string {
+  const base = `novaapm.service-scope.${module}`;
+  return productId ? `${base}.${encodeURIComponent(productId)}` : base;
 }
 
 export function serviceModuleEntryFromPath(pathname: string, module: ServiceScopedModule): string {
@@ -20,7 +27,31 @@ export function buildServiceModulePath(
   entry: string,
 ): string {
   if (entry === 'endpoints') return `/${module}/endpoints`;
+  if (module === 'logs' && entry === 'explore') return buildLogsExplorePath(productId, serviceId);
   return `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/${module}/${entry}`;
+}
+
+export function buildLogsExplorePath(productId = '', serviceId = '', endpointId = ''): string {
+  const search = new URLSearchParams();
+  if (productId) search.set('product_id', productId);
+  if (serviceId) search.set('service_id', serviceId);
+  if (endpointId) search.set('endpoint_id', endpointId);
+  const query = search.toString();
+  return `/logs/explore${query ? `?${query}` : ''}`;
+}
+
+export function selectLogsProductContext<T extends { id: string; productId: string }>(
+  services: T[],
+  productId: string,
+  preferredServiceId: string,
+): LogsQueryContext {
+  const candidates = services.filter((service) => service.productId === productId);
+  const service = resolveRestorableService(candidates, preferredServiceId);
+  return {
+    productId,
+    serviceId: service?.id ?? '',
+    endpointId: '',
+  };
 }
 
 export function resolveRestorableService<T extends { id: string }>(services: T[], preferredServiceId: string): T | null {

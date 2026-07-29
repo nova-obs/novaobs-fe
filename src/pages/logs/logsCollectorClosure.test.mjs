@@ -81,6 +81,16 @@ test('路由草稿变化会使旧预览失效且阻断未预览或预览失败�
   assert.match(vmFlow, /setPreview\(null\)/);
 });
 
+test('VM 路由最终发布成功后刷新生产真值并进入运行页', () => {
+  assert.match(vmFlow, /getServiceDeploymentTargets/);
+  assert.match(vmFlow, /if \(result\.requiresConfirmation\)/);
+  assert.match(vmFlow, /queryKey: \['logs-onboarding-workspace', productId, serviceId\]/);
+  assert.match(vmFlow, /queryKey: \['logs-route-runtime', savedRouteId\]/);
+  assert.match(vmFlow, /queryKey: \['logs-route-rollouts', savedRouteId\]/);
+  assert.match(vmFlow, /navigate\(buildLogsRuntimeURL\(productId, serviceId/);
+  assert.doesNotMatch(onboarding, /hostTargets/);
+});
+
 test('Logs API 已硬切删除 VM 手工安装材料、Endpoint 和端口探测入口', () => {
   assert.doesNotMatch(apiSource, /VMInstallation|VMAgentEndpoint/);
   assert.doesNotMatch(apiSource, /getVMInstallation|listVMAgentEndpoints|createVMAgentEndpoint/);

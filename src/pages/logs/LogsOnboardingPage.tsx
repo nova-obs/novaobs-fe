@@ -199,6 +199,7 @@ function K8sOnboardingFlow({ workspaceQuery, editRouteId, preferredDeploymentId 
       kind="kubernetes_workload"
       deployments={deployments}
       selectedDeployment={selectedDeployment}
+      expectedTargetCount={selectedDeployment ? 1 : null}
       deploymentId={deploymentId}
       onDeploymentChange={setDeploymentId}
       endpointId={endpointId}
@@ -227,6 +228,7 @@ interface RouteEditorProps {
   kind: 'kubernetes_workload' | 'host_set';
   deployments: ServiceDeployment[];
   selectedDeployment: ServiceDeployment | null;
+  expectedTargetCount: number | null;
   deploymentId: string;
   onDeploymentChange: (value: string) => void;
   endpointId: string;
@@ -275,7 +277,12 @@ export function RouteEditor(props: RouteEditorProps) {
             </label>
             {props.deployments.length === 0 ? (
               <div className="console-notice console-notice-warning">当前服务没有可用的{deploymentKind}，请先在服务详情创建部署目标。</div>
-            ) : props.selectedDeployment ? <DeploymentFacts deployment={props.selectedDeployment} /> : null}
+            ) : props.selectedDeployment ? (
+              <DeploymentFacts
+                deployment={props.selectedDeployment}
+                expectedTargetCount={props.expectedTargetCount}
+              />
+            ) : null}
             {props.extraConfig}
           </div>
         </section>
@@ -317,7 +324,7 @@ export function RouteEditor(props: RouteEditorProps) {
           <div className="text-xs font-semibold text-muted">发布摘要</div>
           <dl className="mt-3 space-y-3">
             <SummaryFact label="部署目标" value={props.selectedDeployment?.name || '-'} />
-            <SummaryFact label="预期目标" value={props.selectedDeployment ? String(props.selectedDeployment.kind === 'host_set' ? props.selectedDeployment.hostTargets.length : 1) : '-'} />
+            <SummaryFact label="预期目标" value={props.expectedTargetCount === null ? '-' : String(props.expectedTargetCount)} />
             <SummaryFact label="配置 Hash" value={props.preview?.collectorConfigHash || '-'} mono />
           </dl>
         </section>
@@ -351,11 +358,14 @@ export function RouteEditor(props: RouteEditorProps) {
   );
 }
 
-function DeploymentFacts({ deployment }: { deployment: ServiceDeployment }) {
+function DeploymentFacts({ deployment, expectedTargetCount }: {
+  deployment: ServiceDeployment;
+  expectedTargetCount: number | null;
+}) {
   if (deployment.kind === 'host_set') {
     return (
       <dl className="grid gap-3 rounded border border-outline bg-surface-lowest p-3 sm:grid-cols-2">
-        <SummaryFact label="主机范围" value={`${deployment.hostTargets.length} 台预期主机`} />
+        <SummaryFact label="主机范围" value={expectedTargetCount === null ? '加载中' : `${expectedTargetCount} 台预期主机`} />
         <SummaryFact label="允许日志根目录" value={deployment.allowedLogRoots.join('、') || '-'} mono />
       </dl>
     );

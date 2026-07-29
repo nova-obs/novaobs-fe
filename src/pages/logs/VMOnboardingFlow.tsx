@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../services/api';
 import {
@@ -12,6 +12,7 @@ import {
 import { type ParserMode } from './LogsParseRuleDialog';
 import { LogsEmptyState, LogsErrorLine } from './LogsPrimitives';
 import { RouteEditor } from './LogsOnboardingPage';
+import { buildLogsRuntimeURL } from './logsRuntimeViewModel';
 
 const defaultParserRuleName = 'default-parser';
 const defaultParserPattern = '^(?P<level>[A-Z]+)\\s+(?P<message>.*)$';
@@ -36,6 +37,7 @@ function buildParserRules(mode: ParserMode, name: string, pattern: string): LogP
 
 export function VMOnboardingFlow({ preferredDeploymentId = '' }: { preferredDeploymentId?: string }) {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const { productId = '', serviceId = '', id: editRouteId = '' } = useParams();
   const [deploymentId, setDeploymentId] = useState('');
   const [endpointId, setEndpointId] = useState('');
@@ -63,11 +65,19 @@ export function VMOnboardingFlow({ preferredDeploymentId = '' }: { preferredDepl
     queryFn: () => api.getService(productId, serviceId),
     enabled: Boolean(productId && serviceId),
   });
+  const deploymentTargetsQuery = useQuery({
+    queryKey: ['service-deployment-targets', productId, serviceId, deploymentId],
+    queryFn: () => api.getServiceDeploymentTargets(productId, serviceId, deploymentId),
+    enabled: Boolean(productId && serviceId && deploymentId),
+  });
   const deployments = useMemo(
     () => (deploymentsQuery.data ?? []).filter((deployment) => deployment.kind === 'host_set' && deployment.status === 'active'),
     [deploymentsQuery.data],
   );
   const selectedDeployment = deployments.find((deployment) => deployment.id === deploymentId) ?? null;
+  const expectedTargetCount = deploymentTargetsQuery.data
+    ? deploymentTargetsQuery.data.filter((target) => target.status === 'active').length
+    : null;
   const endpoints = useMemo(
     () => (workspaceQuery.data?.endpoints ?? []).filter((endpoint) => endpoint.scopeType !== 'k8s_cluster'),
     [workspaceQuery.data?.endpoints],
@@ -134,14 +144,28 @@ export function VMOnboardingFlow({ preferredDeploymentId = '' }: { preferredDepl
       previewId: publishConfirmation.previewId,
       confirmationToken: publishConfirmation.confirmationToken,
     } : undefined),
-    onSuccess: (result) => {
-      setPublishConfirmation(result.requiresConfirmation ? result : null);
-      void queryClient.invalidateQueries({ queryKey: ['logs-route-runtime', savedRouteId] });
-      void queryClient.invalidateQueries({ queryKey: ['logs-route-rollouts', savedRouteId] });
+    onSuccess: async (result) => {
+      if (result.requiresConfirmation) {
+        setPublishConfirmation(result);
+        return;
+      }
+      setPublishConfirmation(null);
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace', productId, serviceId] }),
+        queryClient.invalidateQueries({ queryKey: ['logs-route-runtime', savedRouteId] }),
+        queryClient.invalidateQueries({ queryKey: ['logs-route-rollouts', savedRouteId] }),
+      ]);
+      navigate(buildLogsRuntimeURL(productId, serviceId, {
+        deploymentId,
+        routeId: savedRouteId,
+      }), { replace: true });
     },
   });
 
-  const error = workspaceQuery.error ?? deploymentsQuery.error ?? serviceQuery.error;
+  const error = workspaceQuery.error
+    ?? deploymentsQuery.error
+    ?? serviceQuery.error
+    ?? deploymentTargetsQuery.error;
   if (error) return <div className="p-3"><LogsErrorLine message={(error as Error).message} /></div>;
 
   return (
@@ -150,6 +174,7 @@ export function VMOnboardingFlow({ preferredDeploymentId = '' }: { preferredDepl
         kind="host_set"
         deployments={deployments}
         selectedDeployment={selectedDeployment}
+        expectedTargetCount={expectedTargetCount}
         deploymentId={deploymentId}
         onDeploymentChange={setDeploymentId}
         endpointId={endpointId}

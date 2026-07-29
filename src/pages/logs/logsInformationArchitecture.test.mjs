@@ -93,6 +93,8 @@ test('Logs 日志分析通过产品与服务两级上下文切换当前服务', 
   assert.match(explore, /<ServiceContextSelector/);
   assert.match(explore, /查询上下文/);
   assert.match(explore, /VictoriaLogs Endpoint/);
+  assert.match(explore, /useServiceScope/);
+  assert.doesNotMatch(explore, /useParams/);
   assert.doesNotMatch(workspace, /选择当前服务/);
 });
 

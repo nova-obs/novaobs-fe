@@ -9,8 +9,10 @@ import type { ModuleRailItem } from './ModuleRail';
 import { ServiceContextSelector } from './ServiceContextSelector';
 import { ServiceScopeContext } from './ServiceScopeContext';
 import {
+  buildLogsExplorePath,
   buildServiceModulePath,
   resolveRestorableService,
+  selectLogsProductContext,
   serviceModuleEntryFromPath,
   serviceScopePreferenceKey,
   type ServiceScopedModule,
@@ -42,8 +44,13 @@ export function ServiceScopedModuleWorkbench({
   const navigate = useNavigate();
   const entry = serviceModuleEntryFromPath(location.pathname, module);
   const currentItem = items.find((item) => item.entry === entry);
+  const queryContextEntry = module === 'logs' && location.pathname.replace(/\/+$/, '') === '/logs/explore';
+  const querySearchParams = useMemo(() => new URLSearchParams(location.search), [location.search]);
+  const contextProductId = queryContextEntry ? querySearchParams.get('product_id') ?? '' : productId;
+  const contextServiceId = queryContextEntry ? querySearchParams.get('service_id') ?? '' : serviceId;
+  const contextEndpointId = queryContextEntry ? querySearchParams.get('endpoint_id') ?? '' : '';
   const serviceContextEnabled = entry !== 'endpoints';
-  const serviceRequired = currentItem?.serviceScoped !== false;
+  const serviceRequired = !queryContextEntry && currentItem?.serviceScoped !== false;
   const productsQuery = useQuery({
     queryKey: ['products'],
     queryFn: api.getProducts,
@@ -57,19 +64,62 @@ export function ServiceScopedModuleWorkbench({
   const products = productsQuery.data ?? [];
   const services = servicesQuery.data ?? [];
   const serviceScopeError = productsQuery.error ?? servicesQuery.error;
-  const activeService = services.find((service) => service.id === serviceId && service.productId === productId) ?? null;
-  const activeProduct = products.find((product) => product.id === (activeService?.productId || productId)) ?? null;
+  const activeService = services.find((service) => service.id === contextServiceId && service.productId === contextProductId) ?? null;
+  const activeProduct = products.find((product) => product.id === (activeService?.productId || contextProductId)) ?? null;
   useEffect(() => {
-    if (!serviceRequired || servicesQuery.isLoading || servicesQuery.error) return;
+    if (servicesQuery.isLoading || servicesQuery.error || productsQuery.isLoading || productsQuery.error) return;
     if (activeService) {
       writeServicePreference(module, activeService.id);
+      writeServicePreference(module, activeService.id, activeService.productId);
       return;
     }
-    if (serviceId) return;
+    if (queryContextEntry) {
+      if (contextProductId && !activeProduct) {
+        navigate('/logs/explore', { replace: true });
+        return;
+      }
+      if (contextServiceId) {
+        navigate(buildLogsExplorePath(contextProductId), { replace: true });
+        return;
+      }
+      if (contextProductId) {
+        const next = selectLogsProductContext(
+          services,
+          contextProductId,
+          readServicePreference(module, contextProductId),
+        );
+        if (next.serviceId) {
+          navigate(buildLogsExplorePath(next.productId, next.serviceId), { replace: true });
+        }
+        return;
+      }
+      const nextService = resolveRestorableService(services, readServicePreference(module));
+      if (nextService) {
+        navigate(buildLogsExplorePath(nextService.productId, nextService.id), { replace: true });
+      }
+      return;
+    }
+    if (!serviceRequired || serviceId) return;
     const nextService = resolveRestorableService(services, readServicePreference(module));
     if (!nextService) return;
     navigate(buildServiceModulePath(module, nextService.productId, nextService.id, entry), { replace: true });
-  }, [activeService, entry, module, navigate, serviceId, serviceRequired, services, servicesQuery.error, servicesQuery.isLoading]);
+  }, [
+    activeProduct,
+    activeService,
+    contextProductId,
+    contextServiceId,
+    entry,
+    module,
+    navigate,
+    productsQuery.error,
+    productsQuery.isLoading,
+    queryContextEntry,
+    serviceId,
+    serviceRequired,
+    services,
+    servicesQuery.error,
+    servicesQuery.isLoading,
+  ]);
 
   const railItems: ModuleRailItem[] = items.map((item) => {
     const { entry: itemEntry, serviceScoped = itemEntry !== 'endpoints', ...railItem } = item;
@@ -88,10 +138,24 @@ export function ServiceScopedModuleWorkbench({
     error: serviceScopeError,
     retry: () => void Promise.all([productsQuery.refetch(), servicesQuery.refetch()]),
     selectProduct: (nextProductId: string) => {
+      if (queryContextEntry) {
+        const next = selectLogsProductContext(
+          services,
+          nextProductId,
+          readServicePreference(module, nextProductId),
+        );
+        if (next.serviceId) {
+          writeServicePreference(module, next.serviceId);
+          writeServicePreference(module, next.serviceId, next.productId);
+        }
+        navigate(buildLogsExplorePath(next.productId, next.serviceId));
+        return;
+      }
       const candidates = services.filter((service) => service.productId === nextProductId);
       const nextService = resolveRestorableService(candidates, readServicePreference(module));
       if (nextService) {
         writeServicePreference(module, nextService.id);
+        writeServicePreference(module, nextService.id, nextService.productId);
         navigate(buildServiceModulePath(module, nextService.productId, nextService.id, entry));
         return;
       }
@@ -101,9 +165,31 @@ export function ServiceScopedModuleWorkbench({
       const nextService = services.find((service) => service.id === nextServiceId);
       if (!nextService) return;
       writeServicePreference(module, nextService.id);
+      writeServicePreference(module, nextService.id, nextService.productId);
+      if (queryContextEntry) {
+        const endpointId = nextService.productId === contextProductId ? contextEndpointId : '';
+        navigate(buildLogsExplorePath(nextService.productId, nextService.id, endpointId));
+        return;
+      }
       navigate(buildServiceModulePath(module, nextService.productId, nextService.id, entry));
     },
-  }), [activeProduct, activeService, entry, module, navigate, products, productsQuery.isLoading, productsQuery.refetch, serviceScopeError, services, servicesQuery.isLoading, servicesQuery.refetch]);
+  }), [
+    activeProduct,
+    activeService,
+    contextEndpointId,
+    contextProductId,
+    entry,
+    module,
+    navigate,
+    products,
+    productsQuery.isLoading,
+    productsQuery.refetch,
+    queryContextEntry,
+    serviceScopeError,
+    services,
+    servicesQuery.isLoading,
+    servicesQuery.refetch,
+  ]);
 
   return (
     <ServiceScopeContext.Provider value={contextValue}>
@@ -168,17 +254,17 @@ function ServiceScopeContent({
   );
 }
 
-function readServicePreference(module: ServiceScopedModule): string {
+function readServicePreference(module: ServiceScopedModule, productId = ''): string {
   try {
-    return window.localStorage.getItem(serviceScopePreferenceKey(module)) ?? '';
+    return window.localStorage.getItem(serviceScopePreferenceKey(module, productId)) ?? '';
   } catch {
     return '';
   }
 }
 
-function writeServicePreference(module: ServiceScopedModule, serviceId: string) {
+function writeServicePreference(module: ServiceScopedModule, serviceId: string, productId = '') {
   try {
-    window.localStorage.setItem(serviceScopePreferenceKey(module), serviceId);
+    window.localStorage.setItem(serviceScopePreferenceKey(module, productId), serviceId);
   } catch {
     // 浏览器隐私模式或配额不足时，只保留当前 URL 中的服务作用域。
   }

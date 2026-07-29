@@ -18,6 +18,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { HelpTip } from '../../components/HelpTip';
 import { StatusBadge } from '../../components/StatusBadge';
+import { buildLogsExplorePath } from '../../components/navigation/serviceScope';
 import { api } from '../../services/api';
 import { k8sApi } from '../k8s/api';
 import { defaultLogsCollectorNamespace, logsApi } from '../logs/api';
@@ -429,7 +430,7 @@ function ProductServiceRows({ product, integration, state, totalServiceCount, co
           <td><div className="text-xs">{service.ownerTeam || service.owner || '-'}</div><div className="mt-1 text-[11px] text-muted">{sourceLabel(service.source)}</div></td>
           <td><StatusBadge value={service.status} appearance="inline" /></td>
           <td className="text-xs text-muted">{formatTime(service.updatedAt)}</td>
-          <td><div className="flex justify-end gap-1"><button className="product-catalog-row-action" onClick={() => onOpenService(service.id)}>查看</button><Link className="product-catalog-row-action" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/logs/explore`}>Logs</Link></div></td>
+          <td><div className="flex justify-end gap-1"><button className="product-catalog-row-action" onClick={() => onOpenService(service.id)}>查看</button><Link className="product-catalog-row-action" to={buildLogsExplorePath(product.id, service.id)}>Logs</Link></div></td>
         </tr>
       )) : (
         <tr>
@@ -574,7 +575,7 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
           <div className="min-w-0"><div className="text-[11px] text-muted">{product.name}</div><div className="mt-1 flex items-center gap-2"><div id="service-detail-title" className="truncate text-sm font-semibold">{service?.name || '服务详情'}</div>{service ? <StatusBadge value={service.status} /> : null}</div></div>
           <div className="flex shrink-0 gap-2">
-            {service ? <Link className="console-button console-button-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/logs/explore`}>进入 Logs</Link> : null}
+            {service ? <Link className="console-button console-button-primary" to={buildLogsExplorePath(product.id, service.id)}>进入 Logs</Link> : null}
             <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭服务详情" title="关闭"><X className="h-4 w-4" /></button>
           </div>
         </div>
