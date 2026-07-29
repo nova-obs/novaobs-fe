@@ -3,11 +3,17 @@ import { AlertTriangle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { StatusBadge } from '../../components/StatusBadge';
 import { api } from '../../services/api';
+import { k8sAccessLevelForCluster, usePlatformAccess } from '../../layouts/access';
 import { k8sApi } from './api';
 import { useK8sOpsContext } from './context';
 
 export function DashboardPage() {
   const { activeClusterId, activeCluster, clusters, clusterError } = useK8sOpsContext();
+  const { data: accessContext } = usePlatformAccess();
+  const accessLevel = accessContext && activeClusterId
+    ? k8sAccessLevelForCluster(accessContext, activeClusterId)
+    : null;
+  const canWrite = accessLevel === 'namespace-maintainer' && !activeCluster?.readOnly;
 
   const { data, error, isLoading } = useQuery({
     queryKey: ['k8s-dashboard', activeClusterId],
@@ -71,7 +77,7 @@ export function DashboardPage() {
                 <ControlPlaneRow label="API Server" value={signalMeta(signals, 'api-server')} source="Kubernetes API" state={signalMeta(signals, 'api-server')} />
                 <ControlPlaneRow label="Workloads" value={`${stats?.workloads ?? 0} active`} source="Deployment" state={stats?.health ?? 'unknown'} />
                 <ControlPlaneRow label="Namespaces" value={`${stats?.namespaces ?? 0} domains`} source="Kubernetes API" state={sync?.status ?? 'unknown'} />
-                <ControlPlaneRow label="RBAC" value={activeCluster?.readOnly ? 'read-only' : 'write-enabled'} source="NovaAPM policy" state={activeCluster?.readOnly ? 'warning' : 'healthy'} />
+                <ControlPlaneRow label="RBAC" value={canWrite ? 'namespace-maintainer' : 'developer-read-only'} source="NovaAPM Profile" state={canWrite ? 'healthy' : 'warning'} />
               </tbody>
             </table>
           </div>
@@ -79,7 +85,7 @@ export function DashboardPage() {
         <DataPanel title="集群策略">
           <div className="space-y-2">
             <PolicyRow label="接入模式" value={activeCluster?.accessMode || '-'} />
-            <PolicyRow label="写入保护" value={activeCluster?.readOnly ? '只读' : '允许写入'} />
+            <PolicyRow label="工作负载操作" value={canWrite ? '允许 Namespace 维护' : '只读查看'} />
             <PolicyRow label="K8s 版本" value={activeCluster?.version || '-'} />
             <PolicyRow label="区域" value={activeCluster?.region || '-'} />
           </div>

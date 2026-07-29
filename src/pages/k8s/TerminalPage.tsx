@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Play } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
+import { hasBreakGlassAccess, k8sNamespacesForLevel, usePlatformAccess } from '../../layouts/access';
 import { k8sApi, type K8sResourceSummary, type K8sTerminalResult } from './api';
 import { useK8sOpsContext } from './context';
 
@@ -15,13 +16,19 @@ export function K8sTerminalPage() {
   const [result, setResult] = useState<K8sTerminalResult | null>(null);
 
   const { activeClusterId, activeCluster, clusterError } = useK8sOpsContext();
+  const { data: accessContext } = usePlatformAccess();
 
-  const { data: namespaces = [], error: namespaceError } = useQuery({
+  const { data: availableNamespaces = [], error: namespaceError } = useQuery({
     queryKey: ['k8s-namespaces', activeClusterId],
     queryFn: () => k8sApi.listNamespaces(activeClusterId),
     enabled: Boolean(activeClusterId),
     retry: false,
   });
+  const maintainerNamespaces = new Set(
+    accessContext ? k8sNamespacesForLevel(accessContext, activeClusterId, 'namespace-maintainer') : [],
+  );
+  const breakGlassActive = Boolean(accessContext && hasBreakGlassAccess(accessContext, activeClusterId));
+  const namespaces = availableNamespaces.filter((item) => breakGlassActive || maintainerNamespaces.has(item.name));
 
   const { data: resources = [], isLoading: isLoadingResources, error: resourceError } = useQuery({
     queryKey: ['k8s-terminal-resources', activeClusterId, namespace],

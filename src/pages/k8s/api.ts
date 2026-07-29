@@ -122,85 +122,12 @@ export interface K8sAuditEvent {
   createdAt: string;
 }
 
-export interface K8sCertificate {
-  id: string;
-  clusterId: string;
-  namespace: string;
-  name: string;
-  commonName: string;
-  fingerprint: string;
-  secretId: string;
-  notAfter: string;
-  status: string;
-  source: string;
-}
-
-export interface K8sServiceAccount {
-  id: string;
-  clusterId: string;
-  namespace: string;
-  name: string;
-  uid: string;
-  status: string;
-  source: string;
-  createdAt: string;
-}
-
 export interface K8sWriteResult<T> {
   item?: T;
   items?: T[];
   status?: string;
   auditId: string;
   probe?: K8sClusterProbe;
-}
-
-export interface K8sRBACRule {
-  apiGroups: string[];
-  resources: string[];
-  verbs: string[];
-}
-
-export interface K8sRBACRole {
-  id: string;
-  clusterId: string;
-  namespace: string;
-  kind: string;
-  name: string;
-  uid: string;
-  rules: K8sRBACRule[];
-  source: string;
-  updatedAt: string;
-}
-
-export interface K8sRBACSubject {
-  kind: string;
-  name: string;
-  namespace: string;
-}
-
-export interface K8sRBACBinding {
-  id: string;
-  clusterId: string;
-  namespace: string;
-  kind: string;
-  name: string;
-  uid: string;
-  roleRef: { kind: string; name: string };
-  subjects: K8sRBACSubject[];
-  source: string;
-  updatedAt: string;
-}
-
-export interface K8sKubeconfigMetadata {
-  secretId: string;
-  fingerprint: string;
-  expiresAt: string;
-  auditId: string;
-}
-
-export interface K8sKubeconfigExport {
-  kubeconfig: string;
-  auditId: string;
 }
 
 export interface K8sTemplateVariable {
@@ -286,58 +213,6 @@ export interface K8sRuntimeGroupsResponse {
   namespace: string;
   groups: K8sRuntimeGroup[];
   summary: K8sRuntimeGroupsSummary;
-}
-
-export interface K8sPlatformAccessScope {
-  global: boolean;
-  clusterId: string;
-  namespace: string;
-  namespaces: string[];
-  allNamespaces: boolean;
-}
-
-export interface K8sPlatformAccessPermission {
-  id: string;
-  label: string;
-  description: string;
-  resource: string;
-  action: string;
-  scopeMode: string;
-}
-
-export interface K8sPlatformAccessProfile {
-  id: string;
-  label: string;
-  description: string;
-  risk: string;
-  scopeMode: string;
-  recommendedSubjectType: string;
-  permissionIds: string[];
-}
-
-export interface K8sPlatformAccessBinding {
-  id: string;
-  subjectId: string;
-  subjectType: string;
-  roleId: string;
-  roleName: string;
-  scope: K8sPlatformAccessScope;
-  permissionIds: string[];
-  permissions: Array<{ resource: string; action: string; scopeMode: string }>;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface K8sPlatformSubject {
-  id: string;
-  subjectId: string;
-  subjectType: string;
-  displayName: string;
-  email: string;
-  source: string;
-  bindingRefs: number;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface K8sRuntimeGroupsSummary {
@@ -636,34 +511,6 @@ function mapAuditEvent(raw: any): K8sAuditEvent {
   };
 }
 
-function mapCertificate(raw: any): K8sCertificate {
-  return {
-    id: String(raw.id ?? ''),
-    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
-    namespace: raw.namespace ?? '',
-    name: raw.name ?? '',
-    commonName: raw.common_name ?? raw.commonName ?? '',
-    fingerprint: raw.fingerprint ?? '',
-    secretId: raw.secret_id ?? raw.secretId ?? '',
-    notAfter: raw.not_after ?? raw.notAfter ?? '',
-    status: raw.status ?? 'unknown',
-    source: raw.source ?? '',
-  };
-}
-
-function mapServiceAccount(raw: any): K8sServiceAccount {
-  return {
-    id: String(raw.id ?? ''),
-    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
-    namespace: raw.namespace ?? '',
-    name: raw.name ?? '',
-    uid: raw.uid ?? '',
-    status: raw.status ?? 'unknown',
-    source: raw.source ?? '',
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-  };
-}
-
 function mapWriteResult<T>(raw: any, mapItem?: (value: any) => T): K8sWriteResult<T> {
   return {
     item: raw.item && mapItem ? mapItem(raw.item) : undefined,
@@ -671,64 +518,6 @@ function mapWriteResult<T>(raw: any, mapItem?: (value: any) => T): K8sWriteResul
     status: raw.status ?? undefined,
     auditId: raw.audit_id ?? raw.auditId ?? '',
     probe: raw.probe ? mapClusterProbe(raw.probe) : undefined,
-  };
-}
-
-function mapRBACRule(raw: any): K8sRBACRule {
-  return {
-    apiGroups: Array.isArray(raw.api_groups ?? raw.apiGroups) ? (raw.api_groups ?? raw.apiGroups).map(String) : [],
-    resources: Array.isArray(raw.resources) ? raw.resources.map(String) : [],
-    verbs: Array.isArray(raw.verbs) ? raw.verbs.map(String) : [],
-  };
-}
-
-function mapRBACRole(raw: any): K8sRBACRole {
-  return {
-    id: String(raw.id ?? ''),
-    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
-    namespace: raw.namespace ?? '',
-    kind: raw.kind ?? '',
-    name: raw.name ?? '',
-    uid: raw.uid ?? '',
-    rules: Array.isArray(raw.rules) ? raw.rules.map(mapRBACRule) : [],
-    source: raw.source ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
-function mapRBACBinding(raw: any): K8sRBACBinding {
-  return {
-    id: String(raw.id ?? ''),
-    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
-    namespace: raw.namespace ?? '',
-    kind: raw.kind ?? '',
-    name: raw.name ?? '',
-    uid: raw.uid ?? '',
-    roleRef: {
-      kind: raw.role_ref?.kind ?? raw.roleRef?.kind ?? '',
-      name: raw.role_ref?.name ?? raw.roleRef?.name ?? '',
-    },
-    subjects: Array.isArray(raw.subjects)
-      ? raw.subjects.map((item: any) => ({ kind: item.kind ?? '', name: item.name ?? '', namespace: item.namespace ?? '' }))
-      : [],
-    source: raw.source ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
-function mapKubeconfigMetadata(raw: any): K8sKubeconfigMetadata {
-  return {
-    secretId: raw.secret_id ?? raw.secretId ?? '',
-    fingerprint: raw.fingerprint ?? '',
-    expiresAt: raw.expires_at ?? raw.expiresAt ?? '',
-    auditId: raw.audit_id ?? raw.auditId ?? '',
-  };
-}
-
-function mapKubeconfigExport(raw: any): K8sKubeconfigExport {
-  return {
-    kubeconfig: raw.kubeconfig ?? '',
-    auditId: raw.audit_id ?? raw.auditId ?? '',
   };
 }
 
@@ -843,72 +632,6 @@ function mapRuntimeGroups(raw: any): K8sRuntimeGroupsResponse {
       destinationRuleCount: summary.destination_rule_count ?? summary.destinationRuleCount ?? 0,
       securityPolicyCount: summary.security_policy_count ?? summary.securityPolicyCount ?? 0,
     },
-  };
-}
-
-function mapPlatformAccessScope(raw: any): K8sPlatformAccessScope {
-  return {
-    global: Boolean(raw.global),
-    clusterId: raw.cluster_id ?? raw.clusterId ?? '',
-    namespace: raw.namespace ?? '',
-    namespaces: arrayOfStrings(raw.namespaces),
-    allNamespaces: Boolean(raw.all_namespaces ?? raw.allNamespaces),
-  };
-}
-
-function mapPlatformAccessPermission(raw: any): K8sPlatformAccessPermission {
-  return {
-    id: raw.id ?? '',
-    label: raw.label ?? '',
-    description: raw.description ?? '',
-    resource: raw.resource ?? '',
-    action: raw.action ?? '',
-    scopeMode: raw.scope_mode ?? raw.scopeMode ?? '',
-  };
-}
-
-function mapPlatformAccessProfile(raw: any): K8sPlatformAccessProfile {
-  return {
-    id: raw.id ?? '',
-    label: raw.label ?? '',
-    description: raw.description ?? '',
-    risk: raw.risk ?? '',
-    scopeMode: raw.scope_mode ?? raw.scopeMode ?? '',
-    recommendedSubjectType: raw.recommended_subject_type ?? raw.recommendedSubjectType ?? '',
-    permissionIds: arrayOfStrings(raw.permission_ids ?? raw.permissionIds),
-  };
-}
-
-function mapPlatformAccessBinding(raw: any): K8sPlatformAccessBinding {
-  return {
-    id: String(raw.id ?? ''),
-    subjectId: raw.subject_id ?? raw.subjectId ?? '',
-    subjectType: raw.subject_type ?? raw.subjectType ?? '',
-    roleId: raw.role_id ?? raw.roleId ?? '',
-    roleName: raw.role_name ?? raw.roleName ?? '',
-    scope: mapPlatformAccessScope(raw.scope ?? {}),
-    permissionIds: arrayOfStrings(raw.permission_ids ?? raw.permissionIds),
-    permissions: mapArray(raw.permissions, (item: any) => ({
-      resource: item.resource ?? '',
-      action: item.action ?? '',
-      scopeMode: item.scope_mode ?? item.scopeMode ?? '',
-    })),
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
-function mapPlatformSubject(raw: any): K8sPlatformSubject {
-  return {
-    id: String(raw.id ?? ''),
-    subjectId: raw.subject_id ?? raw.subjectId ?? '',
-    subjectType: raw.subject_type ?? raw.subjectType ?? '',
-    displayName: raw.display_name ?? raw.displayName ?? '',
-    email: raw.email ?? '',
-    source: raw.source ?? '',
-    bindingRefs: raw.binding_refs ?? raw.bindingRefs ?? 0,
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
 }
 
@@ -1108,6 +831,11 @@ export const k8sApi = {
     const raw = await apiRequest<any[] | null>(`/k8s/clusters${search ? `?q=${encodeURIComponent(search)}` : ''}`);
     return Array.isArray(raw) ? raw.map(mapCluster) : [];
   },
+  async listClustersForAdministration(query = ''): Promise<K8sCluster[]> {
+    const search = query.trim();
+    const raw = await apiRequest<any[] | null>(`/platform/k8s/clusters${search ? `?q=${encodeURIComponent(search)}` : ''}`);
+    return Array.isArray(raw) ? raw.map(mapCluster) : [];
+  },
   async createCluster(input: K8sClusterInput): Promise<K8sCluster> {
     const raw = await apiRequest<any>('/k8s/clusters', {
       method: 'POST',
@@ -1213,43 +941,6 @@ export const k8sApi = {
     const raw = await apiRequest<any>(`/k8s/runtime-groups?${params.toString()}`);
     return mapRuntimeGroups(raw);
   },
-  async listPlatformAccessBindings(): Promise<K8sPlatformAccessBinding[]> {
-    const raw = await apiRequest<any[]>('/k8s/platform-access/bindings');
-    return raw.map(mapPlatformAccessBinding);
-  },
-  async listPlatformAccessPermissions(): Promise<K8sPlatformAccessPermission[]> {
-    const raw = await apiRequest<any[]>('/k8s/platform-access/permissions');
-    return raw.map(mapPlatformAccessPermission);
-  },
-  async listPlatformAccessProfiles(): Promise<K8sPlatformAccessProfile[]> {
-    const raw = await apiRequest<any[]>('/k8s/platform-access/profiles');
-    return raw.map(mapPlatformAccessProfile);
-  },
-  async createPlatformAccessBinding(input: { subjectId: string; subjectType: string; clusterId: string; namespace?: string; namespaces?: string[]; allNamespaces?: boolean; global?: boolean; riskAccepted?: boolean; permissionIds: string[] }): Promise<K8sWriteResult<K8sPlatformAccessBinding>> {
-    const raw = await apiRequest<any>('/k8s/platform-access/bindings', {
-      method: 'POST',
-      body: JSON.stringify({
-        subject_id: input.subjectId,
-        subject_type: input.subjectType,
-        cluster_id: input.clusterId,
-        namespace: input.namespace ?? '',
-        namespaces: input.namespaces ?? [],
-        all_namespaces: Boolean(input.allNamespaces),
-        global: Boolean(input.global),
-        risk_accepted: Boolean(input.riskAccepted),
-        permission_ids: input.permissionIds,
-      }),
-    });
-    return mapWriteResult(raw, mapPlatformAccessBinding);
-  },
-  async deletePlatformAccessBinding(id: string): Promise<K8sWriteResult<never>> {
-    const raw = await apiRequest<any>(`/k8s/platform-access/bindings/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    return mapWriteResult(raw);
-  },
-  async listPlatformSubjects(): Promise<K8sPlatformSubject[]> {
-    const raw = await apiRequest<any[]>('/k8s/platform-access/subjects');
-    return raw.map(mapPlatformSubject);
-  },
   async listDeploymentHistory(clusterId = '', namespace = ''): Promise<K8sDeploymentHistory[]> {
     const params = new URLSearchParams();
     if (clusterId) params.set('cluster_id', clusterId);
@@ -1263,129 +954,6 @@ export const k8sApi = {
     if (namespace) params.set('namespace', namespace);
     const raw = await apiRequest<any[]>(`/k8s/audit-events${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapAuditEvent);
-  },
-  async listCertificates(clusterId = '', namespace = ''): Promise<K8sCertificate[]> {
-    const params = new URLSearchParams();
-    if (clusterId) params.set('cluster_id', clusterId);
-    if (namespace) params.set('namespace', namespace);
-    const raw = await apiRequest<any[]>(`/k8s/certificates?${params.toString()}`);
-    return raw.map(mapCertificate);
-  },
-  async createCertificate(input: { clusterId: string; namespace: string; name: string; commonName: string; certificatePEM: string; keyMaterialPEM: string; notAfter: string }): Promise<K8sWriteResult<K8sCertificate>> {
-    const raw = await apiRequest<any>('/k8s/certificates', {
-      method: 'POST',
-      body: JSON.stringify({
-        cluster_id: input.clusterId,
-        namespace: input.namespace,
-        name: input.name,
-        common_name: input.commonName,
-        certificate_pem: input.certificatePEM,
-        private_key_pem: input.keyMaterialPEM,
-        not_after: input.notAfter,
-      }),
-    });
-    return mapWriteResult(raw, mapCertificate);
-  },
-  async deleteCertificate(target: string | K8sCertificate): Promise<K8sWriteResult<never>> {
-    const id = typeof target === 'string' ? target : target.id;
-    const params = new URLSearchParams();
-    if (typeof target !== 'string') {
-      if (target.clusterId) params.set('cluster_id', target.clusterId);
-      if (target.namespace) params.set('namespace', target.namespace);
-      if (target.name) params.set('name', target.name);
-    }
-    const raw = await apiRequest<any>(`/k8s/certificates/${encodeURIComponent(id)}${params.toString() ? `?${params.toString()}` : ''}`, { method: 'DELETE' });
-    return mapWriteResult(raw);
-  },
-  async listServiceAccounts(clusterId = '', namespace = ''): Promise<K8sServiceAccount[]> {
-    const params = new URLSearchParams();
-    if (clusterId) params.set('cluster_id', clusterId);
-    if (namespace) params.set('namespace', namespace);
-    const raw = await apiRequest<any[]>(`/k8s/service-accounts${params.toString() ? `?${params.toString()}` : ''}`);
-    return raw.map(mapServiceAccount);
-  },
-  async createServiceAccount(input: { clusterId: string; namespace: string; name: string }): Promise<K8sWriteResult<K8sServiceAccount>> {
-    const raw = await apiRequest<any>('/k8s/service-accounts', {
-      method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, name: input.name }),
-    });
-    return mapWriteResult(raw, mapServiceAccount);
-  },
-  async deleteServiceAccount(input: { clusterId: string; namespace: string; name: string; uid: string }): Promise<K8sWriteResult<never>> {
-    const params = new URLSearchParams();
-    params.set('cluster_id', input.clusterId);
-    params.set('namespace', input.namespace);
-    params.set('name', input.name);
-    params.set('uid', input.uid);
-    const raw = await apiRequest<any>(`/k8s/service-accounts?${params.toString()}`, {
-      method: 'DELETE',
-    });
-    return mapWriteResult(raw);
-  },
-  async listRBACRoles(clusterId = '', namespace = ''): Promise<K8sRBACRole[]> {
-    const params = new URLSearchParams();
-    if (clusterId) params.set('cluster_id', clusterId);
-    if (namespace) params.set('namespace', namespace);
-    const raw = await apiRequest<any[]>(`/k8s/rbac/roles?${params.toString()}`);
-    return raw.map(mapRBACRole);
-  },
-  async listRBACBindings(clusterId = '', namespace = ''): Promise<K8sRBACBinding[]> {
-    const params = new URLSearchParams();
-    if (clusterId) params.set('cluster_id', clusterId);
-    if (namespace) params.set('namespace', namespace);
-    const raw = await apiRequest<any[]>(`/k8s/rbac/bindings?${params.toString()}`);
-    return raw.map(mapRBACBinding);
-  },
-  async createRBACRole(input: { clusterId: string; namespace: string; name: string }): Promise<K8sWriteResult<K8sRBACRole>> {
-    const raw = await apiRequest<any>('/k8s/rbac/roles', {
-      method: 'POST',
-      body: JSON.stringify({
-        cluster_id: input.clusterId,
-        namespace: input.namespace,
-        kind: 'Role',
-        name: input.name,
-        rules: [{ api_groups: [''], resources: ['pods'], verbs: ['get', 'list'] }],
-      }),
-    });
-    return mapWriteResult(raw, mapRBACRole);
-  },
-  async createRBACBinding(input: { clusterId: string; namespace: string; name: string; roleName: string; serviceAccountName: string }): Promise<K8sWriteResult<K8sRBACBinding>> {
-    const raw = await apiRequest<any>('/k8s/rbac/bindings', {
-      method: 'POST',
-      body: JSON.stringify({
-        cluster_id: input.clusterId,
-        namespace: input.namespace,
-        kind: 'RoleBinding',
-        name: input.name,
-        role_ref: { kind: 'Role', name: input.roleName },
-        subjects: [{ kind: 'ServiceAccount', name: input.serviceAccountName, namespace: input.namespace }],
-      }),
-    });
-    return mapWriteResult(raw, mapRBACBinding);
-  },
-  async deleteRBACBinding(input: { clusterId: string; namespace: string; kind: string; name: string; uid: string }): Promise<K8sWriteResult<never>> {
-    const params = new URLSearchParams();
-    params.set('cluster_id', input.clusterId);
-    params.set('namespace', input.namespace);
-    params.set('kind', input.kind);
-    params.set('name', input.name);
-    params.set('uid', input.uid);
-    const raw = await apiRequest<any>(`/k8s/rbac/bindings?${params.toString()}`, { method: 'DELETE' });
-    return mapWriteResult(raw);
-  },
-  async createKubeconfig(input: { clusterId: string; namespace: string; serviceAccount: string }): Promise<K8sKubeconfigMetadata> {
-    const raw = await apiRequest<any>('/k8s/kubeconfigs', {
-      method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, namespace: input.namespace, service_account: input.serviceAccount }),
-    });
-    return mapKubeconfigMetadata(raw);
-  },
-  async exportKubeconfig(secretId: string): Promise<K8sKubeconfigExport> {
-    const raw = await apiRequest<any>('/k8s/kubeconfigs/export', {
-      method: 'POST',
-      body: JSON.stringify({ secret_id: secretId }),
-    });
-    return mapKubeconfigExport(raw);
   },
   async listTemplates(type = ''): Promise<K8sTemplate[]> {
     const params = new URLSearchParams();

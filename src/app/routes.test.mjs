@@ -8,6 +8,7 @@ test('路由定义覆盖主路径', () => {
     '/products',
     '/products/:productId/services',
     '/products/:productId/integrations',
+    '/products/:productId/access',
     '/products/:productId/services/:serviceId',
     '/products/:productId/services/:serviceId/deployments/new',
     '/products/:productId/services/:serviceId/deployments/:deploymentId/edit',
@@ -37,13 +38,16 @@ test('路由定义覆盖主路径', () => {
 test('服务部署目标使用独立创建与编辑任务路由', () => {
   const create = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/deployments/new');
   const edit = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/deployments/:deploymentId/edit');
-  assert.equal(create?.element?.type?.name, 'ServiceDeploymentTaskPage');
-  assert.equal(edit?.element?.type?.name, 'ServiceDeploymentTaskPage');
+  assert.equal(create?.element?.props?.requirement?.minimum, 'product-maintainer');
+  assert.equal(edit?.element?.props?.requirement?.minimum, 'product-maintainer');
+  assert.equal(create?.element?.props?.children?.type?.name, 'ServiceDeploymentTaskPage');
+  assert.equal(edit?.element?.props?.children?.type?.name, 'ServiceDeploymentTaskPage');
 });
 
 test('产品与服务深层入口只打开工作面抽屉，旧服务分区路径统一回收', () => {
   const productServices = routeDefinitions.find((route) => route.path === '/products/:productId/services');
   const productIntegration = routeDefinitions.find((route) => route.path === '/products/:productId/integrations');
+  const productAccess = routeDefinitions.find((route) => route.path === '/products/:productId/access');
   const serviceDetail = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId');
   const overview = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/overview');
   const graph = routeDefinitions.find((route) => route.path === '/products/:productId/services/:serviceId/graph');
@@ -51,6 +55,8 @@ test('产品与服务深层入口只打开工作面抽屉，旧服务分区路�
 
   assert.equal(productServices?.element?.type?.name, 'ServicesPage');
   assert.equal(productIntegration?.element?.type?.name, 'ServicesPage');
+  assert.equal(productAccess?.element?.type?.name, 'AccessGate');
+  assert.equal(productAccess?.element?.props?.requirement?.minimum, 'product-maintainer');
   assert.equal(serviceDetail?.element?.type?.name, 'ServicesPage');
   assert.equal(overview?.element?.type?.name, 'LegacyServiceSectionRedirect');
   assert.equal(graph?.element?.type?.name, 'LegacyServiceSectionRedirect');
@@ -68,9 +74,9 @@ test('Metrics 使用产品级接入路由', () => {
 	assert.equal(metricsEntry?.children?.find((item) => item.path === 'alerts/new')?.element?.type?.name, 'MetricsAlertsPage');
 	assert.equal(metricsEntry?.children?.find((item) => item.path === 'alerts/:id')?.element?.type?.name, 'MetricsAlertsPage');
   assert.equal(metricsEntry?.children?.find((item) => item.path === 'integrations')?.element?.type?.name, 'MetricsIntegrationsPage');
-  assert.equal(metricsEntry?.children?.find((item) => item.path === 'endpoints')?.element?.props?.to, '/observability/endpoints/metrics');
+  assert.equal(metricsEntry?.children?.find((item) => item.path === 'endpoints')?.element?.props?.to, '/platform/observability/endpoints/metrics');
 	const serviceEndpoints = routeDefinitions.find((item) => item.path === '/products/:productId/services/:serviceId/metrics/endpoints');
-	assert.equal(serviceEndpoints?.element?.props?.to, '/observability/endpoints/metrics');
+	assert.equal(serviceEndpoints?.element?.props?.to, '/platform/observability/endpoints/metrics');
 });
 
 test('K8s 运维使用嵌套路由承载模块子页面', () => {
@@ -78,7 +84,9 @@ test('K8s 运维使用嵌套路由承载模块子页面', () => {
   assert.equal(route?.children?.[0].index, true);
   assert.equal(route?.children?.some((item) => item.path === 'access'), false);
   assert.equal(route?.children?.some((item) => item.path === 'namespaces'), true);
-  assert.equal(route?.children?.some((item) => item.path === 'rbac'), true);
+  for (const removed of ['platform-access', 'service-accounts', 'rbac', 'kubeconfig', 'certificates']) {
+    assert.equal(route?.children?.some((item) => item.path === removed || item.path === `clusters/:clusterId/${removed}`), false);
+  }
 });
 
 test('Logs 保留服务级能力，旧接入配置路径统一跳转观测端点', () => {
@@ -98,21 +106,26 @@ test('Logs 保留服务级能力，旧接入配置路径统一跳转观测端点
   assert.equal(paths.includes('/collectors'), false);
 });
 
-test('平台管理只保留平台域入口，观测接入配置迁移到可观测性域', () => {
+test('平台控制面承载集群登记和共享观测端点', () => {
   const platform = routeDefinitions.find((r) => r.path === '/platform');
   const legacyObservabilityRoute = routeDefinitions.find((item) => item.path === '/observability/endpoints');
 	const logsEndpointsRoute = routeDefinitions.find((item) => item.path === '/observability/endpoints/logs');
 	const metricsEndpointsRoute = routeDefinitions.find((item) => item.path === '/observability/endpoints/metrics');
-  assert.deepEqual(platform?.children?.map((item) => item.path ?? 'index'), ['index', 'settings', 'access', 'observability']);
+  assert.deepEqual(platform?.children?.map((item) => item.path ?? 'index'), [
+    'index',
+    'settings',
+    'access',
+    'k8s-clusters',
+    'observability/endpoints/logs',
+    'observability/endpoints/metrics',
+  ]);
   assert.equal(Boolean(legacyObservabilityRoute), true);
 	assert.equal(legacyObservabilityRoute?.element?.type?.name, 'Navigate');
-	assert.equal(legacyObservabilityRoute?.element?.props?.to, '/observability/endpoints/logs');
-	assert.equal(logsEndpointsRoute?.element?.type?.name, 'ObservabilitySettingsPage');
-	assert.equal(logsEndpointsRoute?.element?.props?.domain, 'logs');
-	assert.equal(logsEndpointsRoute?.element?.key, 'logs-endpoints');
-	assert.equal(metricsEndpointsRoute?.element?.type?.name, 'ObservabilitySettingsPage');
-	assert.equal(metricsEndpointsRoute?.element?.props?.domain, 'metrics');
-	assert.equal(metricsEndpointsRoute?.element?.key, 'metrics-endpoints');
+	assert.equal(legacyObservabilityRoute?.element?.props?.to, '/platform/observability/endpoints/logs');
+	assert.equal(logsEndpointsRoute?.element?.type?.name, 'Navigate');
+	assert.equal(logsEndpointsRoute?.element?.props?.to, '/platform/observability/endpoints/logs');
+	assert.equal(metricsEndpointsRoute?.element?.type?.name, 'Navigate');
+	assert.equal(metricsEndpointsRoute?.element?.props?.to, '/platform/observability/endpoints/metrics');
 });
 
 test('路由标题可按路径查找', () => {
@@ -120,6 +133,7 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/products'), '产品与服务');
   assert.equal(getRouteTitle('/products/product-1/services'), '产品服务');
   assert.equal(getRouteTitle('/products/product-1/integrations'), '产品集成');
+  assert.equal(getRouteTitle('/products/product-1/access'), '产品授权');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/deployments/new'), '新增服务部署');
   assert.equal(getRouteTitle('/products/product-1/services/svc-1/deployments/deployment-1/edit'), '编辑服务部署');
   assert.equal(getRouteTitle('/logs'), 'Logs 日志分析');
@@ -150,9 +164,11 @@ test('路由标题可按路径查找', () => {
   assert.equal(getRouteTitle('/traces'), 'Trace');
   assert.equal(getRouteTitle('/platform/settings'), '平台设置');
   assert.equal(getRouteTitle('/platform/access'), '平台管理');
-  assert.equal(getRouteTitle('/platform/observability'), 'Logs 下游端点');
+  assert.equal(getRouteTitle('/platform/k8s-clusters'), 'K8S 集群接入');
+  assert.equal(getRouteTitle('/platform/observability/endpoints/logs'), 'Logs 下游端点');
+  assert.equal(getRouteTitle('/platform/observability/endpoints/metrics'), '指标下游端点');
   assert.equal(getRouteTitle('/k8s'), 'K8s 运维');
-  assert.equal(getRouteTitle('/k8s/observability'), 'K8s 观测接入');
+  assert.equal(getRouteTitle('/k8s/observability'), '平台总览');
   assert.equal(getRouteTitle('/k8s/namespaces'), 'K8s 运维');
   assert.equal(getRouteTitle('/k8s/access'), '平台总览');
   assert.equal(getRouteTitle('/agents/018f4f9a'), 'Agent Detail');
@@ -177,8 +193,9 @@ test('浏览器标签页标题包含当前模块和产品名', () => {
   assert.equal(getDocumentTitle('/traces'), 'Trace - NovaAPM');
   assert.equal(getDocumentTitle('/platform/settings'), '平台设置 - NovaAPM');
   assert.equal(getDocumentTitle('/platform/access'), '平台管理 - NovaAPM');
-  assert.equal(getDocumentTitle('/platform/observability'), 'Logs 下游端点 - NovaAPM');
-  assert.equal(getDocumentTitle('/k8s/observability'), 'K8s 观测接入 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/k8s-clusters'), 'K8S 集群接入 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/observability/endpoints/logs'), 'Logs 下游端点 - NovaAPM');
+  assert.equal(getDocumentTitle('/k8s/observability'), '平台总览 - NovaAPM');
   assert.equal(getDocumentTitle('/k8s/namespaces'), 'K8s 运维 - NovaAPM');
   assert.equal(getDocumentTitle('/k8s/access'), '平台总览 - NovaAPM');
   assert.equal(getDocumentTitle('/'), '平台总览 - NovaAPM');

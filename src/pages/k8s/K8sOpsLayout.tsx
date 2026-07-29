@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link, Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Activity, Boxes, Check, ChevronDown } from 'lucide-react';
+import { Boxes, Check, ChevronDown } from 'lucide-react';
 import { k8sApi } from './api';
 import {
   getK8sNavigationByPath,
@@ -13,17 +13,19 @@ import {
 } from './navigation';
 import { ModuleWorkbench } from '../../components/navigation/ModuleWorkbench';
 import type { ModuleRailItem } from '../../components/navigation/ModuleRail';
+import { usePlatformAccess } from '../../layouts/access';
+import type { PlatformAccessContext } from '../platform/accessApi';
 
 const k8sRailItems: ModuleRailItem[] = [
-  { to: '/k8s', label: '集群总览', description: '集群清单、连接状态与巡检', icon: Boxes, end: true },
-  { to: '/k8s/observability', label: '观测接入', description: '启用集群级可观测性运行时', icon: Activity },
+  { to: '/k8s', label: '集群总览', description: '查看 Profile 授权的集群', icon: Boxes, end: true },
 ];
 
 export function K8sOpsLayout() {
   const location = useLocation();
   const navigate = useNavigate();
   const { clusterId = '' } = useParams();
-  const current = getK8sNavigationByPath(location.pathname);
+  const { data: access } = usePlatformAccess();
+  const current = getK8sNavigationByPath(location.pathname, access);
   const { data: clusters = [], isLoading: isLoadingClusters, error } = useQuery({
     queryKey: ['k8s-clusters'],
     queryFn: () => k8sApi.listClusters(),
@@ -39,6 +41,7 @@ export function K8sOpsLayout() {
     clusterError,
   };
   const hasClusterContext = Boolean(clusterId);
+  const visibleRailItems = k8sRailItems;
 
   function handleClusterChange(nextClusterId: string) {
     if (!nextClusterId) return;
@@ -57,7 +60,7 @@ export function K8sOpsLayout() {
       module="k8s"
       title="K8s 运维"
       ariaLabel="K8s 运维导航"
-      items={k8sRailItems}
+      items={visibleRailItems}
       showRail={!hasClusterContext}
       toolbar={hasClusterContext ? (
         <ClusterContextNavigation
@@ -65,6 +68,7 @@ export function K8sOpsLayout() {
           activeClusterName={activeCluster?.name || clusterId}
           clusters={clusters}
           current={current}
+          access={access}
           onClusterChange={handleClusterChange}
           onFunctionChange={handleFunctionChange}
         />
@@ -80,6 +84,7 @@ function ClusterContextNavigation({
   activeClusterName,
   clusters,
   current,
+  access,
   onClusterChange,
   onFunctionChange,
 }: {
@@ -87,6 +92,7 @@ function ClusterContextNavigation({
   activeClusterName: string;
   clusters: Array<{ id: string; name: string }>;
   current: K8sNavigationItem | undefined;
+  access: PlatformAccessContext | null;
   onClusterChange: (clusterId: string) => void;
   onFunctionChange: (item: K8sNavigationItem) => void;
 }) {
@@ -133,7 +139,7 @@ function ClusterContextNavigation({
 
         <nav className="k8s-context-groups relative hidden min-w-0 flex-1 items-stretch justify-end gap-1 md:flex" aria-label="K8s 功能分组">
           {k8sNavigationGroups.map((group) => {
-            const items = getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster);
+            const items = getK8sNavigationGroupItems(group.id, access, activeClusterId).filter((item) => item.requiresCluster);
             if (!items.length) return null;
             if (items.length === 1) {
               return (
@@ -170,13 +176,13 @@ function ClusterContextNavigation({
             value={current?.id ?? ''}
             onChange={(event) => {
               const item = k8sNavigationGroups
-                .flatMap((group) => getK8sNavigationGroupItems(group.id))
+                .flatMap((group) => getK8sNavigationGroupItems(group.id, access, activeClusterId))
                 .find((candidate) => candidate.id === event.target.value);
               if (item) onFunctionChange(item);
             }}
           >
             {k8sNavigationGroups.map((group) => {
-              const items = getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster);
+              const items = getK8sNavigationGroupItems(group.id, access, activeClusterId).filter((item) => item.requiresCluster);
               if (!items.length) return null;
               return (
                 <optgroup key={group.id} label={group.label}>
