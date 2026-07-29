@@ -1,19 +1,5 @@
 import { apiRequest } from '../../services/api';
 
-export interface PlatformScope {
-  global: boolean;
-  clusterId: string;
-  namespace: string;
-  productId: string;
-  serviceId: string;
-}
-
-export interface PlatformPermission {
-  resource: string;
-  action: string;
-  scopeMode: string;
-}
-
 export interface PlatformSubject {
   id: string;
   subjectId: string;
@@ -62,26 +48,6 @@ export interface PlatformServiceAccount {
   updatedAt: string;
 }
 
-export interface PlatformRole {
-  id: string;
-  name: string;
-  description: string;
-  permissions: PlatformPermission[];
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PlatformBinding {
-  id: string;
-  subjectId: string;
-  subjectType: string;
-  roleId: string;
-  roleName: string;
-  scope: PlatformScope;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface PlatformMembership {
   id: string;
   groupId: string;
@@ -91,18 +57,6 @@ export interface PlatformMembership {
   subjectDisplayName: string;
   createdAt: string;
   updatedAt: string;
-}
-
-export interface PlatformEffectivePermission {
-  bindingId: string;
-  roleId: string;
-  roleName: string;
-  grantedToSubjectId: string;
-  grantedToType: string;
-  grantedVia: string;
-  permissions: PlatformPermission[];
-  scope: PlatformScope;
-  createdAt: string;
 }
 
 export interface PlatformImage {
@@ -123,24 +77,6 @@ export interface PlatformGrafanaSetting {
 export interface PlatformWriteResult<T> {
   item?: T;
   status: string;
-}
-
-function mapScope(raw: any): PlatformScope {
-  return {
-    global: Boolean(raw?.global),
-    clusterId: raw?.cluster_id ?? raw?.clusterId ?? '',
-    namespace: raw?.namespace ?? '',
-    productId: raw?.product_id ?? raw?.productId ?? '',
-    serviceId: raw?.service_id ?? raw?.serviceId ?? '',
-  };
-}
-
-function mapPermission(raw: any): PlatformPermission {
-  return {
-    resource: raw.resource ?? '',
-    action: raw.action ?? '',
-    scopeMode: raw.scope_mode ?? raw.scopeMode ?? '',
-  };
 }
 
 function mapSubject(raw: any): PlatformSubject {
@@ -199,30 +135,6 @@ function mapServiceAccount(raw: any): PlatformServiceAccount {
   };
 }
 
-function mapRole(raw: any): PlatformRole {
-  return {
-    id: String(raw.id ?? ''),
-    name: raw.name ?? '',
-    description: raw.description ?? '',
-    permissions: Array.isArray(raw.permissions) ? raw.permissions.map(mapPermission) : [],
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
-function mapBinding(raw: any): PlatformBinding {
-  return {
-    id: String(raw.id ?? ''),
-    subjectId: raw.subject_id ?? raw.subjectId ?? '',
-    subjectType: raw.subject_type ?? raw.subjectType ?? '',
-    roleId: raw.role_id ?? raw.roleId ?? '',
-    roleName: raw.role_name ?? raw.roleName ?? '',
-    scope: mapScope(raw.scope ?? {}),
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
 function mapMembership(raw: any): PlatformMembership {
   return {
     id: String(raw.id ?? ''),
@@ -233,20 +145,6 @@ function mapMembership(raw: any): PlatformMembership {
     subjectDisplayName: raw.subject_display_name ?? raw.subjectDisplayName ?? '',
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
-function mapEffectivePermission(raw: any): PlatformEffectivePermission {
-  return {
-    bindingId: String(raw.binding_id ?? raw.bindingId ?? ''),
-    roleId: raw.role_id ?? raw.roleId ?? '',
-    roleName: raw.role_name ?? raw.roleName ?? '',
-    grantedToSubjectId: raw.granted_to_subject_id ?? raw.grantedToSubjectId ?? '',
-    grantedToType: raw.granted_to_type ?? raw.grantedToType ?? '',
-    grantedVia: raw.granted_via ?? raw.grantedVia ?? '',
-    permissions: Array.isArray(raw.permissions) ? raw.permissions.map(mapPermission) : [],
-    scope: mapScope(raw.scope ?? {}),
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
   };
 }
 
@@ -344,61 +242,6 @@ export const platformApi = {
   async deleteServiceAccount(id: string): Promise<PlatformWriteResult<PlatformServiceAccount>> {
     const raw = await apiRequest<any>(`/platform/service-accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
     return mapWriteResult(raw, mapServiceAccount);
-  },
-  async listRoles(): Promise<PlatformRole[]> {
-    const raw = await apiRequest<any[]>('/platform/roles');
-    return raw.map(mapRole);
-  },
-  async createRole(input: { id?: string; name: string; description?: string; permissions: PlatformPermission[] }): Promise<PlatformWriteResult<PlatformRole>> {
-    const raw = await apiRequest<any>('/platform/roles', {
-      method: 'POST',
-      body: JSON.stringify({
-        id: input.id ?? '',
-        name: input.name,
-        description: input.description ?? '',
-        permissions: input.permissions.map((permission) => ({
-          resource: permission.resource,
-          action: permission.action,
-          scope_mode: permission.scopeMode,
-        })),
-      }),
-    });
-    return mapWriteResult(raw, mapRole);
-  },
-  async deleteRole(id: string): Promise<PlatformWriteResult<PlatformRole>> {
-    const raw = await apiRequest<any>(`/platform/roles/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    return mapWriteResult(raw, mapRole);
-  },
-  async listBindings(): Promise<PlatformBinding[]> {
-    const raw = await apiRequest<any[]>('/platform/bindings');
-    return raw.map(mapBinding);
-  },
-  async createBinding(input: { subjectId: string; subjectType: string; roleId: string; scope: Partial<PlatformScope> }): Promise<PlatformWriteResult<PlatformBinding>> {
-    const raw = await apiRequest<any>('/platform/bindings', {
-      method: 'POST',
-      body: JSON.stringify({
-        subject_id: input.subjectId,
-        subject_type: input.subjectType,
-        role_id: input.roleId,
-        scope: {
-          global: Boolean(input.scope.global),
-          cluster_id: input.scope.clusterId ?? '',
-          namespace: input.scope.namespace ?? '',
-          product_id: input.scope.productId ?? '',
-          service_id: input.scope.serviceId ?? '',
-        },
-      }),
-    });
-    return mapWriteResult(raw, mapBinding);
-  },
-  async deleteBinding(id: string): Promise<PlatformWriteResult<PlatformBinding>> {
-    const raw = await apiRequest<any>(`/platform/bindings/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    return mapWriteResult(raw, mapBinding);
-  },
-  async effectivePermissions(input: { subjectId: string; subjectType: string }): Promise<PlatformEffectivePermission[]> {
-    const params = new URLSearchParams({ subject_id: input.subjectId, subject_type: input.subjectType });
-    const raw = await apiRequest<any[]>(`/platform/effective-permissions?${params.toString()}`);
-    return raw.map(mapEffectivePermission);
   },
   async listImages(): Promise<PlatformImage[]> {
     const raw = await apiRequest<any[]>('/platform/images');

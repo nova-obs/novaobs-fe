@@ -64,6 +64,16 @@ test('接口失败且响应体为空时返回 HTTP 状态错误', async () => {
   }
 });
 
+test('平台产品目录不复用业务产品列表接口', async () => {
+  const request = await captureRequest(
+    () => api.getProductsForAdministration(),
+    [{ id: 'product-1', key: 'orders', name: '订单', status: 'active' }],
+  );
+
+  assert.equal(request.path, '/api/v1/platform/catalog/products');
+  assert.equal(request.init.method, undefined);
+});
+
 test('保存 Collector Group Override 时传递增量 YAML', async () => {
   const request = await captureRequest(
     () => api.saveCollectorGroupOverride('507f1f77bcf86cd799439013', 'processors:\n  batch:\n'),

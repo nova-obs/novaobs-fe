@@ -899,6 +899,10 @@ export const api = {
 		const raw = await request<any[]>('/products');
 		return Array.isArray(raw) ? raw.map(mapProduct) : [];
 	},
+	async getProductsForAdministration(): Promise<Product[]> {
+		const raw = await request<any[]>('/platform/catalog/products');
+		return Array.isArray(raw) ? raw.map(mapProduct) : [];
+	},
   async getProduct(productId: string): Promise<Product> {
     return mapProduct(await request<any>(`/products/${encodeURIComponent(productId)}`));
   },

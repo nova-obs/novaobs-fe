@@ -13,7 +13,7 @@ const explore = readFileSync(new URL('./LogsExplorePage.tsx', import.meta.url), 
 const formatDemo = readFileSync(new URL('./LogsFormatDemoPage.tsx', import.meta.url), 'utf8');
 const servicePicker = readFileSync(new URL('./ServicePickerPanel.tsx', import.meta.url), 'utf8');
 
-test('Logs 保留服务级入口并把下游端点迁移到可观测性领域入口', () => {
+test('Logs 保留服务级入口并把共享下游端点迁移到平台控制面', () => {
   assert.doesNotMatch(routes, /path: 'targets'/);
   assert.doesNotMatch(workspace, /\/logs\/targets/);
   assert.doesNotMatch(workspace, /日志目标/);
@@ -23,9 +23,9 @@ test('Logs 保留服务级入口并把下游端点迁移到可观测性领域入
   assert.match(routes, /path: 'alerts\/new'/);
 	assert.match(routes, /path: 'alerts\/:id'/);
   assert.match(routes, /path: 'endpoints'/);
-	assert.match(routes, /path: '\/observability\/endpoints\/logs'.*ObservabilitySettingsPage key="logs-endpoints" domain="logs"/);
-	assert.match(routes, /path: '\/observability\/endpoints\/metrics'.*ObservabilitySettingsPage key="metrics-endpoints" domain="metrics"/);
-	assert.match(routes, /path: '\/observability\/endpoints'.*Navigate to="\/observability\/endpoints\/logs"/);
+	assert.match(routes, /path: 'observability\/endpoints\/logs'.*ObservabilitySettingsPage key="platform-logs-endpoints" domain="logs"/);
+	assert.match(routes, /path: 'observability\/endpoints\/metrics'.*ObservabilitySettingsPage key="platform-metrics-endpoints" domain="metrics"/);
+	assert.match(routes, /path: '\/observability\/endpoints'.*Navigate to="\/platform\/observability\/endpoints\/logs"/);
   assert.doesNotMatch(workspace, /entry: 'endpoints'/);
 });
 
@@ -40,8 +40,8 @@ test('采集路由保留任务页，日志告警新增编辑进入列表表单�
   assert.match(onboarding, /<LogsTaskPageHeader/);
   assert.doesNotMatch(onboarding, /parentLabel="采集路由"/);
   assert.doesNotMatch(onboarding, /logs-onboarding-toolbar console-panel/);
-  assert.match(routes, /path: 'alerts\/new'.*element: <LogsAlertsPage \/>/);
-  assert.match(routes, /path: 'alerts\/:id'.*element: <LogsAlertsPage \/>/);
+  assert.match(routes, /path: 'alerts\/new'.*gated\(<LogsAlertsPage \/>, \{ kind: 'product', minimum: 'product-maintainer' \}\)/);
+  assert.match(routes, /path: 'alerts\/:id'.*gated\(<LogsAlertsPage \/>, \{ kind: 'product', minimum: 'product-maintainer' \}\)/);
   assert.match(alerts, /LogsAlertRuleEditorDrawer/);
   assert.match(alertRule, /export function LogsAlertRuleEditorDrawer/);
   assert.match(alertRule, /console-drawer-panel/);

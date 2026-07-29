@@ -17,7 +17,7 @@ test('Metrics 以总览、Dashboard、指标告警和指标接入形成四条用
   assert.doesNotMatch(routes, /monitoring|MetricsMonitoringPage/);
   assert.match(routes, /path: 'alerts'.*MetricsAlertsPage/);
   assert.match(routes, /path: 'integrations'.*MetricsIntegrationsPage/);
-  assert.match(routes, /path: '\/products\/:productId\/services\/:serviceId\/metrics\/endpoints'.*Navigate to="\/observability\/endpoints\/metrics"/);
+  assert.match(routes, /path: '\/products\/:productId\/services\/:serviceId\/metrics\/endpoints'.*Navigate to="\/platform\/observability\/endpoints\/metrics"/);
   assert.doesNotMatch(routes, /path: '\/products\/:productId\/services\/:serviceId\/metrics'[^\n]*MetricsLayout/);
 });
 

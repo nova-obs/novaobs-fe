@@ -2,46 +2,57 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
-const platformAccessAdminSource = readFileSync(new URL('./PlatformAccessAdminPage.tsx', import.meta.url), 'utf8');
+const pageSource = [
+  './PlatformAccessAdminPage.tsx',
+  './PlatformAccessWorkspaces.tsx',
+  './PlatformAccessForms.tsx',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
+const apiSource = readFileSync(new URL('./accessApi.ts', import.meta.url), 'utf8');
 
-test('平台用户权限页面不再保留内置角色保护，只保护当前或开发保留账号', () => {
-  assert.equal(platformAccessAdminSource.includes('deleteSubjectMutation'), true);
-  assert.equal(platformAccessAdminSource.includes('deleteRoleMutation'), true);
-  assert.equal(platformAccessAdminSource.includes('deleteBindingMutation'), true);
-  assert.equal(platformAccessAdminSource.includes('DeleteActionButton'), true);
-  assert.equal(platformAccessAdminSource.includes('isProtectedRole'), false);
-  assert.equal(platformAccessAdminSource.includes('isProtectedBinding'), false);
-  assert.equal(platformAccessAdminSource.includes('系统内置角色'), false);
-  assert.equal(platformAccessAdminSource.includes('当前用户'), true);
-  assert.equal(platformAccessAdminSource.includes('保留账号'), true);
-  assert.equal(platformAccessAdminSource.includes('确认删除'), true);
+test('平台访问控制只呈现固定授权工作台', () => {
+  assert.equal(pageSource.includes('platformAccessTabs'), true);
+  assert.equal(pageSource.includes("key: 'identities'"), true);
+  assert.equal(pageSource.includes("key: 'platform-admins'"), true);
+  assert.equal(pageSource.includes("key: 'product-access'"), true);
+  assert.equal(pageSource.includes("key: 'k8s-profiles'"), true);
+  assert.equal(pageSource.includes("key: 'break-glass'"), true);
+  assert.equal(pageSource.includes('用户与服务身份'), true);
+  assert.equal(pageSource.includes('平台管理员'), true);
+  assert.equal(pageSource.includes('产品授权'), true);
+  assert.equal(pageSource.includes('K8S Access Profile'), true);
+  assert.equal(pageSource.includes('Break Glass 与审计'), true);
+  assert.equal(pageSource.includes('platform-access-panel'), true);
+  assert.equal(pageSource.includes('grid min-w-0'), true);
 });
 
-test('平台用户权限页面使用 Tab 工作台拆分用户、组、角色和授权', () => {
-  assert.equal(platformAccessAdminSource.includes('platformAdminTabs'), true);
-  assert.equal(platformAccessAdminSource.includes('activeTab'), true);
-  assert.equal(platformAccessAdminSource.includes('activeEditor'), true);
-  assert.equal(platformAccessAdminSource.includes("key: 'users'"), true);
-  assert.equal(platformAccessAdminSource.includes("key: 'groups'"), true);
-  assert.equal(platformAccessAdminSource.includes("key: 'service-accounts'"), true);
-  assert.equal(platformAccessAdminSource.includes("key: 'roles'"), true);
-  assert.equal(platformAccessAdminSource.includes("key: 'bindings'"), true);
-  assert.equal(platformAccessAdminSource.includes("key: 'effective'"), true);
-  assert.equal(platformAccessAdminSource.includes('PlatformTabNav'), true);
-  assert.equal(platformAccessAdminSource.includes('PlatformEditorDrawer'), true);
-  assert.equal(platformAccessAdminSource.includes("activeTab === 'users'"), true);
-  assert.equal(platformAccessAdminSource.includes("activeTab === 'groups'"), true);
-  assert.equal(platformAccessAdminSource.includes("activeTab === 'roles'"), true);
-  assert.equal(platformAccessAdminSource.includes('CreateUserPanel'), true);
-  assert.equal(platformAccessAdminSource.includes('CreateRolePanel'), true);
-  assert.equal(platformAccessAdminSource.includes('BindingEditorPanel'), true);
-  assert.equal(platformAccessAdminSource.includes('console-detail-rail grid content-start'), false);
-  assert.equal(platformAccessAdminSource.includes('xl:grid-cols-[minmax(0,1fr)_360px]'), false);
+test('平台访问控制不再提供自由角色、权限字符串和 ScopeMode UI', () => {
+  assert.equal(pageSource.includes('PlatformRole'), false);
+  assert.equal(pageSource.includes('PlatformPermission'), false);
+  assert.equal(pageSource.includes('PlatformBinding'), false);
+  assert.equal(pageSource.includes('rolePermissions'), false);
+  assert.equal(pageSource.includes('scopeMode'), false);
+  assert.equal(pageSource.includes('有效权限'), false);
+  assert.equal(pageSource.includes('创建角色'), false);
+  assert.equal(pageSource.includes('创建授权绑定'), false);
+  assert.equal(pageSource.includes('权限字符串'), false);
 });
 
-test('平台用户组成员维护不会把用户组作为默认成员主体提交', () => {
-  assert.equal(platformAccessAdminSource.includes('assignableMemberSubjects'), true);
-  assert.equal(platformAccessAdminSource.includes('activeMemberSubjectValue'), true);
-  assert.equal(platformAccessAdminSource.includes("item.subjectType !== 'group'"), true);
-  assert.equal(platformAccessAdminSource.includes('memberSubject || activeSubjectValue'), false);
+test('K8S Profile 明示整 Namespace 风险并要求确认真实影响边界', () => {
+  assert.equal(pageSource.includes('整 Namespace 风险确认'), true);
+  assert.equal(pageSource.includes('关联 Product / Service'), true);
+  assert.equal(pageSource.includes('ServiceDeployment 生产真值'), true);
+  assert.equal(apiSource.includes('/platform/k8s/namespace-impacts'), true);
+  assert.equal(pageSource.includes('wholeNamespaceConfirmed'), true);
+  assert.equal(apiSource.includes('whole_namespace_confirmed'), true);
+  assert.equal(pageSource.includes('禁止使用空 Namespace、* 或 all_namespaces'), true);
+  assert.equal(pageSource.includes('onEditProfile'), true);
+  assert.equal(pageSource.includes('updateK8sAccessProfile'), true);
+  assert.equal(pageSource.includes('保存 Profile'), true);
+});
+
+test('Break Glass 强调双人审批、两小时上限和审计入口', () => {
+  assert.equal(pageSource.includes('另一名平台管理员审批'), true);
+  assert.equal(pageSource.includes('最长 120 分钟'), true);
+  assert.equal(pageSource.includes('/audit'), true);
+  assert.equal(pageSource.includes('终端输出'), true);
 });

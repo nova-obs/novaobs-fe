@@ -2,22 +2,28 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { RefreshCw } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import { api } from '../../services/api';
 import { metricsApi } from './api';
 import { dashboardViewState, grafanaWorkspaceURL, type GrafanaWorkspaceView } from './dashboardViewModel';
 
 export function MetricsDashboardPage() {
+	const productsQuery = useQuery({ queryKey: ['products'], queryFn: api.getProducts, retry: false });
+	const products = productsQuery.data ?? [];
+	const [productId, setProductId] = useState('');
+	const activeProductId = products.some((product) => product.id === productId) ? productId : (products[0]?.id ?? '');
 	const dashboardQuery = useQuery({
-		queryKey: ['metrics-dashboard'],
-		queryFn: () => metricsApi.getDashboard(),
+		queryKey: ['metrics-dashboard', activeProductId],
+		queryFn: () => metricsApi.getDashboard(activeProductId),
+		enabled: Boolean(activeProductId),
 		retry: false,
 	});
 	const [workspace, setWorkspace] = useState<GrafanaWorkspaceView>('dashboard');
 	const [loaded, setLoaded] = useState(false);
 	const [slow, setSlow] = useState(false);
 	const view = dashboardViewState({
-		loading: dashboardQuery.isLoading,
+		loading: productsQuery.isLoading || (Boolean(activeProductId) && dashboardQuery.isLoading),
 		data: dashboardQuery.data,
-		error: dashboardQuery.error,
+		error: productsQuery.error || dashboardQuery.error,
 		loaded,
 		slow,
 	});
@@ -33,6 +39,22 @@ export function MetricsDashboardPage() {
 
 	return (
 		<div className="console-workbench flex h-full min-h-0 flex-col overflow-hidden p-0">
+			{products.length > 0 ? (
+				<div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-outline bg-white px-3">
+					<div className="text-xs font-semibold text-on-surface">产品 Dashboard</div>
+					<label className="flex items-center gap-2 text-xs text-muted">
+						<span>Product</span>
+						<select
+							className="console-select h-8 min-w-48"
+							value={activeProductId}
+							onChange={(event) => setProductId(event.target.value)}
+							aria-label="选择 Dashboard 产品"
+						>
+							{products.map((product) => <option key={product.id} value={product.id}>{product.name}</option>)}
+						</select>
+					</label>
+				</div>
+			) : null}
 			{view.kind === 'ready' ? (
 				<>
 					<div className="flex h-11 shrink-0 items-center justify-between gap-3 border-b border-outline bg-white px-3">
@@ -57,11 +79,18 @@ export function MetricsDashboardPage() {
 			) : view.kind === 'loading' ? (
 				<DashboardSkeleton />
 			) : view.kind === 'forbidden' ? (
-				<DashboardState title="无权访问 Dashboard" detail="当前账号缺少 metrics.dashboard:read 权限。" />
+				<DashboardState title="无权访问 Dashboard" detail="当前账号没有所选 Product 的查看权限。" />
+			) : view.kind === 'isolation_unavailable' ? (
+				<DashboardState
+					title="Dashboard 已安全停用"
+					detail={view.unavailableReason || '当前 Grafana 架构无法可靠隔离 Product，NovaAPM 已阻止嵌入访问。'}
+				/>
 			) : view.kind === 'disabled' ? (
 				<DashboardState title="Grafana 工作区已停用" detail="请由平台管理员检查 Grafana 工作区配置状态。" />
 			) : view.kind === 'error' ? (
 				<DashboardState title="Dashboard 加载失败" detail={errorMessage(dashboardQuery.error)} action={<button type="button" className="console-button" onClick={() => dashboardQuery.refetch()}><RefreshCw className="h-3.5 w-3.5" />重试</button>} />
+			) : productsQuery.isSuccess && products.length === 0 ? (
+				<DashboardState title="暂无可访问的 Product" detail="获得 Product Viewer 或 Product Maintainer 授权后，才能查看对应 Dashboard。" />
 			) : (
 				<DashboardState title="尚未配置 Grafana 工作区" detail="请先在平台设置中配置 Grafana 入口地址。" action={<Link className="console-button console-button-primary" to="/platform/settings">前往平台设置</Link>} />
 			)}

@@ -788,6 +788,23 @@ body {
   .content-workbench-body {
     padding: 8px;
   }
+
+  .platform-access-panel .console-panel-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .platform-access-panel .console-section-title {
+    white-space: normal;
+  }
+
+  .platform-access-tabs {
+    width: 100%;
+  }
+
+  .platform-access-workspace > section {
+    min-width: 0;
+  }
 }
 
 /* 对齐 prototype.html 的控制台排版标尺，并覆盖局部 rem 工具类造成的字号漂移。 */

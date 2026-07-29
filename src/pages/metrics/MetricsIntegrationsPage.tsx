@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Clipboard, Plus, RefreshCw, Search, X } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { EmptyState } from '../../components/EmptyState';
+import { accessAllows, usePlatformAccess } from '../../layouts/access';
 import { api } from '../../services/api';
 import type { Product } from '../../services/types';
 import {
@@ -20,6 +21,7 @@ const sourceLabels = {
 
 export function MetricsIntegrationsPage() {
   const queryClient = useQueryClient();
+  const { data: accessContext } = usePlatformAccess();
   const [query, setQuery] = useState('');
   const [selectedProductId, setSelectedProductId] = useState('');
   const [connectProduct, setConnectProduct] = useState<Product | null>(null);
@@ -43,6 +45,11 @@ export function MetricsIntegrationsPage() {
   }, [products, query]);
   const selectedProduct = products.find((item) => item.id === selectedProductId) ?? null;
   const selectedIntegration = selectedProduct ? integrationByProduct.get(selectedProduct.id) ?? null : null;
+  const canMaintainProduct = (productId: string) => Boolean(accessContext && accessAllows(accessContext, {
+    kind: 'product',
+    productId,
+    minimum: 'product-maintainer',
+  }));
   const refresh = () => void Promise.all([productsQuery.refetch(), integrationsQuery.refetch()]);
 
   return <div className="console-workbench min-h-0 overflow-hidden">
@@ -75,7 +82,7 @@ export function MetricsIntegrationsPage() {
                     <td className="truncate font-mono text-[11px] text-muted">{integration?.integration.destinationRef || '未选择'}</td>
                     <td className="text-xs text-muted">{integration ? `${integration.sourceAccesses.length} 个来源` : '待接入'}</td>
                     <td><Status connected={integration?.integration.desiredState === 'connected'} /></td>
-                    <td className="text-right">{integration ? <button type="button" className="console-button h-7 px-2" onClick={(event) => { event.stopPropagation(); setSelectedProductId(product.id); }}>查看</button> : <button type="button" className="console-button console-button-primary h-7 px-2" onClick={(event) => { event.stopPropagation(); setConnectProduct(product); }}>接入</button>}</td>
+                    <td className="text-right">{integration ? <button type="button" className="console-button h-7 px-2" onClick={(event) => { event.stopPropagation(); setSelectedProductId(product.id); }}>查看</button> : canMaintainProduct(product.id) ? <button type="button" className="console-button console-button-primary h-7 px-2" onClick={(event) => { event.stopPropagation(); setConnectProduct(product); }}>接入</button> : <span className="text-xs text-muted">只读</span>}</td>
                   </tr>;
                 })}</tbody>
               </table>
@@ -83,7 +90,12 @@ export function MetricsIntegrationsPage() {
           )}
         </div>}
       </DataPanel>
-      <ProductIntegrationDetail product={selectedProduct} integration={selectedIntegration} onConnect={() => selectedProduct && setConnectProduct(selectedProduct)} />
+      <ProductIntegrationDetail
+        product={selectedProduct}
+        integration={selectedIntegration}
+        canMaintain={Boolean(selectedProduct && canMaintainProduct(selectedProduct.id))}
+        onConnect={() => selectedProduct && setConnectProduct(selectedProduct)}
+      />
     </div>
     {connectProduct ? <ConnectProductDialog product={connectProduct} onClose={() => setConnectProduct(null)} onCreated={async () => {
       await queryClient.invalidateQueries({ queryKey: ['metrics-integrations'] });
@@ -93,7 +105,7 @@ export function MetricsIntegrationsPage() {
   </div>;
 }
 
-function ProductIntegrationDetail({ product, integration, onConnect }: { product: Product | null; integration: MetricsIntegrationView | null; onConnect: () => void }) {
+function ProductIntegrationDetail({ product, integration, canMaintain, onConnect }: { product: Product | null; integration: MetricsIntegrationView | null; canMaintain: boolean; onConnect: () => void }) {
   const queryClient = useQueryClient();
   const [sourceDialogOpen, setSourceDialogOpen] = useState(false);
   const [handoffSource, setHandoffSource] = useState<MetricsSourceAccess | null>(null);
@@ -109,15 +121,15 @@ function ProductIntegrationDetail({ product, integration, onConnect }: { product
   return <aside className="min-h-0 overflow-auto border-l border-outline bg-white p-4" aria-label="产品指标接入详情">
     <div className="space-y-5">
       <div><div className="flex items-center justify-between gap-3"><h2 className="text-base font-semibold">{product.name}</h2>{integration ? <Status connected={integration.integration.desiredState === 'connected'} /> : null}</div><div className="mt-1 font-mono text-[11px] text-muted">{product.id}</div></div>
-      {!integration ? <div className="rounded border border-dashed border-outline p-4"><div className="text-sm font-semibold">尚未接入指标</div><p className="mt-1 text-xs leading-5 text-muted">接入后，该产品的指标使用同一个写入目标和稳定产品标签。</p><button type="button" className="console-button console-button-primary mt-3" onClick={onConnect}>接入产品指标</button></div> : <>
+      {!integration ? <div className="rounded border border-dashed border-outline p-4"><div className="text-sm font-semibold">尚未接入指标</div><p className="mt-1 text-xs leading-5 text-muted">接入后，该产品的指标使用同一个写入目标和稳定产品标签。</p>{canMaintain ? <button type="button" className="console-button console-button-primary mt-3" onClick={onConnect}>接入产品指标</button> : null}</div> : <>
         <section><div className="text-xs font-semibold text-muted">写入目标</div><div className="mt-1 font-mono text-xs">{integration.integration.destinationRef}</div><div className="mt-3 text-xs font-semibold text-muted">身份标签</div><div className="mt-1 font-mono text-xs">{integration.integration.identityLabelKey}={product.id}</div></section>
         <section className="border-t border-outline pt-4">
-          <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">指标来源</h3><div className="flex gap-1"><button type="button" className="console-button h-7 px-2" onClick={() => setSourceDialogOpen(true)}><Plus className="h-3.5 w-3.5" />新增来源</button>{integration.sourceAccesses.some((source) => source.sourceKind === 'log_derived') ? null : <button type="button" className="console-button h-7 px-2" disabled={logDerivedMutation.isPending} onClick={() => logDerivedMutation.mutate(integration.integration.id)}>启用 Logs-to-Metrics</button>}</div></div>
-          <div className="mt-3 space-y-2">{integration.sourceAccesses.length === 0 ? <div className="rounded border border-dashed border-outline p-3 text-xs text-muted">尚未绑定指标来源。</div> : integration.sourceAccesses.map((source) => <div key={source.id} className="rounded border border-outline p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-xs font-semibold">{sourceLabels[source.sourceKind]}</div>{source.resourceRef ? <div className="mt-1 font-mono text-[11px] text-muted">{source.resourceKind}/{source.resourceRef}</div> : null}</div><Status connected={source.desiredState === 'connected'} /></div><label className="mt-3 block text-xs font-semibold text-muted">采集方式<select className="console-input mt-1 w-full" value={source.collectionMode} disabled={updateMutation.isPending || source.sourceKind === 'log_derived'} onChange={(event) => updateMutation.mutate({ source, mode: event.target.value as MetricsCollectionMode })}><option value="external_collector">复用现有采集器</option>{source.sourceKind === 'kubernetes_infra' ? <option value="managed_collector">平台受管采集器</option> : null}</select></label>{source.collectionMode === 'external_collector' && source.sourceKind !== 'log_derived' ? <button type="button" className="console-button mt-3 w-full" onClick={() => setHandoffSource(source)}><Clipboard className="h-3.5 w-3.5" />查看接入片段</button> : null}</div>)}</div>
+          <div className="flex items-center justify-between gap-2"><h3 className="text-sm font-semibold">指标来源</h3>{canMaintain ? <div className="flex gap-1"><button type="button" className="console-button h-7 px-2" onClick={() => setSourceDialogOpen(true)}><Plus className="h-3.5 w-3.5" />新增来源</button>{integration.sourceAccesses.some((source) => source.sourceKind === 'log_derived') ? null : <button type="button" className="console-button h-7 px-2" disabled={logDerivedMutation.isPending} onClick={() => logDerivedMutation.mutate(integration.integration.id)}>启用 Logs-to-Metrics</button>}</div> : <span className="text-xs text-muted">只读</span>}</div>
+          <div className="mt-3 space-y-2">{integration.sourceAccesses.length === 0 ? <div className="rounded border border-dashed border-outline p-3 text-xs text-muted">尚未绑定指标来源。</div> : integration.sourceAccesses.map((source) => <div key={source.id} className="rounded border border-outline p-3"><div className="flex items-center justify-between gap-3"><div><div className="text-xs font-semibold">{sourceLabels[source.sourceKind]}</div>{source.resourceRef ? <div className="mt-1 font-mono text-[11px] text-muted">{source.resourceKind}/{source.resourceRef}</div> : null}</div><Status connected={source.desiredState === 'connected'} /></div><label className="mt-3 block text-xs font-semibold text-muted">采集方式<select className="console-input mt-1 w-full" value={source.collectionMode} disabled={!canMaintain || updateMutation.isPending || source.sourceKind === 'log_derived'} onChange={(event) => updateMutation.mutate({ source, mode: event.target.value as MetricsCollectionMode })}><option value="external_collector">复用现有采集器</option>{source.sourceKind === 'kubernetes_infra' ? <option value="managed_collector">平台受管采集器</option> : null}</select></label>{source.collectionMode === 'external_collector' && source.sourceKind !== 'log_derived' ? <button type="button" className="console-button mt-3 w-full" onClick={() => setHandoffSource(source)}><Clipboard className="h-3.5 w-3.5" />查看接入片段</button> : null}</div>)}</div>
         </section>
       </>}
     </div>
-    {sourceDialogOpen && integration ? <CreateSourceDialog integrationId={integration.integration.id} onClose={() => setSourceDialogOpen(false)} /> : null}
+    {canMaintain && sourceDialogOpen && integration ? <CreateSourceDialog integrationId={integration.integration.id} onClose={() => setSourceDialogOpen(false)} /> : null}
     {handoffSource ? <HandoffDialog source={handoffSource} onClose={() => setHandoffSource(null)} /> : null}
   </aside>;
 }

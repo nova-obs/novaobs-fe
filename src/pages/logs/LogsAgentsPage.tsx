@@ -14,6 +14,7 @@ import {
   XCircle,
 } from 'lucide-react';
 import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
+import { accessAllows, usePlatformAccess } from '../../layouts/access';
 import { api } from '../../services/api';
 import type { CollectorEnrollmentCredential, ServiceDeployment } from '../../services/types';
 import {
@@ -39,6 +40,12 @@ import { routeLifecycle, statusPillClass } from './ServicePickerPanel';
 export function LogsAgentsPage() {
   const queryClient = useQueryClient();
   const { productId = '', serviceId = '' } = useParams();
+  const { data: accessContext } = usePlatformAccess();
+  const canMaintain = Boolean(accessContext && accessAllows(accessContext, {
+    kind: 'product',
+    productId,
+    minimum: 'product-maintainer',
+  }));
   const base = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs`;
   const [searchParams, setSearchParams] = useSearchParams();
   const [selectedRouteId, setSelectedRouteId] = useState(searchParams.get('route_id') ?? '');
@@ -236,14 +243,18 @@ export function LogsAgentsPage() {
               }}>
                 <RefreshCw className={`h-3.5 w-3.5 ${workspaceQuery.isFetching || vmRuntimeQuery.isFetching || k8sRuntimeQuery.isFetching ? 'animate-spin' : ''}`} />刷新
               </button>
-              <Link className="console-button console-button-primary" to={`${base}/agents/new`}><Plus className="h-3.5 w-3.5" />创建采集路由</Link>
+              {canMaintain ? <Link className="console-button console-button-primary" to={`${base}/agents/new`}><Plus className="h-3.5 w-3.5" />创建采集路由</Link> : null}
             </div>
           </div>
         </div>
 
         {error ? <LogsErrorLine message={(error as Error).message} /> : null}
         {!activeRoute ? (
-          <LogsEmptyState title="暂无采集路由" description="创建路由后可查看预期覆盖、Agent 或 DaemonSet 运行状态。" action={<Link className="console-button console-button-primary" to={`${base}/agents/new`}>创建采集路由</Link>} />
+          <LogsEmptyState
+            title="暂无采集路由"
+            description="创建路由后可查看预期覆盖、Agent 或 DaemonSet 运行状态。"
+            action={canMaintain ? <Link className="console-button console-button-primary" to={`${base}/agents/new`}>创建采集路由</Link> : undefined}
+          />
         ) : (
           <div className="flex min-h-0 flex-1 flex-col">
             <div className="flex flex-col gap-3 border-b border-outline px-3 py-3 lg:flex-row lg:items-center lg:justify-between">
@@ -259,15 +270,19 @@ export function LogsAgentsPage() {
               <div className="flex flex-wrap gap-2">
                 {isVMRoute ? <button className="console-button" onClick={() => setHistoryOpen(true)}><FileClock className="h-3.5 w-3.5" />发布历史</button> : null}
                 <button className="console-button" onClick={() => openCollectorConfig(activeRoute)}><FileText className="h-3.5 w-3.5" />查看配置</button>
-                <Link className="console-button console-button-primary" to={`${base}/agents/${activeRoute.route.id}/edit`}>更新路由</Link>
-                <button
-                  className={`console-button ${confirmDeleteRouteId === activeRoute.route.id ? 'console-button-danger' : ''}`}
-                  disabled={deleteMutation.isPending}
-                  onClick={() => confirmDeleteRouteId === activeRoute.route.id ? deleteMutation.mutate(activeRoute.route.id) : setConfirmDeleteRouteId(activeRoute.route.id)}
-                >
-                  {deleteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-                  {confirmDeleteRouteId === activeRoute.route.id ? '确认删除' : '删除'}
-                </button>
+                {canMaintain ? (
+                  <>
+                    <Link className="console-button console-button-primary" to={`${base}/agents/${activeRoute.route.id}/edit`}>更新路由</Link>
+                    <button
+                      className={`console-button ${confirmDeleteRouteId === activeRoute.route.id ? 'console-button-danger' : ''}`}
+                      disabled={deleteMutation.isPending}
+                      onClick={() => confirmDeleteRouteId === activeRoute.route.id ? deleteMutation.mutate(activeRoute.route.id) : setConfirmDeleteRouteId(activeRoute.route.id)}
+                    >
+                      {deleteMutation.isPending ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                      {confirmDeleteRouteId === activeRoute.route.id ? '确认删除' : '删除'}
+                    </button>
+                  </>
+                ) : null}
               </div>
             </div>
 
@@ -319,6 +334,7 @@ export function LogsAgentsPage() {
                           </div>
                           {target.blockingReason ? <div className="mt-3 text-xs text-danger">{blockingReasonLabel(target.blockingReason)}</div> : null}
                           <TargetActions
+                            canMaintain={canMaintain}
                             isVMRoute={isVMRoute}
                             target={target}
                             enrollmentPending={enrollmentMutation.isPending}
@@ -343,6 +359,7 @@ export function LogsAgentsPage() {
                           <td className="font-mono text-[11px] text-muted">{formatTime(target.lastHealthAt)}</td>
                           <td className="text-right">
                             <TargetActions
+                              canMaintain={canMaintain}
                               isVMRoute={isVMRoute}
                               target={target}
                               enrollmentPending={enrollmentMutation.isPending}
@@ -378,6 +395,7 @@ export function LogsAgentsPage() {
           rollouts={rolloutsQuery.data ?? []}
           confirmRollbackId={confirmRollbackId}
           rollbackPending={rollbackMutation.isPending}
+          canRollback={canMaintain}
           onRefresh={() => rolloutsQuery.refetch()}
           onRollback={(rolloutId) => {
             if (confirmRollbackId === rolloutId) rollbackMutation.mutate(rolloutId);
@@ -404,7 +422,8 @@ function TargetHeading({ target, routeId, runtimeURL }: { target: LogRouteRuntim
   );
 }
 
-function TargetActions({ isVMRoute, target, enrollmentPending, retryPending, onEnroll, onRetry }: {
+function TargetActions({ canMaintain, isVMRoute, target, enrollmentPending, retryPending, onEnroll, onRetry }: {
+  canMaintain: boolean;
   isVMRoute: boolean;
   target: LogRouteRuntimeTarget;
   enrollmentPending: boolean;
@@ -412,7 +431,7 @@ function TargetActions({ isVMRoute, target, enrollmentPending, retryPending, onE
   onEnroll: () => void;
   onRetry: () => void;
 }) {
-  if (!isVMRoute) return null;
+  if (!isVMRoute || !canMaintain) return null;
   if (!target.installationId) {
     return <button className="console-button mt-3 md:mt-0" disabled={enrollmentPending} onClick={onEnroll}>签发安装令牌</button>;
   }
@@ -450,12 +469,13 @@ function ConfigDialog({ route, loading, error, collectorYAML, onClose }: {
   ), document.body);
 }
 
-function HistoryDialog({ loading, error, rollouts, confirmRollbackId, rollbackPending, onRefresh, onRollback, onClose }: {
+function HistoryDialog({ loading, error, rollouts, confirmRollbackId, rollbackPending, canRollback, onRefresh, onRollback, onClose }: {
   loading: boolean;
   error: Error | null;
   rollouts: Awaited<ReturnType<typeof logsApi.getRouteRollouts>>;
   confirmRollbackId: string;
   rollbackPending: boolean;
+  canRollback: boolean;
   onRefresh: () => void;
   onRollback: (rolloutId: string) => void;
   onClose: () => void;
@@ -483,7 +503,7 @@ function HistoryDialog({ loading, error, rollouts, confirmRollbackId, rollbackPe
                   <td>{formatTime(rollout.createdAt)}</td>
                   <td>{rollout.rollbackOf ? `回滚自 #${rollout.rollbackOf.slice(-6)}` : '发布'}</td>
                   <td className="text-right">
-                    {index === 0 ? <span className="text-xs text-muted">当前期望</span> : (
+                    {index === 0 || !canRollback ? <span className="text-xs text-muted">{index === 0 ? '当前期望' : '只读'}</span> : (
                       <button className={confirmRollbackId === rollout.rolloutId ? 'console-button console-button-danger' : 'console-button'} disabled={rollbackPending} onClick={() => onRollback(rollout.rolloutId)}>
                         <RotateCcw className="h-3.5 w-3.5" />{confirmRollbackId === rollout.rolloutId ? '确认回滚' : '回滚到此版本'}
                       </button>

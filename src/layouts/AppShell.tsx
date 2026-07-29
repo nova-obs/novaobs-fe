@@ -29,6 +29,8 @@ import {
 } from './navigation';
 import { k8sApi, type K8sCluster } from '../pages/k8s/api';
 import { getK8sNavigationGroupItems, k8sClusterPath, k8sNavigationGroups, type K8sNavigationItem } from '../pages/k8s/navigation';
+import { accessApi } from '../pages/platform/accessApi';
+import { PlatformAccessContextProvider, platformAccessQueryKey, usePlatformAccess } from './access';
 import {
   fetchPlatformSession,
   isSignedOutLocation,
@@ -43,16 +45,24 @@ import {
 export function AppShell({ children }: PropsWithChildren) {
   const location = useLocation();
   const navigate = useNavigate();
-  const navigationDomains = useMemo(() => getNavigationDomains(), []);
-  const activeDomain = getNavigationDomainByPath(location.pathname) ?? navigationDomains[0];
-  const activeItem = getNavigationByPath(location.pathname);
-  const workspaceLabel = getWorkspaceLabel(location.pathname, activeItem, activeDomain);
-  const breadcrumbSegments = getWorkspaceBreadcrumbSegments(location.pathname, activeItem, activeDomain, workspaceLabel);
-  const backTarget = getBackTarget(location.pathname);
   const [openDomainId, setOpenDomainId] = useState<string | null>(null);
   const [linkCopyStatus, setLinkCopyStatus] = useState<'idle' | 'copied' | 'failed'>('idle');
   const [session, setSession] = useState<PlatformSession | null>(null);
   const [authStatus, setAuthStatus] = useState<SessionStatus>('checking');
+  const accessQuery = useQuery({
+    queryKey: platformAccessQueryKey(session?.subject.id ?? ''),
+    queryFn: () => accessApi.me(),
+    enabled: authStatus === 'authenticated',
+    retry: false,
+    staleTime: 30_000,
+  });
+  const access = accessQuery.data ?? null;
+  const navigationDomains = useMemo(() => getNavigationDomains(access), [access]);
+  const activeDomain = getNavigationDomainByPath(location.pathname, access) ?? navigationDomains[0];
+  const activeItem = getNavigationByPath(location.pathname, access);
+  const workspaceLabel = getWorkspaceLabel(location.pathname, activeItem, activeDomain);
+  const breadcrumbSegments = getWorkspaceBreadcrumbSegments(location.pathname, activeItem, activeDomain, workspaceLabel);
+  const backTarget = getBackTarget(location.pathname);
   const logoutAction = useLogoutAction({
     onLoggedOut: () => {
       setSession(null);
@@ -151,7 +161,8 @@ export function AppShell({ children }: PropsWithChildren) {
   }
 
   return (
-    <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-background text-on-surface">
+    <PlatformAccessContextProvider subjectId={activeSubject?.id ?? ''}>
+      <div className="flex h-[100dvh] max-h-[100dvh] flex-col overflow-hidden bg-background text-on-surface">
       <header className="relative z-40 shrink-0 border-b border-outline bg-surface-lowest">
         <div className="flex min-h-14 items-center gap-2 px-3 md:gap-4 md:px-5">
           <Link className="flex shrink-0 items-center gap-2.5" to="/" aria-label="返回 NovaAPM 平台总览">
@@ -287,7 +298,8 @@ export function AppShell({ children }: PropsWithChildren) {
           </div>
         </section>
       </main>
-    </div>
+      </div>
+    </PlatformAccessContextProvider>
   );
 }
 
@@ -398,6 +410,7 @@ function MegaMenu({
 }
 
 function K8sMegaMenuClusterWork() {
+  const { data: access } = usePlatformAccess();
   const [selectedClusterId, setSelectedClusterId] = useState('');
   const { data: clusters = [], error, isLoading } = useQuery({
     queryKey: ['k8s-clusters'],
@@ -409,10 +422,10 @@ function K8sMegaMenuClusterWork() {
     k8sNavigationGroups
       .map((group) => ({
         ...group,
-        items: getK8sNavigationGroupItems(group.id).filter((item) => item.requiresCluster),
+        items: getK8sNavigationGroupItems(group.id, access, selectedClusterId).filter((item) => item.requiresCluster),
       }))
       .filter((group) => group.items.length)
-  ), []);
+  ), [access, selectedClusterId]);
 
   useEffect(() => {
     if (!clusters.length) {

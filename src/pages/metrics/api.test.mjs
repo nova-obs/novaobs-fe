@@ -57,18 +57,24 @@ test('产品接入支持调整目标、断开和直接登记资源来源', async
   } finally { globalThis.fetch = original; }
 });
 
-test('Dashboard 运行态只映射同源嵌入地址', async () => {
+test('Dashboard 必须按产品读取并映射隔离不可用状态', async () => {
   const original = globalThis.fetch;
   let requestPath = '';
   globalThis.fetch = async (path) => {
     requestPath = String(path);
-    return response({ state: 'ready', embed_url: '/grafana/d/nova/overview?orgId=1', updated_at: '2026-07-22T10:00:00Z' });
+    return response({
+      state: 'isolation_unavailable',
+      embed_url: '',
+      unavailable_reason: '共享 Grafana 无法可靠隔离 Product',
+      updated_at: '2026-07-22T10:00:00Z',
+    });
   };
   try {
-    const dashboard = await metricsApi.getDashboard();
-    assert.equal(requestPath, '/api/v1/metrics/dashboard');
-    assert.equal(dashboard.state, 'ready');
-    assert.equal(dashboard.embedURL, '/grafana/d/nova/overview?orgId=1');
+    const dashboard = await metricsApi.getDashboard('product-commerce');
+    assert.equal(requestPath, '/api/v1/products/product-commerce/metrics/dashboard');
+    assert.equal(dashboard.state, 'isolation_unavailable');
+    assert.equal(dashboard.embedURL, '');
+    assert.equal(dashboard.unavailableReason, '共享 Grafana 无法可靠隔离 Product');
     assert.equal(dashboard.updatedAt, '2026-07-22T10:00:00Z');
   } finally { globalThis.fetch = original; }
 });

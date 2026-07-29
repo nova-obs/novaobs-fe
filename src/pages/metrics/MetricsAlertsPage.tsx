@@ -5,6 +5,7 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { DataPanel } from '../../components/DataPanel';
 import { EmptyState } from '../../components/EmptyState';
 import { StatusBadge } from '../../components/StatusBadge';
+import { accessAllows, usePlatformAccess } from '../../layouts/access';
 import { api, ApiRequestError } from '../../services/api';
 import type { AlertRule, AlertRuleSpec, AlertRuleTestResult, AlertSeverity, Product } from '../../services/types';
 import { metricsApi, type MetricsIntegrationView } from './api';
@@ -22,6 +23,7 @@ export function MetricsAlertsPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { id: ruleId = '' } = useParams();
+  const { data: accessContext } = usePlatformAccess();
   const [query, setQuery] = useState('');
   const [productFilter, setProductFilter] = useState('');
   const creating = location.pathname.endsWith('/alerts/new');
@@ -38,8 +40,18 @@ export function MetricsAlertsPage() {
     () => buildMetricAlertContexts(productsQuery.data ?? [], integrationsQuery.data ?? []),
     [productsQuery.data, integrationsQuery.data],
   );
+  const canMaintainProduct = (productId: string) => Boolean(accessContext && accessAllows(accessContext, {
+    kind: 'product',
+    productId,
+    minimum: 'product-maintainer',
+  }));
+  const maintainableContexts = contexts.filter((context) => canMaintainProduct(context.product.id));
   const productNames = useMemo(() => new Map((productsQuery.data ?? []).map((item) => [item.id, item.name])), [productsQuery.data]);
   const rules = rulesQuery.data ?? [];
+  const editorRule = rules.find((rule) => rule.id === ruleId);
+  const editorAllowed = creating
+    ? maintainableContexts.length > 0
+    : Boolean(editorRule && canMaintainProduct(editorRule.spec.scope.productId ?? ''));
   const visibleRules = useMemo(() => {
     const keyword = query.trim().toLowerCase();
     return rules.filter((rule) => {
@@ -73,7 +85,7 @@ export function MetricsAlertsPage() {
             <button type="button" className="console-icon-button" aria-label="刷新指标告警" title="刷新指标告警" onClick={refresh}>
               <RefreshCw className={`h-3.5 w-3.5 ${rulesQuery.isFetching ? 'animate-spin' : ''}`} />
             </button>
-            {contexts.length ? (
+            {maintainableContexts.length ? (
               <Link className="console-button console-button-primary" to="/metrics/alerts/new"><Plus className="h-3.5 w-3.5" />创建告警</Link>
             ) : (
               <button type="button" className="console-button console-button-primary" disabled title="请先接入并连接一个有效产品"><Plus className="h-3.5 w-3.5" />创建告警</button>
@@ -89,7 +101,7 @@ export function MetricsAlertsPage() {
         ) : visibleRules.length === 0 ? (
           <EmptyState
             title={rules.length ? '未找到匹配的指标告警规则' : '暂无指标告警规则'}
-            action={!rules.length && contexts.length ? <Link className="console-button console-button-primary" to="/metrics/alerts/new">创建指标告警</Link> : undefined}
+            action={!rules.length && maintainableContexts.length ? <Link className="console-button console-button-primary" to="/metrics/alerts/new">创建指标告警</Link> : undefined}
           />
         ) : (
           <div className="overflow-x-auto rounded-md border border-outline bg-white">
@@ -104,14 +116,14 @@ export function MetricsAlertsPage() {
                   <td className="font-mono text-xs">{triggerLabel(rule)}</td>
                   <td><StatusBadge value={rule.spec.notification.severity} /><div className="mt-1 truncate text-[11px] text-muted" title={rule.spec.notification.ownerTeam}>{rule.spec.notification.ownerTeam || rule.spec.notification.policyId || '-'}</div></td>
                   <td><div className="flex flex-wrap gap-1"><StatusBadge value={rule.state} /><StatusBadge value={rule.applyStatus} /></div></td>
-                  <td className="text-right"><Link className="console-icon-button inline-flex" to={`/metrics/alerts/${encodeURIComponent(rule.id)}`} aria-label={`编辑指标告警 ${rule.spec.name}`} title="编辑"><Pencil className="h-3.5 w-3.5" /></Link></td>
+                  <td className="text-right">{canMaintainProduct(rule.spec.scope.productId ?? '') ? <Link className="console-icon-button inline-flex" to={`/metrics/alerts/${encodeURIComponent(rule.id)}`} aria-label={`编辑指标告警 ${rule.spec.name}`} title="编辑"><Pencil className="h-3.5 w-3.5" /></Link> : <span className="text-xs text-muted">只读</span>}</td>
                 </tr>
               ))}</tbody>
             </table>
           </div>
         )}
       </DataPanel>
-      {editorOpen ? <MetricsAlertEditor mode={creating ? 'create' : 'edit'} ruleId={ruleId} contexts={contexts} onClose={closeEditor} /> : null}
+      {editorOpen && editorAllowed ? <MetricsAlertEditor mode={creating ? 'create' : 'edit'} ruleId={ruleId} contexts={maintainableContexts} onClose={closeEditor} /> : null}
     </div>
   );
 }

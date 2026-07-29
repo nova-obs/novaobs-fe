@@ -1,11 +1,12 @@
 import { ApiRequestError } from '../../services/api';
 import type { MetricsDashboard } from './api';
 
-export type DashboardViewKind = 'loading' | 'unconfigured' | 'disabled' | 'forbidden' | 'error' | 'ready';
+export type DashboardViewKind = 'loading' | 'unconfigured' | 'disabled' | 'isolation_unavailable' | 'forbidden' | 'error' | 'ready';
 
 export interface DashboardViewState {
 	kind: DashboardViewKind;
 	embedURL: string;
+	unavailableReason: string;
 	slow: boolean;
 }
 
@@ -25,7 +26,9 @@ export function grafanaWorkspaceURL(configuredURL: string, workspace: GrafanaWor
   }
   query.set('kiosk', '1');
 	const suffix = query.toString();
-	return `/grafana/explore${suffix ? `?${suffix}` : ''}`;
+  const productProxy = /^\/grafana\/products\/[^/]+/.exec(configured.pathname)?.[0];
+  if (!productProxy) return '';
+	return `${productProxy}/explore${suffix ? `?${suffix}` : ''}`;
 }
 
 export function dashboardViewState(input: {
@@ -35,14 +38,22 @@ export function dashboardViewState(input: {
 	slow?: boolean;
 	loaded?: boolean;
 }): DashboardViewState {
-	if (input.loading) return { kind: 'loading', embedURL: '', slow: false };
+	if (input.loading) return { kind: 'loading', embedURL: '', unavailableReason: '', slow: false };
 	if (input.error instanceof ApiRequestError && input.error.status === 403) {
-		return { kind: 'forbidden', embedURL: '', slow: false };
+		return { kind: 'forbidden', embedURL: '', unavailableReason: '', slow: false };
 	}
-	if (input.error) return { kind: 'error', embedURL: '', slow: false };
+	if (input.error) return { kind: 'error', embedURL: '', unavailableReason: '', slow: false };
 	if (input.data?.state === 'ready' && input.data.embedURL) {
-		return { kind: 'ready', embedURL: input.data.embedURL, slow: Boolean(input.slow && !input.loaded) };
+		return { kind: 'ready', embedURL: input.data.embedURL, unavailableReason: '', slow: Boolean(input.slow && !input.loaded) };
 	}
-	if (input.data?.state === 'disabled') return { kind: 'disabled', embedURL: '', slow: false };
-	return { kind: 'unconfigured', embedURL: '', slow: false };
+	if (input.data?.state === 'disabled') return { kind: 'disabled', embedURL: '', unavailableReason: '', slow: false };
+	if (input.data?.state === 'isolation_unavailable') {
+		return {
+			kind: 'isolation_unavailable',
+			embedURL: '',
+			unavailableReason: input.data.unavailableReason,
+			slow: false,
+		};
+	}
+	return { kind: 'unconfigured', embedURL: '', unavailableReason: '', slow: false };
 }

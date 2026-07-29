@@ -9,7 +9,11 @@ const logsAgentsPage = readFileSync(new URL('../pages/logs/LogsAgentsPage.tsx', 
 const k8sDashboardPage = readFileSync(new URL('../pages/k8s/DashboardPage.tsx', import.meta.url), 'utf8');
 const k8sAuditPage = readFileSync(new URL('../pages/k8s/AuditPage.tsx', import.meta.url), 'utf8');
 const k8sLayout = readFileSync(new URL('../pages/k8s/K8sOpsLayout.tsx', import.meta.url), 'utf8');
-const platformAccessPage = readFileSync(new URL('../pages/platform/PlatformAccessAdminPage.tsx', import.meta.url), 'utf8');
+const platformAccessPage = [
+  '../pages/platform/PlatformAccessAdminPage.tsx',
+  '../pages/platform/PlatformAccessForms.tsx',
+  '../pages/platform/PlatformAccessWorkspaces.tsx',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 
 test('全站具备公司控制台式工作区、工具栏、详情栏和固定动作语义', () => {
   for (const className of [
@@ -79,6 +83,6 @@ test('K8s 与平台 IAM 从指标卡墙收敛为工具栏、工程表格和轻�
   assert.doesNotMatch(k8sLayout, /k8s-context-items/);
   assert.doesNotMatch(k8sLayout, /<aside/);
   assert.match(platformAccessPage, /console-workbench/);
-  assert.match(platformAccessPage, /console-detail-rail/);
-  assert.match(platformAccessPage, /console-danger-zone/);
+  assert.match(platformAccessPage, /console-drawer-panel/);
+  assert.match(platformAccessPage, /console-table-action-danger/);
 });

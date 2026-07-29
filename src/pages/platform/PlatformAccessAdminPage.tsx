@@ -1,964 +1,459 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bot, KeyRound, Link2, Plus, ShieldAlert, ShieldCheck, Trash2, UserRoundCog, UsersRound, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle, ShieldCheck } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
-import { EmptyState } from '../../components/EmptyState';
+import { usePlatformAccess } from '../../layouts/access';
+import { api } from '../../services/api';
+import { k8sApi } from '../k8s/api';
+import { accessApi, type K8sAccessLevel, type ProductAccessRole } from './accessApi';
+import { platformApi } from './api';
 import {
-  platformApi,
-  type PlatformBinding,
-  type PlatformGroup,
-  type PlatformPermission,
-  type PlatformRole,
-  type PlatformScope,
-  type PlatformServiceAccount,
-  type PlatformSubject,
-  type PlatformUser,
-} from './api';
+  BreakGlassForm,
+  EditorDrawer,
+  IdentityForm,
+  K8sGrantForm,
+  K8sProfileForm,
+  MembershipForm,
+  PlatformAdminForm,
+  ProductAccessForm,
+  editorTitle,
+  parseNamespaces,
+} from './PlatformAccessForms';
+import {
+  AccessTabNav,
+  BreakGlassWorkspace,
+  IdentityWorkspace,
+  K8sProfilesWorkspace,
+  PlatformAdminsWorkspace,
+  ProductAccessWorkspace,
+} from './PlatformAccessWorkspaces';
 
-type PlatformAdminTab = 'users' | 'groups' | 'service-accounts' | 'roles' | 'bindings' | 'effective';
-type PlatformEditor = 'user' | 'group' | 'membership' | 'service-account' | 'role' | 'binding';
-
-const platformAdminTabs: { key: PlatformAdminTab; label: string }[] = [
-  { key: 'users', label: '用户' },
-  { key: 'groups', label: '用户组' },
-  { key: 'service-accounts', label: '服务账号' },
-  { key: 'roles', label: '角色' },
-  { key: 'bindings', label: '授权绑定' },
-  { key: 'effective', label: '有效权限' },
-];
-
-interface SubjectDeleteTarget {
-  subjectId: string;
-  subjectType: string;
-  source?: string;
+export type AccessTab = 'identities' | 'platform-admins' | 'product-access' | 'k8s-profiles' | 'break-glass';
+export type Editor = 'identity' | 'membership' | 'platform-admin' | 'product-access' | 'k8s-profile' | 'k8s-grant' | 'break-glass';
+export type IdentityKind = 'user' | 'group' | 'service-account';
+export interface IdentityDraft {
+  kind: IdentityKind;
+  name: string;
+  displayName: string;
+  email: string;
+  password: string;
+  owner: string;
+  description: string;
 }
+
+const emptyIdentityDraft: IdentityDraft = {
+  kind: 'user',
+  name: '',
+  displayName: '',
+  email: '',
+  password: '',
+  owner: '',
+  description: '',
+};
+
+const emptyProfileDraft = {
+  name: '',
+  clusterId: '',
+  accessLevel: 'developer' as K8sAccessLevel,
+  namespacesText: '',
+  wholeNamespaceConfirmed: false,
+};
 
 export function PlatformAccessAdminPage() {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<PlatformAdminTab>('users');
-  const [activeEditor, setActiveEditor] = useState<PlatformEditor | null>(null);
-  const [username, setUsername] = useState('');
-  const [displayName, setDisplayName] = useState('');
-  const [email, setEmail] = useState('');
-  const [initialPassword, setInitialPassword] = useState('');
-  const [groupName, setGroupName] = useState('');
-  const [groupDisplayName, setGroupDisplayName] = useState('');
-  const [serviceAccountName, setServiceAccountName] = useState('');
-  const [serviceAccountDisplayName, setServiceAccountDisplayName] = useState('');
-  const [serviceAccountOwner, setServiceAccountOwner] = useState('');
-  const [serviceAccountDescription, setServiceAccountDescription] = useState('');
-  const [memberGroupId, setMemberGroupId] = useState('');
-  const [memberSubject, setMemberSubject] = useState('');
-  const [selectedSubject, setSelectedSubject] = useState('');
-  const [previewSubject, setPreviewSubject] = useState('');
-  const [selectedRole, setSelectedRole] = useState('');
-  const [scopeMode, setScopeMode] = useState<'global' | 'cluster' | 'namespace'>('global');
-  const [clusterId, setClusterId] = useState('');
-  const [namespace, setNamespace] = useState('');
-  const [roleId, setRoleId] = useState('');
-  const [roleName, setRoleName] = useState('');
-  const [roleDescription, setRoleDescription] = useState('');
-  const [rolePermissions, setRolePermissions] = useState('k8s.resource:read:namespace');
-  const [confirmDeleteKey, setConfirmDeleteKey] = useState('');
+  const { data: currentAccess } = usePlatformAccess();
+  const [activeTab, setActiveTab] = useState<AccessTab>('identities');
+  const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
+  const [identityDraft, setIdentityDraft] = useState(emptyIdentityDraft);
+  const [membershipDraft, setMembershipDraft] = useState({ groupId: '', subjectType: 'user', subjectId: '' });
+  const [adminDraft, setAdminDraft] = useState({ subjectType: 'user' as 'user' | 'group', subjectId: '' });
+  const [productDraft, setProductDraft] = useState({
+    productId: '',
+    subjectType: 'group' as 'group' | 'service-account',
+    subjectId: '',
+    role: 'product-viewer' as ProductAccessRole,
+  });
+  const [profileDraft, setProfileDraft] = useState(emptyProfileDraft);
+  const [editingProfileId, setEditingProfileId] = useState('');
+  const [k8sGrantDraft, setK8sGrantDraft] = useState({ profileId: '', groupId: '' });
+  const [breakGlassDraft, setBreakGlassDraft] = useState({ clusterId: '', reason: '' });
+  const [approvalMinutes, setApprovalMinutes] = useState(60);
+  const namespaces = parseNamespaces(profileDraft.namespacesText);
+  const profileHasInvalidNamespace = namespaces.some((namespace) => namespace === '*' || namespace === 'all_namespaces');
 
-  const meQuery = useQuery({ queryKey: ['platform-me'], queryFn: () => platformApi.me(), retry: false });
-  const subjectsQuery = useQuery({ queryKey: ['platform-subjects'], queryFn: () => platformApi.listSubjects(), retry: false });
-  const usersQuery = useQuery({ queryKey: ['platform-users'], queryFn: () => platformApi.listUsers(), retry: false });
-  const groupsQuery = useQuery({ queryKey: ['platform-groups'], queryFn: () => platformApi.listGroups(), retry: false });
-  const membershipsQuery = useQuery({ queryKey: ['platform-group-memberships'], queryFn: () => platformApi.listMemberships(), retry: false });
-  const serviceAccountsQuery = useQuery({ queryKey: ['platform-service-accounts'], queryFn: () => platformApi.listServiceAccounts(), retry: false });
-  const rolesQuery = useQuery({ queryKey: ['platform-roles'], queryFn: () => platformApi.listRoles(), retry: false });
-  const bindingsQuery = useQuery({ queryKey: ['platform-bindings'], queryFn: () => platformApi.listBindings(), retry: false });
-
-  const subjects = subjectsQuery.data ?? [];
-  const roles = rolesQuery.data ?? [];
-  const bindings = bindingsQuery.data ?? [];
-  const memberships = membershipsQuery.data ?? [];
-  const users = usersQuery.data ?? [];
-  const groups = groupsQuery.data ?? [];
-  const serviceAccounts = serviceAccountsQuery.data ?? [];
-  const firstSubjectValue = subjectValue(subjects[0]);
-  const activeSubjectValue = selectedSubject || firstSubjectValue;
-  const activePreviewSubject = previewSubject || activeSubjectValue;
-  const assignableMemberSubjects = useMemo(
-    () => subjects.filter((item) => item.subjectType !== 'group'),
-    [subjects],
-  );
-  const assignableMemberSubjectValues = useMemo(
-    () => new Set(assignableMemberSubjects.map((item) => subjectValue(item))),
-    [assignableMemberSubjects],
-  );
-  const firstMemberSubjectValue = subjectValue(assignableMemberSubjects[0]);
-  const activeMemberSubjectValue = assignableMemberSubjectValues.has(memberSubject) ? memberSubject : firstMemberSubjectValue;
-  const activeRole = selectedRole || roles[0]?.id || '';
-
-  const effectiveQuery = useQuery({
-    queryKey: ['platform-effective-permissions', activePreviewSubject],
-    queryFn: () => {
-      const [subjectType, subjectId] = splitSubjectValue(activePreviewSubject);
-      return platformApi.effectivePermissions({ subjectId, subjectType });
-    },
-    enabled: Boolean(activePreviewSubject),
+  const usersQuery = useQuery({ queryKey: ['platform-users'], queryFn: platformApi.listUsers, retry: false });
+  const groupsQuery = useQuery({ queryKey: ['platform-groups'], queryFn: platformApi.listGroups, retry: false });
+  const membershipsQuery = useQuery({ queryKey: ['platform-group-memberships'], queryFn: platformApi.listMemberships, retry: false });
+  const serviceAccountsQuery = useQuery({ queryKey: ['platform-service-accounts'], queryFn: platformApi.listServiceAccounts, retry: false });
+  const productsQuery = useQuery({ queryKey: ['platform-products'], queryFn: api.getProductsForAdministration, retry: false });
+  const clustersQuery = useQuery({ queryKey: ['platform-k8s-clusters'], queryFn: () => k8sApi.listClustersForAdministration(), retry: false });
+  const adminsQuery = useQuery({ queryKey: ['fixed-access', 'platform-admins'], queryFn: accessApi.listPlatformAdminGrants, retry: false });
+  const profilesQuery = useQuery({ queryKey: ['fixed-access', 'k8s-profiles'], queryFn: accessApi.listK8sAccessProfiles, retry: false });
+  const k8sGrantsQuery = useQuery({ queryKey: ['fixed-access', 'k8s-grants'], queryFn: () => accessApi.listK8sAccessGrants(), retry: false });
+  const breakGlassQuery = useQuery({ queryKey: ['fixed-access', 'break-glass'], queryFn: accessApi.listBreakGlassGrants, retry: false });
+  const profileClusterId = profileDraft.clusterId || clustersQuery.data?.[0]?.id || '';
+  const namespaceImpactsQuery = useQuery({
+    queryKey: ['fixed-access', 'namespace-impacts', profileClusterId, namespaces],
+    queryFn: () => accessApi.listK8sNamespaceImpacts(profileClusterId, namespaces),
+    enabled: activeEditor === 'k8s-profile' && Boolean(profileClusterId) && namespaces.length > 0 && !profileHasInvalidNamespace,
     retry: false,
   });
-  const effectivePermissions = effectiveQuery.data ?? [];
 
-  const invalidatePlatformIAM = () => {
-    queryClient.invalidateQueries({ queryKey: ['platform-me'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-subjects'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-users'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-groups'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-service-accounts'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-group-memberships'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-roles'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-bindings'] });
-    queryClient.invalidateQueries({ queryKey: ['platform-effective-permissions'] });
-    queryClient.invalidateQueries({ queryKey: ['k8s-platform-subjects'] });
-    queryClient.invalidateQueries({ queryKey: ['k8s-platform-access-bindings'] });
-  };
+  const users = usersQuery.data ?? [];
+  const groups = groupsQuery.data ?? [];
+  const memberships = membershipsQuery.data ?? [];
+  const serviceAccounts = serviceAccountsQuery.data ?? [];
+  const products = productsQuery.data ?? [];
+  const clusters = clustersQuery.data ?? [];
+  const admins = adminsQuery.data ?? [];
+  const profiles = profilesQuery.data ?? [];
+  const k8sGrants = k8sGrantsQuery.data ?? [];
+  const breakGlassGrants = breakGlassQuery.data ?? [];
 
-  const createUserMutation = useMutation({
-    mutationFn: () => platformApi.createUser({ username, displayName, email, password: initialPassword }),
-    onSuccess: () => {
-      setUsername('');
-      setDisplayName('');
-      setEmail('');
-      setInitialPassword('');
-      setActiveEditor(null);
-      invalidatePlatformIAM();
-    },
+  const productGrantQueries = useQueries({
+    queries: products.map((product) => ({
+      queryKey: ['fixed-access', 'product-grants', product.id],
+      queryFn: () => accessApi.listProductAccessGrants(product.id),
+      retry: false,
+    })),
   });
-  const createGroupMutation = useMutation({
-    mutationFn: () => platformApi.createGroup({ name: groupName, displayName: groupDisplayName }),
-    onSuccess: () => {
-      setGroupName('');
-      setGroupDisplayName('');
-      setActiveEditor(null);
-      invalidatePlatformIAM();
-    },
-  });
-  const createServiceAccountMutation = useMutation({
-    mutationFn: () => platformApi.createServiceAccount({
-      name: serviceAccountName,
-      displayName: serviceAccountDisplayName,
-      owner: serviceAccountOwner,
-      description: serviceAccountDescription,
-    }),
-    onSuccess: () => {
-      setServiceAccountName('');
-      setServiceAccountDisplayName('');
-      setServiceAccountOwner('');
-      setServiceAccountDescription('');
-      setActiveEditor(null);
-      invalidatePlatformIAM();
-    },
-  });
-  const createMembershipMutation = useMutation({
-    mutationFn: () => {
-      const [subjectType, subjectId] = splitSubjectValue(activeMemberSubjectValue);
-      return platformApi.createMembership({ groupId: memberGroupId || groups[0]?.id || '', subjectId, subjectType });
-    },
-    onSuccess: () => {
-      setActiveEditor(null);
-      invalidatePlatformIAM();
-    },
-  });
-  const deleteMembershipMutation = useMutation({
-    mutationFn: (id: string) => platformApi.deleteMembership(id),
-    onSuccess: () => {
-      setConfirmDeleteKey('');
-      invalidatePlatformIAM();
-    },
-  });
-  const deleteSubjectMutation = useMutation<unknown, Error, SubjectDeleteTarget>({
-    mutationFn: (item) => deletePlatformSubject(item),
-    onSuccess: () => {
-      setConfirmDeleteKey('');
-      invalidatePlatformIAM();
-    },
-  });
-  const createRoleMutation = useMutation({
-    mutationFn: () => platformApi.createRole({ id: roleId, name: roleName, description: roleDescription, permissions: parsePermissionLines(rolePermissions) }),
-    onSuccess: () => {
-      setRoleId('');
-      setRoleName('');
-      setRoleDescription('');
-      setActiveEditor(null);
-      invalidatePlatformIAM();
-    },
-  });
-  const deleteRoleMutation = useMutation({
-    mutationFn: (id: string) => platformApi.deleteRole(id),
-    onSuccess: () => {
-      setConfirmDeleteKey('');
-      invalidatePlatformIAM();
-    },
-  });
-  const createBindingMutation = useMutation({
-    mutationFn: () => {
-      const [subjectType, subjectId] = splitSubjectValue(activeSubjectValue);
-      return platformApi.createBinding({
-        subjectId,
-        subjectType,
-        roleId: activeRole,
-        scope: {
-          global: scopeMode === 'global',
-          clusterId: scopeMode === 'global' ? '' : clusterId,
-          namespace: scopeMode === 'namespace' ? namespace : '',
-        },
+  const productGrants = useMemo(
+    () => products.flatMap((product, index) => (
+      (productGrantQueries[index]?.data ?? []).map((grant) => ({ ...grant, productName: product.name }))
+    )),
+    [productGrantQueries, products],
+  );
+
+  const invalidateIdentity = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['platform-users'] }),
+    queryClient.invalidateQueries({ queryKey: ['platform-groups'] }),
+    queryClient.invalidateQueries({ queryKey: ['platform-group-memberships'] }),
+    queryClient.invalidateQueries({ queryKey: ['platform-service-accounts'] }),
+    queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
+  ]);
+  const invalidateFixedAccess = () => Promise.all([
+    queryClient.invalidateQueries({ queryKey: ['fixed-access'] }),
+    queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
+  ]);
+
+  const createIdentity = useMutation({
+    mutationFn: async () => {
+      if (identityDraft.kind === 'group') {
+        return platformApi.createGroup({
+          name: identityDraft.name.trim(),
+          displayName: identityDraft.displayName.trim(),
+          description: identityDraft.description.trim(),
+        });
+      }
+      if (identityDraft.kind === 'service-account') {
+        return platformApi.createServiceAccount({
+          name: identityDraft.name.trim(),
+          displayName: identityDraft.displayName.trim(),
+          owner: identityDraft.owner.trim(),
+          description: identityDraft.description.trim(),
+        });
+      }
+      return platformApi.createUser({
+        username: identityDraft.name.trim(),
+        displayName: identityDraft.displayName.trim(),
+        email: identityDraft.email.trim(),
+        password: identityDraft.password,
       });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      setIdentityDraft(emptyIdentityDraft);
       setActiveEditor(null);
-      invalidatePlatformIAM();
+      await invalidateIdentity();
     },
   });
-  const deleteBindingMutation = useMutation({
-    mutationFn: (id: string) => platformApi.deleteBinding(id),
-    onSuccess: () => {
-      setConfirmDeleteKey('');
-      invalidatePlatformIAM();
+  const deleteIdentity = useMutation<unknown, Error, { kind: IdentityKind; id: string }>({
+    mutationFn: ({ kind, id }) => (
+      kind === 'group'
+        ? platformApi.deleteGroup(id)
+        : kind === 'service-account'
+          ? platformApi.deleteServiceAccount(id)
+          : platformApi.deleteUser(id)
+    ),
+    onSuccess: invalidateIdentity,
+  });
+  const createMembership = useMutation({
+    mutationFn: () => platformApi.createMembership({
+      ...membershipDraft,
+      groupId: membershipDraft.groupId || groups[0]?.id || '',
+      subjectId: membershipDraft.subjectId || (
+        membershipDraft.subjectType === 'service-account' ? serviceAccounts[0]?.id : users[0]?.id
+      ) || '',
+    }),
+    onSuccess: async () => {
+      setActiveEditor(null);
+      await invalidateIdentity();
     },
   });
+  const deleteMembership = useMutation({ mutationFn: platformApi.deleteMembership, onSuccess: invalidateIdentity });
+  const createAdmin = useMutation({
+    mutationFn: () => accessApi.createPlatformAdminGrant({
+      subjectType: adminDraft.subjectType,
+      subjectId: adminDraft.subjectId || (
+        adminDraft.subjectType === 'group' ? groups[0]?.id : users[0]?.id
+      ) || '',
+    }),
+    onSuccess: async () => {
+      setActiveEditor(null);
+      await invalidateFixedAccess();
+    },
+  });
+  const deleteAdmin = useMutation({ mutationFn: accessApi.deletePlatformAdminGrant, onSuccess: invalidateFixedAccess });
+  const createProductGrant = useMutation({
+    mutationFn: () => accessApi.createProductAccessGrant(productDraft.productId || products[0]?.id || '', {
+      subjectType: productDraft.subjectType,
+      subjectId: productDraft.subjectId || (
+        productDraft.subjectType === 'group' ? groups[0]?.id : serviceAccounts[0]?.id
+      ) || '',
+      role: productDraft.role,
+    }),
+    onSuccess: async () => {
+      setActiveEditor(null);
+      await invalidateFixedAccess();
+    },
+  });
+  const deleteProductGrant = useMutation({
+    mutationFn: ({ productId, grantId }: { productId: string; grantId: string }) => (
+      accessApi.deleteProductAccessGrant(productId, grantId)
+    ),
+    onSuccess: invalidateFixedAccess,
+  });
+  const saveProfile = useMutation({
+    mutationFn: () => {
+      const input = {
+        name: profileDraft.name.trim(),
+        accessLevel: profileDraft.accessLevel,
+        namespaces: parseNamespaces(profileDraft.namespacesText),
+        wholeNamespaceConfirmed: profileDraft.wholeNamespaceConfirmed,
+      };
+      return editingProfileId
+        ? accessApi.updateK8sAccessProfile(editingProfileId, input)
+        : accessApi.createK8sAccessProfile({
+          ...input,
+          clusterId: profileDraft.clusterId || clusters[0]?.id || '',
+        });
+    },
+    onSuccess: async () => {
+      setProfileDraft(emptyProfileDraft);
+      setEditingProfileId('');
+      setActiveEditor(null);
+      await invalidateFixedAccess();
+    },
+  });
+  const deleteProfile = useMutation({ mutationFn: accessApi.deleteK8sAccessProfile, onSuccess: invalidateFixedAccess });
+  const syncProfile = useMutation({ mutationFn: accessApi.syncK8sAccessProfile, onSuccess: invalidateFixedAccess });
+  const createK8sGrant = useMutation({
+    mutationFn: () => accessApi.createK8sAccessGrant({
+      profileId: k8sGrantDraft.profileId || profiles[0]?.id || '',
+      groupId: k8sGrantDraft.groupId || groups[0]?.id || '',
+    }),
+    onSuccess: async () => {
+      setActiveEditor(null);
+      await invalidateFixedAccess();
+    },
+  });
+  const deleteK8sGrant = useMutation({ mutationFn: accessApi.deleteK8sAccessGrant, onSuccess: invalidateFixedAccess });
+  const requestBreakGlass = useMutation({
+    mutationFn: () => accessApi.requestBreakGlassGrant({
+      clusterId: breakGlassDraft.clusterId || clusters[0]?.id || '',
+      reason: breakGlassDraft.reason.trim(),
+    }),
+    onSuccess: async () => {
+      setBreakGlassDraft({ clusterId: '', reason: '' });
+      setActiveEditor(null);
+      await invalidateFixedAccess();
+    },
+  });
+  const approveBreakGlass = useMutation({
+    mutationFn: (id: string) => accessApi.approveBreakGlassGrant(id, Math.min(120, Math.max(1, approvalMinutes))),
+    onSuccess: invalidateFixedAccess,
+  });
+  const revokeBreakGlass = useMutation({ mutationFn: accessApi.revokeBreakGlassGrant, onSuccess: invalidateFixedAccess });
 
-  const permissionError = useMemo(() => {
-    const error = meQuery.error || subjectsQuery.error || usersQuery.error || groupsQuery.error || membershipsQuery.error || serviceAccountsQuery.error || rolesQuery.error || bindingsQuery.error || effectiveQuery.error || createUserMutation.error || createGroupMutation.error || createServiceAccountMutation.error || createMembershipMutation.error || deleteMembershipMutation.error || deleteSubjectMutation.error || createRoleMutation.error || deleteRoleMutation.error || createBindingMutation.error || deleteBindingMutation.error;
-    const message = error?.message ?? '';
-    return message.includes('无权') || message.includes('permission_denied') ? message : '';
-  }, [meQuery.error, subjectsQuery.error, usersQuery.error, groupsQuery.error, membershipsQuery.error, serviceAccountsQuery.error, rolesQuery.error, bindingsQuery.error, effectiveQuery.error, createUserMutation.error, createGroupMutation.error, createServiceAccountMutation.error, createMembershipMutation.error, deleteMembershipMutation.error, deleteSubjectMutation.error, createRoleMutation.error, deleteRoleMutation.error, createBindingMutation.error, deleteBindingMutation.error]);
-
-  const canCreateUser = Boolean(username.trim() && displayName.trim() && initialPassword.trim().length >= 8);
-  const canCreateGroup = Boolean(groupName.trim() && groupDisplayName.trim());
-  const canCreateServiceAccount = Boolean(serviceAccountName.trim() && serviceAccountDisplayName.trim());
-  const canCreateMembership = Boolean((memberGroupId || groups[0]?.id) && activeMemberSubjectValue);
-  const canCreateRole = Boolean(roleName.trim() && parsePermissionLines(rolePermissions).length);
-  const canBind = Boolean(activeSubjectValue && activeRole && (scopeMode === 'global' || clusterId.trim()) && (scopeMode !== 'namespace' || namespace.trim()));
-
+  const errors = [
+    usersQuery.error,
+    groupsQuery.error,
+    membershipsQuery.error,
+    serviceAccountsQuery.error,
+    productsQuery.error,
+    clustersQuery.error,
+    adminsQuery.error,
+    profilesQuery.error,
+    k8sGrantsQuery.error,
+    breakGlassQuery.error,
+    ...productGrantQueries.map((query) => query.error),
+    createIdentity.error,
+    deleteIdentity.error,
+    createMembership.error,
+    deleteMembership.error,
+    createAdmin.error,
+    deleteAdmin.error,
+    createProductGrant.error,
+    deleteProductGrant.error,
+    saveProfile.error,
+    deleteProfile.error,
+    syncProfile.error,
+    createK8sGrant.error,
+    deleteK8sGrant.error,
+    requestBreakGlass.error,
+    approveBreakGlass.error,
+    revokeBreakGlass.error,
+  ].filter(Boolean);
+  const adminSubjects = adminDraft.subjectType === 'group' ? groups : users;
+  const productSubjects = productDraft.subjectType === 'group' ? groups : serviceAccounts;
+  const membershipSubjects = membershipDraft.subjectType === 'service-account' ? serviceAccounts : users;
   return (
     <div className="space-y-4">
-      <DataPanel title="平台用户权限" action={<PlatformTabNav activeTab={activeTab} onChange={setActiveTab} />}>
-        {permissionError ? (
-          <div className="console-notice console-notice-warning mb-3">
-            <ShieldAlert className="h-4 w-4" />
-            权限不足：当前用户缺少 `platform.iam:manage`。
-          </div>
-        ) : null}
+      <DataPanel className="platform-access-panel" title="平台访问控制" action={<AccessTabNav activeTab={activeTab} onChange={setActiveTab} />}>
+        <div className="console-notice mb-3">
+          <ShieldCheck className="h-4 w-4" />
+          平台、Product 与 K8S 是三条独立授权边界；平台管理员不会自动获得产品数据或工作负载权限。
+        </div>
+        {errors[0] ? <ErrorNotice error={errors[0]} /> : null}
 
-        {activeTab === 'users' ? (
-          <TabWorkspace
-            table={<UsersTable users={users} current={meQuery.data} confirmDeleteKey={confirmDeleteKey} pending={deleteSubjectMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(item) => deleteSubjectMutation.mutate(item)} />}
-            action={<PrimaryToolbarButton label="创建用户" onClick={() => setActiveEditor('user')} />}
+        {activeTab === 'identities' ? (
+          <IdentityWorkspace
+            users={users}
+            groups={groups}
+            memberships={memberships}
+            serviceAccounts={serviceAccounts}
+            currentUserId={currentAccess?.subject.id ?? ''}
+            onCreateIdentity={() => setActiveEditor('identity')}
+            onCreateMembership={() => setActiveEditor('membership')}
+            onDeleteIdentity={(kind, id, label) => {
+              if (window.confirm(`确认删除 ${label}？相关固定授权必须由后端阻止悬空引用。`)) {
+                deleteIdentity.mutate({ kind, id });
+              }
+            }}
+            onDeleteMembership={(id) => {
+              if (window.confirm('确认移除该用户组成员关系？')) deleteMembership.mutate(id);
+            }}
           />
         ) : null}
 
-        {activeTab === 'groups' ? (
-          <TabWorkspace
-            table={(
-              <div className="grid gap-4">
-                <GroupsTable groups={groups} current={meQuery.data} confirmDeleteKey={confirmDeleteKey} pending={deleteSubjectMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(item) => deleteSubjectMutation.mutate(item)} />
-                <MembershipsTable memberships={memberships} confirmDeleteKey={confirmDeleteKey} pending={deleteMembershipMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(id) => deleteMembershipMutation.mutate(id)} />
-              </div>
-            )}
-            action={(
-              <div className="flex flex-wrap items-center gap-2">
-                <button className="console-button" onClick={() => setActiveEditor('membership')}><Link2 className="h-4 w-4" />加入成员</button>
-                <PrimaryToolbarButton label="创建用户组" onClick={() => setActiveEditor('group')} />
-              </div>
-            )}
+        {activeTab === 'platform-admins' ? (
+          <PlatformAdminsWorkspace
+            grants={admins}
+            users={users}
+            groups={groups}
+            onCreate={() => setActiveEditor('platform-admin')}
+            onDelete={(grant) => {
+              if (window.confirm('确认撤销该平台管理员？后端会保护最后一名管理员。')) deleteAdmin.mutate(grant.id);
+            }}
           />
         ) : null}
 
-        {activeTab === 'service-accounts' ? (
-          <TabWorkspace
-            table={<ServiceAccountsTable serviceAccounts={serviceAccounts} confirmDeleteKey={confirmDeleteKey} pending={deleteSubjectMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(item) => deleteSubjectMutation.mutate(item)} />}
-            action={<PrimaryToolbarButton label="创建服务账号" onClick={() => setActiveEditor('service-account')} />}
+        {activeTab === 'product-access' ? (
+          <ProductAccessWorkspace
+            grants={productGrants}
+            groups={groups}
+            serviceAccounts={serviceAccounts}
+            onCreate={() => setActiveEditor('product-access')}
+            onDelete={(grant) => {
+              if (window.confirm('确认撤销该 Product 授权？授权会自动覆盖 Product 下全部 Service。')) {
+                deleteProductGrant.mutate({ productId: grant.productId, grantId: grant.id });
+              }
+            }}
           />
         ) : null}
 
-        {activeTab === 'roles' ? (
-          <TabWorkspace
-            table={<RolesTable roles={roles} confirmDeleteKey={confirmDeleteKey} pending={deleteRoleMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(id) => deleteRoleMutation.mutate(id)} />}
-            action={<PrimaryToolbarButton label="创建角色" onClick={() => setActiveEditor('role')} />}
+        {activeTab === 'k8s-profiles' ? (
+          <K8sProfilesWorkspace
+            profiles={profiles}
+            grants={k8sGrants}
+            groups={groups}
+            onCreateProfile={() => {
+              setEditingProfileId('');
+              setProfileDraft(emptyProfileDraft);
+              setActiveEditor('k8s-profile');
+            }}
+            onCreateGrant={() => setActiveEditor('k8s-grant')}
+            onEditProfile={(profile) => {
+              setEditingProfileId(profile.id);
+              setProfileDraft({
+                name: profile.name,
+                clusterId: profile.clusterId,
+                accessLevel: profile.accessLevel,
+                namespacesText: profile.namespaces.join('\n'),
+                wholeNamespaceConfirmed: false,
+              });
+              setActiveEditor('k8s-profile');
+            }}
+            onSync={(id) => syncProfile.mutate(id)}
+            onDeleteProfile={(profile) => {
+              if (window.confirm(`确认删除 Profile「${profile.name}」？关联用户组会立即失去对应 Namespace 权限。`)) {
+                deleteProfile.mutate(profile.id);
+              }
+            }}
+            onDeleteGrant={(grant) => {
+              if (window.confirm('确认撤销该用户组的 K8S Profile？')) deleteK8sGrant.mutate(grant.id);
+            }}
           />
         ) : null}
 
-        {activeTab === 'bindings' ? (
-          <TabWorkspace
-            table={<BindingsTable bindings={bindings} confirmDeleteKey={confirmDeleteKey} pending={deleteBindingMutation.isPending} onConfirmKey={setConfirmDeleteKey} onDelete={(id) => deleteBindingMutation.mutate(id)} />}
-            action={<PrimaryToolbarButton label="创建授权绑定" onClick={() => setActiveEditor('binding')} />}
+        {activeTab === 'break-glass' ? (
+          <BreakGlassWorkspace
+            grants={breakGlassGrants}
+            currentUserId={currentAccess?.subject.id ?? ''}
+            approvalMinutes={approvalMinutes}
+            setApprovalMinutes={setApprovalMinutes}
+            onRequest={() => setActiveEditor('break-glass')}
+            onApprove={(grant) => {
+              if (window.confirm(`确认批准 ${approvalMinutes} 分钟 Break Glass？必须由另一名平台管理员审批。`)) {
+                approveBreakGlass.mutate(grant.id);
+              }
+            }}
+            onRevoke={(grant) => {
+              if (window.confirm('确认立即撤销该 Break Glass？')) revokeBreakGlass.mutate(grant.id);
+            }}
           />
-        ) : null}
-
-        {activeTab === 'effective' ? (
-          <EffectivePermissionsWorkspace subjects={subjects} activePreviewSubject={activePreviewSubject} effectivePermissions={effectivePermissions} isLoading={effectiveQuery.isLoading} setPreviewSubject={setPreviewSubject} />
         ) : null}
       </DataPanel>
 
       {activeEditor ? (
-        <PlatformEditorDrawer title={platformEditorTitle(activeEditor)} onClose={() => setActiveEditor(null)}>
-          {activeEditor === 'user' ? (
-            <CreateUserPanel username={username} displayName={displayName} email={email} initialPassword={initialPassword} pending={createUserMutation.isPending} canSubmit={canCreateUser} setUsername={setUsername} setDisplayName={setDisplayName} setEmail={setEmail} setInitialPassword={setInitialPassword} onSubmit={() => createUserMutation.mutate()} />
-          ) : null}
-          {activeEditor === 'group' ? (
-            <CreateGroupPanel groupName={groupName} groupDisplayName={groupDisplayName} pending={createGroupMutation.isPending} canSubmit={canCreateGroup} setGroupName={setGroupName} setGroupDisplayName={setGroupDisplayName} onSubmit={() => createGroupMutation.mutate()} />
-          ) : null}
-          {activeEditor === 'membership' ? (
-            <MembershipEditorPanel groups={groups} assignableMemberSubjects={assignableMemberSubjects} activeMemberSubjectValue={activeMemberSubjectValue} memberGroupId={memberGroupId} pending={createMembershipMutation.isPending} canSubmit={canCreateMembership} setMemberGroupId={setMemberGroupId} setMemberSubject={setMemberSubject} onSubmit={() => createMembershipMutation.mutate()} />
-          ) : null}
-          {activeEditor === 'service-account' ? (
-            <CreateServiceAccountPanel name={serviceAccountName} displayName={serviceAccountDisplayName} owner={serviceAccountOwner} description={serviceAccountDescription} pending={createServiceAccountMutation.isPending} canSubmit={canCreateServiceAccount} setName={setServiceAccountName} setDisplayName={setServiceAccountDisplayName} setOwner={setServiceAccountOwner} setDescription={setServiceAccountDescription} onSubmit={() => createServiceAccountMutation.mutate()} />
-          ) : null}
-          {activeEditor === 'role' ? (
-            <CreateRolePanel roleId={roleId} roleName={roleName} roleDescription={roleDescription} rolePermissions={rolePermissions} pending={createRoleMutation.isPending} canSubmit={canCreateRole} setRoleId={setRoleId} setRoleName={setRoleName} setRoleDescription={setRoleDescription} setRolePermissions={setRolePermissions} onSubmit={() => createRoleMutation.mutate()} />
-          ) : null}
-          {activeEditor === 'binding' ? (
-            <BindingEditorPanel subjects={subjects} roles={roles} activeSubjectValue={activeSubjectValue} activeRole={activeRole} scopeMode={scopeMode} clusterId={clusterId} namespace={namespace} pending={createBindingMutation.isPending} canSubmit={canBind} setSelectedSubject={setSelectedSubject} setSelectedRole={setSelectedRole} setScopeMode={setScopeMode} setClusterId={setClusterId} setNamespace={setNamespace} onSubmit={() => createBindingMutation.mutate()} />
-          ) : null}
-        </PlatformEditorDrawer>
-      ) : null}
-    </div>
-  );
-}
-
-function PlatformTabNav({ activeTab, onChange }: { activeTab: PlatformAdminTab; onChange: (tab: PlatformAdminTab) => void }) {
-  return (
-    <div className="flex max-w-full flex-wrap gap-0 border-b border-outline">
-      {platformAdminTabs.map((tab) => (
-        <button
-          key={tab.key}
-          className={`border-b-2 px-3 py-2 text-left text-xs font-semibold transition-colors ${tab.key === activeTab ? 'border-primary bg-primary-soft/40 text-primary' : 'border-transparent text-muted hover:bg-surface hover:text-on-surface'}`}
-          onClick={() => onChange(tab.key)}
+        <EditorDrawer
+          title={activeEditor === 'k8s-profile' && editingProfileId ? '编辑 K8S Access Profile' : editorTitle(activeEditor)}
+          onClose={() => {
+            setActiveEditor(null);
+            setEditingProfileId('');
+          }}
         >
-          <span className="block">{tab.label}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
-
-function PrimaryToolbarButton({ label, onClick }: { label: string; onClick: () => void }) {
-  return (
-    <button className="console-button console-button-primary" onClick={onClick}>
-      <Plus className="h-4 w-4" />
-      {label}
-    </button>
-  );
-}
-
-function TabWorkspace({ table, action }: { table: ReactNode; action?: ReactNode }) {
-  return (
-    <div className="console-workbench grid gap-3">
-      {action ? (
-        <div className="console-list-toolbar justify-end">{action}</div>
+          {activeEditor === 'identity' ? <IdentityForm draft={identityDraft} setDraft={setIdentityDraft} pending={createIdentity.isPending} onSubmit={() => createIdentity.mutate()} /> : null}
+          {activeEditor === 'membership' ? <MembershipForm draft={membershipDraft} groups={groups} subjects={membershipSubjects} setDraft={setMembershipDraft} pending={createMembership.isPending} onSubmit={() => createMembership.mutate()} /> : null}
+          {activeEditor === 'platform-admin' ? <PlatformAdminForm draft={adminDraft} subjects={adminSubjects} setDraft={setAdminDraft} pending={createAdmin.isPending} onSubmit={() => createAdmin.mutate()} /> : null}
+          {activeEditor === 'product-access' ? <ProductAccessForm draft={productDraft} products={products} subjects={productSubjects} setDraft={setProductDraft} pending={createProductGrant.isPending} onSubmit={() => createProductGrant.mutate()} /> : null}
+          {activeEditor === 'k8s-profile' ? (
+            <K8sProfileForm
+              draft={profileDraft}
+              clusters={clusters}
+              namespaces={namespaces}
+              invalidNamespace={profileHasInvalidNamespace}
+              impacts={namespaceImpactsQuery.data ?? []}
+              impactsLoading={namespaceImpactsQuery.isLoading || namespaceImpactsQuery.isFetching}
+              impactsError={namespaceImpactsQuery.error instanceof Error ? namespaceImpactsQuery.error : null}
+              editing={Boolean(editingProfileId)}
+              setDraft={setProfileDraft}
+              pending={saveProfile.isPending}
+              onSubmit={() => saveProfile.mutate()}
+            />
+          ) : null}
+          {activeEditor === 'k8s-grant' ? <K8sGrantForm draft={k8sGrantDraft} profiles={profiles} groups={groups} setDraft={setK8sGrantDraft} pending={createK8sGrant.isPending} onSubmit={() => createK8sGrant.mutate()} /> : null}
+          {activeEditor === 'break-glass' ? <BreakGlassForm draft={breakGlassDraft} clusters={clusters} setDraft={setBreakGlassDraft} pending={requestBreakGlass.isPending} onSubmit={() => requestBreakGlass.mutate()} /> : null}
+        </EditorDrawer>
       ) : null}
-      <div className="console-resource-list min-w-0">{table}</div>
     </div>
   );
 }
 
-function PlatformEditorDrawer({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
+function ErrorNotice({ error }: { error: unknown }) {
   return (
-    <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">
-      <button className="absolute inset-0 cursor-default" aria-label={`关闭${title}`} onClick={onClose} />
-      <aside className="console-drawer-panel console-detail-rail relative flex h-full w-full max-w-[720px] flex-col border-l border-outline bg-white shadow-[0_20px_60px_rgba(24,52,96,0.24)]" role="dialog" aria-modal="true" aria-labelledby="platform-editor-title">
-        <header className="flex items-start justify-between gap-4 border-b border-outline px-5 py-4">
-          <h2 id="platform-editor-title" className="text-base font-semibold text-on-surface">{title}</h2>
-          <button className="console-button h-8 w-8 p-0" aria-label={`关闭${title}`} onClick={onClose}>
-            <X className="h-4 w-4" />
-          </button>
-        </header>
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-5 py-4">{children}</div>
-      </aside>
+    <div className="console-notice console-notice-warning mb-3">
+      <AlertTriangle className="h-4 w-4" />
+      访问控制数据读取或写入失败：{error instanceof Error ? error.message : '未知错误'}
     </div>
   );
-}
-
-function UsersTable({ users, current, confirmDeleteKey, pending, onConfirmKey, onDelete }: { users: PlatformUser[]; current?: PlatformSubject; confirmDeleteKey: string; pending: boolean; onConfirmKey: (value: string) => void; onDelete: (target: SubjectDeleteTarget) => void }) {
-  return (
-    <section className="overflow-auto">
-      <table className="console-table min-w-[900px] w-full">
-        <thead>
-          <tr>
-            <th>用户</th>
-            <th>邮箱</th>
-            <th>密码</th>
-            <th>状态</th>
-            <th>来源</th>
-            <th className="sticky right-0 bg-surface-lowest/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {users.map((item) => {
-            const target = { subjectId: item.id, subjectType: 'user', source: item.source };
-            const protectReason = subjectDeleteBlockReason(target, current);
-            return (
-              <tr key={item.id} className="bg-white/35">
-                <td>
-                  <div className="font-semibold text-primary">{item.displayName || item.username}</div>
-                  <div className="font-mono text-[11px] text-muted">{item.id}</div>
-                </td>
-                <td className="text-xs text-muted">{item.email || '-'}</td>
-                <td className="text-xs text-muted">{item.passwordSet ? '已设置' : '未设置'}</td>
-                <td className="text-xs text-muted">{item.status}</td>
-                <td className="text-xs text-muted">{item.source}</td>
-                <td className="sticky right-0 bg-white/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">
-                  {protectReason ? <ProtectedHint label={protectReason} /> : <DeleteActionButton id={`subject:user:${item.id}`} confirmKey={confirmDeleteKey} label="删除" pending={pending} setConfirmKey={onConfirmKey} onDelete={() => onDelete(target)} />}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {!users.length ? <EmptyState title="暂无本地用户，请先创建登录账号。" /> : null}
-    </section>
-  );
-}
-
-function GroupsTable({ groups, current, confirmDeleteKey, pending, onConfirmKey, onDelete }: { groups: PlatformGroup[]; current?: PlatformSubject; confirmDeleteKey: string; pending: boolean; onConfirmKey: (value: string) => void; onDelete: (target: SubjectDeleteTarget) => void }) {
-  return (
-    <section className="overflow-auto">
-      <div className="mb-2 text-sm font-semibold text-on-surface">用户组</div>
-      <table className="console-table min-w-[820px] w-full">
-        <thead>
-          <tr>
-            <th>用户组</th>
-            <th>成员数</th>
-            <th>状态</th>
-            <th>来源</th>
-            <th>描述</th>
-            <th className="sticky right-0 bg-surface-lowest/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map((item) => {
-            const target = { subjectId: item.id, subjectType: 'group', source: item.source };
-            const protectReason = subjectDeleteBlockReason(target, current);
-            return (
-              <tr key={item.id} className="bg-white/35">
-                <td>
-                  <div className="font-semibold text-primary">{item.displayName || item.name}</div>
-                  <div className="font-mono text-[11px] text-muted">{item.id}</div>
-                </td>
-                <td className="font-mono text-xs">{item.memberCount}</td>
-                <td className="text-xs text-muted">{item.status}</td>
-                <td className="text-xs text-muted">{item.source}</td>
-                <td className="max-w-[260px] truncate text-xs text-muted">{item.description || '-'}</td>
-                <td className="sticky right-0 bg-white/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">
-                  {protectReason ? <ProtectedHint label={protectReason} /> : <DeleteActionButton id={`subject:group:${item.id}`} confirmKey={confirmDeleteKey} label="删除" pending={pending} setConfirmKey={onConfirmKey} onDelete={() => onDelete(target)} />}
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {!groups.length ? <EmptyState title="暂无用户组。" /> : null}
-    </section>
-  );
-}
-
-function MembershipsTable({ memberships, confirmDeleteKey, pending, onConfirmKey, onDelete }: { memberships: any[]; confirmDeleteKey: string; pending: boolean; onConfirmKey: (value: string) => void; onDelete: (id: string) => void }) {
-  return (
-    <section className="overflow-auto">
-      <div className="mb-2 text-sm font-semibold text-on-surface">组成员</div>
-      <table className="console-table min-w-[720px] w-full">
-        <thead>
-          <tr>
-            <th>用户组</th>
-            <th>成员</th>
-            <th>类型</th>
-            <th className="sticky right-0 bg-surface-lowest/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {memberships.map((item) => (
-            <tr key={item.id} className="bg-white/35">
-              <td>
-                <div className="font-semibold text-primary">{item.groupName || item.groupId}</div>
-                <div className="font-mono text-[11px] text-muted">{item.groupId}</div>
-              </td>
-              <td>
-                <div className="font-semibold text-on-surface">{item.subjectDisplayName || item.subjectId}</div>
-                <div className="font-mono text-[11px] text-muted">{item.subjectId}</div>
-              </td>
-              <td><SubjectPill kind={item.subjectType} /></td>
-              <td className="sticky right-0 bg-white/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">
-                <DeleteActionButton id={`membership:${item.id}`} confirmKey={confirmDeleteKey} label="移出" confirmingLabel="确认移出" pending={pending} setConfirmKey={onConfirmKey} onDelete={() => onDelete(item.id)} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!memberships.length ? <EmptyState title="暂无组成员。" /> : null}
-    </section>
-  );
-}
-
-function ServiceAccountsTable({ serviceAccounts, confirmDeleteKey, pending, onConfirmKey, onDelete }: { serviceAccounts: PlatformServiceAccount[]; confirmDeleteKey: string; pending: boolean; onConfirmKey: (value: string) => void; onDelete: (target: SubjectDeleteTarget) => void }) {
-  return (
-    <section className="overflow-auto">
-      <table className="console-table min-w-[860px] w-full">
-        <thead>
-          <tr>
-            <th>服务账号</th>
-            <th>Owner</th>
-            <th>描述</th>
-            <th>更新时间</th>
-            <th className="sticky right-0 bg-surface-lowest/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {serviceAccounts.map((item) => {
-            const target = { subjectId: item.id, subjectType: 'service-account' };
-            return (
-              <tr key={item.id} className="bg-white/35">
-                <td>
-                  <div className="font-semibold text-primary">{item.displayName || item.name}</div>
-                  <div className="font-mono text-[11px] text-muted">{item.id}</div>
-                </td>
-                <td className="text-xs text-muted">{item.owner || '-'}</td>
-                <td className="max-w-[320px] truncate text-xs text-muted">{item.description || '-'}</td>
-                <td className="font-mono text-[11px] text-muted">{item.updatedAt || '-'}</td>
-                <td className="sticky right-0 bg-white/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">
-                  <DeleteActionButton id={`subject:service-account:${item.id}`} confirmKey={confirmDeleteKey} label="删除" pending={pending} setConfirmKey={onConfirmKey} onDelete={() => onDelete(target)} />
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {!serviceAccounts.length ? <EmptyState title="暂无服务账号。" /> : null}
-    </section>
-  );
-}
-
-function RolesTable({ roles, confirmDeleteKey, pending, onConfirmKey, onDelete }: { roles: PlatformRole[]; confirmDeleteKey: string; pending: boolean; onConfirmKey: (value: string) => void; onDelete: (id: string) => void }) {
-  return (
-    <section className="overflow-auto">
-      <table className="console-table min-w-[900px] w-full">
-        <thead>
-          <tr>
-            <th>角色</th>
-            <th>权限数</th>
-            <th>描述</th>
-            <th>Role ID</th>
-            <th className="sticky right-0 bg-surface-lowest/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {roles.map((item) => (
-            <tr key={item.id} className="bg-white/35">
-              <td>
-                <div className="font-semibold text-primary">{item.name || item.id}</div>
-              </td>
-              <td className="font-mono text-xs">{item.permissions.length}</td>
-              <td className="max-w-[320px] truncate text-xs text-muted">{item.description || '-'}</td>
-              <td className="font-mono text-[11px] text-muted">{item.id}</td>
-              <td className="sticky right-0 bg-white/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">
-                <DeleteActionButton id={`role:${item.id}`} confirmKey={confirmDeleteKey} label="删除" pending={pending} setConfirmKey={onConfirmKey} onDelete={() => onDelete(item.id)} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!roles.length ? <EmptyState title="暂无角色。开发态 dev-admin 不通过角色授予权限。" /> : null}
-    </section>
-  );
-}
-
-function BindingsTable({ bindings, confirmDeleteKey, pending, onConfirmKey, onDelete }: { bindings: PlatformBinding[]; confirmDeleteKey: string; pending: boolean; onConfirmKey: (value: string) => void; onDelete: (id: string) => void }) {
-  return (
-    <section className="overflow-auto">
-      <table className="console-table min-w-[960px] w-full">
-        <thead>
-          <tr>
-            <th>Subject</th>
-            <th>Role</th>
-            <th>Scope</th>
-            <th className="sticky right-0 bg-surface-lowest/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">操作</th>
-          </tr>
-        </thead>
-        <tbody>
-          {bindings.map((item) => (
-            <tr key={item.id} className="bg-white/35">
-              <td>
-                <div className="font-semibold text-primary">{item.subjectId}</div>
-                <div className="text-[11px] text-muted">{item.subjectType}</div>
-              </td>
-              <td className="text-xs text-muted">{item.roleName || item.roleId}</td>
-              <td className="font-mono text-xs">{formatScope(item.scope)}</td>
-              <td className="sticky right-0 bg-white/95 shadow-[-8px_0_12px_rgba(216,226,239,0.45)]">
-                <DeleteActionButton id={`binding:${item.id}`} confirmKey={confirmDeleteKey} label="删除" pending={pending} setConfirmKey={onConfirmKey} onDelete={() => onDelete(item.id)} />
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-      {!bindings.length ? <EmptyState title="暂无授权绑定。" /> : null}
-    </section>
-  );
-}
-
-function EffectivePermissionsWorkspace({ subjects, activePreviewSubject, effectivePermissions, isLoading, setPreviewSubject }: { subjects: PlatformSubject[]; activePreviewSubject: string; effectivePermissions: any[]; isLoading: boolean; setPreviewSubject: (value: string) => void }) {
-  return (
-    <div className="grid gap-4 xl:grid-cols-[320px_minmax(0,1fr)]">
-      <section className="console-panel px-4 py-3">
-        <div className="text-sm font-semibold text-on-surface">选择主体</div>
-        <select className="console-input mt-3 w-full" value={activePreviewSubject} onChange={(event) => setPreviewSubject(event.target.value)} disabled={!subjects.length}>
-          {!subjects.length ? <option value="">暂无主体</option> : null}
-          {subjects.map((item) => <option key={item.id} value={subjectValue(item)}>{item.displayName || item.subjectId} / {item.subjectType}</option>)}
-        </select>
-        <div className="mt-3 rounded-lg bg-white/50 px-3 py-3 text-xs leading-5 text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-          这里聚合直接授权与用户组继承，适合排查“为什么这个用户有某个模块权限”。
-        </div>
-      </section>
-      <section className="overflow-auto">
-        <table className="console-table min-w-[820px] w-full">
-          <thead>
-            <tr>
-              <th>来源</th>
-              <th>Role</th>
-              <th>Scope</th>
-              <th>权限</th>
-            </tr>
-          </thead>
-          <tbody>
-            {effectivePermissions.map((item) => (
-              <tr key={item.bindingId} className="bg-white/35">
-                <td>
-                  <div className="font-semibold text-primary">{item.grantedVia === 'group' ? '用户组继承' : '直接授权'}</div>
-                  <div className="font-mono text-[11px] text-muted">{item.grantedToType}/{item.grantedToSubjectId}</div>
-                </td>
-                <td className="text-xs text-muted">{item.roleName || item.roleId}</td>
-                <td className="font-mono text-xs">{formatScope(item.scope)}</td>
-                <td className="text-xs text-muted">{item.permissions.map((permission: PlatformPermission) => `${permission.resource}:${permission.action}:${permission.scopeMode}`).join(' · ')}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-        {!effectivePermissions.length && !isLoading ? <EmptyState title="当前主体暂无有效权限。" /> : null}
-      </section>
-    </div>
-  );
-}
-
-function CreateUserPanel(props: {
-  username: string;
-  displayName: string;
-  email: string;
-  initialPassword: string;
-  pending: boolean;
-  canSubmit: boolean;
-  setUsername: (value: string) => void;
-  setDisplayName: (value: string) => void;
-  setEmail: (value: string) => void;
-  setInitialPassword: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <section className="grid gap-3">
-      <PanelTitle icon={UserRoundCog} title="录入用户" meta="创建后可登录 NovaAPM" />
-      <div className="grid gap-3">
-        <input className="console-input w-full" placeholder="username" value={props.username} onChange={(event) => props.setUsername(event.target.value)} />
-        <input className="console-input w-full" placeholder="显示名" value={props.displayName} onChange={(event) => props.setDisplayName(event.target.value)} />
-        <input className="console-input w-full" placeholder="邮箱" value={props.email} onChange={(event) => props.setEmail(event.target.value)} />
-        <input className="console-input w-full" placeholder="初始密码（至少 8 位）" type="password" value={props.initialPassword} onChange={(event) => props.setInitialPassword(event.target.value)} />
-      </div>
-      <PrimaryAction label="创建用户" disabled={!props.canSubmit || props.pending} icon={Plus} onClick={props.onSubmit} />
-    </section>
-  );
-}
-
-function CreateGroupPanel(props: {
-  groupName: string;
-  groupDisplayName: string;
-  canSubmit: boolean;
-  pending: boolean;
-  setGroupName: (value: string) => void;
-  setGroupDisplayName: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <section className="grid gap-3">
-      <PanelTitle icon={UsersRound} title="录入用户组" meta="承载平台与模块授权" />
-      <div className="grid gap-3">
-        <input className="console-input w-full" placeholder="group name" value={props.groupName} onChange={(event) => props.setGroupName(event.target.value)} />
-        <input className="console-input w-full" placeholder="显示名" value={props.groupDisplayName} onChange={(event) => props.setGroupDisplayName(event.target.value)} />
-      </div>
-      <PrimaryAction label="创建用户组" disabled={!props.canSubmit || props.pending} icon={Plus} onClick={props.onSubmit} />
-    </section>
-  );
-}
-
-function MembershipEditorPanel(props: {
-  groups: PlatformGroup[];
-  assignableMemberSubjects: PlatformSubject[];
-  activeMemberSubjectValue: string;
-  memberGroupId: string;
-  pending: boolean;
-  canSubmit: boolean;
-  setMemberGroupId: (value: string) => void;
-  setMemberSubject: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <section className="grid gap-3">
-      <PanelTitle icon={Link2} title="维护组成员" meta="把用户或服务账号加入组" />
-      <div className="grid gap-3">
-        <select className="console-input w-full" value={props.memberGroupId || props.groups[0]?.id || ''} onChange={(event) => props.setMemberGroupId(event.target.value)} disabled={!props.groups.length}>
-          {!props.groups.length ? <option value="">暂无用户组</option> : null}
-          {props.groups.map((item) => <option key={item.id} value={item.id}>{item.displayName || item.name}</option>)}
-        </select>
-        <select className="console-input w-full" value={props.activeMemberSubjectValue} onChange={(event) => props.setMemberSubject(event.target.value)} disabled={!props.assignableMemberSubjects.length}>
-          {!props.assignableMemberSubjects.length ? <option value="">暂无可加入主体</option> : null}
-          {props.assignableMemberSubjects.map((item) => <option key={item.id} value={subjectValue(item)}>{item.displayName || item.subjectId} / {item.subjectType}</option>)}
-        </select>
-      </div>
-      <PrimaryAction label="加入用户组" disabled={!props.canSubmit || props.pending} icon={Plus} onClick={props.onSubmit} />
-    </section>
-  );
-}
-
-function CreateServiceAccountPanel(props: {
-  name: string;
-  displayName: string;
-  owner: string;
-  description: string;
-  pending: boolean;
-  canSubmit: boolean;
-  setName: (value: string) => void;
-  setDisplayName: (value: string) => void;
-  setOwner: (value: string) => void;
-  setDescription: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <section className="grid gap-3">
-      <PanelTitle icon={Bot} title="录入服务账号" meta="用于自动化或外部系统" />
-      <div className="grid gap-3">
-        <input className="console-input w-full" placeholder="service account name" value={props.name} onChange={(event) => props.setName(event.target.value)} />
-        <input className="console-input w-full" placeholder="显示名" value={props.displayName} onChange={(event) => props.setDisplayName(event.target.value)} />
-        <input className="console-input w-full" placeholder="owner" value={props.owner} onChange={(event) => props.setOwner(event.target.value)} />
-        <textarea className="console-input min-h-20 w-full resize-y" placeholder="描述" value={props.description} onChange={(event) => props.setDescription(event.target.value)} />
-      </div>
-      <PrimaryAction label="创建服务账号" disabled={!props.canSubmit || props.pending} icon={Plus} onClick={props.onSubmit} />
-    </section>
-  );
-}
-
-function CreateRolePanel(props: {
-  roleId: string;
-  roleName: string;
-  roleDescription: string;
-  rolePermissions: string;
-  pending: boolean;
-  canSubmit: boolean;
-  setRoleId: (value: string) => void;
-  setRoleName: (value: string) => void;
-  setRoleDescription: (value: string) => void;
-  setRolePermissions: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  return (
-    <section className="grid gap-3">
-      <PanelTitle icon={ShieldCheck} title="创建角色" meta="resource:action:scopeMode" />
-      <div className="grid gap-3">
-        <input className="console-input w-full" placeholder="role id（可选）" value={props.roleId} onChange={(event) => props.setRoleId(event.target.value)} />
-        <input className="console-input w-full" placeholder="角色名称" value={props.roleName} onChange={(event) => props.setRoleName(event.target.value)} />
-        <input className="console-input w-full" placeholder="描述" value={props.roleDescription} onChange={(event) => props.setRoleDescription(event.target.value)} />
-        <textarea className="console-input min-h-[120px] w-full resize-y font-mono text-xs" value={props.rolePermissions} onChange={(event) => props.setRolePermissions(event.target.value)} />
-      </div>
-      <div className="mt-2 text-[11px] leading-5 text-muted">每行一个权限，例如 k8s.resource:read:namespace。</div>
-      <PrimaryAction label="创建角色" disabled={!props.canSubmit || props.pending} icon={Plus} onClick={props.onSubmit} />
-    </section>
-  );
-}
-
-function BindingEditorPanel(props: {
-  subjects: PlatformSubject[];
-  roles: PlatformRole[];
-  activeSubjectValue: string;
-  activeRole: string;
-  scopeMode: 'global' | 'cluster' | 'namespace';
-  clusterId: string;
-  namespace: string;
-  pending: boolean;
-  canSubmit: boolean;
-  setSelectedSubject: (value: string) => void;
-  setSelectedRole: (value: string) => void;
-  setScopeMode: (value: 'global' | 'cluster' | 'namespace') => void;
-  setClusterId: (value: string) => void;
-  setNamespace: (value: string) => void;
-  onSubmit: () => void;
-}) {
-  const [subjectType, subjectId] = splitSubjectValue(props.activeSubjectValue);
-  const activeRole = props.roles.find((item) => item.id === props.activeRole);
-  return (
-    <section className="grid gap-3">
-      <PanelTitle icon={KeyRound} title="创建授权绑定" meta="主体 + 角色 + 作用域" />
-      <div className="grid gap-3">
-        <select className="console-input w-full" value={props.activeSubjectValue} onChange={(event) => props.setSelectedSubject(event.target.value)} disabled={!props.subjects.length}>
-          {!props.subjects.length ? <option value="">暂无主体</option> : null}
-          {props.subjects.map((item) => <option key={item.id} value={subjectValue(item)}>{item.displayName || item.subjectId} / {item.subjectType}</option>)}
-        </select>
-        <select className="console-input w-full" value={props.activeRole} onChange={(event) => props.setSelectedRole(event.target.value)} disabled={!props.roles.length}>
-          {!props.roles.length ? <option value="">暂无角色</option> : null}
-          {props.roles.map((item) => <option key={item.id} value={item.id}>{item.name || item.id}</option>)}
-        </select>
-        <select className="console-input w-full" value={props.scopeMode} onChange={(event) => props.setScopeMode(event.target.value as 'global' | 'cluster' | 'namespace')}>
-          <option value="global">global</option>
-          <option value="cluster">cluster</option>
-          <option value="namespace">namespace</option>
-        </select>
-        {props.scopeMode !== 'global' ? <input className="console-input w-full" placeholder="cluster id" value={props.clusterId} onChange={(event) => props.setClusterId(event.target.value)} /> : null}
-        {props.scopeMode === 'namespace' ? <input className="console-input w-full" placeholder="namespace" value={props.namespace} onChange={(event) => props.setNamespace(event.target.value)} /> : null}
-      </div>
-      <div className="mt-3 rounded-lg bg-white/50 px-3 py-3 text-xs leading-5 text-muted shadow-[inset_0_1px_0_rgba(255,255,255,0.68)]">
-        <div className="font-semibold text-on-surface">授权摘要</div>
-        <div className="mt-2 font-mono">subject={subjectType}/{subjectId || '-'}</div>
-        <div className="font-mono">role={activeRole?.name || props.activeRole || '-'}</div>
-        <div className="font-mono">scope={props.scopeMode === 'global' ? 'global' : props.scopeMode === 'namespace' ? `${props.clusterId || '-'}/${props.namespace || '-'}` : `cluster/${props.clusterId || '-'}`}</div>
-      </div>
-      <PrimaryAction label="创建授权绑定" disabled={!props.canSubmit || props.pending} icon={ShieldCheck} onClick={props.onSubmit} />
-    </section>
-  );
-}
-
-function PanelTitle({ icon: Icon, title, meta }: { icon: typeof UsersRound; title: string; meta: string }) {
-  return (
-    <div className="flex items-start gap-2">
-      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
-      <div>
-        <div className="text-sm font-semibold text-on-surface">{title}</div>
-        <div className="mt-1 text-[11px] text-muted">{meta}</div>
-      </div>
-    </div>
-  );
-}
-
-function PrimaryAction({ label, icon: Icon, disabled, onClick }: { label: string; icon: typeof Plus; disabled: boolean; onClick: () => void }) {
-  return (
-    <button className="console-button console-button-primary mt-3 w-full" title={disabled ? '请先完成必填项或等待当前操作结束' : undefined} disabled={disabled} onClick={onClick}>
-      <Icon className="h-4 w-4" />
-      {label}
-    </button>
-  );
-}
-
-function SubjectPill({ kind }: { kind: string }) {
-  return <span className="status-badge border-primary/20 bg-primary-soft text-primary"><span className="status-dot" aria-hidden />{kind || 'unknown'}</span>;
-}
-
-function ProtectedHint({ label }: { label: string }) {
-  return <span className="status-badge border-outline bg-surface text-muted"><span className="status-dot" aria-hidden />{label}</span>;
-}
-
-function DeleteActionButton({
-  id,
-  label,
-  confirmingLabel = '确认删除',
-  confirmKey,
-  pending,
-  setConfirmKey,
-  onDelete,
-}: {
-  id: string;
-  label: string;
-  confirmingLabel?: string;
-  confirmKey: string;
-  pending: boolean;
-  setConfirmKey: (value: string) => void;
-  onDelete: () => void;
-}) {
-  const confirming = confirmKey === id;
-  return (
-    <button
-      className={`console-button h-7 px-2 ${confirming ? 'console-button-danger console-danger-zone' : 'border-transparent text-danger'}`}
-      aria-label={confirming ? confirmingLabel : label}
-      title={confirming ? '再次点击将立即执行危险操作' : `${label}，需要二次确认`}
-      disabled={pending}
-      onClick={() => {
-        if (!confirming) {
-          setConfirmKey(id);
-          return;
-        }
-        onDelete();
-      }}
-    >
-      <Trash2 className="h-3.5 w-3.5" />
-      {confirming ? confirmingLabel : label}
-    </button>
-  );
-}
-
-
-function platformEditorTitle(editor: PlatformEditor) {
-  switch (editor) {
-    case 'user':
-      return '创建用户';
-    case 'group':
-      return '创建用户组';
-    case 'membership':
-      return '加入用户组';
-    case 'service-account':
-      return '创建服务账号';
-    case 'role':
-      return '创建角色';
-    case 'binding':
-      return '创建授权绑定';
-    default:
-      return '平台用户权限';
-  }
-}
-
-
-function subjectValue(item?: PlatformSubject) {
-  if (!item) return '';
-  return `${item.subjectType}:${item.subjectId}`;
-}
-
-function deletePlatformSubject(item: SubjectDeleteTarget): Promise<unknown> {
-  switch (item.subjectType) {
-    case 'user':
-      return platformApi.deleteUser(item.subjectId);
-    case 'group':
-      return platformApi.deleteGroup(item.subjectId);
-    case 'service-account':
-      return platformApi.deleteServiceAccount(item.subjectId);
-    default:
-      return Promise.reject(new Error('不支持删除该主体'));
-  }
-}
-
-function subjectDeleteBlockReason(item: SubjectDeleteTarget, current?: PlatformSubject) {
-  if (item.source === 'binding') return '绑定派生';
-  if (current && item.subjectType === current.subjectType && item.subjectId === current.subjectId) return '当前用户';
-  if (item.subjectType === 'user' && item.subjectId === 'dev-admin') return '保留账号';
-  if (!['user', 'group', 'service-account'].includes(item.subjectType)) return '不支持';
-  return '';
-}
-
-function splitSubjectValue(value: string) {
-  const index = value.indexOf(':');
-  if (index === -1) return ['user', value] as const;
-  return [value.slice(0, index), value.slice(index + 1)] as const;
-}
-
-function parsePermissionLines(value: string): PlatformPermission[] {
-  return value
-    .split('\n')
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .map((line) => {
-      const [resource = '', action = '', scopeMode = 'global'] = line.split(':').map((part) => part.trim());
-      return { resource, action, scopeMode };
-    })
-    .filter((permission) => permission.resource && permission.action && permission.scopeMode);
-}
-
-function formatScope(scope: PlatformScope) {
-  if (scope.global) return 'global';
-  if (scope.serviceId) return `service/${scope.serviceId}`;
-  if (scope.namespace) return `${scope.clusterId || '-'}/${scope.namespace}`;
-  if (scope.clusterId) return `cluster/${scope.clusterId}`;
-  return '-';
 }
