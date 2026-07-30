@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import type { PlatformAccessContext } from '../pages/platform/accessApi';
+import { platformAccessNavigationItems } from '../pages/platform/platformNavigation';
 
 export interface NavigationItem {
   id: string;
@@ -132,7 +133,20 @@ const navigationDomains: NavigationDomain[] = [
         label: '平台设置',
         items: [
           { id: 'platform-settings', label: '平台设置', description: '平台级模板与运行配置', path: '/platform/settings', icon: Settings },
-          { id: 'platform-access', label: '访问控制', description: '用户、组、角色与授权', path: '/platform/access', icon: ShieldCheck },
+          {
+            id: 'platform-access',
+            label: '权限控制',
+            description: '用户、服务身份与固定授权',
+            path: '/platform/access',
+            icon: ShieldCheck,
+            children: platformAccessNavigationItems.map((item) => ({
+              id: item.id,
+              label: item.label,
+              description: item.description,
+              path: item.path,
+              icon: item.icon,
+            })),
+          },
           { id: 'platform-k8s-clusters', label: 'K8s 集群接入', description: '登记集群并管理控制面凭据', path: '/platform/k8s-clusters', icon: ServerCog },
           {
             id: 'platform-observability-endpoints',

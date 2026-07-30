@@ -85,8 +85,10 @@ export function PlatformK8sClustersPage() {
 
   const deleteCredentials = useMutation({
     mutationFn: (clusterId: string) => k8sApi.deleteClusterCredentials(clusterId),
-    onSuccess: async (_, clusterId) => {
+    onSuccess: () => {
       setCredential('');
+    },
+    onSettled: async (_, __, clusterId) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials', clusterId] }),
         queryClient.invalidateQueries({ queryKey: ['fixed-access'] }),
@@ -98,9 +100,18 @@ export function PlatformK8sClustersPage() {
 
   const removeCluster = useMutation({
     mutationFn: (cluster: K8sCluster) => k8sApi.deleteCluster(cluster.id),
-    onSuccess: async () => {
+    onSuccess: () => {
       setSelectedId('');
-      await queryClient.invalidateQueries({ queryKey: ['platform-k8s-clusters'] });
+      setCredential('');
+    },
+    onSettled: async (_, __, cluster) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['platform-k8s-clusters'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials', cluster.id] }),
+        queryClient.invalidateQueries({ queryKey: ['fixed-access'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
+        queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] }),
+      ]);
     },
   });
 
@@ -182,7 +193,10 @@ export function PlatformK8sClustersPage() {
                           aria-label={`删除集群 ${cluster.name || cluster.id}`}
                           disabled={removeCluster.isPending}
                           onClick={() => {
-                            if (window.confirm(`确认删除集群 ${cluster.name || cluster.id} 的 NovaAPM 登记信息？`)) removeCluster.mutate(cluster);
+                            const confirmation = window.prompt(
+                              `退役集群会删除集群目录、全部 Controller/Broker 凭据，撤销全部 K8S Profile、用户组授权和 Break Glass，并清理 NovaAPM 管理的集群 RBAC。\n请输入集群 ID “${cluster.id}” 确认：`,
+                            );
+                            if (confirmation?.trim() === cluster.id) removeCluster.mutate(cluster);
                           }}
                         >
                           <Trash2 className="h-3.5 w-3.5" />
@@ -194,6 +208,7 @@ export function PlatformK8sClustersPage() {
               </table>
             </div>
           )}
+          {removeCluster.error ? <div className="mt-3 text-sm font-semibold text-danger">{removeCluster.error.message}</div> : null}
         </DataPanel>
       </section>
 

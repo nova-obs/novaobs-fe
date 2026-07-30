@@ -25,16 +25,48 @@ test('超级菜单按业务域组织现有叶子入口且路径唯一', () => {
 	'/metrics/overview',
 	'/metrics/dashboard',
 	'/metrics/alerts',
-    '/metrics/integrations',
+	'/metrics/integrations',
     '/traces',
     '/k8s',
 	'/platform/settings',
-    '/platform/access',
+    '/platform/identities',
+    '/platform/admins',
+    '/platform/product-access',
+    '/platform/k8s-access-profiles',
+    '/platform/break-glass',
     '/platform/k8s-clusters',
     '/platform/observability/endpoints/logs',
     '/platform/observability/endpoints/metrics',
   ]);
   assert.equal(new Set(items.map((item) => item.path)).size, items.length);
+});
+
+test('平台管理顶部下拉保留四个一级入口并在权限控制下展示五个二级入口', () => {
+  const platform = getNavigationDomains().find((domain) => domain.id === 'platform');
+  const items = platform?.groups.flatMap((group) => group.items) ?? [];
+  const access = items.find((item) => item.id === 'platform-access');
+
+  assert.deepEqual(items.map((item) => item.label), [
+    '平台设置',
+    '权限控制',
+    'K8s 集群接入',
+    '共享观测端点',
+  ]);
+  assert.equal(access?.path, '/platform/access');
+  assert.deepEqual(access?.children?.map((item) => item.label), [
+    '用户与服务身份',
+    '平台管理员',
+    '产品授权',
+    'K8S Access Profile',
+    'Break Glass 与审计',
+  ]);
+  assert.deepEqual(access?.children?.map((item) => item.path), [
+    '/platform/identities',
+    '/platform/admins',
+    '/platform/product-access',
+    '/platform/k8s-access-profiles',
+    '/platform/break-glass',
+  ]);
 });
 
 test('可观测性导航只包含产品观测能力，共享端点归平台控制面', () => {
@@ -92,6 +124,11 @@ test('根据路径解析当前导航项', () => {
   assert.equal(getNavigationByPath('/traces')?.id, 'traces');
   assert.equal(getNavigationByPath('/platform/settings')?.id, 'platform-settings');
   assert.equal(getNavigationByPath('/platform/access')?.id, 'platform-access');
+  assert.equal(getNavigationByPath('/platform/identities')?.id, 'platform-identities');
+  assert.equal(getNavigationByPath('/platform/admins')?.id, 'platform-admins');
+  assert.equal(getNavigationByPath('/platform/product-access')?.id, 'platform-product-access');
+  assert.equal(getNavigationByPath('/platform/k8s-access-profiles')?.id, 'platform-k8s-access-profiles');
+  assert.equal(getNavigationByPath('/platform/break-glass')?.id, 'platform-break-glass');
   assert.equal(getNavigationByPath('/platform/k8s-clusters')?.id, 'platform-k8s-clusters');
   assert.equal(getNavigationByPath('/platform/observability/endpoints/logs')?.id, 'platform-observability-logs-endpoints');
   assert.equal(getNavigationByPath('/k8s')?.id, 'k8s-fleet');
@@ -150,5 +187,9 @@ test('超级菜单按访问上下文隐藏无权业务域和管理员入口', ()
   assert.equal(adminItems.some((item) => item.path === '/logs/explore'), false);
   assert.equal(adminItems.some((item) => item.path === '/platform/observability/endpoints/logs'), true);
   assert.equal(adminItems.some((item) => item.path === '/platform/k8s-clusters'), true);
-  assert.equal(adminItems.some((item) => item.path === '/platform/access'), true);
+  assert.equal(adminItems.some((item) => item.path === '/platform/identities'), true);
+  assert.equal(adminItems.some((item) => item.path === '/platform/admins'), true);
+  assert.equal(adminItems.some((item) => item.path === '/platform/product-access'), true);
+  assert.equal(adminItems.some((item) => item.path === '/platform/k8s-access-profiles'), true);
+  assert.equal(adminItems.some((item) => item.path === '/platform/break-glass'), true);
 });

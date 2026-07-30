@@ -20,15 +20,14 @@ import {
   parseNamespaces,
 } from './PlatformAccessForms';
 import {
-  AccessTabNav,
   BreakGlassWorkspace,
   IdentityWorkspace,
   K8sProfilesWorkspace,
   PlatformAdminsWorkspace,
   ProductAccessWorkspace,
 } from './PlatformAccessWorkspaces';
+import type { PlatformAccessSection } from './platformNavigation';
 
-export type AccessTab = 'identities' | 'platform-admins' | 'product-access' | 'k8s-profiles' | 'break-glass';
 export type Editor = 'identity' | 'membership' | 'platform-admin' | 'product-access' | 'k8s-profile' | 'k8s-grant' | 'break-glass';
 export type IdentityKind = 'user' | 'group' | 'service-account';
 export interface IdentityDraft {
@@ -59,10 +58,9 @@ const emptyProfileDraft = {
   wholeNamespaceConfirmed: false,
 };
 
-export function PlatformAccessAdminPage() {
+export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSection }) {
   const queryClient = useQueryClient();
   const { data: currentAccess } = usePlatformAccess();
-  const [activeTab, setActiveTab] = useState<AccessTab>('identities');
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [identityDraft, setIdentityDraft] = useState(emptyIdentityDraft);
   const [membershipDraft, setMembershipDraft] = useState({ groupId: '', subjectType: 'user', subjectId: '' });
@@ -107,6 +105,7 @@ export function PlatformAccessAdminPage() {
   const clusters = clustersQuery.data ?? [];
   const admins = adminsQuery.data ?? [];
   const profiles = profilesQuery.data ?? [];
+  const activeProfiles = profiles.filter((profile) => profile.status === 'active');
   const k8sGrants = k8sGrantsQuery.data ?? [];
   const breakGlassGrants = breakGlassQuery.data ?? [];
 
@@ -244,19 +243,19 @@ export function PlatformAccessAdminPage() {
       await invalidateFixedAccess();
     },
   });
-  const deleteProfile = useMutation({ mutationFn: accessApi.deleteK8sAccessProfile, onSuccess: invalidateFixedAccess });
-  const syncProfile = useMutation({ mutationFn: accessApi.syncK8sAccessProfile, onSuccess: invalidateFixedAccess });
+  const deleteProfile = useMutation({ mutationFn: accessApi.deleteK8sAccessProfile, onSettled: invalidateFixedAccess });
+  const syncProfile = useMutation({ mutationFn: accessApi.syncK8sAccessProfile, onSettled: invalidateFixedAccess });
   const createK8sGrant = useMutation({
     mutationFn: () => accessApi.createK8sAccessGrant({
-      profileId: k8sGrantDraft.profileId || profiles[0]?.id || '',
+      profileId: k8sGrantDraft.profileId || activeProfiles[0]?.id || '',
       groupId: k8sGrantDraft.groupId || groups[0]?.id || '',
     }),
-    onSuccess: async () => {
+    onSuccess: () => {
       setActiveEditor(null);
-      await invalidateFixedAccess();
     },
+    onSettled: invalidateFixedAccess,
   });
-  const deleteK8sGrant = useMutation({ mutationFn: accessApi.deleteK8sAccessGrant, onSuccess: invalidateFixedAccess });
+  const deleteK8sGrant = useMutation({ mutationFn: accessApi.deleteK8sAccessGrant, onSettled: invalidateFixedAccess });
   const requestBreakGlass = useMutation({
     mutationFn: () => accessApi.requestBreakGlassGrant({
       clusterId: breakGlassDraft.clusterId || clusters[0]?.id || '',
@@ -308,14 +307,14 @@ export function PlatformAccessAdminPage() {
   const membershipSubjects = membershipDraft.subjectType === 'service-account' ? serviceAccounts : users;
   return (
     <div className="space-y-4">
-      <DataPanel className="platform-access-panel" title="平台访问控制" action={<AccessTabNav activeTab={activeTab} onChange={setActiveTab} />}>
+      <DataPanel>
         <div className="console-notice mb-3">
           <ShieldCheck className="h-4 w-4" />
           平台、Product 与 K8S 是三条独立授权边界；平台管理员不会自动获得产品数据或工作负载权限。
         </div>
         {errors[0] ? <ErrorNotice error={errors[0]} /> : null}
 
-        {activeTab === 'identities' ? (
+        {section === 'identities' ? (
           <IdentityWorkspace
             users={users}
             groups={groups}
@@ -335,7 +334,7 @@ export function PlatformAccessAdminPage() {
           />
         ) : null}
 
-        {activeTab === 'platform-admins' ? (
+        {section === 'platform-admins' ? (
           <PlatformAdminsWorkspace
             grants={admins}
             users={users}
@@ -347,7 +346,7 @@ export function PlatformAccessAdminPage() {
           />
         ) : null}
 
-        {activeTab === 'product-access' ? (
+        {section === 'product-access' ? (
           <ProductAccessWorkspace
             grants={productGrants}
             groups={groups}
@@ -361,7 +360,7 @@ export function PlatformAccessAdminPage() {
           />
         ) : null}
 
-        {activeTab === 'k8s-profiles' ? (
+        {section === 'k8s-profiles' ? (
           <K8sProfilesWorkspace
             profiles={profiles}
             grants={k8sGrants}
@@ -395,7 +394,7 @@ export function PlatformAccessAdminPage() {
           />
         ) : null}
 
-        {activeTab === 'break-glass' ? (
+        {section === 'break-glass' ? (
           <BreakGlassWorkspace
             grants={breakGlassGrants}
             currentUserId={currentAccess?.subject.id ?? ''}
@@ -441,7 +440,7 @@ export function PlatformAccessAdminPage() {
               onSubmit={() => saveProfile.mutate()}
             />
           ) : null}
-          {activeEditor === 'k8s-grant' ? <K8sGrantForm draft={k8sGrantDraft} profiles={profiles} groups={groups} setDraft={setK8sGrantDraft} pending={createK8sGrant.isPending} onSubmit={() => createK8sGrant.mutate()} /> : null}
+          {activeEditor === 'k8s-grant' ? <K8sGrantForm draft={k8sGrantDraft} profiles={activeProfiles} groups={groups} setDraft={setK8sGrantDraft} pending={createK8sGrant.isPending} onSubmit={() => createK8sGrant.mutate()} /> : null}
           {activeEditor === 'break-glass' ? <BreakGlassForm draft={breakGlassDraft} clusters={clusters} setDraft={setBreakGlassDraft} pending={requestBreakGlass.isPending} onSubmit={() => requestBreakGlass.mutate()} /> : null}
         </EditorDrawer>
       ) : null}

@@ -533,6 +533,7 @@ body {
 
   .module-workbench[data-rail='true'] {
     padding-left: 60px;
+    transition: padding-left 220ms cubic-bezier(0.22, 1, 0.36, 1);
   }
 
   .module-workbench-outlet {
@@ -779,6 +780,12 @@ body {
   }
 }
 
+@media (min-width: 1024px) {
+  .module-workbench[data-rail='true']:has(> .module-rail-expanded) {
+    padding-left: 232px;
+  }
+}
+
 @media (max-width: 639px) {
   .content-workbench-header {
     padding-left: 10px;
@@ -787,19 +794,6 @@ body {
 
   .content-workbench-body {
     padding: 8px;
-  }
-
-  .platform-access-panel .console-panel-header {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .platform-access-panel .console-section-title {
-    white-space: normal;
-  }
-
-  .platform-access-tabs {
-    width: 100%;
   }
 
   .platform-access-workspace > section {

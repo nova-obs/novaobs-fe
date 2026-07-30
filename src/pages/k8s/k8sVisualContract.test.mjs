@@ -98,6 +98,9 @@ test('K8s 集群接入和控制面凭据迁移到平台管理', () => {
   assert.equal(platformClusterSource.includes('deleteCluster'), true);
   assert.equal(platformClusterSource.includes('deleteClusterCredentials'), true);
   assert.equal(platformClusterSource.includes('撤销该集群全部 K8S Profile'), true);
+  assert.equal(platformClusterSource.includes('退役集群会删除集群目录、全部 Controller/Broker 凭据'), true);
+  assert.equal(platformClusterSource.includes("queryKey: ['fixed-access']"), true);
+  assert.equal(platformClusterSource.includes('onSettled: async (_, __, cluster)'), true);
 });
 
 test('K8s 工作台不再暴露旧平台授权入口', () => {

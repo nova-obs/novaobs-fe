@@ -29,32 +29,7 @@ import type {
   PlatformServiceAccount,
   PlatformUser,
 } from './api';
-import type { AccessTab, IdentityKind } from './PlatformAccessAdminPage';
-
-const platformAccessTabs: Array<{ key: AccessTab; label: string }> = [
-  { key: 'identities', label: '用户与服务身份' },
-  { key: 'platform-admins', label: '平台管理员' },
-  { key: 'product-access', label: '产品授权' },
-  { key: 'k8s-profiles', label: 'K8S Access Profile' },
-  { key: 'break-glass', label: 'Break Glass 与审计' },
-];
-
-export function AccessTabNav({ activeTab, onChange }: { activeTab: AccessTab; onChange: (tab: AccessTab) => void }) {
-  return (
-    <div className="platform-access-tabs flex max-w-full flex-wrap gap-0 border-b border-outline">
-      {platformAccessTabs.map((tab) => (
-        <button
-          key={tab.key}
-          type="button"
-          className={`border-b-2 px-3 py-2 text-xs font-semibold ${tab.key === activeTab ? 'border-primary bg-primary-soft/40 text-primary' : 'border-transparent text-muted hover:text-on-surface'}`}
-          onClick={() => onChange(tab.key)}
-        >
-          {tab.label}
-        </button>
-      ))}
-    </div>
-  );
-}
+import type { IdentityKind } from './PlatformAccessAdminPage';
 
 export function IdentityWorkspace({
   users,

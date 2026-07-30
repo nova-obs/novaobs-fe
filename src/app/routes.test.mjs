@@ -115,10 +115,22 @@ test('平台控制面承载集群登记和共享观测端点', () => {
     'index',
     'settings',
     'access',
+    'identities',
+    'admins',
+    'product-access',
+    'k8s-access-profiles',
+    'break-glass',
     'k8s-clusters',
     'observability/endpoints/logs',
     'observability/endpoints/metrics',
   ]);
+  assert.equal(platform?.children?.find((item) => item.path === 'access')?.element?.props?.to, '/platform/identities');
+  for (const path of ['identities', 'admins', 'product-access', 'k8s-access-profiles', 'break-glass']) {
+    const route = platform?.children?.find((item) => item.path === path);
+    assert.equal(route?.element?.type?.name, 'AccessGate');
+    assert.equal(route?.element?.props?.requirement?.kind, 'platform-admin');
+    assert.equal(route?.element?.props?.children?.type?.name, 'PlatformAccessAdminPage');
+  }
   assert.equal(Boolean(legacyObservabilityRoute), true);
 	assert.equal(legacyObservabilityRoute?.element?.type?.name, 'Navigate');
 	assert.equal(legacyObservabilityRoute?.element?.props?.to, '/platform/observability/endpoints/logs');
@@ -163,7 +175,12 @@ test('路由标题可按路径查找', () => {
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/endpoints'), '指标下游端点');
   assert.equal(getRouteTitle('/traces'), 'Trace');
   assert.equal(getRouteTitle('/platform/settings'), '平台设置');
-  assert.equal(getRouteTitle('/platform/access'), '平台管理');
+  assert.equal(getRouteTitle('/platform/access'), '用户与服务身份');
+  assert.equal(getRouteTitle('/platform/identities'), '用户与服务身份');
+  assert.equal(getRouteTitle('/platform/admins'), '平台管理员');
+  assert.equal(getRouteTitle('/platform/product-access'), '产品授权');
+  assert.equal(getRouteTitle('/platform/k8s-access-profiles'), 'K8S Access Profile');
+  assert.equal(getRouteTitle('/platform/break-glass'), 'Break Glass 与审计');
   assert.equal(getRouteTitle('/platform/k8s-clusters'), 'K8S 集群接入');
   assert.equal(getRouteTitle('/platform/observability/endpoints/logs'), 'Logs 下游端点');
   assert.equal(getRouteTitle('/platform/observability/endpoints/metrics'), '指标下游端点');
@@ -192,7 +209,12 @@ test('浏览器标签页标题包含当前模块和产品名', () => {
 	assert.equal(getDocumentTitle('/metrics/endpoints'), '指标下游端点 - NovaAPM');
   assert.equal(getDocumentTitle('/traces'), 'Trace - NovaAPM');
   assert.equal(getDocumentTitle('/platform/settings'), '平台设置 - NovaAPM');
-  assert.equal(getDocumentTitle('/platform/access'), '平台管理 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/access'), '用户与服务身份 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/identities'), '用户与服务身份 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/admins'), '平台管理员 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/product-access'), '产品授权 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/k8s-access-profiles'), 'K8S Access Profile - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/break-glass'), 'Break Glass 与审计 - NovaAPM');
   assert.equal(getDocumentTitle('/platform/k8s-clusters'), 'K8S 集群接入 - NovaAPM');
   assert.equal(getDocumentTitle('/platform/observability/endpoints/logs'), 'Logs 下游端点 - NovaAPM');
   assert.equal(getDocumentTitle('/k8s/observability'), '平台总览 - NovaAPM');

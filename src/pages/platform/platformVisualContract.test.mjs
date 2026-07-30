@@ -6,22 +6,24 @@ const pageSource = [
   './PlatformAccessAdminPage.tsx',
   './PlatformAccessWorkspaces.tsx',
   './PlatformAccessForms.tsx',
+  './platformNavigation.ts',
 ].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const apiSource = readFileSync(new URL('./accessApi.ts', import.meta.url), 'utf8');
 
 test('平台访问控制只呈现固定授权工作台', () => {
-  assert.equal(pageSource.includes('platformAccessTabs'), true);
-  assert.equal(pageSource.includes("key: 'identities'"), true);
-  assert.equal(pageSource.includes("key: 'platform-admins'"), true);
-  assert.equal(pageSource.includes("key: 'product-access'"), true);
-  assert.equal(pageSource.includes("key: 'k8s-profiles'"), true);
-  assert.equal(pageSource.includes("key: 'break-glass'"), true);
+  assert.equal(pageSource.includes('platformAccessNavigationItems'), true);
+  assert.equal(pageSource.includes("section: 'identities'"), true);
+  assert.equal(pageSource.includes("section: 'platform-admins'"), true);
+  assert.equal(pageSource.includes("section: 'product-access'"), true);
+  assert.equal(pageSource.includes("section: 'k8s-profiles'"), true);
+  assert.equal(pageSource.includes("section: 'break-glass'"), true);
   assert.equal(pageSource.includes('用户与服务身份'), true);
   assert.equal(pageSource.includes('平台管理员'), true);
   assert.equal(pageSource.includes('产品授权'), true);
   assert.equal(pageSource.includes('K8S Access Profile'), true);
   assert.equal(pageSource.includes('Break Glass 与审计'), true);
-  assert.equal(pageSource.includes('platform-access-panel'), true);
+  assert.equal(pageSource.includes('AccessTabNav'), false);
+  assert.equal(pageSource.includes('platform-access-tabs'), false);
   assert.equal(pageSource.includes('grid min-w-0'), true);
 });
 
@@ -48,6 +50,8 @@ test('K8S Profile 明示整 Namespace 风险并要求确认真实影响边界', 
   assert.equal(pageSource.includes('onEditProfile'), true);
   assert.equal(pageSource.includes('updateK8sAccessProfile'), true);
   assert.equal(pageSource.includes('保存 Profile'), true);
+  assert.equal(pageSource.includes("profile.status === 'active'"), true);
+  assert.equal(pageSource.includes('请先同步至少一个 Profile'), true);
 });
 
 test('Break Glass 强调双人审批、两小时上限和审计入口', () => {

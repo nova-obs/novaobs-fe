@@ -274,6 +274,7 @@ export function K8sGrantForm({
   const groupId = draft.groupId || groups[0]?.id || '';
   return (
     <FormStack>
+      {profiles.length === 0 ? <div className="console-notice console-notice-warning">请先同步至少一个 Profile，成功后才能授权用户组。</div> : null}
       <Field label="K8S Access Profile"><Select value={profileId} options={profiles.map((item) => ({ value: item.id, label: `${item.name} · ${k8sLevelLabel(item.accessLevel)}` }))} onChange={(value) => setDraft({ ...draft, profileId: value })} /></Field>
       <Field label="用户组"><Select value={groupId} options={groups.map((item) => ({ value: item.id, label: item.displayName || item.name }))} onChange={(value) => setDraft({ ...draft, groupId: value })} /></Field>
       <SubmitButton label="授权用户组" disabled={!profileId || !groupId || pending} onClick={onSubmit} />

@@ -3,16 +3,26 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 
 const layoutSource = readFileSync(new URL('./PlatformLayout.tsx', import.meta.url), 'utf8');
+const navigationSource = readFileSync(new URL('./platformNavigation.ts', import.meta.url), 'utf8');
 const observabilitySource = readFileSync(new URL('./ObservabilitySettingsPage.tsx', import.meta.url), 'utf8');
 const helpTipSource = readFileSync(new URL('../../components/HelpTip.tsx', import.meta.url), 'utf8');
 const platformSettingsSource = readFileSync(new URL('./PlatformSettingsPage.tsx', import.meta.url), 'utf8');
 const styleSource = readFileSync(new URL('../../styles/index.css', import.meta.url), 'utf8');
 
-test('平台管理模块保留平台设置和访问控制入口', () => {
+test('平台管理左侧 Rail 直接承载五个身份与授权二级入口', () => {
   assert.equal(layoutSource.includes('/platform/settings'), true);
   assert.equal(layoutSource.includes('平台设置'), true);
-  assert.equal(layoutSource.includes('/platform/access'), true);
-  assert.equal(layoutSource.includes('访问控制'), true);
+  assert.equal(layoutSource.includes('platformAccessNavigationItems'), true);
+  assert.equal(navigationSource.includes('/platform/identities'), true);
+  assert.equal(navigationSource.includes('/platform/admins'), true);
+  assert.equal(navigationSource.includes('/platform/product-access'), true);
+  assert.equal(navigationSource.includes('/platform/k8s-access-profiles'), true);
+  assert.equal(navigationSource.includes('/platform/break-glass'), true);
+  assert.equal(navigationSource.includes('用户与服务身份'), true);
+  assert.equal(navigationSource.includes('平台管理员'), true);
+  assert.equal(navigationSource.includes('产品授权'), true);
+  assert.equal(navigationSource.includes('K8S Access Profile'), true);
+  assert.equal(navigationSource.includes('Break Glass 与审计'), true);
   assert.equal(layoutSource.includes('/platform/observability'), false);
   assert.equal(layoutSource.includes('观测接入配置'), false);
   assert.equal(layoutSource.includes('平台管理导航'), true);
@@ -25,6 +35,8 @@ test('平台管理模块保留平台设置和访问控制入口', () => {
   assert.equal(layoutSource.includes('关闭平台设置菜单'), false);
   assert.equal(layoutSource.includes('<aside'), false);
   assert.equal(layoutSource.includes('xl:grid-cols-[248px'), false);
+  assert.equal(styleSource.includes(":has(> .module-rail-expanded)"), true);
+  assert.equal(styleSource.includes('padding-left: 232px'), true);
 });
 
 test('平台设置页面承载平台级镜像模板而非业务或项目配置', () => {
