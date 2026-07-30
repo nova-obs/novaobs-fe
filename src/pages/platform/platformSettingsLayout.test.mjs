@@ -18,11 +18,11 @@ test('平台管理左侧 Rail 直接承载五个身份与授权二级入口', ()
   assert.equal(navigationSource.includes('/platform/product-access'), true);
   assert.equal(navigationSource.includes('/platform/k8s-access-profiles'), true);
   assert.equal(navigationSource.includes('/platform/break-glass'), true);
-  assert.equal(navigationSource.includes('用户与服务身份'), true);
+  assert.equal(navigationSource.includes('用户与用户组'), true);
   assert.equal(navigationSource.includes('平台管理员'), true);
   assert.equal(navigationSource.includes('产品授权'), true);
-  assert.equal(navigationSource.includes('K8S Access Profile'), true);
-  assert.equal(navigationSource.includes('Break Glass 与审计'), true);
+  assert.equal(navigationSource.includes('命名空间权限'), true);
+  assert.equal(navigationSource.includes('紧急访问与审计'), true);
   assert.equal(layoutSource.includes('/platform/observability'), false);
   assert.equal(layoutSource.includes('观测接入配置'), false);
   assert.equal(layoutSource.includes('平台管理导航'), true);

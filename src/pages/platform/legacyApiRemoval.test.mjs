@@ -27,6 +27,18 @@ test('平台共享 API 不再暴露通用 Role、Binding、Permission 和 ScopeM
   }
 });
 
+test('平台共享 API 不再暴露未闭环的服务账号', () => {
+  for (const removedSymbol of [
+    'PlatformServiceAccount',
+    'listServiceAccounts',
+    'createServiceAccount',
+    'deleteServiceAccount',
+    '/platform/service-accounts',
+  ]) {
+    assert.equal(platformApiSource.includes(removedSymbol), false, removedSymbol);
+  }
+});
+
 test('K8S 共享 API 不再暴露已下线的自由权限与 kubeconfig 资源', () => {
   for (const legacySymbol of [
     'K8sCertificate',

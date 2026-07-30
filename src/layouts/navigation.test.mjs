@@ -54,11 +54,11 @@ test('平台管理顶部下拉保留四个一级入口并在权限控制下展�
   ]);
   assert.equal(access?.path, '/platform/access');
   assert.deepEqual(access?.children?.map((item) => item.label), [
-    '用户与服务身份',
+    '用户与用户组',
     '平台管理员',
     '产品授权',
-    'K8S Access Profile',
-    'Break Glass 与审计',
+    '命名空间权限',
+    '紧急访问与审计',
   ]);
   assert.deepEqual(access?.children?.map((item) => item.path), [
     '/platform/identities',
@@ -166,6 +166,7 @@ test('超级菜单按访问上下文隐藏无权业务域和管理员入口', ()
     productAccesses: [{ productId: 'product-1', productName: '订单', role: 'product-viewer' }],
     k8sProfiles: [],
     k8sBreakGlass: [],
+    availableModules: ['workspace', 'observability', 'k8s'],
     modules: { workspace: 'read', products: 'read', logs: 'read', metrics: 'read', traces: 'read', k8s: 'hidden', platform: 'hidden' },
   };
   const platformAdmin = {
@@ -180,9 +181,9 @@ test('超级菜单按访问上下文隐藏无权业务域和管理员入口', ()
   const developerItems = developerDomains.flatMap((domain) => domain.groups.flatMap((group) => flattenLeafItems(group.items)));
   const adminItems = adminDomains.flatMap((domain) => domain.groups.flatMap((group) => flattenLeafItems(group.items)));
 
-  assert.deepEqual(developerDomains.map((domain) => domain.id), ['workspace', 'observability']);
+  assert.deepEqual(developerDomains.map((domain) => domain.id), ['workspace', 'observability', 'k8s']);
   assert.equal(developerItems.some((item) => item.path === '/observability/endpoints/logs'), false);
-  assert.deepEqual(adminDomains.map((domain) => domain.id), ['workspace', 'platform']);
+  assert.deepEqual(adminDomains.map((domain) => domain.id), ['workspace', 'k8s', 'platform']);
   assert.equal(adminItems.some((item) => item.path === '/products'), true);
   assert.equal(adminItems.some((item) => item.path === '/logs/explore'), false);
   assert.equal(adminItems.some((item) => item.path === '/platform/observability/endpoints/logs'), true);

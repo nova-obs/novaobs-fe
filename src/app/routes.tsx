@@ -45,7 +45,7 @@ export interface RouteDefinition {
 }
 
 const k8sChildRoutes: RouteDefinition[] = [
-  { index: true, title: 'K8s 运维', element: gated(<K8sClusterPage />, { kind: 'k8s-module' }) },
+  { index: true, title: 'K8s 运维', element: <K8sClusterPage /> },
   { path: 'clusters', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
   { path: 'namespaces', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
   { path: 'resource-view', title: 'K8s 运维', element: <Navigate to="/k8s" replace /> },
@@ -90,12 +90,12 @@ const logsEntryChildRoutes: RouteDefinition[] = [
 const platformChildRoutes: RouteDefinition[] = [
   { index: true, title: '平台管理', element: <Navigate to="/platform/settings" replace /> },
   { path: 'settings', title: '平台设置', element: gated(<PlatformSettingsPage />, { kind: 'platform-admin' }) },
-  { path: 'access', title: '用户与服务身份', element: <Navigate to="/platform/identities" replace /> },
-  { path: 'identities', title: '用户与服务身份', element: gated(<PlatformAccessAdminPage section="identities" />, { kind: 'platform-admin' }) },
+  { path: 'access', title: '用户与用户组', element: <Navigate to="/platform/identities" replace /> },
+  { path: 'identities', title: '用户与用户组', element: gated(<PlatformAccessAdminPage section="identities" />, { kind: 'platform-admin' }) },
   { path: 'admins', title: '平台管理员', element: gated(<PlatformAccessAdminPage section="platform-admins" />, { kind: 'platform-admin' }) },
   { path: 'product-access', title: '产品授权', element: gated(<PlatformAccessAdminPage section="product-access" />, { kind: 'platform-admin' }) },
-  { path: 'k8s-access-profiles', title: 'K8S Access Profile', element: gated(<PlatformAccessAdminPage section="k8s-profiles" />, { kind: 'platform-admin' }) },
-  { path: 'break-glass', title: 'Break Glass 与审计', element: gated(<PlatformAccessAdminPage section="break-glass" />, { kind: 'platform-admin' }) },
+  { path: 'k8s-access-profiles', title: '命名空间权限', element: gated(<PlatformAccessAdminPage section="k8s-profiles" />, { kind: 'platform-admin' }) },
+  { path: 'break-glass', title: '紧急访问与审计', element: gated(<PlatformAccessAdminPage section="break-glass" />, { kind: 'platform-admin' }) },
   { path: 'k8s-clusters', title: 'K8S 集群接入', element: gated(<PlatformK8sClustersPage />, { kind: 'platform-admin' }) },
   { path: 'observability/endpoints/logs', title: 'Logs 下游端点', element: gated(<ObservabilitySettingsPage key="platform-logs-endpoints" domain="logs" />, { kind: 'platform-admin' }) },
   { path: 'observability/endpoints/metrics', title: '指标下游端点', element: gated(<ObservabilitySettingsPage key="platform-metrics-endpoints" domain="metrics" />, { kind: 'platform-admin' }) },

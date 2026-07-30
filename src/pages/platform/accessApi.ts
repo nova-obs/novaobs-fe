@@ -54,6 +54,7 @@ export interface K8sBreakGlassAccessSummary {
 export interface PlatformAccessContext {
   subject: PlatformSubjectRef;
   groups: PlatformGroupRef[];
+  availableModules: PlatformModule[];
   platformAdmin: boolean;
   productAccesses: ProductAccessSummary[];
   k8sProfiles: K8sAccessProfileSummary[];
@@ -72,16 +73,14 @@ export interface PlatformAdminGrant {
 export interface ProductAccessGrant {
   id: string;
   productId: string;
-  subjectType: 'group' | 'service-account';
-  subjectId: string;
+  groupId: string;
   role: ProductAccessRole;
   createdBy: string;
   createdAt: string;
 }
 
 export interface ProductGrantSubject {
-  subjectType: 'group' | 'service-account';
-  subjectId: string;
+  groupId: string;
   displayName: string;
 }
 
@@ -228,6 +227,11 @@ function mapAccessContext(raw: any): PlatformAccessContext {
   return {
     subject: mapSubject(raw?.subject),
     groups: rawGroups,
+    availableModules: Array.isArray(raw?.available_modules ?? raw?.availableModules)
+      ? (raw.available_modules ?? raw.availableModules).filter((item: unknown): item is PlatformModule => (
+        typeof item === 'string' && ['workspace', 'products', 'observability', 'logs', 'metrics', 'traces', 'alerts', 'k8s', 'platform'].includes(item)
+      ))
+      : [],
     platformAdmin: Boolean(raw?.platform_admin ?? raw?.platformAdmin),
     productAccesses: Array.isArray(raw?.product_accesses ?? raw?.productAccesses)
       ? (raw.product_accesses ?? raw.productAccesses).map(mapProductAccess)
@@ -260,8 +264,7 @@ function mapProductAccessGrant(raw: any): ProductAccessGrant {
   return {
     id: String(raw?.id ?? ''),
     productId: String(raw?.product_id ?? raw?.productId ?? ''),
-    subjectType: raw?.subject_type === 'service-account' || raw?.subjectType === 'service-account' ? 'service-account' : 'group',
-    subjectId: String(raw?.subject_id ?? raw?.subjectId ?? ''),
+    groupId: String(raw?.group_id ?? raw?.groupId ?? ''),
     role: raw?.role === 'product-maintainer' ? 'product-maintainer' : 'product-viewer',
     createdBy: raw?.created_by ?? raw?.createdBy ?? '',
     createdAt: raw?.created_at ?? raw?.createdAt ?? '',
@@ -270,10 +273,7 @@ function mapProductAccessGrant(raw: any): ProductAccessGrant {
 
 function mapProductGrantSubject(raw: any): ProductGrantSubject {
   return {
-    subjectType: raw?.subject_type === 'service-account' || raw?.subjectType === 'service-account'
-      ? 'service-account'
-      : 'group',
-    subjectId: String(raw?.subject_id ?? raw?.subjectId ?? ''),
+    groupId: String(raw?.group_id ?? raw?.groupId ?? ''),
     displayName: raw?.display_name ?? raw?.displayName ?? '',
   };
 }
@@ -339,11 +339,11 @@ function mapWriteResult<T>(raw: any, mapper: (value: any) => T): AccessWriteResu
 
 function validateK8sAccessProfileInput(input: K8sAccessProfileInput | Omit<K8sAccessProfileInput, 'clusterId'>) {
   if (!input.wholeNamespaceConfirmed) {
-    throw new Error('必须确认整 Namespace 风险后才能保存 K8S Access Profile');
+    throw new Error('必须确认整命名空间风险后才能保存命名空间权限');
   }
   const namespaces = [...new Set(input.namespaces.map((item) => item.trim()).filter(Boolean))];
   if (!namespaces.length || namespaces.some((item) => item === '*' || item.toLowerCase() === 'all_namespaces')) {
-    throw new Error('K8S Access Profile 必须指定具体 Namespace，禁止空值、* 或 all_namespaces');
+    throw new Error('命名空间权限必须指定具体命名空间，禁止空值、* 或 all_namespaces');
   }
   return namespaces;
 }
@@ -373,14 +373,14 @@ export const accessApi = {
     const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/access-grants`);
     return Array.isArray(raw) ? raw.map(mapProductAccessGrant) : [];
   },
-  async listProductGrantSubjects(productId: string): Promise<ProductGrantSubject[]> {
-    const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/access-subjects`);
+  async listProductGrantGroups(productId: string): Promise<ProductGrantSubject[]> {
+    const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/access-groups`);
     return Array.isArray(raw) ? raw.map(mapProductGrantSubject) : [];
   },
-  async createProductAccessGrant(productId: string, input: Pick<ProductAccessGrant, 'subjectType' | 'subjectId' | 'role'>): Promise<AccessWriteResult<ProductAccessGrant>> {
+  async createProductAccessGrant(productId: string, input: Pick<ProductAccessGrant, 'groupId' | 'role'>): Promise<AccessWriteResult<ProductAccessGrant>> {
     const raw = await apiRequest<any>(`/products/${encodeURIComponent(productId)}/access-grants`, {
       method: 'POST',
-      body: JSON.stringify({ subject_type: input.subjectType, subject_id: input.subjectId, role: input.role }),
+      body: JSON.stringify({ group_id: input.groupId, role: input.role }),
     });
     return mapWriteResult(raw, mapProductAccessGrant);
   },
@@ -470,7 +470,7 @@ export const accessApi = {
   },
   async approveBreakGlassGrant(id: string, durationMinutes: number): Promise<AccessWriteResult<K8sBreakGlassGrant>> {
     if (!Number.isInteger(durationMinutes) || durationMinutes < 1 || durationMinutes > 120) {
-      throw new Error('Break Glass 审批时长必须是 1 到 120 分钟的整数');
+      throw new Error('紧急访问审批时长必须是 1 到 120 分钟的整数');
     }
     return mapWriteResult(
       await apiRequest<any>(`/k8s/break-glass-grants/${encodeURIComponent(id)}/approve`, {

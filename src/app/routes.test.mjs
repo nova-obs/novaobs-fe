@@ -89,6 +89,11 @@ test('K8s 运维使用嵌套路由承载模块子页面', () => {
   }
 });
 
+test('K8s 模块首页允许未授权用户查看无集群空态', () => {
+  const indexRoute = routeDefinitions.find((route) => route.path === '/k8s')?.children?.find((route) => route.index);
+  assert.equal(indexRoute?.element?.type?.name, 'K8sClusterPage');
+});
+
 test('Logs 保留服务级能力，旧接入配置路径统一跳转观测端点', () => {
   const paths = routeDefinitions.map((r) => r.path);
 	const logsEntry = routeDefinitions.find((r) => r.path === '/logs');
@@ -175,12 +180,12 @@ test('路由标题可按路径查找', () => {
 	assert.equal(getRouteTitle('/products/product-1/services/svc-1/metrics/endpoints'), '指标下游端点');
   assert.equal(getRouteTitle('/traces'), 'Trace');
   assert.equal(getRouteTitle('/platform/settings'), '平台设置');
-  assert.equal(getRouteTitle('/platform/access'), '用户与服务身份');
-  assert.equal(getRouteTitle('/platform/identities'), '用户与服务身份');
+  assert.equal(getRouteTitle('/platform/access'), '用户与用户组');
+  assert.equal(getRouteTitle('/platform/identities'), '用户与用户组');
   assert.equal(getRouteTitle('/platform/admins'), '平台管理员');
   assert.equal(getRouteTitle('/platform/product-access'), '产品授权');
-  assert.equal(getRouteTitle('/platform/k8s-access-profiles'), 'K8S Access Profile');
-  assert.equal(getRouteTitle('/platform/break-glass'), 'Break Glass 与审计');
+  assert.equal(getRouteTitle('/platform/k8s-access-profiles'), '命名空间权限');
+  assert.equal(getRouteTitle('/platform/break-glass'), '紧急访问与审计');
   assert.equal(getRouteTitle('/platform/k8s-clusters'), 'K8S 集群接入');
   assert.equal(getRouteTitle('/platform/observability/endpoints/logs'), 'Logs 下游端点');
   assert.equal(getRouteTitle('/platform/observability/endpoints/metrics'), '指标下游端点');
@@ -209,12 +214,12 @@ test('浏览器标签页标题包含当前模块和产品名', () => {
 	assert.equal(getDocumentTitle('/metrics/endpoints'), '指标下游端点 - NovaAPM');
   assert.equal(getDocumentTitle('/traces'), 'Trace - NovaAPM');
   assert.equal(getDocumentTitle('/platform/settings'), '平台设置 - NovaAPM');
-  assert.equal(getDocumentTitle('/platform/access'), '用户与服务身份 - NovaAPM');
-  assert.equal(getDocumentTitle('/platform/identities'), '用户与服务身份 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/access'), '用户与用户组 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/identities'), '用户与用户组 - NovaAPM');
   assert.equal(getDocumentTitle('/platform/admins'), '平台管理员 - NovaAPM');
   assert.equal(getDocumentTitle('/platform/product-access'), '产品授权 - NovaAPM');
-  assert.equal(getDocumentTitle('/platform/k8s-access-profiles'), 'K8S Access Profile - NovaAPM');
-  assert.equal(getDocumentTitle('/platform/break-glass'), 'Break Glass 与审计 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/k8s-access-profiles'), '命名空间权限 - NovaAPM');
+  assert.equal(getDocumentTitle('/platform/break-glass'), '紧急访问与审计 - NovaAPM');
   assert.equal(getDocumentTitle('/platform/k8s-clusters'), 'K8S 集群接入 - NovaAPM');
   assert.equal(getDocumentTitle('/platform/observability/endpoints/logs'), 'Logs 下游端点 - NovaAPM');
   assert.equal(getDocumentTitle('/k8s/observability'), '平台总览 - NovaAPM');

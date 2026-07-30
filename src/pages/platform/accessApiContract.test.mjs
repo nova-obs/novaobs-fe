@@ -16,6 +16,7 @@ test('访问上下文映射固定平台、产品和 K8s 授权', async () => {
   globalThis.fetch = async () => jsonResponse({
     subject: { id: 'user-1', type: 'user', display_name: '开发一组' },
     group_ids: ['developers'],
+    available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
     product_accesses: [{ product_id: 'product-1', product_name: '订单', role: 'product-maintainer' }],
     k8s_profiles: [{
@@ -40,6 +41,7 @@ test('访问上下文映射固定平台、产品和 K8s 授权', async () => {
     assert.equal(context.subject.displayName, '开发一组');
     assert.equal(context.groups[0].id, 'developers');
     assert.equal(context.platformAdmin, false);
+    assert.deepEqual(context.availableModules, ['workspace', 'observability', 'k8s']);
     assert.equal(context.productAccesses[0].role, 'product-maintainer');
     assert.equal(context.k8sProfiles[0].accessLevel, 'developer');
     assert.deepEqual(context.k8sProfiles[0].namespaces, ['orders']);
@@ -66,7 +68,7 @@ test('固定授权 API 使用类型化资源而不是通用 Role 和 Binding', a
 
   try {
     await accessApi.createPlatformAdminGrant({ subjectType: 'group', subjectId: 'platform-admins' });
-    await accessApi.createProductAccessGrant('product-1', { subjectType: 'group', subjectId: 'orders-dev', role: 'product-viewer' });
+    await accessApi.createProductAccessGrant('product-1', { groupId: 'orders-dev', role: 'product-viewer' });
     await accessApi.createK8sAccessProfile({
       name: '订单生产只读',
       clusterId: 'prod',
@@ -110,30 +112,28 @@ test('固定授权 API 使用类型化资源而不是通用 Role 和 Binding', a
   }
 });
 
-test('产品维护者通过产品域接口读取最小授权主体目录', async () => {
+test('产品维护者通过产品域接口读取最小授权用户组目录', async () => {
   const originalFetch = globalThis.fetch;
   let requestedPath = '';
   globalThis.fetch = async (path) => {
     requestedPath = String(path);
     return jsonResponse([
-      { subject_type: 'group', subject_id: 'orders-dev', display_name: '订单开发组' },
-      { subject_type: 'service-account', subject_id: 'orders-bot', display_name: '订单发布机器人' },
+      { group_id: 'orders-dev', display_name: '订单开发组' },
     ]);
   };
 
   try {
-    const subjects = await accessApi.listProductGrantSubjects('product-1');
-    assert.equal(requestedPath, '/api/v1/products/product-1/access-subjects');
-    assert.deepEqual(subjects, [
-      { subjectType: 'group', subjectId: 'orders-dev', displayName: '订单开发组' },
-      { subjectType: 'service-account', subjectId: 'orders-bot', displayName: '订单发布机器人' },
+    const groups = await accessApi.listProductGrantGroups('product-1');
+    assert.equal(requestedPath, '/api/v1/products/product-1/access-groups');
+    assert.deepEqual(groups, [
+      { groupId: 'orders-dev', displayName: '订单开发组' },
     ]);
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('Profile 整 Namespace 确认与 Break Glass 时长在请求边界校验', async () => {
+test('命名空间权限风险确认与紧急访问时长在请求边界校验', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => {
     throw new Error('无效输入不应发起网络请求');
@@ -142,23 +142,23 @@ test('Profile 整 Namespace 确认与 Break Glass 时长在请求边界校验', 
   try {
     await assert.rejects(
       () => accessApi.createK8sAccessProfile({
-        name: '未确认 Profile',
+        name: '未确认权限',
         clusterId: 'prod',
         accessLevel: 'developer',
         namespaces: ['orders'],
         wholeNamespaceConfirmed: false,
       }),
-      /整 Namespace 风险/,
+      /整命名空间风险/,
     );
     await assert.rejects(
       () => accessApi.createK8sAccessProfile({
-        name: '全局 Profile',
+        name: '全局权限',
         clusterId: 'prod',
         accessLevel: 'developer',
         namespaces: ['all_namespaces'],
         wholeNamespaceConfirmed: true,
       }),
-      /Namespace/,
+      /命名空间/,
     );
     await assert.rejects(
       () => accessApi.approveBreakGlassGrant('grant-1', 121),

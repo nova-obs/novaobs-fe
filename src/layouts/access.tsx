@@ -110,7 +110,8 @@ export function accessAllows(context: PlatformAccessContext, requirement: Access
       return Boolean(level && k8sRank(level) >= k8sRank(requirement.minimum));
     }
     case 'k8s-module':
-      return context.k8sProfiles.some((profile) => profile.status === 'active')
+      return (context.availableModules ?? []).includes('k8s')
+        || context.k8sProfiles.some((profile) => profile.status === 'active')
         || (context.k8sBreakGlass ?? []).some((grant) => new Date(grant.expiresAt).getTime() > Date.now());
   }
 }

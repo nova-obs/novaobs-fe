@@ -17,11 +17,11 @@ test('平台访问控制只呈现固定授权工作台', () => {
   assert.equal(pageSource.includes("section: 'product-access'"), true);
   assert.equal(pageSource.includes("section: 'k8s-profiles'"), true);
   assert.equal(pageSource.includes("section: 'break-glass'"), true);
-  assert.equal(pageSource.includes('用户与服务身份'), true);
+  assert.equal(pageSource.includes('用户与用户组'), true);
   assert.equal(pageSource.includes('平台管理员'), true);
   assert.equal(pageSource.includes('产品授权'), true);
-  assert.equal(pageSource.includes('K8S Access Profile'), true);
-  assert.equal(pageSource.includes('Break Glass 与审计'), true);
+  assert.equal(pageSource.includes('命名空间权限'), true);
+  assert.equal(pageSource.includes('紧急访问与审计'), true);
   assert.equal(pageSource.includes('AccessTabNav'), false);
   assert.equal(pageSource.includes('platform-access-tabs'), false);
   assert.equal(pageSource.includes('grid min-w-0'), true);
@@ -39,19 +39,22 @@ test('平台访问控制不再提供自由角色、权限字符串和 ScopeMode 
   assert.equal(pageSource.includes('权限字符串'), false);
 });
 
-test('K8S Profile 明示整 Namespace 风险并要求确认真实影响边界', () => {
-  assert.equal(pageSource.includes('整 Namespace 风险确认'), true);
-  assert.equal(pageSource.includes('关联 Product / Service'), true);
-  assert.equal(pageSource.includes('ServiceDeployment 生产真值'), true);
+test('命名空间权限明示整命名空间风险并要求确认真实影响边界', () => {
+  assert.equal(pageSource.includes('<HelpTip'), true);
+  assert.equal(pageSource.includes('开发只读'), true);
+  assert.equal(pageSource.includes('命名空间维护'), true);
+  assert.equal(pageSource.includes('整命名空间风险确认'), true);
+  assert.equal(pageSource.includes('关联产品与服务'), true);
+  assert.equal(pageSource.includes('关联的服务部署关系'), true);
   assert.equal(apiSource.includes('/platform/k8s/namespace-impacts'), true);
   assert.equal(pageSource.includes('wholeNamespaceConfirmed'), true);
   assert.equal(apiSource.includes('whole_namespace_confirmed'), true);
-  assert.equal(pageSource.includes('禁止使用空 Namespace、* 或 all_namespaces'), true);
+  assert.equal(pageSource.includes('禁止使用空命名空间、* 或全局范围'), true);
   assert.equal(pageSource.includes('onEditProfile'), true);
   assert.equal(pageSource.includes('updateK8sAccessProfile'), true);
-  assert.equal(pageSource.includes('保存 Profile'), true);
+  assert.equal(pageSource.includes('保存命名空间权限'), true);
   assert.equal(pageSource.includes("profile.status === 'active'"), true);
-  assert.equal(pageSource.includes('请先同步至少一个 Profile'), true);
+  assert.equal(pageSource.includes('请先下发至少一条命名空间权限'), true);
 });
 
 test('Break Glass 强调双人审批、两小时上限和审计入口', () => {

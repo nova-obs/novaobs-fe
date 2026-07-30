@@ -57,7 +57,7 @@ export function DashboardPage() {
       {clusterError || error ? (
         <div className="console-notice console-notice-warning">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : 'K8s Dashboard 真实快照读取失败，请检查集群凭据、RBAC 与 Kubernetes API 连通性。'}
+          {clusterError ? '集群列表读取失败，请检查 NovaAPM 后端连接。' : 'K8s 仪表盘真实快照读取失败，请检查集群凭据、权限配置与 Kubernetes API 连通性。'}
         </div>
       ) : null}
 
@@ -75,9 +75,9 @@ export function DashboardPage() {
               </thead>
               <tbody>
                 <ControlPlaneRow label="API Server" value={signalMeta(signals, 'api-server')} source="Kubernetes API" state={signalMeta(signals, 'api-server')} />
-                <ControlPlaneRow label="Workloads" value={`${stats?.workloads ?? 0} active`} source="Deployment" state={stats?.health ?? 'unknown'} />
-                <ControlPlaneRow label="Namespaces" value={`${stats?.namespaces ?? 0} domains`} source="Kubernetes API" state={sync?.status ?? 'unknown'} />
-                <ControlPlaneRow label="RBAC" value={canWrite ? 'namespace-maintainer' : 'developer-read-only'} source="NovaAPM Profile" state={canWrite ? 'healthy' : 'warning'} />
+                <ControlPlaneRow label="工作负载" value={`${stats?.workloads ?? 0} 个运行中`} source="Deployment" state={stats?.health ?? 'unknown'} />
+                <ControlPlaneRow label="命名空间" value={`${stats?.namespaces ?? 0} 个`} source="Kubernetes API" state={sync?.status ?? 'unknown'} />
+                <ControlPlaneRow label="权限级别" value={canWrite ? '命名空间维护' : '开发只读'} source="NovaAPM 命名空间权限" state={canWrite ? 'healthy' : 'warning'} />
               </tbody>
             </table>
           </div>
@@ -85,7 +85,7 @@ export function DashboardPage() {
         <DataPanel title="集群策略">
           <div className="space-y-2">
             <PolicyRow label="接入模式" value={activeCluster?.accessMode || '-'} />
-            <PolicyRow label="工作负载操作" value={canWrite ? '允许 Namespace 维护' : '只读查看'} />
+            <PolicyRow label="工作负载操作" value={canWrite ? '允许命名空间维护' : '只读查看'} />
             <PolicyRow label="K8s 版本" value={activeCluster?.version || '-'} />
             <PolicyRow label="区域" value={activeCluster?.region || '-'} />
           </div>

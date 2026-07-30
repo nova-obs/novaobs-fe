@@ -6,7 +6,10 @@ const layoutSource = readFileSync(new URL('./K8sOpsLayout.tsx', import.meta.url)
 const dashboardSource = readFileSync(new URL('./DashboardPage.tsx', import.meta.url), 'utf8');
 const navigationSource = readFileSync(new URL('./navigation.ts', import.meta.url), 'utf8');
 const clusterSource = readFileSync(new URL('./ClusterPage.tsx', import.meta.url), 'utf8');
-const platformClusterSource = readFileSync(new URL('../platform/PlatformK8sClustersPage.tsx', import.meta.url), 'utf8');
+const platformClusterSource = [
+  '../platform/PlatformK8sClustersPage.tsx',
+  '../platform/PlatformK8sClusterDrawers.tsx',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 const namespaceSource = readFileSync(new URL('./NamespacePage.tsx', import.meta.url), 'utf8');
 const resourceSource = readFileSync(new URL('./ResourcePage.tsx', import.meta.url), 'utf8');
 const deploymentHistorySource = readFileSync(new URL('./DeploymentHistoryPage.tsx', import.meta.url), 'utf8');
@@ -94,15 +97,20 @@ test('K8s 集群接入和控制面凭据迁移到平台管理', () => {
   assert.equal(platformClusterSource.includes('createCluster'), true);
   assert.equal(platformClusterSource.includes('createClusterCredential'), true);
   assert.equal(platformClusterSource.includes('Controller Kubeconfig'), true);
-  assert.equal(platformClusterSource.includes('平台不会返回明文'), true);
+  assert.equal(platformClusterSource.includes('明文只用于本次校验和加密写入'), true);
   assert.equal(platformClusterSource.includes('deleteCluster'), true);
   assert.equal(platformClusterSource.includes('deleteClusterCredentials'), true);
-  assert.equal(platformClusterSource.includes('撤销该集群全部 K8S Profile'), true);
-  assert.equal(platformClusterSource.includes('退役集群会删除集群目录、全部 Controller/Broker 凭据'), true);
+  assert.equal(platformClusterSource.includes('撤销命名空间权限、用户组授权和紧急访问'), true);
+  assert.equal(platformClusterSource.includes('退役集群会删除集群目录、集群管理凭据和用户执行凭据'), true);
   assert.equal(platformClusterSource.includes("queryKey: ['fixed-access']"), true);
-  assert.equal(platformClusterSource.includes('onSettled: async (_, __, cluster)'), true);
+  assert.equal(platformClusterSource.includes('invalidateClusterAccess'), true);
   assert.equal(platformClusterSource.includes('孤立控制面凭据'), true);
   assert.equal(platformClusterSource.includes('清理孤立凭据与权限'), true);
+  assert.equal(platformClusterSource.includes('probeCluster'), true);
+  assert.equal(platformClusterSource.includes('lastProbe'), true);
+  assert.equal(platformClusterSource.includes('连接状态'), true);
+  assert.equal(platformClusterSource.includes('打开凭据管理'), true);
+  assert.equal(platformClusterSource.includes('版本（可选）'), false);
 });
 
 test('K8s 工作台不再暴露旧平台授权入口', () => {

@@ -9,6 +9,7 @@ export interface K8sCluster {
   status: string;
   accessMode: string;
   readOnly: boolean;
+  lastProbe?: K8sClusterProbe;
 }
 
 export interface K8sClusterInput {
@@ -33,6 +34,7 @@ export interface K8sClusterRegistrationResult {
     broker: K8sClusterCredential;
     auditId: string;
     probe?: K8sClusterProbe;
+    probeStatePersisted?: boolean;
   };
 }
 
@@ -45,6 +47,7 @@ export interface K8sClusterProbe {
   resourceCount: number;
   warnings: string[];
   checkedAt: string;
+  errorCode: string;
 }
 
 export interface K8sDeleteResult {
@@ -57,6 +60,15 @@ export interface K8sCredentialDeletionResult {
   deletedBrokerVersions: number;
   accessInvalidated: boolean;
   auditId: string;
+  clusterStatePersisted?: boolean;
+}
+
+export interface K8sCredentialRegistrationResult {
+  controller: K8sClusterCredential;
+  broker: K8sClusterCredential;
+  auditId: string;
+  probe?: K8sClusterProbe;
+  probeStatePersisted?: boolean;
 }
 
 export interface K8sClusterCredential {
@@ -151,6 +163,7 @@ export interface K8sWriteResult<T> {
   status?: string;
   auditId: string;
   probe?: K8sClusterProbe;
+  probeStatePersisted?: boolean;
 }
 
 export interface K8sTemplateVariable {
@@ -403,6 +416,7 @@ function mapCluster(raw: any): K8sCluster {
     status: raw.status ?? 'unknown',
     accessMode: raw.access_mode ?? raw.accessMode ?? 'direct',
     readOnly: Boolean(raw.read_only ?? raw.readOnly ?? true),
+    lastProbe: raw.last_probe || raw.lastProbe ? mapClusterProbe(raw.last_probe ?? raw.lastProbe) : undefined,
   };
 }
 
@@ -416,6 +430,7 @@ function mapClusterProbe(raw: any): K8sClusterProbe {
     resourceCount: Number(raw.resource_count ?? raw.resourceCount ?? 0),
     warnings: Array.isArray(raw.warnings) ? raw.warnings.map(String) : [],
     checkedAt: raw.checked_at ?? raw.checkedAt ?? '',
+    errorCode: raw.error_code ?? raw.errorCode ?? '',
   };
 }
 
@@ -541,6 +556,9 @@ function mapWriteResult<T>(raw: any, mapItem?: (value: any) => T): K8sWriteResul
     status: raw.status ?? undefined,
     auditId: raw.audit_id ?? raw.auditId ?? '',
     probe: raw.probe ? mapClusterProbe(raw.probe) : undefined,
+    probeStatePersisted: typeof (raw.probe_state_persisted ?? raw.probeStatePersisted) === 'boolean'
+      ? Boolean(raw.probe_state_persisted ?? raw.probeStatePersisted)
+      : undefined,
   };
 }
 
@@ -884,6 +902,9 @@ export const k8sApi = {
         broker: mapClusterCredential(raw.credentials?.broker),
         auditId: raw.credentials?.audit_id ?? '',
         probe: raw.credentials?.probe ? mapClusterProbe(raw.credentials.probe) : undefined,
+        probeStatePersisted: typeof raw.credentials?.probe_state_persisted === 'boolean'
+          ? raw.credentials.probe_state_persisted
+          : undefined,
       },
     };
   },
@@ -901,7 +922,7 @@ export const k8sApi = {
     const raw = await apiRequest<any[]>(`/k8s/cluster-credentials${params.toString() ? `?${params.toString()}` : ''}`);
     return raw.map(mapClusterCredential);
   },
-  async createClusterCredential(input: { clusterId: string; name: string; kubeconfig: string; expiresAt?: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+  async createClusterCredential(input: { clusterId: string; name: string; kubeconfig: string; expiresAt?: string }): Promise<K8sCredentialRegistrationResult> {
     const body: Record<string, string> = {
       cluster_id: input.clusterId,
       name: input.name,
@@ -912,27 +933,15 @@ export const k8sApi = {
       method: 'POST',
       body: JSON.stringify(body),
     });
-    return mapWriteResult(raw, mapClusterCredential);
-  },
-  async rotateClusterCredential(input: { clusterId: string; name: string; kubeconfig: string; expiresAt?: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
-    const body: Record<string, string> = {
-      cluster_id: input.clusterId,
-      name: input.name,
-      kubeconfig: input.kubeconfig,
+    return {
+      controller: mapClusterCredential(raw.controller),
+      broker: mapClusterCredential(raw.broker),
+      auditId: raw.audit_id ?? raw.auditId ?? '',
+      probe: raw.probe ? mapClusterProbe(raw.probe) : undefined,
+      probeStatePersisted: typeof (raw.probe_state_persisted ?? raw.probeStatePersisted) === 'boolean'
+        ? Boolean(raw.probe_state_persisted ?? raw.probeStatePersisted)
+        : undefined,
     };
-    if (input.expiresAt) body.expires_at = input.expiresAt;
-    const raw = await apiRequest<any>('/k8s/cluster-credentials/rotate', {
-      method: 'POST',
-      body: JSON.stringify(body),
-    });
-    return mapWriteResult(raw, mapClusterCredential);
-  },
-  async rollbackClusterCredential(input: { clusterId: string; secretId: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
-    const raw = await apiRequest<any>('/k8s/cluster-credentials/rollback', {
-      method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, secret_id: input.secretId }),
-    });
-    return mapWriteResult(raw, mapClusterCredential);
   },
   async deleteClusterCredentials(clusterId: string): Promise<K8sCredentialDeletionResult> {
     const raw = await apiRequest<any>(`/k8s/cluster-credentials/${encodeURIComponent(clusterId)}`, {
@@ -944,6 +953,9 @@ export const k8sApi = {
       deletedBrokerVersions: Number(raw.deleted_broker_versions ?? raw.deletedBrokerVersions ?? 0),
       accessInvalidated: Boolean(raw.access_invalidated ?? raw.accessInvalidated),
       auditId: raw.audit_id ?? raw.auditId ?? '',
+      clusterStatePersisted: typeof (raw.cluster_state_persisted ?? raw.clusterStatePersisted) === 'boolean'
+        ? Boolean(raw.cluster_state_persisted ?? raw.clusterStatePersisted)
+        : undefined,
     };
   },
   async listNamespaces(clusterId = '', query = ''): Promise<K8sNamespace[]> {

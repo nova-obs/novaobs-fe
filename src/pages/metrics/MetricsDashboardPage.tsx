@@ -90,7 +90,7 @@ export function MetricsDashboardPage() {
 			) : view.kind === 'error' ? (
 				<DashboardState title="Dashboard 加载失败" detail={errorMessage(dashboardQuery.error)} action={<button type="button" className="console-button" onClick={() => dashboardQuery.refetch()}><RefreshCw className="h-3.5 w-3.5" />重试</button>} />
 			) : productsQuery.isSuccess && products.length === 0 ? (
-				<DashboardState title="暂无可访问的 Product" detail="获得 Product Viewer 或 Product Maintainer 授权后，才能查看对应 Dashboard。" />
+				<DashboardState title="暂无可访问的产品" detail="获得产品查看者或产品维护者授权后，才能查看对应仪表盘。" />
 			) : (
 				<DashboardState title="尚未配置 Grafana 工作区" detail="请先在平台设置中配置 Grafana 入口地址。" action={<Link className="console-button console-button-primary" to="/platform/settings">前往平台设置</Link>} />
 			)}

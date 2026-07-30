@@ -11,7 +11,7 @@ export function K8sClusterPage() {
     <div className="space-y-4">
       <DataPanel
         title="可访问集群"
-        help="这里只展示由有效 K8S Access Profile 或 Break Glass 授权的集群；集群登记和控制面凭据在平台管理中维护。"
+        help="这里只展示通过有效命名空间权限或紧急访问授权的集群；集群登记和控制面凭据在平台管理中维护。"
       >
         {clusterError ? (
           <div className="rounded-md border border-danger/20 bg-danger/5 px-3 py-2 text-sm font-semibold text-danger">
@@ -25,7 +25,7 @@ export function K8sClusterPage() {
         ) : clusters.length === 0 ? (
           <div>
             <EmptyState title="暂无可访问集群" />
-            <p className="-mt-4 pb-4 text-center text-xs text-muted">请联系平台管理员，将你的用户组绑定到 K8S Access Profile。</p>
+            <p className="-mt-4 pb-4 text-center text-xs text-muted">请联系平台管理员，将你的用户组绑定到命名空间权限。</p>
           </div>
         ) : (
           <div className="grid gap-3 lg:grid-cols-2 2xl:grid-cols-3">

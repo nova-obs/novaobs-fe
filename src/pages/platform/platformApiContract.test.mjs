@@ -52,11 +52,10 @@ test('平台 IAM 空库列表把 null 统一映射为空数组', async () => {
       platformApi.listUsers(),
       platformApi.listGroups(),
       platformApi.listMemberships(),
-      platformApi.listServiceAccounts(),
       platformApi.listImages(),
     ]);
 
-    assert.deepEqual(results, [[], [], [], [], [], []]);
+    assert.deepEqual(results, [[], [], [], [], []]);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -82,23 +81,24 @@ test('平台 IAM 组成员调用统一平台 API', async () => {
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
     if (String(path).endsWith('/group-memberships') && init.method === 'POST') {
-      return jsonResponse({ item: { id: 'membership-1', group_id: 'sre', group_name: 'SRE', subject_id: 'dev-admin', subject_type: 'user', subject_display_name: '开发管理员' }, status: 'created' });
+      return jsonResponse({ item: { id: 'membership-1', group_id: 'sre', group_name: 'SRE', user_id: 'dev-admin', user_display_name: '开发管理员' }, status: 'created' });
     }
     return jsonResponse([]);
   };
 
   try {
-    const created = await platformApi.createMembership({ groupId: 'sre', subjectId: 'dev-admin', subjectType: 'user' });
+    const created = await platformApi.createMembership({ groupId: 'sre', userId: 'dev-admin' });
 
     assert.equal(requests[0].path, '/api/v1/platform/group-memberships');
-    assert.deepEqual(JSON.parse(requests[0].init.body), { group_id: 'sre', subject_id: 'dev-admin', subject_type: 'user' });
+    assert.deepEqual(JSON.parse(requests[0].init.body), { group_id: 'sre', user_id: 'dev-admin' });
     assert.equal(created.item.groupId, 'sre');
+    assert.equal(created.item.userId, 'dev-admin');
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('平台 IAM 删除接口覆盖用户、组和服务账号', async () => {
+test('平台 IAM 删除接口覆盖用户和用户组', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -109,23 +109,18 @@ test('平台 IAM 删除接口覆盖用户、组和服务账号', async () => {
     if (String(path).includes('/groups/')) {
       return jsonResponse({ item: { id: 'sre', name: 'sre', display_name: 'SRE', status: 'active' }, status: 'deleted' });
     }
-    if (String(path).includes('/service-accounts/')) {
-      return jsonResponse({ item: { id: 'robot-1', name: 'robot-1', display_name: '自动化账号', status: 'active' }, status: 'deleted' });
-    }
     return jsonResponse({ status: 'deleted' });
   };
 
   try {
     await platformApi.deleteUser('operator-1');
     await platformApi.deleteGroup('sre');
-    await platformApi.deleteServiceAccount('robot-1');
 
     assert.deepEqual(requests.map((request) => request.path), [
       '/api/v1/platform/users/operator-1',
       '/api/v1/platform/groups/sre',
-      '/api/v1/platform/service-accounts/robot-1',
     ]);
-    assert.deepEqual(requests.map((request) => request.init.method), ['DELETE', 'DELETE', 'DELETE']);
+    assert.deepEqual(requests.map((request) => request.init.method), ['DELETE', 'DELETE']);
   } finally {
     globalThis.fetch = originalFetch;
   }

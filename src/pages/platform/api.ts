@@ -37,24 +37,12 @@ export interface PlatformGroup {
   updatedAt: string;
 }
 
-export interface PlatformServiceAccount {
-  id: string;
-  name: string;
-  displayName: string;
-  description: string;
-  status: string;
-  owner: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
 export interface PlatformMembership {
   id: string;
   groupId: string;
   groupName: string;
-  subjectId: string;
-  subjectType: string;
-  subjectDisplayName: string;
+  userId: string;
+  userDisplayName: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -122,27 +110,13 @@ function mapGroup(raw: any): PlatformGroup {
   };
 }
 
-function mapServiceAccount(raw: any): PlatformServiceAccount {
-  return {
-    id: String(raw.id ?? ''),
-    name: raw.name ?? '',
-    displayName: raw.display_name ?? raw.displayName ?? '',
-    description: raw.description ?? '',
-    status: raw.status ?? 'unknown',
-    owner: raw.owner ?? '',
-    createdAt: raw.created_at ?? raw.createdAt ?? '',
-    updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
-  };
-}
-
 function mapMembership(raw: any): PlatformMembership {
   return {
     id: String(raw.id ?? ''),
     groupId: raw.group_id ?? raw.groupId ?? '',
     groupName: raw.group_name ?? raw.groupName ?? '',
-    subjectId: raw.subject_id ?? raw.subjectId ?? '',
-    subjectType: raw.subject_type ?? raw.subjectType ?? '',
-    subjectDisplayName: raw.subject_display_name ?? raw.subjectDisplayName ?? '',
+    userId: raw.user_id ?? raw.userId ?? '',
+    userDisplayName: raw.user_display_name ?? raw.userDisplayName ?? '',
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
@@ -225,31 +199,16 @@ export const platformApi = {
     const raw = await apiRequest<any[] | null>('/platform/group-memberships');
     return mapList(raw, mapMembership);
   },
-  async createMembership(input: { groupId: string; subjectId: string; subjectType: string }): Promise<PlatformWriteResult<PlatformMembership>> {
+  async createMembership(input: { groupId: string; userId: string }): Promise<PlatformWriteResult<PlatformMembership>> {
     const raw = await apiRequest<any>('/platform/group-memberships', {
       method: 'POST',
-      body: JSON.stringify({ group_id: input.groupId, subject_id: input.subjectId, subject_type: input.subjectType }),
+      body: JSON.stringify({ group_id: input.groupId, user_id: input.userId }),
     });
     return mapWriteResult(raw, mapMembership);
   },
   async deleteMembership(id: string): Promise<PlatformWriteResult<PlatformMembership>> {
     const raw = await apiRequest<any>(`/platform/group-memberships/${encodeURIComponent(id)}`, { method: 'DELETE' });
     return mapWriteResult(raw, mapMembership);
-  },
-  async listServiceAccounts(): Promise<PlatformServiceAccount[]> {
-    const raw = await apiRequest<any[] | null>('/platform/service-accounts');
-    return mapList(raw, mapServiceAccount);
-  },
-  async createServiceAccount(input: { name: string; displayName: string; owner?: string; description?: string }): Promise<PlatformWriteResult<PlatformServiceAccount>> {
-    const raw = await apiRequest<any>('/platform/service-accounts', {
-      method: 'POST',
-      body: JSON.stringify({ name: input.name, display_name: input.displayName, owner: input.owner ?? '', description: input.description ?? '' }),
-    });
-    return mapWriteResult(raw, mapServiceAccount);
-  },
-  async deleteServiceAccount(id: string): Promise<PlatformWriteResult<PlatformServiceAccount>> {
-    const raw = await apiRequest<any>(`/platform/service-accounts/${encodeURIComponent(id)}`, { method: 'DELETE' });
-    return mapWriteResult(raw, mapServiceAccount);
   },
   async listImages(): Promise<PlatformImage[]> {
     const raw = await apiRequest<any[] | null>('/platform/images');

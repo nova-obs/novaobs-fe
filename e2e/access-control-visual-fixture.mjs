@@ -7,6 +7,7 @@ const roles = Object.freeze({
   developer: Object.freeze({
     subject: { id: 'developer-chen', type: 'user', display_name: '开发工程师 陈晨' },
     group_ids: ['commerce-developers'],
+    available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
     product_accesses: [],
     k8s_profiles: [{
@@ -24,6 +25,7 @@ const roles = Object.freeze({
   maintainer: Object.freeze({
     subject: { id: 'lead-li', type: 'user', display_name: '开发组长 李岚' },
     group_ids: ['commerce-maintainers'],
+    available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
     product_accesses: [],
     k8s_profiles: [{
@@ -41,6 +43,7 @@ const roles = Object.freeze({
   'product-viewer': Object.freeze({
     subject: { id: 'viewer-wang', type: 'user', display_name: '产品观察者 王维' },
     group_ids: ['commerce-viewers'],
+    available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
     product_accesses: [{ product_id: 'product-commerce', product_name: '交易平台', role: 'product-viewer' }],
     k8s_profiles: [],
@@ -56,6 +59,7 @@ const roles = Object.freeze({
   'product-maintainer': Object.freeze({
     subject: { id: 'owner-zhao', type: 'user', display_name: '产品维护者 赵哲' },
     group_ids: ['commerce-owners'],
+    available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
     product_accesses: [{ product_id: 'product-commerce', product_name: '交易平台', role: 'product-maintainer' }],
     k8s_profiles: [],
@@ -71,6 +75,7 @@ const roles = Object.freeze({
   'platform-admin': Object.freeze({
     subject: { id: 'platform-admin', type: 'user', display_name: '平台管理员' },
     group_ids: ['platform-owners'],
+    available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: true,
     product_accesses: [],
     k8s_profiles: [],
@@ -122,6 +127,13 @@ const clusters = Object.freeze([{
   status: 'healthy',
   access_mode: 'impersonation-broker',
   read_only: false,
+  last_probe: {
+    status: 'connected',
+    server_version: 'v1.31.4',
+    resource_count: 48,
+    warnings: [],
+    checked_at: '2026-07-29T08:00:00Z',
+  },
 }]);
 
 function envelope(data) {
@@ -160,7 +172,7 @@ function routeData(pathname) {
   if (pathname === '/api/v1/products') return products;
   if (pathname === '/api/v1/platform/catalog/products') return products;
   if (pathname === '/api/v1/products/product-commerce/services') return services;
-  if (pathname === '/api/v1/k8s/clusters') return clusters;
+  if (pathname === '/api/v1/k8s/clusters') return role.k8s_profiles.length > 0 ? clusters : [];
   if (pathname === '/api/v1/platform/k8s/clusters') return clusters;
   if (pathname === '/api/v1/platform/k8s/namespace-impacts') {
     return [{
@@ -190,21 +202,19 @@ function routeData(pathname) {
     ];
   }
   if (pathname === '/api/v1/platform/group-memberships') return [];
-  if (pathname === '/api/v1/platform/service-accounts') return [];
   if (pathname === '/api/v1/platform/admin-grants') {
     return [{ id: 'admin:user:platform-admin', subject_type: 'user', subject_id: 'platform-admin', created_by: 'bootstrap', created_at: '2026-07-20T08:00:00Z' }];
   }
   if (pathname === '/api/v1/products/product-commerce/access-grants') {
     return [
-      { id: 'grant-commerce-viewers', product_id: 'product-commerce', subject_type: 'group', subject_id: 'commerce-viewers', role: 'product-viewer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z' },
-      { id: 'grant-commerce-owners', product_id: 'product-commerce', subject_type: 'group', subject_id: 'commerce-owners', role: 'product-maintainer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z' },
+      { id: 'grant-commerce-viewers', product_id: 'product-commerce', group_id: 'commerce-viewers', role: 'product-viewer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z' },
+      { id: 'grant-commerce-owners', product_id: 'product-commerce', group_id: 'commerce-owners', role: 'product-maintainer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z' },
     ];
   }
-  if (pathname === '/api/v1/products/product-commerce/access-subjects') {
+  if (pathname === '/api/v1/products/product-commerce/access-groups') {
     return [
-      { subject_type: 'group', subject_id: 'commerce-viewers', display_name: '交易平台观察者' },
-      { subject_type: 'group', subject_id: 'commerce-owners', display_name: '交易平台维护者' },
-      { subject_type: 'service-account', subject_id: 'commerce-release-bot', display_name: '交易发布机器人' },
+      { group_id: 'commerce-viewers', display_name: '交易平台观察者' },
+      { group_id: 'commerce-owners', display_name: '交易平台维护者' },
     ];
   }
   if (pathname === '/api/v1/k8s/access-profiles') {

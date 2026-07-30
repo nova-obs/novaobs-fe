@@ -1,4 +1,4 @@
-import { useMemo, useState, type ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, ShieldCheck, Trash2, UsersRound } from 'lucide-react';
 import { Link, useParams } from 'react-router-dom';
@@ -9,16 +9,12 @@ import {
   accessApi,
   type ProductAccessGrant,
   type ProductAccessRole,
-  type ProductGrantSubject,
 } from '../platform/accessApi';
-
-type ProductGrantSubjectType = ProductGrantSubject['subjectType'];
 
 export function ProductAccessPage() {
   const { productId = '' } = useParams();
   const queryClient = useQueryClient();
-  const [subjectType, setSubjectType] = useState<ProductGrantSubjectType>('group');
-  const [subjectId, setSubjectId] = useState('');
+  const [groupId, setGroupId] = useState('');
   const [role, setRole] = useState<ProductAccessRole>('product-viewer');
   const productsQuery = useQuery({ queryKey: ['products', 'accessible'], queryFn: api.getProducts, retry: false });
   const grantsQuery = useQuery({
@@ -29,27 +25,23 @@ export function ProductAccessPage() {
   });
   const subjectsQuery = useQuery({
     queryKey: ['fixed-access', 'product-grant-subjects', productId],
-    queryFn: () => accessApi.listProductGrantSubjects(productId),
+    queryFn: () => accessApi.listProductGrantGroups(productId),
     enabled: Boolean(productId),
     retry: false,
   });
   const product = productsQuery.data?.find((item) => item.id === productId);
   const subjects = subjectsQuery.data ?? [];
   const grants = grantsQuery.data ?? [];
-  const selectableSubjects = useMemo(
-    () => subjects.filter((item) => item.subjectType === subjectType),
-    [subjectType, subjects],
-  );
-  const selectedSubjectId = selectableSubjects.some((item) => item.subjectId === subjectId)
-    ? subjectId
-    : selectableSubjects[0]?.subjectId ?? '';
+  const selectedGroupId = subjects.some((item) => item.groupId === groupId)
+    ? groupId
+    : subjects[0]?.groupId ?? '';
 
   const invalidate = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ['fixed-access', 'product-grants', productId] }),
     queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
   ]);
   const saveGrant = useMutation({
-    mutationFn: (input: { subjectType: ProductGrantSubjectType; subjectId: string; role: ProductAccessRole }) => (
+    mutationFn: (input: { groupId: string; role: ProductAccessRole }) => (
       accessApi.createProductAccessGrant(productId, input)
     ),
     onSuccess: invalidate,
@@ -58,9 +50,9 @@ export function ProductAccessPage() {
     mutationFn: (grant: ProductAccessGrant) => accessApi.deleteProductAccessGrant(productId, grant.id),
     onSuccess: invalidate,
   });
-  const subjectLabels = new Map(subjects.map((item) => [
-    `${item.subjectType}:${item.subjectId}`,
-    item.displayName || item.subjectId,
+  const groupLabels = new Map(subjects.map((item) => [
+    item.groupId,
+    item.displayName || item.groupId,
   ]));
   const error = productsQuery.error || grantsQuery.error || subjectsQuery.error || saveGrant.error || deleteGrant.error;
 
@@ -86,48 +78,35 @@ export function ProductAccessPage() {
 
       <DataPanel
         title="添加产品授权"
-        meta="只可选择平台中已启用的用户组与服务账号；用户通过用户组继承权限。"
+        meta="只可选择平台中已启用的用户组；用户通过用户组继承权限。"
       >
         {subjectsQuery.isLoading ? <div className="console-skeleton h-10" /> : (
-          <div className="grid gap-3 lg:grid-cols-[160px_minmax(220px,1fr)_190px_auto] lg:items-end">
-            <Field label="主体类型">
+          <div className="grid gap-3 lg:grid-cols-[minmax(220px,1fr)_190px_auto] lg:items-end">
+            <Field label="授权用户组">
               <select
                 className="console-select w-full"
-                value={subjectType}
-                onChange={(event) => {
-                  setSubjectType(event.target.value as ProductGrantSubjectType);
-                  setSubjectId('');
-                }}
+                value={selectedGroupId}
+                onChange={(event) => setGroupId(event.target.value)}
               >
-                <option value="group">用户组</option>
-                <option value="service-account">服务账号</option>
-              </select>
-            </Field>
-            <Field label="授权主体">
-              <select
-                className="console-select w-full"
-                value={selectedSubjectId}
-                onChange={(event) => setSubjectId(event.target.value)}
-              >
-                {selectableSubjects.length === 0 ? <option value="">暂无可用主体</option> : null}
-                {selectableSubjects.map((item) => (
-                  <option key={item.subjectId} value={item.subjectId}>
-                    {item.displayName || item.subjectId} · {item.subjectId}
+                {subjects.length === 0 ? <option value="">暂无可用用户组</option> : null}
+                {subjects.map((item) => (
+                  <option key={item.groupId} value={item.groupId}>
+                    {item.displayName || item.groupId} · {item.groupId}
                   </option>
                 ))}
               </select>
             </Field>
             <Field label="产品角色">
               <select className="console-select w-full" value={role} onChange={(event) => setRole(event.target.value as ProductAccessRole)}>
-                <option value="product-viewer">Product Viewer</option>
-                <option value="product-maintainer">Product Maintainer</option>
+                <option value="product-viewer">产品查看者</option>
+                <option value="product-maintainer">产品维护者</option>
               </select>
             </Field>
             <button
               className="console-button console-button-primary"
               type="button"
-              disabled={!selectedSubjectId || saveGrant.isPending}
-              onClick={() => saveGrant.mutate({ subjectType, subjectId: selectedSubjectId, role })}
+              disabled={!selectedGroupId || saveGrant.isPending}
+              onClick={() => saveGrant.mutate({ groupId: selectedGroupId, role })}
             >
               {saveGrant.isPending ? '保存中…' : '添加授权'}
             </button>
@@ -144,47 +123,45 @@ export function ProductAccessPage() {
         ) : (
           <div className="console-resource-list overflow-x-auto">
             <table className="console-table w-full min-w-[760px]">
-              <thead><tr><th>主体</th><th>类型</th><th>产品角色</th><th>生效范围</th><th className="text-right">操作</th></tr></thead>
+              <thead><tr><th>用户组</th><th>产品角色</th><th>生效范围</th><th className="text-right">操作</th></tr></thead>
               <tbody>
                 {grants.map((grant) => (
                   <tr key={grant.id}>
                     <td>
                       <div className="font-semibold text-on-surface">
-                        {subjectLabels.get(`${grant.subjectType}:${grant.subjectId}`) || grant.subjectId}
+                        {groupLabels.get(grant.groupId) || grant.groupId}
                       </div>
-                      <div className="mt-1 font-mono text-[11px] text-muted">{grant.subjectId}</div>
+                      <div className="mt-1 font-mono text-[11px] text-muted">{grant.groupId}</div>
                     </td>
-                    <td>{subjectTypeLabel(grant.subjectType)}</td>
                     <td>
                       <select
                         className="console-select min-w-[180px]"
-                        aria-label={`修改 ${grant.subjectId} 的产品角色`}
+                        aria-label={`修改 ${grant.groupId} 的产品角色`}
                         value={grant.role}
                         disabled={saveGrant.isPending}
                         onChange={(event) => saveGrant.mutate({
-                          subjectType: grant.subjectType,
-                          subjectId: grant.subjectId,
+                          groupId: grant.groupId,
                           role: event.target.value as ProductAccessRole,
                         })}
                       >
-                        <option value="product-viewer">Product Viewer</option>
-                        <option value="product-maintainer">Product Maintainer</option>
+                        <option value="product-viewer">产品查看者</option>
+                        <option value="product-maintainer">产品维护者</option>
                       </select>
                     </td>
                     <td>
                       <span className="inline-flex items-center gap-1.5 text-xs text-muted">
-                        <UsersRound className="h-3.5 w-3.5" />全部 Service
+                        <UsersRound className="h-3.5 w-3.5" />全部服务
                       </span>
                     </td>
                     <td className="text-right">
                       <button
                         className="console-icon-button text-red-600"
                         type="button"
-                        aria-label={`移除 ${grant.subjectId} 的产品授权`}
+                        aria-label={`移除 ${grant.groupId} 的产品授权`}
                         title="移除授权"
                         disabled={deleteGrant.isPending}
                         onClick={() => {
-                          if (window.confirm(`确认移除 ${grant.subjectId} 的产品授权？该主体将立即失去本产品访问能力。`)) {
+                          if (window.confirm(`确认移除 ${grant.groupId} 的产品授权？该用户组将立即失去本产品访问能力。`)) {
                             deleteGrant.mutate(grant);
                           }
                         }}
@@ -210,10 +187,6 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
       {children}
     </label>
   );
-}
-
-function subjectTypeLabel(subjectType: ProductGrantSubjectType) {
-  return subjectType === 'service-account' ? '服务账号' : '用户组';
 }
 
 function errorMessage(error: unknown) {

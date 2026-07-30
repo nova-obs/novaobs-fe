@@ -29,14 +29,13 @@ import {
 import type { PlatformAccessSection } from './platformNavigation';
 
 export type Editor = 'identity' | 'membership' | 'platform-admin' | 'product-access' | 'k8s-profile' | 'k8s-grant' | 'break-glass';
-export type IdentityKind = 'user' | 'group' | 'service-account';
+export type IdentityKind = 'user' | 'group';
 export interface IdentityDraft {
   kind: IdentityKind;
   name: string;
   displayName: string;
   email: string;
   password: string;
-  owner: string;
   description: string;
 }
 
@@ -46,7 +45,6 @@ const emptyIdentityDraft: IdentityDraft = {
   displayName: '',
   email: '',
   password: '',
-  owner: '',
   description: '',
 };
 
@@ -63,12 +61,11 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
   const { data: currentAccess } = usePlatformAccess();
   const [activeEditor, setActiveEditor] = useState<Editor | null>(null);
   const [identityDraft, setIdentityDraft] = useState(emptyIdentityDraft);
-  const [membershipDraft, setMembershipDraft] = useState({ groupId: '', subjectType: 'user', subjectId: '' });
+  const [membershipDraft, setMembershipDraft] = useState({ groupId: '', userId: '' });
   const [adminDraft, setAdminDraft] = useState({ subjectType: 'user' as 'user' | 'group', subjectId: '' });
   const [productDraft, setProductDraft] = useState({
     productId: '',
-    subjectType: 'group' as 'group' | 'service-account',
-    subjectId: '',
+    groupId: '',
     role: 'product-viewer' as ProductAccessRole,
   });
   const [profileDraft, setProfileDraft] = useState(emptyProfileDraft);
@@ -82,7 +79,6 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
   const usersQuery = useQuery({ queryKey: ['platform-users'], queryFn: platformApi.listUsers, retry: false });
   const groupsQuery = useQuery({ queryKey: ['platform-groups'], queryFn: platformApi.listGroups, retry: false });
   const membershipsQuery = useQuery({ queryKey: ['platform-group-memberships'], queryFn: platformApi.listMemberships, retry: false });
-  const serviceAccountsQuery = useQuery({ queryKey: ['platform-service-accounts'], queryFn: platformApi.listServiceAccounts, retry: false });
   const productsQuery = useQuery({ queryKey: ['platform-products'], queryFn: api.getProductsForAdministration, retry: false });
   const clustersQuery = useQuery({ queryKey: ['platform-k8s-clusters'], queryFn: () => k8sApi.listClustersForAdministration(), retry: false });
   const adminsQuery = useQuery({ queryKey: ['fixed-access', 'platform-admins'], queryFn: accessApi.listPlatformAdminGrants, retry: false });
@@ -100,7 +96,6 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
   const users = usersQuery.data ?? [];
   const groups = groupsQuery.data ?? [];
   const memberships = membershipsQuery.data ?? [];
-  const serviceAccounts = serviceAccountsQuery.data ?? [];
   const products = productsQuery.data ?? [];
   const clusters = clustersQuery.data ?? [];
   const admins = adminsQuery.data ?? [];
@@ -127,7 +122,6 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
     queryClient.invalidateQueries({ queryKey: ['platform-users'] }),
     queryClient.invalidateQueries({ queryKey: ['platform-groups'] }),
     queryClient.invalidateQueries({ queryKey: ['platform-group-memberships'] }),
-    queryClient.invalidateQueries({ queryKey: ['platform-service-accounts'] }),
     queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
   ]);
   const invalidateFixedAccess = () => Promise.all([
@@ -141,14 +135,6 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
         return platformApi.createGroup({
           name: identityDraft.name.trim(),
           displayName: identityDraft.displayName.trim(),
-          description: identityDraft.description.trim(),
-        });
-      }
-      if (identityDraft.kind === 'service-account') {
-        return platformApi.createServiceAccount({
-          name: identityDraft.name.trim(),
-          displayName: identityDraft.displayName.trim(),
-          owner: identityDraft.owner.trim(),
           description: identityDraft.description.trim(),
         });
       }
@@ -169,19 +155,14 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
     mutationFn: ({ kind, id }) => (
       kind === 'group'
         ? platformApi.deleteGroup(id)
-        : kind === 'service-account'
-          ? platformApi.deleteServiceAccount(id)
-          : platformApi.deleteUser(id)
+        : platformApi.deleteUser(id)
     ),
     onSuccess: invalidateIdentity,
   });
   const createMembership = useMutation({
     mutationFn: () => platformApi.createMembership({
-      ...membershipDraft,
       groupId: membershipDraft.groupId || groups[0]?.id || '',
-      subjectId: membershipDraft.subjectId || (
-        membershipDraft.subjectType === 'service-account' ? serviceAccounts[0]?.id : users[0]?.id
-      ) || '',
+      userId: membershipDraft.userId || users[0]?.id || '',
     }),
     onSuccess: async () => {
       setActiveEditor(null);
@@ -204,10 +185,7 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
   const deleteAdmin = useMutation({ mutationFn: accessApi.deletePlatformAdminGrant, onSuccess: invalidateFixedAccess });
   const createProductGrant = useMutation({
     mutationFn: () => accessApi.createProductAccessGrant(productDraft.productId || products[0]?.id || '', {
-      subjectType: productDraft.subjectType,
-      subjectId: productDraft.subjectId || (
-        productDraft.subjectType === 'group' ? groups[0]?.id : serviceAccounts[0]?.id
-      ) || '',
+      groupId: productDraft.groupId || groups[0]?.id || '',
       role: productDraft.role,
     }),
     onSuccess: async () => {
@@ -277,7 +255,6 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
     usersQuery.error,
     groupsQuery.error,
     membershipsQuery.error,
-    serviceAccountsQuery.error,
     productsQuery.error,
     clustersQuery.error,
     adminsQuery.error,
@@ -303,14 +280,12 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
     revokeBreakGlass.error,
   ].filter(Boolean);
   const adminSubjects = adminDraft.subjectType === 'group' ? groups : users;
-  const productSubjects = productDraft.subjectType === 'group' ? groups : serviceAccounts;
-  const membershipSubjects = membershipDraft.subjectType === 'service-account' ? serviceAccounts : users;
   return (
     <div className="space-y-4">
       <DataPanel>
         <div className="console-notice mb-3">
           <ShieldCheck className="h-4 w-4" />
-          平台、Product 与 K8S 是三条独立授权边界；平台管理员不会自动获得产品数据或工作负载权限。
+          平台控制面、产品与 K8S 工作负载是三条独立授权边界；平台管理员不会自动获得产品数据或工作负载权限。
         </div>
         {errors[0] ? <ErrorNotice error={errors[0]} /> : null}
 
@@ -319,7 +294,6 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
             users={users}
             groups={groups}
             memberships={memberships}
-            serviceAccounts={serviceAccounts}
             currentUserId={currentAccess?.subject.id ?? ''}
             onCreateIdentity={() => setActiveEditor('identity')}
             onCreateMembership={() => setActiveEditor('membership')}
@@ -350,10 +324,9 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
           <ProductAccessWorkspace
             grants={productGrants}
             groups={groups}
-            serviceAccounts={serviceAccounts}
             onCreate={() => setActiveEditor('product-access')}
             onDelete={(grant) => {
-              if (window.confirm('确认撤销该 Product 授权？授权会自动覆盖 Product 下全部 Service。')) {
+              if (window.confirm('确认撤销该产品授权？授权会自动覆盖产品下全部服务。')) {
                 deleteProductGrant.mutate({ productId: grant.productId, grantId: grant.id });
               }
             }}
@@ -384,12 +357,12 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
             }}
             onSync={(id) => syncProfile.mutate(id)}
             onDeleteProfile={(profile) => {
-              if (window.confirm(`确认删除 Profile「${profile.name}」？关联用户组会立即失去对应 Namespace 权限。`)) {
+              if (window.confirm(`确认删除命名空间权限「${profile.name}」？关联用户组会立即失去对应命名空间权限。`)) {
                 deleteProfile.mutate(profile.id);
               }
             }}
             onDeleteGrant={(grant) => {
-              if (window.confirm('确认撤销该用户组的 K8S Profile？')) deleteK8sGrant.mutate(grant.id);
+              if (window.confirm('确认撤销该用户组的命名空间权限？')) deleteK8sGrant.mutate(grant.id);
             }}
           />
         ) : null}
@@ -402,12 +375,12 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
             setApprovalMinutes={setApprovalMinutes}
             onRequest={() => setActiveEditor('break-glass')}
             onApprove={(grant) => {
-              if (window.confirm(`确认批准 ${approvalMinutes} 分钟 Break Glass？必须由另一名平台管理员审批。`)) {
+              if (window.confirm(`确认批准 ${approvalMinutes} 分钟紧急访问？必须由另一名平台管理员审批。`)) {
                 approveBreakGlass.mutate(grant.id);
               }
             }}
             onRevoke={(grant) => {
-              if (window.confirm('确认立即撤销该 Break Glass？')) revokeBreakGlass.mutate(grant.id);
+              if (window.confirm('确认立即撤销该紧急访问？')) revokeBreakGlass.mutate(grant.id);
             }}
           />
         ) : null}
@@ -415,16 +388,16 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
 
       {activeEditor ? (
         <EditorDrawer
-          title={activeEditor === 'k8s-profile' && editingProfileId ? '编辑 K8S Access Profile' : editorTitle(activeEditor)}
+          title={activeEditor === 'k8s-profile' && editingProfileId ? '编辑命名空间权限' : editorTitle(activeEditor)}
           onClose={() => {
             setActiveEditor(null);
             setEditingProfileId('');
           }}
         >
           {activeEditor === 'identity' ? <IdentityForm draft={identityDraft} setDraft={setIdentityDraft} pending={createIdentity.isPending} onSubmit={() => createIdentity.mutate()} /> : null}
-          {activeEditor === 'membership' ? <MembershipForm draft={membershipDraft} groups={groups} subjects={membershipSubjects} setDraft={setMembershipDraft} pending={createMembership.isPending} onSubmit={() => createMembership.mutate()} /> : null}
+          {activeEditor === 'membership' ? <MembershipForm draft={membershipDraft} groups={groups} users={users} setDraft={setMembershipDraft} pending={createMembership.isPending} onSubmit={() => createMembership.mutate()} /> : null}
           {activeEditor === 'platform-admin' ? <PlatformAdminForm draft={adminDraft} subjects={adminSubjects} setDraft={setAdminDraft} pending={createAdmin.isPending} onSubmit={() => createAdmin.mutate()} /> : null}
-          {activeEditor === 'product-access' ? <ProductAccessForm draft={productDraft} products={products} subjects={productSubjects} setDraft={setProductDraft} pending={createProductGrant.isPending} onSubmit={() => createProductGrant.mutate()} /> : null}
+          {activeEditor === 'product-access' ? <ProductAccessForm draft={productDraft} products={products} groups={groups} setDraft={setProductDraft} pending={createProductGrant.isPending} onSubmit={() => createProductGrant.mutate()} /> : null}
           {activeEditor === 'k8s-profile' ? (
             <K8sProfileForm
               draft={profileDraft}
