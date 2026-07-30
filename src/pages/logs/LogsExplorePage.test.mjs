@@ -49,3 +49,8 @@ test('Logs Explore 只提供平台内嵌查询，不暴露跳转 Grafana 的入�
   assert.doesNotMatch(source, /target="_blank"/);
   assert.doesNotMatch(source, /ExternalLink/);
 });
+
+test('未分配产品时保留可观测性入口并明确数据仍按产品授权隔离', () => {
+  assert.match(source, /暂无可访问的产品/);
+  assert.match(source, /可观测性模块对所有登录用户可见，但产品、服务和观测数据仍按产品授权隔离/);
+});

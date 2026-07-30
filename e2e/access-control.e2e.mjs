@@ -130,6 +130,18 @@ test('固定权限五种身份视图与集群接入响应式布局', { timeout: 
     });
     await emptyContext.close();
 
+    const observabilityContext = await browser.newContext({ viewport: viewports[1] });
+    const observabilityPage = await observabilityContext.newPage();
+    await observabilityPage.goto(`${baseURL}/logs/explore`);
+    await observabilityPage.getByText('可观测性', { exact: true }).first().waitFor();
+    await observabilityPage.getByText('暂无可访问的产品', { exact: true }).waitFor();
+    await waitForAnimations(observabilityPage.locator('body'));
+    await observabilityPage.screenshot({
+      path: `${previewDir}/access-platform-admin-observability-empty.png`,
+      fullPage: true,
+    });
+    await observabilityContext.close();
+
     for (const viewport of viewports) {
       const context = await browser.newContext({ viewport });
       const page = await context.newPage();

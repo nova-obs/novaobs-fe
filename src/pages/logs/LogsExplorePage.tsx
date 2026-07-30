@@ -10,11 +10,12 @@ import { LogsEmptyState, LogsErrorLine, LogsInfoCell, LogsSection } from './Logs
 
 export function LogsExplorePage() {
   const queryClient = useQueryClient();
-  const { activeProduct, activeService, services } = useServiceScope();
+  const { activeProduct, activeService, products, services, loading, error } = useServiceScope();
   const [searchParams, setSearchParams] = useSearchParams();
   const productId = activeProduct?.id ?? '';
   const serviceId = activeService?.id ?? '';
   const contextReady = Boolean(productId && serviceId);
+  const noProductAccess = !loading && !error && products.length === 0;
   const productServices = useMemo(
     () => services.filter((service) => service.productId === productId),
     [productId, services],
@@ -85,7 +86,12 @@ export function LogsExplorePage() {
         </div>
 
         {!activeProduct ? (
-          <LogsEmptyState title="请选择产品" description="选择查询产品后，可继续选择该产品内的服务。" />
+          <LogsEmptyState
+            title={noProductAccess ? '暂无可访问的产品' : '请选择产品'}
+            description={noProductAccess
+              ? '可观测性模块对所有登录用户可见，但产品、服务和观测数据仍按产品授权隔离。'
+              : '选择查询产品后，可继续选择该产品内的服务。'}
+          />
         ) : !activeService ? (
           <LogsEmptyState
             title={productServices.length ? '请选择服务' : '当前产品暂无服务'}

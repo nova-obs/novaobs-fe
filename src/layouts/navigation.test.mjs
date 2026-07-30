@@ -158,7 +158,7 @@ function flattenLeafItems(items) {
   return items.flatMap((item) => item.children?.length ? flattenLeafItems(item.children) : [item]);
 }
 
-test('超级菜单按访问上下文隐藏无权业务域和管理员入口', () => {
+test('超级菜单默认展示可发现业务域，并按访问上下文隐藏数据与管理员入口', () => {
   const developer = {
     subject: { id: 'user-1', type: 'user', displayName: '开发用户' },
     groups: [],
@@ -169,23 +169,36 @@ test('超级菜单按访问上下文隐藏无权业务域和管理员入口', ()
     availableModules: ['workspace', 'observability', 'k8s'],
     modules: { workspace: 'read', products: 'read', logs: 'read', metrics: 'read', traces: 'read', k8s: 'hidden', platform: 'hidden' },
   };
-  const platformAdmin = {
+  const unassigned = {
     ...developer,
-    platformAdmin: true,
     productAccesses: [],
-    modules: { workspace: 'read', products: 'hidden', logs: 'hidden', metrics: 'hidden', traces: 'hidden', k8s: 'manage', platform: 'manage' },
+    availableModules: ['workspace', 'observability', 'k8s'],
+    modules: { workspace: 'read' },
+  };
+  const platformAdmin = {
+    ...unassigned,
+    platformAdmin: true,
+    modules: { workspace: 'read', platform: 'manage' },
   };
 
   const developerDomains = getNavigationDomains(developer);
+  const unassignedDomains = getNavigationDomains(unassigned);
   const adminDomains = getNavigationDomains(platformAdmin);
   const developerItems = developerDomains.flatMap((domain) => domain.groups.flatMap((group) => flattenLeafItems(group.items)));
+  const unassignedItems = unassignedDomains.flatMap((domain) => domain.groups.flatMap((group) => flattenLeafItems(group.items)));
   const adminItems = adminDomains.flatMap((domain) => domain.groups.flatMap((group) => flattenLeafItems(group.items)));
 
   assert.deepEqual(developerDomains.map((domain) => domain.id), ['workspace', 'observability', 'k8s']);
   assert.equal(developerItems.some((item) => item.path === '/observability/endpoints/logs'), false);
-  assert.deepEqual(adminDomains.map((domain) => domain.id), ['workspace', 'k8s', 'platform']);
+  assert.deepEqual(unassignedDomains.map((domain) => domain.id), ['workspace', 'observability', 'k8s']);
+  assert.equal(unassignedItems.some((item) => item.path === '/products'), false);
+  assert.equal(unassignedItems.some((item) => item.path === '/logs/explore'), true);
+  assert.equal(unassignedItems.some((item) => item.path === '/metrics/overview'), true);
+  assert.equal(unassignedItems.some((item) => item.path === '/traces'), true);
+  assert.equal(unassignedItems.some((item) => item.path.startsWith('/platform/')), false);
+  assert.deepEqual(adminDomains.map((domain) => domain.id), ['workspace', 'observability', 'k8s', 'platform']);
   assert.equal(adminItems.some((item) => item.path === '/products'), true);
-  assert.equal(adminItems.some((item) => item.path === '/logs/explore'), false);
+  assert.equal(adminItems.some((item) => item.path === '/logs/explore'), true);
   assert.equal(adminItems.some((item) => item.path === '/platform/observability/endpoints/logs'), true);
   assert.equal(adminItems.some((item) => item.path === '/platform/k8s-clusters'), true);
   assert.equal(adminItems.some((item) => item.path === '/platform/identities'), true);

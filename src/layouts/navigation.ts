@@ -299,12 +299,13 @@ function navigationItemVisible(itemId: string, access: PlatformAccessContext | n
   const hasProducts = access.productAccesses.length > 0;
   const hasK8s = access.k8sProfiles.some((profile) => profile.status === 'active')
     || (access.k8sBreakGlass ?? []).some((grant) => new Date(grant.expiresAt).getTime() > Date.now());
+  const observabilityAvailable = (access.availableModules ?? []).includes('observability');
   const k8sAvailable = (access.availableModules ?? []).includes('k8s');
   if (itemId === 'overview') return true;
   if (itemId === 'products') return access.platformAdmin || hasProducts || access.modules.products === 'read' || access.modules.products === 'manage';
-  if (itemId === 'logs' || itemId.startsWith('logs-')) return access.modules.logs === 'read' || access.modules.logs === 'manage';
-  if (itemId === 'metrics' || itemId.startsWith('metrics-')) return access.modules.metrics === 'read' || access.modules.metrics === 'manage';
-  if (itemId === 'traces') return access.modules.traces === 'read' || access.modules.traces === 'manage';
+  if (itemId === 'logs' || itemId.startsWith('logs-')) return observabilityAvailable || access.modules.logs === 'read' || access.modules.logs === 'manage';
+  if (itemId === 'metrics' || itemId.startsWith('metrics-')) return observabilityAvailable || access.modules.metrics === 'read' || access.modules.metrics === 'manage';
+  if (itemId === 'traces') return observabilityAvailable || access.modules.traces === 'read' || access.modules.traces === 'manage';
   if (itemId === 'k8s-cluster' || itemId === 'k8s-fleet') return k8sAvailable || hasK8s;
   if (itemId === 'k8s-observability') return false;
   if (itemId.startsWith('platform-')) return access.platformAdmin;

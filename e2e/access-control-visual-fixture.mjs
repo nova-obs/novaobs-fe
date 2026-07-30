@@ -169,7 +169,7 @@ function routeData(pathname) {
     return { subject: role.subject, expires_at: '2026-07-29T18:00:00Z' };
   }
   if (pathname === '/api/v1/platform/me') return role;
-  if (pathname === '/api/v1/products') return products;
+  if (pathname === '/api/v1/products') return role.product_accesses.length > 0 ? products : [];
   if (pathname === '/api/v1/platform/catalog/products') return products;
   if (pathname === '/api/v1/products/product-commerce/services') return services;
   if (pathname === '/api/v1/k8s/clusters') return role.k8s_profiles.length > 0 ? clusters : [];
