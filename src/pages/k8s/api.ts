@@ -21,6 +21,21 @@ export interface K8sClusterInput {
   readOnly?: boolean;
 }
 
+export interface K8sClusterRegistrationInput extends K8sClusterInput {
+  kubeconfig: string;
+  expiresAt?: string;
+}
+
+export interface K8sClusterRegistrationResult {
+  cluster: K8sCluster;
+  credentials: {
+    controller: K8sClusterCredential;
+    broker: K8sClusterCredential;
+    auditId: string;
+    probe?: K8sClusterProbe;
+  };
+}
+
 export interface K8sClusterProbe {
   clusterId: string;
   status: string;
@@ -836,10 +851,9 @@ export const k8sApi = {
     const raw = await apiRequest<any[] | null>(`/platform/k8s/clusters${search ? `?q=${encodeURIComponent(search)}` : ''}`);
     return Array.isArray(raw) ? raw.map(mapCluster) : [];
   },
-  async createCluster(input: K8sClusterInput): Promise<K8sCluster> {
-    const raw = await apiRequest<any>('/k8s/clusters', {
-      method: 'POST',
-      body: JSON.stringify({
+  async registerCluster(input: K8sClusterRegistrationInput): Promise<K8sClusterRegistrationResult> {
+    const body: Record<string, unknown> = {
+      cluster: {
         id: input.id,
         name: input.name,
         version: input.version,
@@ -847,9 +861,23 @@ export const k8sApi = {
         description: input.description,
         access_mode: input.accessMode ?? 'direct',
         read_only: input.readOnly ?? true,
-      }),
+      },
+      kubeconfig: input.kubeconfig,
+    };
+    if (input.expiresAt) body.expires_at = input.expiresAt;
+    const raw = await apiRequest<any>('/k8s/cluster-registrations', {
+      method: 'POST',
+      body: JSON.stringify(body),
     });
-    return mapCluster(raw);
+    return {
+      cluster: mapCluster(raw.cluster),
+      credentials: {
+        controller: mapClusterCredential(raw.credentials?.controller),
+        broker: mapClusterCredential(raw.credentials?.broker),
+        auditId: raw.credentials?.audit_id ?? '',
+        probe: raw.credentials?.probe ? mapClusterProbe(raw.credentials.probe) : undefined,
+      },
+    };
   },
   async probeCluster(id: string): Promise<K8sClusterProbe> {
     const raw = await apiRequest<any>(`/k8s/clusters/${encodeURIComponent(id)}/probe`, { method: 'POST' });
@@ -866,16 +894,28 @@ export const k8sApi = {
     return raw.map(mapClusterCredential);
   },
   async createClusterCredential(input: { clusterId: string; name: string; kubeconfig: string; expiresAt?: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+    const body: Record<string, string> = {
+      cluster_id: input.clusterId,
+      name: input.name,
+      kubeconfig: input.kubeconfig,
+    };
+    if (input.expiresAt) body.expires_at = input.expiresAt;
     const raw = await apiRequest<any>('/k8s/cluster-credentials', {
       method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig, expires_at: input.expiresAt ?? '' }),
+      body: JSON.stringify(body),
     });
     return mapWriteResult(raw, mapClusterCredential);
   },
   async rotateClusterCredential(input: { clusterId: string; name: string; kubeconfig: string; expiresAt?: string }): Promise<K8sWriteResult<K8sClusterCredential>> {
+    const body: Record<string, string> = {
+      cluster_id: input.clusterId,
+      name: input.name,
+      kubeconfig: input.kubeconfig,
+    };
+    if (input.expiresAt) body.expires_at = input.expiresAt;
     const raw = await apiRequest<any>('/k8s/cluster-credentials/rotate', {
       method: 'POST',
-      body: JSON.stringify({ cluster_id: input.clusterId, name: input.name, kubeconfig: input.kubeconfig, expires_at: input.expiresAt ?? '' }),
+      body: JSON.stringify(body),
     });
     return mapWriteResult(raw, mapClusterCredential);
   },

@@ -59,39 +59,41 @@ test('平台控制面集群目录使用独立接口', async () => {
   }
 });
 
-test('K8s 集群登记调用统一 NovaAPM API 并刷新真实数据源', async () => {
+test('K8s 集群与 Controller 凭据通过单一登记接口提交且不发送空过期时间', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
-    return jsonResponse({ id: 'prod', name: 'prod-core', version: 'v1.30.1', region: 'cn-shanghai', status: 'active', access_mode: 'agent', read_only: true });
+    return jsonResponse({
+      cluster: { id: 'prod', name: 'prod-core', status: 'active', access_mode: 'direct', read_only: true },
+      credentials: {
+        controller: { secret_id: 'controller-1', cluster_id: 'prod', name: 'prod-core', status: 'active' },
+        broker: { secret_id: 'broker-1', cluster_id: 'prod', name: 'prod-broker', status: 'active' },
+        audit_id: 'audit-1',
+      },
+    });
   };
 
   try {
-    const cluster = await k8sApi.createCluster({
+    const result = await k8sApi.registerCluster({
       id: 'prod',
       name: 'prod-core',
-      version: 'v1.30.1',
-      region: 'cn-shanghai',
-      description: '生产集群',
-      accessMode: 'agent',
+      version: '',
+      region: '',
+      description: '',
+      accessMode: 'direct',
       readOnly: true,
+      kubeconfig: 'apiVersion: v1\nkind: Config',
     });
 
-    assert.equal(requests[0].path, '/api/v1/k8s/clusters');
-    assert.equal(requests[0].init.method, 'POST');
-    assert.deepEqual(JSON.parse(requests[0].init.body), {
-      id: 'prod',
-      name: 'prod-core',
-      version: 'v1.30.1',
-      region: 'cn-shanghai',
-      description: '生产集群',
-      access_mode: 'agent',
-      read_only: true,
-    });
-    assert.equal(cluster.status, 'active');
-    assert.equal(cluster.accessMode, 'agent');
-    assert.equal(cluster.readOnly, true);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].path, '/api/v1/k8s/cluster-registrations');
+    const body = JSON.parse(requests[0].init.body);
+    assert.equal(body.cluster.id, 'prod');
+    assert.equal(body.kubeconfig.includes('apiVersion'), true);
+    assert.equal('expires_at' in body, false);
+    assert.equal(result.cluster.id, 'prod');
+    assert.equal(result.credentials.auditId, 'audit-1');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -237,8 +239,11 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
 
     assert.equal(requests[0].path, '/api/v1/k8s/cluster-credentials?cluster_id=prod');
     assert.equal(requests[1].path, '/api/v1/k8s/cluster-credentials');
-    assert.equal(JSON.parse(requests[1].init.body).kubeconfig.includes('apiVersion'), true);
+    const createBody = JSON.parse(requests[1].init.body);
+    assert.equal(createBody.kubeconfig.includes('apiVersion'), true);
+    assert.equal('expires_at' in createBody, false);
     assert.equal(requests[2].path, '/api/v1/k8s/cluster-credentials/rotate');
+    assert.equal('expires_at' in JSON.parse(requests[2].init.body), false);
     assert.equal(requests[3].path, '/api/v1/k8s/cluster-credentials/rollback');
     assert.deepEqual(JSON.parse(requests[3].init.body), { cluster_id: 'prod', secret_id: 'secret-created' });
     assert.equal(credentials[0].secretId, 'secret-rotated');

@@ -50,7 +50,7 @@ export function PlatformK8sClustersPage() {
 
   const register = useMutation({
     mutationFn: async () => {
-      const cluster = await k8sApi.createCluster({
+      const result = await k8sApi.registerCluster({
         id: draft.id.trim(),
         name: draft.name.trim(),
         version: draft.version.trim(),
@@ -58,13 +58,9 @@ export function PlatformK8sClustersPage() {
         description: draft.description.trim(),
         accessMode: 'direct',
         readOnly: true,
-      });
-      await k8sApi.createClusterCredential({
-        clusterId: cluster.id,
-        name: cluster.name || cluster.id,
         kubeconfig: draft.kubeconfig.trim(),
       });
-      return cluster;
+      return result.cluster;
     },
     onSuccess: async (cluster) => {
       setDraft(emptyDraft);
