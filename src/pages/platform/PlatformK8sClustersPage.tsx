@@ -42,11 +42,20 @@ export function PlatformK8sClustersPage() {
   }, [clusters, selectedId]);
 
   const credentialsQuery = useQuery({
-    queryKey: ['platform-k8s-credentials', selected?.id],
-    queryFn: () => k8sApi.listClusterCredentials(selected?.id ?? ''),
-    enabled: Boolean(selected?.id),
+    queryKey: ['platform-k8s-credentials'],
+    queryFn: () => k8sApi.listClusterCredentials(),
     retry: false,
   });
+  const credentials = credentialsQuery.data ?? [];
+  const selectedCredentials = selected
+    ? credentials.filter((item) => item.clusterId === selected.id)
+    : [];
+  const registeredClusterIds = new Set(clusters.map((cluster) => cluster.id));
+  const orphanCredentialClusterIds = Array.from(new Set(
+    credentials
+      .map((item) => item.clusterId)
+      .filter((clusterId) => clusterId && !registeredClusterIds.has(clusterId)),
+  )).sort();
 
   const register = useMutation({
     mutationFn: async () => {
@@ -67,7 +76,7 @@ export function PlatformK8sClustersPage() {
       setSelectedId(cluster.id);
       setShowRegistration(false);
       await queryClient.invalidateQueries({ queryKey: ['platform-k8s-clusters'] });
-      await queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials', cluster.id] });
+      await queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials'] });
     },
   });
 
@@ -79,7 +88,7 @@ export function PlatformK8sClustersPage() {
     }),
     onSuccess: async () => {
       setCredential('');
-      await queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials', selected?.id] });
+      await queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials'] });
     },
   });
 
@@ -90,7 +99,7 @@ export function PlatformK8sClustersPage() {
     },
     onSettled: async (_, __, clusterId) => {
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials', clusterId] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials'] }),
         queryClient.invalidateQueries({ queryKey: ['fixed-access'] }),
         queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
         queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] }),
@@ -107,7 +116,7 @@ export function PlatformK8sClustersPage() {
     onSettled: async (_, __, cluster) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ['platform-k8s-clusters'] }),
-        queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials', cluster.id] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials'] }),
         queryClient.invalidateQueries({ queryKey: ['fixed-access'] }),
         queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
         queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] }),
@@ -209,6 +218,35 @@ export function PlatformK8sClustersPage() {
             </div>
           )}
           {removeCluster.error ? <div className="mt-3 text-sm font-semibold text-danger">{removeCluster.error.message}</div> : null}
+          {orphanCredentialClusterIds.length > 0 ? (
+            <div className="mt-4 rounded-md border border-warning/40 bg-amber-50 p-3">
+              <div className="text-sm font-semibold text-on-surface">孤立控制面凭据</div>
+              <p className="mt-1 text-xs text-muted">
+                下列集群目录已不存在，但仍有凭据或授权数据。清理会撤销对应 Profile、用户组授权和 Break Glass，并删除全部凭据版本。
+              </p>
+              <div className="mt-3 space-y-2">
+                {orphanCredentialClusterIds.map((clusterId) => (
+                  <div key={clusterId} className="flex items-center justify-between gap-3 rounded border border-outline bg-surface px-3 py-2">
+                    <code className="text-xs">{clusterId}</code>
+                    <button
+                      type="button"
+                      className="console-button text-danger"
+                      disabled={deleteCredentials.isPending}
+                      onClick={() => {
+                        const confirmation = window.prompt(
+                          `清理孤立凭据会撤销集群 “${clusterId}” 的全部 K8S 权限并删除凭据。\n请输入集群 ID 确认：`,
+                        );
+                        if (confirmation?.trim() === clusterId) deleteCredentials.mutate(clusterId);
+                      }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      清理孤立凭据与权限
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
         </DataPanel>
       </section>
 
@@ -225,7 +263,7 @@ export function PlatformK8sClustersPage() {
                 className="console-icon-button text-danger"
                 title="删除该集群全部控制面凭据并撤销 K8S 授权"
                 aria-label={`删除集群 ${selected?.name || selected?.id || ''} 的全部控制面凭据`}
-                disabled={!selected || !(credentialsQuery.data ?? []).length || deleteCredentials.isPending}
+                disabled={!selected || selectedCredentials.length === 0 || deleteCredentials.isPending}
                 onClick={() => {
                   if (!selected) return;
                   const confirmation = window.prompt(
@@ -239,6 +277,11 @@ export function PlatformK8sClustersPage() {
             </div>
           )}
         >
+          {credentialsQuery.error ? (
+            <div className="mb-3 text-sm font-semibold text-danger">
+              控制面凭据元数据加载失败：{credentialsQuery.error.message}
+            </div>
+          ) : null}
           {!selected ? (
             <EmptyState title="请选择集群" />
           ) : (
@@ -248,7 +291,7 @@ export function PlatformK8sClustersPage() {
                 <span className="font-semibold">{selected.name || selected.id}</span>
               </div>
               <div className="space-y-2">
-                {(credentialsQuery.data ?? []).map((item) => (
+                {selectedCredentials.map((item) => (
                   <div key={item.secretId} className="rounded-md border border-outline px-3 py-2 text-xs">
                     <div className="flex items-center justify-between gap-2">
                       <span className="font-semibold text-on-surface">{item.name}</span>
@@ -257,7 +300,7 @@ export function PlatformK8sClustersPage() {
                     <div className="mt-1 break-all font-mono text-[10px] text-muted">{item.fingerprint || '无指纹'}</div>
                   </div>
                 ))}
-                {!credentialsQuery.isLoading && !(credentialsQuery.data ?? []).length ? <EmptyState title="暂无控制面凭据" /> : null}
+                {!credentialsQuery.isLoading && selectedCredentials.length === 0 ? <EmptyState title="暂无控制面凭据" /> : null}
               </div>
               <label className="block text-xs font-semibold text-on-surface">
                 替换 Controller Kubeconfig
