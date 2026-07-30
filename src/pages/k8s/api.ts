@@ -51,6 +51,14 @@ export interface K8sDeleteResult {
   deleted: boolean;
 }
 
+export interface K8sCredentialDeletionResult {
+  clusterId: string;
+  deletedControllerVersions: number;
+  deletedBrokerVersions: number;
+  accessInvalidated: boolean;
+  auditId: string;
+}
+
 export interface K8sClusterCredential {
   secretId: string;
   clusterId: string;
@@ -925,6 +933,18 @@ export const k8sApi = {
       body: JSON.stringify({ cluster_id: input.clusterId, secret_id: input.secretId }),
     });
     return mapWriteResult(raw, mapClusterCredential);
+  },
+  async deleteClusterCredentials(clusterId: string): Promise<K8sCredentialDeletionResult> {
+    const raw = await apiRequest<any>(`/k8s/cluster-credentials/${encodeURIComponent(clusterId)}`, {
+      method: 'DELETE',
+    });
+    return {
+      clusterId: raw.cluster_id ?? raw.clusterId ?? '',
+      deletedControllerVersions: Number(raw.deleted_controller_versions ?? raw.deletedControllerVersions ?? 0),
+      deletedBrokerVersions: Number(raw.deleted_broker_versions ?? raw.deletedBrokerVersions ?? 0),
+      accessInvalidated: Boolean(raw.access_invalidated ?? raw.accessInvalidated),
+      auditId: raw.audit_id ?? raw.auditId ?? '',
+    };
   },
   async listNamespaces(clusterId = '', query = ''): Promise<K8sNamespace[]> {
     const params = new URLSearchParams();

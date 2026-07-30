@@ -96,6 +96,8 @@ test('K8s 集群接入和控制面凭据迁移到平台管理', () => {
   assert.equal(platformClusterSource.includes('Controller Kubeconfig'), true);
   assert.equal(platformClusterSource.includes('平台不会返回明文'), true);
   assert.equal(platformClusterSource.includes('deleteCluster'), true);
+  assert.equal(platformClusterSource.includes('deleteClusterCredentials'), true);
+  assert.equal(platformClusterSource.includes('撤销该集群全部 K8S Profile'), true);
 });
 
 test('K8s 工作台不再暴露旧平台授权入口', () => {

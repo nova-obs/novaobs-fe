@@ -83,6 +83,19 @@ export function PlatformK8sClustersPage() {
     },
   });
 
+  const deleteCredentials = useMutation({
+    mutationFn: (clusterId: string) => k8sApi.deleteClusterCredentials(clusterId),
+    onSuccess: async (_, clusterId) => {
+      setCredential('');
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ['platform-k8s-credentials', clusterId] }),
+        queryClient.invalidateQueries({ queryKey: ['fixed-access'] }),
+        queryClient.invalidateQueries({ queryKey: ['platform-me'] }),
+        queryClient.invalidateQueries({ queryKey: ['k8s-clusters'] }),
+      ]);
+    },
+  });
+
   const removeCluster = useMutation({
     mutationFn: (cluster: K8sCluster) => k8sApi.deleteCluster(cluster.id),
     onSuccess: async () => {
@@ -188,9 +201,27 @@ export function PlatformK8sClustersPage() {
         <DataPanel
           title="控制面凭据"
           action={(
-            <button type="button" className="console-icon-button" title="刷新凭据元数据" disabled={!selected || credentialsQuery.isFetching} onClick={() => credentialsQuery.refetch()}>
-              <RefreshCw className={`h-3.5 w-3.5 ${credentialsQuery.isFetching ? 'animate-spin' : ''}`} />
-            </button>
+            <div className="flex items-center gap-1">
+              <button type="button" className="console-icon-button" title="刷新凭据元数据" disabled={!selected || credentialsQuery.isFetching} onClick={() => credentialsQuery.refetch()}>
+                <RefreshCw className={`h-3.5 w-3.5 ${credentialsQuery.isFetching ? 'animate-spin' : ''}`} />
+              </button>
+              <button
+                type="button"
+                className="console-icon-button text-danger"
+                title="删除该集群全部控制面凭据并撤销 K8S 授权"
+                aria-label={`删除集群 ${selected?.name || selected?.id || ''} 的全部控制面凭据`}
+                disabled={!selected || !(credentialsQuery.data ?? []).length || deleteCredentials.isPending}
+                onClick={() => {
+                  if (!selected) return;
+                  const confirmation = window.prompt(
+                    `此操作会删除该集群全部 Controller/Broker 凭据版本，撤销该集群全部 K8S Profile、用户组授权和 Break Glass，并清理 NovaAPM 管理的集群 RBAC。\n请输入集群 ID “${selected.id}” 确认：`,
+                  );
+                  if (confirmation?.trim() === selected.id) deleteCredentials.mutate(selected.id);
+                }}
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
           )}
         >
           {!selected ? (
@@ -234,6 +265,12 @@ export function PlatformK8sClustersPage() {
               </button>
               {replaceCredential.error ? <div className="text-sm font-semibold text-danger">{replaceCredential.error.message}</div> : null}
               {replaceCredential.isSuccess ? <div className="text-sm font-semibold text-success">凭据已替换，明文未保留。</div> : null}
+              {deleteCredentials.error ? <div className="text-sm font-semibold text-danger">{deleteCredentials.error.message}</div> : null}
+              {deleteCredentials.isSuccess ? (
+                <div className="text-sm font-semibold text-success">
+                  控制面凭据已删除，关联 K8S 权限已撤销；重新录入凭据不会恢复原授权。
+                </div>
+              ) : null}
             </div>
           )}
         </DataPanel>

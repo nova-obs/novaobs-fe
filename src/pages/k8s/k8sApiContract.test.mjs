@@ -225,6 +225,15 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
     if (init.method === 'POST') {
       return jsonResponse({ item: { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', active: true, version: 1 }, audit_id: 'audit-create-1' });
     }
+    if (init.method === 'DELETE') {
+      return jsonResponse({
+        cluster_id: 'prod',
+        deleted_controller_versions: 2,
+        deleted_broker_versions: 1,
+        access_invalidated: true,
+        audit_id: 'audit-delete-1',
+      });
+    }
     return jsonResponse([
       { secret_id: 'secret-rotated', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:def', status: 'active', active: true, version: 2, expires_soon: true, expired: false, kubeconfig: 'must-not-be-used' },
       { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'superseded', active: false, version: 1, expires_soon: false, expired: false },
@@ -236,6 +245,7 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
     const created = await k8sApi.createClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
     const rotated = await k8sApi.rotateClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
     const rollback = await k8sApi.rollbackClusterCredential({ clusterId: 'prod', secretId: 'secret-created' });
+    const deleted = await k8sApi.deleteClusterCredentials('prod');
 
     assert.equal(requests[0].path, '/api/v1/k8s/cluster-credentials?cluster_id=prod');
     assert.equal(requests[1].path, '/api/v1/k8s/cluster-credentials');
@@ -246,6 +256,8 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
     assert.equal('expires_at' in JSON.parse(requests[2].init.body), false);
     assert.equal(requests[3].path, '/api/v1/k8s/cluster-credentials/rollback');
     assert.deepEqual(JSON.parse(requests[3].init.body), { cluster_id: 'prod', secret_id: 'secret-created' });
+    assert.equal(requests[4].path, '/api/v1/k8s/cluster-credentials/prod');
+    assert.equal(requests[4].init.method, 'DELETE');
     assert.equal(credentials[0].secretId, 'secret-rotated');
     assert.equal(credentials[0].fingerprint, 'sha256:def');
     assert.equal(credentials[0].active, true);
@@ -257,6 +269,7 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
     assert.equal(rotated.probe.serverVersion, 'v1.30.2');
     assert.equal(rollback.item.secretId, 'secret-rollback');
     assert.equal(rollback.probe.resourceCount, 42);
+    assert.equal(deleted.accessInvalidated, true);
   } finally {
     globalThis.fetch = originalFetch;
   }
