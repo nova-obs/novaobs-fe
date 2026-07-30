@@ -42,6 +42,40 @@ test('平台 IAM 用户和主体目录调用 /api/v1/platform/*', async () => {
   }
 });
 
+test('平台 IAM 空库列表把 null 统一映射为空数组', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse(null);
+
+  try {
+    const results = await Promise.all([
+      platformApi.listSubjects(),
+      platformApi.listUsers(),
+      platformApi.listGroups(),
+      platformApi.listMemberships(),
+      platformApi.listServiceAccounts(),
+      platformApi.listImages(),
+    ]);
+
+    assert.deepEqual(results, [[], [], [], [], [], []]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('平台 IAM 列表拒绝非数组成功响应', async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () => jsonResponse({});
+
+  try {
+    await assert.rejects(
+      () => platformApi.listSubjects(),
+      /平台列表接口返回格式错误/,
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('平台 IAM 组成员调用统一平台 API', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;

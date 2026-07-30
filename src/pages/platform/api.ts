@@ -174,18 +174,26 @@ function mapWriteResult<T>(raw: any, mapper: (value: any) => T): PlatformWriteRe
   };
 }
 
+function mapList<T>(raw: unknown, mapper: (value: any) => T): T[] {
+  if (raw === null) return [];
+  if (!Array.isArray(raw)) {
+    throw new Error('平台列表接口返回格式错误');
+  }
+  return raw.map(mapper);
+}
+
 export const platformApi = {
   async me(): Promise<PlatformSubject> {
     const raw = await apiRequest<any>('/platform/me');
     return mapSubject(raw);
   },
   async listSubjects(): Promise<PlatformSubject[]> {
-    const raw = await apiRequest<any[]>('/platform/subjects');
-    return raw.map(mapSubject);
+    const raw = await apiRequest<any[] | null>('/platform/subjects');
+    return mapList(raw, mapSubject);
   },
   async listUsers(): Promise<PlatformUser[]> {
-    const raw = await apiRequest<any[]>('/platform/users');
-    return raw.map(mapUser);
+    const raw = await apiRequest<any[] | null>('/platform/users');
+    return mapList(raw, mapUser);
   },
   async createUser(input: { username: string; displayName: string; email?: string; password?: string }): Promise<PlatformWriteResult<PlatformUser>> {
     const raw = await apiRequest<any>('/platform/users', {
@@ -199,8 +207,8 @@ export const platformApi = {
     return mapWriteResult(raw, mapUser);
   },
   async listGroups(): Promise<PlatformGroup[]> {
-    const raw = await apiRequest<any[]>('/platform/groups');
-    return raw.map(mapGroup);
+    const raw = await apiRequest<any[] | null>('/platform/groups');
+    return mapList(raw, mapGroup);
   },
   async createGroup(input: { name: string; displayName: string; description?: string }): Promise<PlatformWriteResult<PlatformGroup>> {
     const raw = await apiRequest<any>('/platform/groups', {
@@ -214,8 +222,8 @@ export const platformApi = {
     return mapWriteResult(raw, mapGroup);
   },
   async listMemberships(): Promise<PlatformMembership[]> {
-    const raw = await apiRequest<any[]>('/platform/group-memberships');
-    return raw.map(mapMembership);
+    const raw = await apiRequest<any[] | null>('/platform/group-memberships');
+    return mapList(raw, mapMembership);
   },
   async createMembership(input: { groupId: string; subjectId: string; subjectType: string }): Promise<PlatformWriteResult<PlatformMembership>> {
     const raw = await apiRequest<any>('/platform/group-memberships', {
@@ -229,8 +237,8 @@ export const platformApi = {
     return mapWriteResult(raw, mapMembership);
   },
   async listServiceAccounts(): Promise<PlatformServiceAccount[]> {
-    const raw = await apiRequest<any[]>('/platform/service-accounts');
-    return raw.map(mapServiceAccount);
+    const raw = await apiRequest<any[] | null>('/platform/service-accounts');
+    return mapList(raw, mapServiceAccount);
   },
   async createServiceAccount(input: { name: string; displayName: string; owner?: string; description?: string }): Promise<PlatformWriteResult<PlatformServiceAccount>> {
     const raw = await apiRequest<any>('/platform/service-accounts', {
@@ -244,8 +252,8 @@ export const platformApi = {
     return mapWriteResult(raw, mapServiceAccount);
   },
   async listImages(): Promise<PlatformImage[]> {
-    const raw = await apiRequest<any[]>('/platform/images');
-    return raw.map(mapImage);
+    const raw = await apiRequest<any[] | null>('/platform/images');
+    return mapList(raw, mapImage);
   },
   async updateImage(input: { key: string; value: string }): Promise<PlatformImage> {
     const raw = await apiRequest<any>('/platform/images', {
