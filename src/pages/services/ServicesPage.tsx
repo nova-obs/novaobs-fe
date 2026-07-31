@@ -182,9 +182,9 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
   return (
     <div className="page-shell">
       <div className="page-header">
-        <div>
+        <div className="flex min-w-0 items-center gap-1.5">
           <h1 className="page-title">产品与服务</h1>
-          <p className="page-description">产品定义统一租户和权限边界，服务在产品下维护稳定观测身份。</p>
+          <HelpTip content="产品定义统一租户和权限边界，服务在产品下维护稳定观测身份。" label="产品与服务说明" />
         </div>
         {canCreateProduct ? (
           <button className="console-button console-button-primary" onClick={() => setCreating(true)}>
@@ -279,7 +279,6 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
                     filtered={catalogFiltered}
                     onToggle={() => toggleProductCollapsed(product.id)}
                     onOpenIntegration={() => navigate(`/products/${encodeURIComponent(product.id)}/integrations`)}
-                    onOpenAccess={() => navigate(`/products/${encodeURIComponent(product.id)}/access`)}
                     onCreateService={() => setServiceProduct(product)}
                     onArchiveProduct={() => setArchiveProductTarget(product)}
                     onOpenService={(serviceId) => navigate(`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(serviceId)}`)}
@@ -306,7 +305,6 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
                         filtered={catalogFiltered}
                         onToggle={() => toggleProductCollapsed(product.id)}
                         onOpenIntegration={() => navigate(`/products/${encodeURIComponent(product.id)}/integrations`)}
-                        onOpenAccess={() => navigate(`/products/${encodeURIComponent(product.id)}/access`)}
                         onCreateService={() => setServiceProduct(product)}
                         onArchiveProduct={() => setArchiveProductTarget(product)}
                         onOpenService={(serviceId) => navigate(`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(serviceId)}`)}
@@ -386,7 +384,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
   );
 }
 
-function ProductServiceRows({ product, capabilities, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onOpenAccess, onCreateService, onArchiveProduct, onOpenService }: {
+function ProductServiceRows({ product, capabilities, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onCreateService, onArchiveProduct, onOpenService }: {
   product: Product;
   capabilities: ProductCatalogCapabilities;
   integration?: GrafanaProductIntegration;
@@ -396,7 +394,6 @@ function ProductServiceRows({ product, capabilities, integration, state, totalSe
   filtered: boolean;
   onToggle: () => void;
   onOpenIntegration: () => void;
-  onOpenAccess: () => void;
   onCreateService: () => void;
   onArchiveProduct: () => void;
   onOpenService: (serviceId: string) => void;
@@ -417,7 +414,7 @@ function ProductServiceRows({ product, capabilities, integration, state, totalSe
           </button>
           <div className="ml-5 mt-1 truncate text-[11px] text-muted">{product.description || '暂无产品描述'}</div>
         </td>
-        <td><Identity primary={product.key} secondary={product.id} /></td>
+        <td><Identity primary={product.key} internalId={product.id} /></td>
         <td className="font-mono text-xs">{product.tenant.accountId}:{product.tenant.projectId}</td>
         <td><span className="text-xs text-muted">产品边界</span></td>
         <td>
@@ -430,7 +427,6 @@ function ProductServiceRows({ product, capabilities, integration, state, totalSe
         <td>
           <div className="flex justify-end gap-1">
             {capabilities.canViewProduct ? <button className="product-catalog-row-action" onClick={onOpenIntegration}>集成</button> : null}
-            {capabilities.canMaintainProduct ? <button className="product-catalog-row-action" onClick={onOpenAccess}>授权</button> : null}
             {capabilities.canMaintainProduct ? <button className="product-catalog-row-action" onClick={onCreateService}><Plus className="h-3.5 w-3.5" />服务</button> : null}
             {capabilities.canArchiveProduct ? <button className="product-catalog-row-action product-catalog-row-action-icon product-catalog-row-action-danger" aria-label={`归档产品 ${product.name}`} title="归档产品" onClick={onArchiveProduct}><Archive className="h-3.5 w-3.5" /></button> : null}
           </div>
@@ -447,7 +443,7 @@ function ProductServiceRows({ product, capabilities, integration, state, totalSe
               <span className="truncate">{service.name}</span>
             </button>
           </td>
-          <td><Identity primary={service.key} secondary={service.id} /></td>
+          <td><Identity primary={service.key} internalId={service.id} /></td>
           <td className="text-xs text-muted">继承产品租户</td>
           <td><div className="text-xs">{service.ownerTeam || service.owner || '-'}</div><div className="mt-1 text-[11px] text-muted">{sourceLabel(service.source)}</div></td>
           <td><StatusBadge value={service.status} appearance="inline" /></td>
@@ -469,7 +465,7 @@ function ProductServiceRows({ product, capabilities, integration, state, totalSe
   );
 }
 
-function ProductServiceMobileCard({ product, capabilities, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onOpenAccess, onCreateService, onArchiveProduct, onOpenService }: {
+function ProductServiceMobileCard({ product, capabilities, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onCreateService, onArchiveProduct, onOpenService }: {
   product: Product;
   capabilities: ProductCatalogCapabilities;
   integration?: GrafanaProductIntegration;
@@ -479,7 +475,6 @@ function ProductServiceMobileCard({ product, capabilities, integration, state, t
   filtered: boolean;
   onToggle: () => void;
   onOpenIntegration: () => void;
-  onOpenAccess: () => void;
   onCreateService: () => void;
   onArchiveProduct: () => void;
   onOpenService: (serviceId: string) => void;
@@ -497,7 +492,7 @@ function ProductServiceMobileCard({ product, capabilities, integration, state, t
             {collapsed ? <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" /> : <ChevronDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />}
             <span className="min-w-0">
               <span className="flex items-center gap-2"><span className="truncate font-semibold">{product.name}</span><span className="shrink-0 text-[10px] font-medium text-muted">{state?.loading ? '加载中' : `${totalServiceCount} 个服务`}</span></span>
-              <span className="mt-1 block break-all font-mono text-[11px] text-muted">{product.key} · {product.id}</span>
+              <span className="mt-1 block break-all font-mono text-[11px] text-muted" title={product.id}>{product.key}</span>
             </span>
           </button>
           <StatusBadge value={product.status} appearance="inline" />
@@ -506,7 +501,6 @@ function ProductServiceMobileCard({ product, capabilities, integration, state, t
           <Info label="统一租户" value={`${product.tenant.accountId}:${product.tenant.projectId}`} mono />
           <div className="flex gap-1">
             {capabilities.canViewProduct ? <button className="product-catalog-row-action" onClick={onOpenIntegration}>集成</button> : null}
-            {capabilities.canMaintainProduct ? <button className="product-catalog-row-action" onClick={onOpenAccess}>授权</button> : null}
             {capabilities.canMaintainProduct ? <button className="product-catalog-row-action" onClick={onCreateService}><Plus className="h-3.5 w-3.5" />服务</button> : null}
             {capabilities.canArchiveProduct ? <button className="product-catalog-row-action product-catalog-row-action-icon product-catalog-row-action-danger" aria-label={`归档产品 ${product.name}`} title="归档产品" onClick={onArchiveProduct}><Archive className="h-3.5 w-3.5" /></button> : null}
           </div>
@@ -786,8 +780,9 @@ function DetailSection({ title, description, children }: { title: string; descri
   );
 }
 
-function Identity({ primary, secondary }: { primary: string; secondary: string }) {
-  return <div className="min-w-0"><div className="truncate font-mono text-xs text-on-surface">{primary}</div><div className="mt-1 truncate font-mono text-[10px] text-muted">{secondary}</div></div>;
+// 内部主键对使用者没有价值，只挂在 title 上供排查，正文里只留稳定标识。
+function Identity({ primary, internalId }: { primary: string; internalId: string }) {
+  return <div className="min-w-0" title={internalId}><div className="truncate font-mono text-xs text-on-surface">{primary}</div></div>;
 }
 
 function ProductDrawer({ pending, error, onClose, onSubmit }: {

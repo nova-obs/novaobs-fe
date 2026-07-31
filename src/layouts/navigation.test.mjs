@@ -41,24 +41,25 @@ test('超级菜单按业务域组织现有叶子入口且路径唯一', () => {
   assert.equal(new Set(items.map((item) => item.path)).size, items.length);
 });
 
-test('平台管理顶部下拉保留四个一级入口并在权限控制下展示五个二级入口', () => {
+test('平台管理顶部下拉使用面向任务的统一名称与描述', () => {
   const platform = getNavigationDomains().find((domain) => domain.id === 'platform');
   const items = platform?.groups.flatMap((group) => group.items) ?? [];
   const access = items.find((item) => item.id === 'platform-access');
+  const endpoints = items.find((item) => item.id === 'platform-observability-endpoints');
 
-  assert.deepEqual(items.map((item) => item.label), [
-    '平台设置',
-    '权限控制',
-    'K8s 集群接入',
-    '共享观测端点',
+  assert.deepEqual(items.map((item) => [item.label, item.description]), [
+    ['平台设置', '镜像模板与 Grafana 入口'],
+    ['身份与授权', '用户、用户组与授权'],
+    ['K8s 集群接入', '集群登记与控制面凭据'],
+    ['观测数据端点', '日志与指标端点'],
   ]);
   assert.equal(access?.path, '/platform/access');
-  assert.deepEqual(access?.children?.map((item) => item.label), [
-    '用户与用户组',
-    '平台管理员',
-    '产品授权',
-    '命名空间权限',
-    '紧急访问与审计',
+  assert.deepEqual(access?.children?.map((item) => [item.label, item.description]), [
+    ['用户与用户组', '管理登录用户、用户组及成员关系'],
+    ['平台管理员授权', '授予或撤销平台控制面管理权限'],
+    ['产品访问授权', '按用户组授予产品查看或维护权限'],
+    ['K8s 集群授权', '按集群、权限级别和命名空间授权用户组'],
+    ['K8s 紧急访问', '审批临时集群高权限并查看审计记录'],
   ]);
   assert.deepEqual(access?.children?.map((item) => item.path), [
     '/platform/identities',
@@ -66,6 +67,10 @@ test('平台管理顶部下拉保留四个一级入口并在权限控制下展�
     '/platform/product-access',
     '/platform/k8s-access-profiles',
     '/platform/break-glass',
+  ]);
+  assert.deepEqual(endpoints?.children?.map((item) => [item.label, item.description]), [
+    ['日志数据端点', '配置日志写入与查询端点'],
+    ['指标数据端点', '配置指标写入与查询端点'],
   ]);
 });
 

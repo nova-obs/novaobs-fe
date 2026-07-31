@@ -28,11 +28,11 @@ import { MetricsOverviewPage } from '../pages/metrics/MetricsOverviewPage';
 import { OverviewPage } from '../pages/overview/OverviewPage';
 import { ObservabilitySettingsPage } from '../pages/platform/ObservabilitySettingsPage';
 import { PlatformAccessAdminPage } from '../pages/platform/PlatformAccessAdminPage';
+import { PlatformGroupDetailPage } from '../pages/platform/PlatformGroupDetailPage';
 import { PlatformK8sClustersPage } from '../pages/platform/PlatformK8sClustersPage';
 import { PlatformLayout } from '../pages/platform/PlatformLayout';
 import { PlatformSettingsPage } from '../pages/platform/PlatformSettingsPage';
 import { ServicesPage } from '../pages/services/ServicesPage';
-import { ProductAccessPage } from '../pages/services/ProductAccessPage';
 import { ServiceDeploymentTaskPage } from '../pages/services/ServiceDeploymentTaskPage';
 import { TracesPage } from '../pages/traces/TracesPage';
 
@@ -75,7 +75,7 @@ const logsChildRoutes: RouteDefinition[] = [
   { path: 'alerts/new', title: '创建日志告警', element: gated(<LogsAlertsPage />, { kind: 'product', minimum: 'product-maintainer' }) },
   { path: 'alerts/:id', title: '更新日志告警', element: gated(<LogsAlertsPage />, { kind: 'product', minimum: 'product-maintainer' }) },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
-  { path: 'endpoints', title: 'Logs 下游端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
+  { path: 'endpoints', title: '日志数据端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
 ];
 
 const logsEntryChildRoutes: RouteDefinition[] = [
@@ -84,21 +84,22 @@ const logsEntryChildRoutes: RouteDefinition[] = [
   { path: 'format-demo', title: '日志格式改造演示', element: <LogsFormatDemoPage /> },
   { path: 'agents', title: 'Logs 日志采集', element: <LogsAgentsPage /> },
   { path: 'alerts', title: 'Logs 日志告警', element: <LogsAlertsPage /> },
-  { path: 'endpoints', title: 'Logs 下游端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
+  { path: 'endpoints', title: '日志数据端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
 ];
 
 const platformChildRoutes: RouteDefinition[] = [
   { index: true, title: '平台管理', element: <Navigate to="/platform/settings" replace /> },
   { path: 'settings', title: '平台设置', element: gated(<PlatformSettingsPage />, { kind: 'platform-admin' }) },
-  { path: 'access', title: '用户与用户组', element: <Navigate to="/platform/identities" replace /> },
+  { path: 'access', title: '身份与授权', element: <Navigate to="/platform/identities" replace /> },
   { path: 'identities', title: '用户与用户组', element: gated(<PlatformAccessAdminPage section="identities" />, { kind: 'platform-admin' }) },
-  { path: 'admins', title: '平台管理员', element: gated(<PlatformAccessAdminPage section="platform-admins" />, { kind: 'platform-admin' }) },
-  { path: 'product-access', title: '产品授权', element: gated(<PlatformAccessAdminPage section="product-access" />, { kind: 'platform-admin' }) },
-  { path: 'k8s-access-profiles', title: '命名空间权限', element: gated(<PlatformAccessAdminPage section="k8s-profiles" />, { kind: 'platform-admin' }) },
-  { path: 'break-glass', title: '紧急访问与审计', element: gated(<PlatformAccessAdminPage section="break-glass" />, { kind: 'platform-admin' }) },
-  { path: 'k8s-clusters', title: 'K8S 集群接入', element: gated(<PlatformK8sClustersPage />, { kind: 'platform-admin' }) },
-  { path: 'observability/endpoints/logs', title: 'Logs 下游端点', element: gated(<ObservabilitySettingsPage key="platform-logs-endpoints" domain="logs" />, { kind: 'platform-admin' }) },
-  { path: 'observability/endpoints/metrics', title: '指标下游端点', element: gated(<ObservabilitySettingsPage key="platform-metrics-endpoints" domain="metrics" />, { kind: 'platform-admin' }) },
+  { path: 'groups/:groupId', title: '用户组授权', element: gated(<PlatformGroupDetailPage />, { kind: 'platform-admin' }) },
+  { path: 'admins', title: '平台管理员授权', element: gated(<PlatformAccessAdminPage section="platform-admins" />, { kind: 'platform-admin' }) },
+  { path: 'product-access', title: '产品访问授权', element: gated(<PlatformAccessAdminPage section="product-access" />, { kind: 'platform-admin' }) },
+  { path: 'k8s-access-profiles', title: 'K8s 集群授权', element: gated(<PlatformAccessAdminPage section="k8s-profiles" />, { kind: 'platform-admin' }) },
+  { path: 'break-glass', title: 'K8s 紧急访问', element: gated(<PlatformAccessAdminPage section="break-glass" />, { kind: 'platform-admin' }) },
+  { path: 'k8s-clusters', title: 'K8s 集群接入', element: gated(<PlatformK8sClustersPage />, { kind: 'platform-admin' }) },
+  { path: 'observability/endpoints/logs', title: '日志数据端点', element: gated(<ObservabilitySettingsPage key="platform-logs-endpoints" domain="logs" />, { kind: 'platform-admin' }) },
+  { path: 'observability/endpoints/metrics', title: '指标数据端点', element: gated(<ObservabilitySettingsPage key="platform-metrics-endpoints" domain="metrics" />, { kind: 'platform-admin' }) },
 ];
 
 const metricsEntryChildRoutes: RouteDefinition[] = [
@@ -109,7 +110,7 @@ const metricsEntryChildRoutes: RouteDefinition[] = [
   { path: 'alerts/:id', title: '编辑指标告警', element: <MetricsAlertsPage /> },
   { path: 'alerts', title: '指标告警', element: <MetricsAlertsPage /> },
   { path: 'integrations', title: '指标接入', element: <MetricsIntegrationsPage /> },
-  { path: 'endpoints', title: '指标下游端点', element: <Navigate to="/platform/observability/endpoints/metrics" replace /> },
+  { path: 'endpoints', title: '指标数据端点', element: <Navigate to="/platform/observability/endpoints/metrics" replace /> },
 ];
 
 export const routeDefinitions: RouteDefinition[] = [
@@ -117,7 +118,6 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/products', title: '产品与服务', element: <ServicesPage /> },
   { path: '/products/:productId/services', title: '产品服务', element: <ServicesPage /> },
   { path: '/products/:productId/integrations', title: '产品集成', element: <ServicesPage /> },
-  { path: '/products/:productId/access', title: '产品授权', element: gated(<ProductAccessPage />, { kind: 'product', minimum: 'product-maintainer' }) },
   { path: '/products/:productId/services/:serviceId', title: '服务详情', element: <ServicesPage /> },
   { path: '/products/:productId/services/:serviceId/deployments/new', title: '新增服务部署', element: gated(<ServiceDeploymentTaskPage />, { kind: 'product', minimum: 'product-maintainer' }) },
   { path: '/products/:productId/services/:serviceId/deployments/:deploymentId/edit', title: '编辑服务部署', element: gated(<ServiceDeploymentTaskPage />, { kind: 'product', minimum: 'product-maintainer' }) },
@@ -128,13 +128,13 @@ export const routeDefinitions: RouteDefinition[] = [
   { path: '/onboarding', title: '服务接入', element: <Navigate to="/products" replace /> },
 	{ path: '/logs', title: 'Logs', element: <LogsWorkspace />, children: logsEntryChildRoutes },
   { path: '/products/:productId/services/:serviceId/logs', title: 'Logs', element: <LogsWorkspace />, children: logsChildRoutes },
-  { path: '/products/:productId/services/:serviceId/metrics/endpoints', title: '指标下游端点', element: <Navigate to="/platform/observability/endpoints/metrics" replace /> },
+  { path: '/products/:productId/services/:serviceId/metrics/endpoints', title: '指标数据端点', element: <Navigate to="/platform/observability/endpoints/metrics" replace /> },
   { path: '/products/:productId/services/:serviceId/metrics/alerts/new', title: '创建指标告警', element: <Navigate to="/metrics/alerts/new" replace /> },
   { path: '/products/:productId/services/:serviceId/metrics/alerts/:id', title: '编辑指标告警', element: <LegacyMetricsAlertRedirect /> },
   { path: '/products/:productId/services/:serviceId/metrics/alerts', title: '指标告警', element: <Navigate to="/metrics/alerts" replace /> },
-  { path: '/observability/endpoints', title: 'Logs 下游端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
-  { path: '/observability/endpoints/logs', title: 'Logs 下游端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
-  { path: '/observability/endpoints/metrics', title: '指标下游端点', element: <Navigate to="/platform/observability/endpoints/metrics" replace /> },
+  { path: '/observability/endpoints', title: '日志数据端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
+  { path: '/observability/endpoints/logs', title: '日志数据端点', element: <Navigate to="/platform/observability/endpoints/logs" replace /> },
+  { path: '/observability/endpoints/metrics', title: '指标数据端点', element: <Navigate to="/platform/observability/endpoints/metrics" replace /> },
   { path: '/metrics', title: '监控总览', element: <MetricsLayout />, children: metricsEntryChildRoutes },
   { path: '/traces', title: 'Trace', element: <TracesPage /> },
   { path: '/platform', title: '平台管理', element: <PlatformLayout />, children: platformChildRoutes },

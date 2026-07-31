@@ -1,11 +1,16 @@
-import { useMemo, useState } from 'react';
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query';
-import { AlertTriangle, ShieldCheck } from 'lucide-react';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { AlertTriangle } from 'lucide-react';
 import { DataPanel } from '../../components/DataPanel';
 import { usePlatformAccess } from '../../layouts/access';
 import { api } from '../../services/api';
 import { k8sApi } from '../k8s/api';
-import { accessApi, type K8sAccessLevel, type ProductAccessRole } from './accessApi';
+import {
+  accessApi,
+  type K8sAccessLevel,
+  type ProductAccessGrant,
+  type ProductAccessRole,
+} from './accessApi';
 import { platformApi } from './api';
 import {
   BreakGlassForm,
@@ -33,7 +38,7 @@ export type IdentityKind = 'user' | 'group';
 export interface IdentityDraft {
   kind: IdentityKind;
   name: string;
-  displayName: string;
+  groupDisplayName: string;
   email: string;
   password: string;
   description: string;
@@ -42,7 +47,7 @@ export interface IdentityDraft {
 const emptyIdentityDraft: IdentityDraft = {
   kind: 'user',
   name: '',
-  displayName: '',
+  groupDisplayName: '',
   email: '',
   password: '',
   description: '',
@@ -68,6 +73,7 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
     groupId: '',
     role: 'product-viewer' as ProductAccessRole,
   });
+  const [editingProductGrantId, setEditingProductGrantId] = useState('');
   const [profileDraft, setProfileDraft] = useState(emptyProfileDraft);
   const [editingProfileId, setEditingProfileId] = useState('');
   const [k8sGrantDraft, setK8sGrantDraft] = useState({ profileId: '', groupId: '' });
@@ -82,6 +88,12 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
   const productsQuery = useQuery({ queryKey: ['platform-products'], queryFn: api.getProductsForAdministration, retry: false });
   const clustersQuery = useQuery({ queryKey: ['platform-k8s-clusters'], queryFn: () => k8sApi.listClustersForAdministration(), retry: false });
   const adminsQuery = useQuery({ queryKey: ['fixed-access', 'platform-admins'], queryFn: accessApi.listPlatformAdminGrants, retry: false });
+  const productGrantsQuery = useQuery({
+    queryKey: ['fixed-access', 'product-grants', 'administration'],
+    queryFn: accessApi.listProductAccessGrantsForAdministration,
+    enabled: section === 'product-access',
+    retry: false,
+  });
   const profilesQuery = useQuery({ queryKey: ['fixed-access', 'k8s-profiles'], queryFn: accessApi.listK8sAccessProfiles, retry: false });
   const k8sGrantsQuery = useQuery({ queryKey: ['fixed-access', 'k8s-grants'], queryFn: () => accessApi.listK8sAccessGrants(), retry: false });
   const breakGlassQuery = useQuery({ queryKey: ['fixed-access', 'break-glass'], queryFn: accessApi.listBreakGlassGrants, retry: false });
@@ -99,24 +111,11 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
   const products = productsQuery.data ?? [];
   const clusters = clustersQuery.data ?? [];
   const admins = adminsQuery.data ?? [];
+  const productGrants = productGrantsQuery.data ?? [];
   const profiles = profilesQuery.data ?? [];
   const activeProfiles = profiles.filter((profile) => profile.status === 'active');
   const k8sGrants = k8sGrantsQuery.data ?? [];
   const breakGlassGrants = breakGlassQuery.data ?? [];
-
-  const productGrantQueries = useQueries({
-    queries: products.map((product) => ({
-      queryKey: ['fixed-access', 'product-grants', product.id],
-      queryFn: () => accessApi.listProductAccessGrants(product.id),
-      retry: false,
-    })),
-  });
-  const productGrants = useMemo(
-    () => products.flatMap((product, index) => (
-      (productGrantQueries[index]?.data ?? []).map((grant) => ({ ...grant, productName: product.name }))
-    )),
-    [productGrantQueries, products],
-  );
 
   const invalidateIdentity = () => Promise.all([
     queryClient.invalidateQueries({ queryKey: ['platform-users'] }),
@@ -134,13 +133,12 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
       if (identityDraft.kind === 'group') {
         return platformApi.createGroup({
           name: identityDraft.name.trim(),
-          displayName: identityDraft.displayName.trim(),
+          displayName: identityDraft.groupDisplayName.trim(),
           description: identityDraft.description.trim(),
         });
       }
       return platformApi.createUser({
         username: identityDraft.name.trim(),
-        displayName: identityDraft.displayName.trim(),
         email: identityDraft.email.trim(),
         password: identityDraft.password,
       });
@@ -178,26 +176,41 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
       ) || '',
     }),
     onSuccess: async () => {
-      setActiveEditor(null);
-      await invalidateFixedAccess();
-    },
-  });
-  const deleteAdmin = useMutation({ mutationFn: accessApi.deletePlatformAdminGrant, onSuccess: invalidateFixedAccess });
-  const createProductGrant = useMutation({
-    mutationFn: () => accessApi.createProductAccessGrant(productDraft.productId || products[0]?.id || '', {
-      groupId: productDraft.groupId || groups[0]?.id || '',
-      role: productDraft.role,
-    }),
-    onSuccess: async () => {
+      setProductDraft({ productId: '', groupId: '', role: 'product-viewer' });
+      setEditingProductGrantId('');
       setActiveEditor(null);
       await invalidateFixedAccess();
     },
   });
   const deleteProductGrant = useMutation({
-    mutationFn: ({ productId, grantId }: { productId: string; grantId: string }) => (
-      accessApi.deleteProductAccessGrant(productId, grantId)
-    ),
+    mutationFn: (grant: ProductAccessGrant) => accessApi.deleteProductAccessGrant(grant.productId, grant.id),
     onSuccess: invalidateFixedAccess,
+  });
+  const deleteAdmin = useMutation({ mutationFn: accessApi.deletePlatformAdminGrant, onSuccess: invalidateFixedAccess });
+  const createProductGrant = useMutation({
+    mutationFn: () => {
+      const productId = productDraft.productId
+        || products.find((product) => product.status === 'active')?.id
+        || '';
+      const groupId = productDraft.groupId
+        || groups.find((group) => (
+          group.status === 'active'
+          && !productGrants.some((grant) => (
+            grant.productId === productId && grant.groupId === group.id
+          ))
+        ))?.id
+        || '';
+      return editingProductGrantId
+        ? accessApi.updateProductAccessGrant(productId, editingProductGrantId, productDraft.role)
+        : accessApi.createProductAccessGrant(productId, {
+          groupId,
+          role: productDraft.role,
+        });
+    },
+    onSuccess: async () => {
+      setActiveEditor(null);
+      await invalidateFixedAccess();
+    },
   });
   const saveProfile = useMutation({
     mutationFn: () => {
@@ -258,11 +271,10 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
     productsQuery.error,
     clustersQuery.error,
     adminsQuery.error,
+    productGrantsQuery.error,
     profilesQuery.error,
     k8sGrantsQuery.error,
     breakGlassQuery.error,
-    ...productGrantQueries.map((query) => query.error),
-    createIdentity.error,
     deleteIdentity.error,
     createMembership.error,
     deleteMembership.error,
@@ -283,10 +295,7 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
   return (
     <div className="space-y-4">
       <DataPanel>
-        <div className="console-notice mb-3">
-          <ShieldCheck className="h-4 w-4" />
-          平台控制面、产品与 K8S 工作负载是三条独立授权边界；平台管理员不会自动获得产品数据或工作负载权限。
-        </div>
+        {/* 授权边界说明已降级为各工作区标题旁的 HelpTip，不再占用首屏通栏。 */}
         {errors[0] ? <ErrorNotice error={errors[0]} /> : null}
 
         {section === 'identities' ? (
@@ -295,8 +304,14 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
             groups={groups}
             memberships={memberships}
             currentUserId={currentAccess?.subject.id ?? ''}
-            onCreateIdentity={() => setActiveEditor('identity')}
-            onCreateMembership={() => setActiveEditor('membership')}
+            onCreateIdentity={() => {
+              if (!createIdentity.isPending) createIdentity.reset();
+              setActiveEditor('identity');
+            }}
+            onCreateMembership={(groupId) => {
+              setMembershipDraft({ groupId: groupId ?? '', userId: '' });
+              setActiveEditor('membership');
+            }}
             onDeleteIdentity={(kind, id, label) => {
               if (window.confirm(`确认删除 ${label}？相关固定授权必须由后端阻止悬空引用。`)) {
                 deleteIdentity.mutate({ kind, id });
@@ -323,11 +338,26 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
         {section === 'product-access' ? (
           <ProductAccessWorkspace
             grants={productGrants}
+            products={products}
             groups={groups}
-            onCreate={() => setActiveEditor('product-access')}
+            loading={productGrantsQuery.isLoading || productsQuery.isLoading || groupsQuery.isLoading}
+            onCreate={(productId) => {
+              setEditingProductGrantId('');
+              setProductDraft({ productId: productId ?? '', groupId: '', role: 'product-viewer' });
+              setActiveEditor('product-access');
+            }}
+            onEdit={(grant) => {
+              setEditingProductGrantId(grant.id);
+              setProductDraft({
+                productId: grant.productId,
+                groupId: grant.groupId,
+                role: grant.role,
+              });
+              setActiveEditor('product-access');
+            }}
             onDelete={(grant) => {
-              if (window.confirm('确认撤销该产品授权？授权会自动覆盖产品下全部服务。')) {
-                deleteProductGrant.mutate({ productId: grant.productId, grantId: grant.id });
+              if (window.confirm('确认撤销该产品访问授权？该用户组成员将立即失去由此关系继承的产品权限。')) {
+                deleteProductGrant.mutate(grant);
               }
             }}
           />
@@ -343,7 +373,10 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
               setProfileDraft(emptyProfileDraft);
               setActiveEditor('k8s-profile');
             }}
-            onCreateGrant={() => setActiveEditor('k8s-grant')}
+            onCreateGrant={(profileId) => {
+              setK8sGrantDraft({ profileId: profileId ?? '', groupId: '' });
+              setActiveEditor('k8s-grant');
+            }}
             onEditProfile={(profile) => {
               setEditingProfileId(profile.id);
               setProfileDraft({
@@ -388,16 +421,44 @@ export function PlatformAccessAdminPage({ section }: { section: PlatformAccessSe
 
       {activeEditor ? (
         <EditorDrawer
-          title={activeEditor === 'k8s-profile' && editingProfileId ? '编辑命名空间权限' : editorTitle(activeEditor)}
+          title={activeEditor === 'k8s-profile' && editingProfileId
+            ? '编辑命名空间权限'
+            : activeEditor === 'product-access' && editingProductGrantId
+              ? '修改产品访问授权'
+              : editorTitle(activeEditor)}
           onClose={() => {
+            if (activeEditor === 'identity' && !createIdentity.isPending) createIdentity.reset();
             setActiveEditor(null);
+            setEditingProductGrantId('');
             setEditingProfileId('');
           }}
         >
-          {activeEditor === 'identity' ? <IdentityForm draft={identityDraft} setDraft={setIdentityDraft} pending={createIdentity.isPending} onSubmit={() => createIdentity.mutate()} /> : null}
+          {activeEditor === 'identity' ? (
+            <IdentityForm
+              draft={identityDraft}
+              setDraft={(draft) => {
+                if (!createIdentity.isPending) createIdentity.reset();
+                setIdentityDraft(draft);
+              }}
+              pending={createIdentity.isPending}
+              error={createIdentity.error}
+              onSubmit={() => createIdentity.mutate()}
+            />
+          ) : null}
           {activeEditor === 'membership' ? <MembershipForm draft={membershipDraft} groups={groups} users={users} setDraft={setMembershipDraft} pending={createMembership.isPending} onSubmit={() => createMembership.mutate()} /> : null}
           {activeEditor === 'platform-admin' ? <PlatformAdminForm draft={adminDraft} subjects={adminSubjects} setDraft={setAdminDraft} pending={createAdmin.isPending} onSubmit={() => createAdmin.mutate()} /> : null}
-          {activeEditor === 'product-access' ? <ProductAccessForm draft={productDraft} products={products} groups={groups} setDraft={setProductDraft} pending={createProductGrant.isPending} onSubmit={() => createProductGrant.mutate()} /> : null}
+          {activeEditor === 'product-access' ? (
+            <ProductAccessForm
+              draft={productDraft}
+              products={products}
+              groups={groups}
+              existingGrants={productGrants}
+              editing={Boolean(editingProductGrantId)}
+              setDraft={setProductDraft}
+              pending={createProductGrant.isPending}
+              onSubmit={() => createProductGrant.mutate()}
+            />
+          ) : null}
           {activeEditor === 'k8s-profile' ? (
             <K8sProfileForm
               draft={profileDraft}

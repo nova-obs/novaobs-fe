@@ -684,6 +684,7 @@ function getWorkspaceLabel(
   activeDomain: NavigationDomain,
 ) {
   if (/^\/k8s\/clusters\/[^/]+/.test(pathname)) return '集群工作台';
+  if (/^\/platform\/groups\/[^/]+/.test(pathname)) return '用户组授权';
   if (pathname.startsWith('/agents/')) return 'Agent 详情';
   return activeItem?.label ?? activeDomain.label;
 }

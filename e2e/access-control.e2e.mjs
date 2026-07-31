@@ -16,7 +16,7 @@ const roles = Object.freeze([
   Object.freeze({ id: 'maintainer', path: '/k8s/clusters/prod-shanghai', expected: '控制面状态', accessText: '允许命名空间维护' }),
   Object.freeze({ id: 'product-viewer', path: '/products', expected: '产品与服务' }),
   Object.freeze({ id: 'product-maintainer', path: '/products', expected: '产品与服务' }),
-  Object.freeze({ id: 'platform-admin', path: '/platform/k8s-access-profiles', expected: '命名空间权限' }),
+  Object.freeze({ id: 'platform-admin', path: '/platform/product-access', expected: '产品访问授权' }),
 ]);
 
 const viewports = Object.freeze([
@@ -101,10 +101,10 @@ test('固定权限五种身份视图与集群接入响应式布局', { timeout: 
           assert.equal(await page.getByRole('button', { name: '授权', exact: true }).count(), 0);
         }
         if (role.id === 'product-maintainer') {
-          await page.getByRole('button', { name: '授权', exact: true }).first().waitFor();
+          assert.equal(await page.getByRole('button', { name: '授权', exact: true }).count(), 0);
         }
         if (role.id === 'platform-admin') {
-          await page.getByRole('button', { name: '创建命名空间权限', exact: true }).waitFor();
+          await page.getByRole('button', { name: '添加产品访问授权', exact: true }).waitFor();
         }
         const horizontalOverflow = await page.evaluate(() => (
           document.documentElement.scrollWidth > document.documentElement.clientWidth
@@ -146,7 +146,7 @@ test('固定权限五种身份视图与集群接入响应式布局', { timeout: 
       const context = await browser.newContext({ viewport });
       const page = await context.newPage();
       await page.goto(`${baseURL}/platform/k8s-clusters`);
-      await page.getByText('K8S 集群接入', { exact: true }).waitFor();
+      await page.getByRole('heading', { name: 'K8s 集群接入', exact: true }).waitFor();
       await page.getByText('连接正常', { exact: true }).waitFor();
       await page.getByRole('button', { name: /打开凭据管理/ }).click();
       const dialog = page.getByRole('dialog', { name: /集群管理凭据/ });

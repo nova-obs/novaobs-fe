@@ -5,7 +5,7 @@ let activeRole = 'developer';
 
 const roles = Object.freeze({
   developer: Object.freeze({
-    subject: { id: 'developer-chen', type: 'user', display_name: '开发工程师 陈晨' },
+    subject: { id: 'developer-chen', type: 'user', display_name: 'developer-chen' },
     group_ids: ['commerce-developers'],
     available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
@@ -23,7 +23,7 @@ const roles = Object.freeze({
     modules: { workspace: 'read', k8s: 'read' },
   }),
   maintainer: Object.freeze({
-    subject: { id: 'lead-li', type: 'user', display_name: '开发组长 李岚' },
+    subject: { id: 'lead-li', type: 'user', display_name: 'lead-li' },
     group_ids: ['commerce-maintainers'],
     available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
@@ -41,7 +41,7 @@ const roles = Object.freeze({
     modules: { workspace: 'read', k8s: 'manage' },
   }),
   'product-viewer': Object.freeze({
-    subject: { id: 'viewer-wang', type: 'user', display_name: '产品观察者 王维' },
+    subject: { id: 'viewer-wang', type: 'user', display_name: 'viewer-wang' },
     group_ids: ['commerce-viewers'],
     available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
@@ -57,7 +57,7 @@ const roles = Object.freeze({
     },
   }),
   'product-maintainer': Object.freeze({
-    subject: { id: 'owner-zhao', type: 'user', display_name: '产品维护者 赵哲' },
+    subject: { id: 'owner-zhao', type: 'user', display_name: 'owner-zhao' },
     group_ids: ['commerce-owners'],
     available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: false,
@@ -73,7 +73,7 @@ const roles = Object.freeze({
     },
   }),
   'platform-admin': Object.freeze({
-    subject: { id: 'platform-admin', type: 'user', display_name: '平台管理员' },
+    subject: { id: 'platform-admin', type: 'user', display_name: 'platform-admin' },
     group_ids: ['platform-owners'],
     available_modules: ['workspace', 'observability', 'k8s'],
     platform_admin: true,
@@ -191,31 +191,29 @@ function routeData(pathname) {
   if (pathname === '/api/v1/k8sops/dashboard') return dashboard();
   if (pathname === '/api/v1/platform/users') {
     return [
-      { id: 'platform-admin', username: 'platform-admin', display_name: '平台管理员', email: 'platform@example.com', status: 'active', source: 'local' },
-      { id: 'owner-zhao', username: 'owner-zhao', display_name: '产品维护者 赵哲', email: 'owner@example.com', status: 'active', source: 'oidc' },
+      { id: 'platform-admin', username: 'platform-admin', email: 'platform@example.com', status: 'active', source: 'local' },
+      { id: 'owner-zhao', username: 'owner-zhao', email: 'owner@example.com', status: 'active', source: 'oidc' },
     ];
   }
   if (pathname === '/api/v1/platform/groups') {
     return [
-      { id: 'commerce-viewers', name: 'commerce-viewers', display_name: '交易平台观察者', status: 'active' },
-      { id: 'commerce-maintainers', name: 'commerce-maintainers', display_name: '交易 Namespace 维护者', status: 'active' },
+      { id: 'commerce-viewers', name: 'commerce-viewers', display_name: '交易平台观察者', status: 'active', member_count: 6 },
+      { id: 'commerce-owners', name: 'commerce-owners', display_name: '交易平台维护者', status: 'active', member_count: 3 },
+      { id: 'commerce-maintainers', name: 'commerce-maintainers', display_name: '交易 Namespace 维护者', status: 'active', member_count: 4 },
     ];
   }
   if (pathname === '/api/v1/platform/group-memberships') return [];
   if (pathname === '/api/v1/platform/admin-grants') {
     return [{ id: 'admin:user:platform-admin', subject_type: 'user', subject_id: 'platform-admin', created_by: 'bootstrap', created_at: '2026-07-20T08:00:00Z' }];
   }
-  if (pathname === '/api/v1/products/product-commerce/access-grants') {
+  if (pathname === '/api/v1/platform/products/product-commerce/access-grants') {
     return [
-      { id: 'grant-commerce-viewers', product_id: 'product-commerce', group_id: 'commerce-viewers', role: 'product-viewer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z' },
-      { id: 'grant-commerce-owners', product_id: 'product-commerce', group_id: 'commerce-owners', role: 'product-maintainer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z' },
+      { id: 'grant-commerce-viewers', product_id: 'product-commerce', group_id: 'commerce-viewers', role: 'product-viewer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z', updated_by: 'platform-admin', updated_at: '2026-07-30T08:00:00Z' },
+      { id: 'grant-commerce-owners', product_id: 'product-commerce', group_id: 'commerce-owners', role: 'product-maintainer', created_by: 'platform-admin', created_at: '2026-07-20T08:00:00Z', updated_by: 'platform-admin', updated_at: '2026-07-31T08:00:00Z' },
     ];
   }
-  if (pathname === '/api/v1/products/product-commerce/access-groups') {
-    return [
-      { group_id: 'commerce-viewers', display_name: '交易平台观察者' },
-      { group_id: 'commerce-owners', display_name: '交易平台维护者' },
-    ];
+  if (pathname === '/api/v1/platform/product-access-grants') {
+    return routeData('/api/v1/platform/products/product-commerce/access-grants');
   }
   if (pathname === '/api/v1/k8s/access-profiles') {
     return [

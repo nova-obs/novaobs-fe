@@ -125,18 +125,18 @@ const navigationDomains: NavigationDomain[] = [
   {
     id: 'platform',
     label: '平台管理',
-    description: '身份权限与平台配置',
+    description: '身份授权、集群与观测配置',
     icon: ShieldCheck,
     groups: [
       {
         id: 'platform-settings',
         label: '平台设置',
         items: [
-          { id: 'platform-settings', label: '平台设置', description: '平台级模板与运行配置', path: '/platform/settings', icon: Settings },
+          { id: 'platform-settings', label: '平台设置', description: '镜像模板与 Grafana 入口', path: '/platform/settings', icon: Settings },
           {
             id: 'platform-access',
-            label: '权限控制',
-            description: '用户、用户组与固定授权',
+            label: '身份与授权',
+            description: '用户、用户组与授权',
             path: '/platform/access',
             icon: ShieldCheck,
             children: platformAccessNavigationItems.map((item) => ({
@@ -147,16 +147,16 @@ const navigationDomains: NavigationDomain[] = [
               icon: item.icon,
             })),
           },
-          { id: 'platform-k8s-clusters', label: 'K8s 集群接入', description: '登记集群并管理控制面凭据', path: '/platform/k8s-clusters', icon: ServerCog },
+          { id: 'platform-k8s-clusters', label: 'K8s 集群接入', description: '集群登记与控制面凭据', path: '/platform/k8s-clusters', icon: ServerCog },
           {
             id: 'platform-observability-endpoints',
-            label: '共享观测端点',
-            description: '管理日志与指标共享下游',
+            label: '观测数据端点',
+            description: '日志与指标端点',
             path: '/platform/observability/endpoints/logs',
             icon: RadioTower,
             children: [
-              { id: 'platform-observability-logs-endpoints', label: 'Logs 下游端点', description: '管理日志写入与查询端点', path: '/platform/observability/endpoints/logs', icon: FileText },
-              { id: 'platform-observability-metrics-endpoints', label: '指标下游端点', description: '管理指标写入与查询端点', path: '/platform/observability/endpoints/metrics', icon: Activity },
+              { id: 'platform-observability-logs-endpoints', label: '日志数据端点', description: '配置日志写入与查询端点', path: '/platform/observability/endpoints/logs', icon: FileText },
+              { id: 'platform-observability-metrics-endpoints', label: '指标数据端点', description: '配置指标写入与查询端点', path: '/platform/observability/endpoints/metrics', icon: Activity },
             ],
           },
         ],

@@ -416,8 +416,7 @@ function TargetHeading({ target, routeId, runtimeURL }: { target: LogRouteRuntim
         <Link className="font-semibold text-primary hover:underline" to={buildAgentDetailURL(target.instanceUid, runtimeURL, routeId)}>
           {target.targetName || target.targetId}
         </Link>
-      ) : <span className="font-semibold">{target.targetName || target.targetId}</span>}
-      <div className="mt-1 font-mono text-[11px] text-muted">{target.targetId}</div>
+      ) : <span className="font-semibold" title={target.targetId}>{target.targetName || target.targetId}</span>}
     </div>
   );
 }
@@ -453,7 +452,7 @@ function ConfigDialog({ route, loading, error, collectorYAML, onClose }: {
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/28 px-4 py-6">
       <section className="grid h-[80vh] w-full max-w-[920px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden rounded-md border border-outline bg-white shadow-[0_24px_80px_rgba(24,52,96,0.28)]">
         <div className="flex items-center justify-between gap-3 border-b border-outline px-4 py-3">
-          <div><div className="text-sm font-semibold">采集配置</div><div className="mt-1 font-mono text-[11px] text-muted">{route.route.id}</div></div>
+          <div><div className="text-sm font-semibold" title={route.route.id}>采集配置</div></div>
           <div className="flex gap-2">
             <button className="console-icon-button" aria-label="复制采集配置" title="复制" disabled={!collectorYAML} onClick={() => navigator.clipboard?.writeText(collectorYAML)}><Copy className="h-4 w-4" /></button>
             <button className="console-icon-button" aria-label="关闭采集配置" title="关闭" onClick={onClose}><XCircle className="h-4 w-4" /></button>
@@ -497,7 +496,7 @@ function HistoryDialog({ loading, error, rollouts, confirmRollbackId, rollbackPe
               <thead><tr><th>Generation</th><th>状态</th><th>目标收敛</th><th>发布时间</th><th>来源</th><th className="text-right">操作</th></tr></thead>
               <tbody>{rollouts.map((rollout, index) => (
                 <tr key={rollout.rolloutId}>
-                  <td><div className="font-semibold">#{rollout.generation}</div><div className="mt-1 max-w-48 truncate font-mono text-[11px] text-muted">{rollout.rolloutId}</div></td>
+                  <td><div className="font-semibold" title={rollout.rolloutId}>#{rollout.generation}</div></td>
                   <td><AxisState value={rollout.status} /></td>
                   <td>{rollout.convergedTargets} / {rollout.expectedTargets}</td>
                   <td>{formatTime(rollout.createdAt)}</td>

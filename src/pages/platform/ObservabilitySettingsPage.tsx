@@ -245,14 +245,14 @@ export function ObservabilitySettingsPage({ domain = 'logs' }: { domain?: Endpoi
   const saveMutation = useMutation({
     mutationFn: async (): Promise<EndpointItem> => {
       if (domain === 'metrics') {
-        if (form.sinkType !== 'vm') throw new Error('指标下游端点仅支持 VictoriaMetrics');
+        if (form.sinkType !== 'vm') throw new Error('指标数据端点仅支持 VictoriaMetrics');
         const input = victoriaMetricsInput(form);
         const endpoint = editingEndpoint && selectedEndpoint
           ? await observabilityEndpointsApi.updateVictoriaMetrics(selectedEndpoint.id, input)
           : await observabilityEndpointsApi.createVictoriaMetrics(input);
         return victoriaMetricsEndpointToItem(endpoint);
       }
-      if (form.sinkType === 'vm') throw new Error('Logs 下游端点不支持 VictoriaMetrics');
+      if (form.sinkType === 'vm') throw new Error('日志数据端点不支持 VictoriaMetrics');
       return editingEndpoint && selectedEndpoint
         ? logsApi.updateEndpoint(selectedEndpoint.id, { ...form, sinkType: form.sinkType })
         : logsApi.createEndpoint({ ...form, sinkType: form.sinkType });
@@ -321,7 +321,7 @@ export function ObservabilitySettingsPage({ domain = 'logs' }: { domain?: Endpoi
           <div className="flex w-full flex-wrap items-center justify-end gap-2 md:w-auto">
             <div className="relative w-full md:w-80">
               <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted" />
-              <input className="console-input h-9 w-full pl-8 text-sm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={domain === 'metrics' ? '搜索指标端点、URL 或集群' : '搜索 Logs 端点、URL、集群或 Topic'} />
+              <input className="console-input h-9 w-full pl-8 text-sm" value={query} onChange={(event) => setQuery(event.target.value)} placeholder={domain === 'metrics' ? '搜索指标数据端点、URL 或集群' : '搜索日志数据端点、URL、集群或 Topic'} />
             </div>
             <button className="console-button" onClick={() => endpointsQuery.refetch()} disabled={endpointsQuery.isFetching} aria-label="刷新观测端点">
               {endpointsQuery.isFetching ? <RefreshCw className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
@@ -329,7 +329,7 @@ export function ObservabilitySettingsPage({ domain = 'logs' }: { domain?: Endpoi
             </button>
             <button className="console-button console-button-primary" onClick={startCreate}>
               <Plus className="h-3.5 w-3.5" />
-              {domain === 'metrics' ? '新增指标端点' : '新增 Logs 端点'}
+              {domain === 'metrics' ? '新增指标数据端点' : '新增日志数据端点'}
             </button>
           </div>
         )}
@@ -343,13 +343,13 @@ export function ObservabilitySettingsPage({ domain = 'logs' }: { domain?: Endpoi
                 <Database className="h-5 w-5" />
               </div>
               <div>
-                <div className="text-sm font-semibold text-on-surface">{query.trim() ? '未找到匹配的下游端点' : domain === 'metrics' ? '暂无指标下游端点' : '暂无 Logs 下游端点'}</div>
-                <div className="mt-1 text-xs text-muted">{query.trim() ? '调整关键词后再查看列表。' : domain === 'metrics' ? '登记 VictoriaMetrics 后，产品指标接入才能选择写入目标。' : '登记日志下游后，Logs 接入才能选择写入目标。'}</div>
+                <div className="text-sm font-semibold text-on-surface">{query.trim() ? '未找到匹配的数据端点' : domain === 'metrics' ? '暂无指标数据端点' : '暂无日志数据端点'}</div>
+                <div className="mt-1 text-xs text-muted">{query.trim() ? '调整关键词后再查看列表。' : domain === 'metrics' ? '登记 VictoriaMetrics 后，产品指标接入才能选择写入目标。' : '登记日志数据端点后，Logs 接入才能选择写入目标。'}</div>
               </div>
               {!query.trim() ? (
                 <button className="console-button console-button-primary" onClick={startCreate}>
                   <Plus className="h-3.5 w-3.5" />
-                  {domain === 'metrics' ? '新增指标端点' : '新增 Logs 端点'}
+                  {domain === 'metrics' ? '新增指标数据端点' : '新增日志数据端点'}
                 </button>
               ) : null}
             </div>
@@ -511,7 +511,7 @@ function EndpointEditorDrawer({ domain, mode, form, clusters, registeredClusterI
   onClose: () => void;
   onSave: () => void;
 }) {
-  const domainLabel = domain === 'metrics' ? '指标下游端点' : 'Logs 下游端点';
+  const domainLabel = domain === 'metrics' ? '指标数据端点' : '日志数据端点';
   const title = mode === 'edit' ? `编辑${domainLabel}` : `新增${domainLabel}`;
   return (
     <div className="fixed inset-0 z-[90] flex justify-end bg-slate-900/28">

@@ -77,11 +77,8 @@ export interface ProductAccessGrant {
   role: ProductAccessRole;
   createdBy: string;
   createdAt: string;
-}
-
-export interface ProductGrantSubject {
-  groupId: string;
-  displayName: string;
+  updatedBy: string;
+  updatedAt: string;
 }
 
 export interface K8sAccessProfile extends K8sAccessProfileSummary {
@@ -132,6 +129,14 @@ export interface K8sBreakGlassGrant {
   revokedAt: string;
   revokedByUserId: string;
   status: string;
+}
+
+/** 一个用户组在三条授权链路上的汇总，由后端一次返回，前端不再按产品扇出查询。 */
+export interface GroupAccessSummary {
+  groupId: string;
+  platformAdmin: boolean;
+  productGrants: ProductAccessGrant[];
+  k8sGrants: K8sAccessGrant[];
 }
 
 export interface AccessWriteResult<T> {
@@ -268,13 +273,8 @@ function mapProductAccessGrant(raw: any): ProductAccessGrant {
     role: raw?.role === 'product-maintainer' ? 'product-maintainer' : 'product-viewer',
     createdBy: raw?.created_by ?? raw?.createdBy ?? '',
     createdAt: raw?.created_at ?? raw?.createdAt ?? '',
-  };
-}
-
-function mapProductGrantSubject(raw: any): ProductGrantSubject {
-  return {
-    groupId: String(raw?.group_id ?? raw?.groupId ?? ''),
-    displayName: raw?.display_name ?? raw?.displayName ?? '',
+    updatedBy: raw?.updated_by ?? raw?.updatedBy ?? '',
+    updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
   };
 }
 
@@ -329,6 +329,19 @@ function mapK8sNamespaceImpact(raw: any): K8sNamespaceImpact {
   };
 }
 
+function mapGroupAccessSummary(raw: any): GroupAccessSummary {
+  return {
+    groupId: String(raw?.group_id ?? raw?.groupId ?? ''),
+    platformAdmin: Boolean(raw?.platform_admin ?? raw?.platformAdmin),
+    productGrants: Array.isArray(raw?.product_grants ?? raw?.productGrants)
+      ? (raw.product_grants ?? raw.productGrants).map(mapProductAccessGrant)
+      : [],
+    k8sGrants: Array.isArray(raw?.k8s_grants ?? raw?.k8sGrants)
+      ? (raw.k8s_grants ?? raw.k8sGrants).map(mapK8sAccessGrant)
+      : [],
+  };
+}
+
 function mapWriteResult<T>(raw: any, mapper: (value: any) => T): AccessWriteResult<T> {
   return {
     item: raw?.item ? mapper(raw.item) : undefined,
@@ -352,6 +365,11 @@ export const accessApi = {
   async me(): Promise<PlatformAccessContext> {
     return mapAccessContext(await apiRequest<any>('/platform/me'));
   },
+  async getGroupAccess(groupId: string): Promise<GroupAccessSummary> {
+    return mapGroupAccessSummary(
+      await apiRequest<any>(`/platform/groups/${encodeURIComponent(groupId)}/access`),
+    );
+  },
   async listPlatformAdminGrants(): Promise<PlatformAdminGrant[]> {
     const raw = await apiRequest<any[]>('/platform/admin-grants');
     return Array.isArray(raw) ? raw.map(mapPlatformAdminGrant) : [];
@@ -369,24 +387,30 @@ export const accessApi = {
       mapPlatformAdminGrant,
     );
   },
-  async listProductAccessGrants(productId: string): Promise<ProductAccessGrant[]> {
-    const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/access-grants`);
+  async listProductAccessGrantsForAdministration(): Promise<ProductAccessGrant[]> {
+    const raw = await apiRequest<any[]>('/platform/product-access-grants');
     return Array.isArray(raw) ? raw.map(mapProductAccessGrant) : [];
   },
-  async listProductGrantGroups(productId: string): Promise<ProductGrantSubject[]> {
-    const raw = await apiRequest<any[]>(`/products/${encodeURIComponent(productId)}/access-groups`);
-    return Array.isArray(raw) ? raw.map(mapProductGrantSubject) : [];
-  },
   async createProductAccessGrant(productId: string, input: Pick<ProductAccessGrant, 'groupId' | 'role'>): Promise<AccessWriteResult<ProductAccessGrant>> {
-    const raw = await apiRequest<any>(`/products/${encodeURIComponent(productId)}/access-grants`, {
+    const raw = await apiRequest<any>(`/platform/products/${encodeURIComponent(productId)}/access-grants`, {
       method: 'POST',
       body: JSON.stringify({ group_id: input.groupId, role: input.role }),
     });
     return mapWriteResult(raw, mapProductAccessGrant);
   },
+  async updateProductAccessGrant(productId: string, id: string, role: ProductAccessRole): Promise<AccessWriteResult<ProductAccessGrant>> {
+    const raw = await apiRequest<any>(
+      `/platform/products/${encodeURIComponent(productId)}/access-grants/${encodeURIComponent(id)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({ role }),
+      },
+    );
+    return mapWriteResult(raw, mapProductAccessGrant);
+  },
   async deleteProductAccessGrant(productId: string, id: string): Promise<AccessWriteResult<ProductAccessGrant>> {
     return mapWriteResult(
-      await apiRequest<any>(`/products/${encodeURIComponent(productId)}/access-grants/${encodeURIComponent(id)}`, { method: 'DELETE' }),
+      await apiRequest<any>(`/platform/products/${encodeURIComponent(productId)}/access-grants/${encodeURIComponent(id)}`, { method: 'DELETE' }),
       mapProductAccessGrant,
     );
   },

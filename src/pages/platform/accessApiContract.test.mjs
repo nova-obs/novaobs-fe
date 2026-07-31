@@ -87,7 +87,7 @@ test('固定授权 API 使用类型化资源而不是通用 Role 和 Binding', a
 
     assert.deepEqual(requests.map((item) => item.path), [
       '/api/v1/platform/admin-grants',
-      '/api/v1/products/product-1/access-grants',
+      '/api/v1/platform/products/product-1/access-grants',
       '/api/v1/k8s/access-profiles',
       '/api/v1/k8s/access-profiles/profile-1',
       '/api/v1/k8s/access-grants',
@@ -112,22 +112,82 @@ test('固定授权 API 使用类型化资源而不是通用 Role 和 Binding', a
   }
 });
 
-test('产品维护者通过产品域接口读取最小授权用户组目录', async () => {
+test('平台管理员通过单一平台接口读取全部产品授权关系', async () => {
   const originalFetch = globalThis.fetch;
   let requestedPath = '';
   globalThis.fetch = async (path) => {
     requestedPath = String(path);
-    return jsonResponse([
-      { group_id: 'orders-dev', display_name: '订单开发组' },
-    ]);
+    return jsonResponse([{
+      id: 'product:orders:group:orders-dev',
+      product_id: 'orders',
+      group_id: 'orders-dev',
+      role: 'product-maintainer',
+      created_by: 'admin',
+      created_at: '2026-07-30T08:00:00Z',
+      updated_by: 'admin-2',
+      updated_at: '2026-07-31T09:00:00Z',
+    }]);
   };
 
   try {
-    const groups = await accessApi.listProductGrantGroups('product-1');
-    assert.equal(requestedPath, '/api/v1/products/product-1/access-groups');
-    assert.deepEqual(groups, [
-      { groupId: 'orders-dev', displayName: '订单开发组' },
-    ]);
+    const grants = await accessApi.listProductAccessGrantsForAdministration();
+    assert.equal(requestedPath, '/api/v1/platform/product-access-grants');
+    assert.deepEqual(grants, [{
+      id: 'product:orders:group:orders-dev',
+      productId: 'orders',
+      groupId: 'orders-dev',
+      role: 'product-maintainer',
+      createdBy: 'admin',
+      createdAt: '2026-07-30T08:00:00Z',
+      updatedBy: 'admin-2',
+      updatedAt: '2026-07-31T09:00:00Z',
+    }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('产品访问授权创建与修改使用不同的写入语义', async () => {
+  const originalFetch = globalThis.fetch;
+  const requests = [];
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path: String(path), init });
+    return jsonResponse({
+      item: {
+        id: 'product:orders:group:orders-dev',
+        product_id: 'orders',
+        group_id: 'orders-dev',
+        role: 'product-maintainer',
+      },
+      status: 'saved',
+    });
+  };
+
+  try {
+    await accessApi.createProductAccessGrant('orders', {
+      groupId: 'orders-dev',
+      role: 'product-viewer',
+    });
+    await accessApi.updateProductAccessGrant(
+      'orders',
+      'product:orders:group:orders-dev',
+      'product-maintainer',
+    );
+
+    assert.equal(requests[0].path, '/api/v1/platform/products/orders/access-grants');
+    assert.equal(requests[0].init.method, 'POST');
+    assert.deepEqual(JSON.parse(requests[0].init.body), {
+      group_id: 'orders-dev',
+      role: 'product-viewer',
+    });
+    assert.equal(
+      requests[1].path,
+      '/api/v1/platform/products/orders/access-grants/product%3Aorders%3Agroup%3Aorders-dev',
+    );
+    assert.equal(requests[1].init.method, 'PUT');
+    assert.deepEqual(JSON.parse(requests[1].init.body), {
+      role: 'product-maintainer',
+    });
   } finally {
     globalThis.fetch = originalFetch;
   }

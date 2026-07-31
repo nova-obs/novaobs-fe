@@ -5,7 +5,7 @@ import type { ModuleRailItem } from '../../components/navigation/ModuleRail';
 import { platformAccessNavigationItems } from './platformNavigation';
 
 const platformRailItems: ModuleRailItem[] = [
-  { to: '/platform/settings', label: '平台设置', description: '镜像模板与平台级运行配置', icon: Settings, end: true },
+  { to: '/platform/settings', label: '平台设置', description: '镜像模板与 Grafana 入口', icon: Settings, end: true },
   ...platformAccessNavigationItems.map((item) => ({
     to: item.path,
     label: item.label,

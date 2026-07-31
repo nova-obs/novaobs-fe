@@ -16,7 +16,6 @@ export interface PlatformSubject {
 export interface PlatformUser {
   id: string;
   username: string;
-  displayName: string;
   email: string;
   passwordSet: boolean;
   status: string;
@@ -42,7 +41,7 @@ export interface PlatformMembership {
   groupId: string;
   groupName: string;
   userId: string;
-  userDisplayName: string;
+  username: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -86,7 +85,6 @@ function mapUser(raw: any): PlatformUser {
   return {
     id: String(raw.id ?? ''),
     username: raw.username ?? '',
-    displayName: raw.display_name ?? raw.displayName ?? '',
     email: raw.email ?? '',
     passwordSet: Boolean(raw.password_set ?? raw.passwordSet),
     status: raw.status ?? 'unknown',
@@ -116,7 +114,7 @@ function mapMembership(raw: any): PlatformMembership {
     groupId: raw.group_id ?? raw.groupId ?? '',
     groupName: raw.group_name ?? raw.groupName ?? '',
     userId: raw.user_id ?? raw.userId ?? '',
-    userDisplayName: raw.user_display_name ?? raw.userDisplayName ?? '',
+    username: raw.username ?? '',
     createdAt: raw.created_at ?? raw.createdAt ?? '',
     updatedAt: raw.updated_at ?? raw.updatedAt ?? '',
   };
@@ -169,10 +167,10 @@ export const platformApi = {
     const raw = await apiRequest<any[] | null>('/platform/users');
     return mapList(raw, mapUser);
   },
-  async createUser(input: { username: string; displayName: string; email?: string; password?: string }): Promise<PlatformWriteResult<PlatformUser>> {
+  async createUser(input: { username: string; email?: string; password?: string }): Promise<PlatformWriteResult<PlatformUser>> {
     const raw = await apiRequest<any>('/platform/users', {
       method: 'POST',
-      body: JSON.stringify({ username: input.username, display_name: input.displayName, email: input.email ?? '', password: input.password ?? '' }),
+      body: JSON.stringify({ username: input.username, email: input.email ?? '', password: input.password ?? '' }),
     });
     return mapWriteResult(raw, mapUser);
   },

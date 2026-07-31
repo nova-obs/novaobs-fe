@@ -1,39 +1,69 @@
 import type { ReactNode } from 'react';
 import { AlertTriangle, X } from 'lucide-react';
 import { HelpTip } from '../../components/HelpTip';
-import type { K8sAccessLevel, K8sAccessProfile, K8sNamespaceImpact, ProductAccessRole } from './accessApi';
+import type {
+  K8sAccessLevel,
+  K8sAccessProfile,
+  K8sNamespaceImpact,
+  ProductAccessGrant,
+  ProductAccessRole,
+} from './accessApi';
+import type { Product } from '../../services/types';
 import type { PlatformGroup, PlatformUser } from './api';
+import { identityIdentifierError, identityIdentifierHelp } from './identityValidation';
 import type { Editor, IdentityDraft, IdentityKind } from './PlatformAccessAdminPage';
 
 export function IdentityForm({
   draft,
   setDraft,
   pending,
+  error,
   onSubmit,
 }: {
   draft: IdentityDraft;
   setDraft: (draft: IdentityDraft) => void;
   pending: boolean;
+  error?: unknown;
   onSubmit: () => void;
 }) {
-  const valid = Boolean(draft.name.trim() && draft.displayName.trim() && (draft.kind !== 'user' || draft.password.length >= 8));
+  const identifierError = identityIdentifierError(draft.name);
+  const valid = Boolean(
+    draft.name.trim()
+    && !identifierError
+    && (draft.kind !== 'group' || draft.groupDisplayName.trim())
+    && (draft.kind !== 'user' || draft.password.length >= 8),
+  );
   return (
     <FormStack>
       <Field label="创建类型">
-        <select className="console-select w-full" value={draft.kind} onChange={(event) => setDraft({ ...draft, kind: event.target.value as IdentityKind })}>
+        <select className="console-select w-full" value={draft.kind} disabled={pending} onChange={(event) => setDraft({ ...draft, kind: event.target.value as IdentityKind })}>
           <option value="user">用户</option>
           <option value="group">用户组</option>
         </select>
       </Field>
-      <TextField label={draft.kind === 'user' ? '用户名' : '名称'} value={draft.name} onChange={(value) => setDraft({ ...draft, name: value })} />
-      <TextField label="显示名称" value={draft.displayName} onChange={(value) => setDraft({ ...draft, displayName: value })} />
+      <TextField
+        label={draft.kind === 'user' ? '用户名' : '用户组标识'}
+        value={draft.name}
+        help={identityIdentifierHelp}
+        error={identifierError}
+        disabled={pending}
+        onChange={(value) => setDraft({ ...draft, name: value })}
+      />
+      {draft.kind === 'group' && (
+        <TextField label="显示名称" value={draft.groupDisplayName} disabled={pending} onChange={(value) => setDraft({ ...draft, groupDisplayName: value })} />
+      )}
       {draft.kind === 'user' ? (
         <>
-          <TextField label="邮箱（可选）" value={draft.email} onChange={(value) => setDraft({ ...draft, email: value })} />
-          <TextField label="初始密码（至少 8 位）" type="password" value={draft.password} onChange={(value) => setDraft({ ...draft, password: value })} />
+          <TextField label="邮箱（可选）" value={draft.email} disabled={pending} onChange={(value) => setDraft({ ...draft, email: value })} />
+          <TextField label="初始密码（至少 8 位）" type="password" value={draft.password} disabled={pending} onChange={(value) => setDraft({ ...draft, password: value })} />
         </>
       ) : null}
-      {draft.kind !== 'user' ? <TextField label="说明（可选）" value={draft.description} onChange={(value) => setDraft({ ...draft, description: value })} /> : null}
+      {draft.kind !== 'user' ? <TextField label="说明（可选）" value={draft.description} disabled={pending} onChange={(value) => setDraft({ ...draft, description: value })} /> : null}
+      {error ? (
+        <div className="console-notice console-notice-danger" role="alert">
+          创建失败：{error instanceof Error ? error.message : '未知错误'}
+        </div>
+      ) : null}
       <SubmitButton label={draft.kind === 'user' ? '创建用户' : '创建用户组'} disabled={!valid || pending} onClick={onSubmit} />
     </FormStack>
   );
@@ -81,7 +111,7 @@ export function PlatformAdminForm({
   const subjectId = draft.subjectId || subjects[0]?.id || '';
   return (
     <FormStack>
-      <div className="console-notice">平台管理员只管理控制面，不继承 Product 或 K8S 业务访问。</div>
+      <div className="console-notice">平台管理员只管理控制面，不继承产品或 K8s 业务访问。</div>
       <Field label="主体类型">
         <select className="console-select w-full" value={draft.subjectType} onChange={(event) => setDraft({ subjectType: event.target.value as 'user' | 'group', subjectId: '' })}>
           <option value="user">用户</option>
@@ -98,31 +128,63 @@ export function ProductAccessForm({
   draft,
   products,
   groups,
+  existingGrants,
+  editing,
   setDraft,
   pending,
   onSubmit,
 }: {
   draft: { productId: string; groupId: string; role: ProductAccessRole };
-  products: Array<{ id: string; name: string }>;
+  products: Product[];
   groups: PlatformGroup[];
+  existingGrants: ProductAccessGrant[];
+  editing: boolean;
   setDraft: (draft: { productId: string; groupId: string; role: ProductAccessRole }) => void;
   pending: boolean;
   onSubmit: () => void;
 }) {
-  const productId = draft.productId || products[0]?.id || '';
-  const groupId = draft.groupId || groups[0]?.id || '';
+  const selectableProducts = editing ? products : products.filter((item) => item.status === 'active');
+  const productId = draft.productId || selectableProducts[0]?.id || '';
+  const selectableGroups = groups.filter((item) => (
+    (editing || item.status === 'active')
+    && (editing || !existingGrants.some((grant) => (
+      grant.productId === productId && grant.groupId === item.id
+    )))
+  ));
+  const groupId = draft.groupId || selectableGroups[0]?.id || '';
   return (
     <FormStack>
-      <div className="console-notice">授权覆盖产品下全部服务，但不会产生任何 K8S 权限。</div>
-      <Field label="产品"><Select value={productId} options={products.map((item) => ({ value: item.id, label: item.name }))} onChange={(value) => setDraft({ ...draft, productId: value })} /></Field>
-      <Field label="用户组"><Select value={groupId} options={groups.map((item) => ({ value: item.id, label: item.displayName || item.name }))} onChange={(value) => setDraft({ ...draft, groupId: value })} /></Field>
-      <Field label="能力">
+      <div className={draft.role === 'product-maintainer' ? 'console-notice console-notice-warning' : 'console-notice'}>
+        {draft.role === 'product-maintainer'
+          ? '产品维护者可配置产品下全部服务，但不能分配或调整访问授权；不会获得任何 K8s 权限。'
+          : '产品查看者可查看产品下全部服务及观测数据，但不能修改配置，也不会获得任何 K8s 权限。'}
+      </div>
+      <Field label="产品">
+        <Select
+          value={productId}
+          options={selectableProducts.map((item) => ({ value: item.id, label: item.name }))}
+          disabled={editing}
+          onChange={(value) => setDraft({ ...draft, productId: value, groupId: '' })}
+        />
+      </Field>
+      <Field label="用户组">
+        <Select
+          value={groupId}
+          options={selectableGroups.map((item) => ({ value: item.id, label: item.displayName || item.name }))}
+          disabled={editing}
+          onChange={(value) => setDraft({ ...draft, groupId: value })}
+        />
+      </Field>
+      {!editing && selectableProducts.length > 0 && selectableGroups.length === 0 ? (
+        <div className="console-notice">当前产品的活动用户组均已授权，请从列表中修改现有关系。</div>
+      ) : null}
+      <Field label="权限等级">
         <select className="console-select w-full" value={draft.role} onChange={(event) => setDraft({ ...draft, role: event.target.value as ProductAccessRole })}>
           <option value="product-viewer">产品查看者（只读）</option>
           <option value="product-maintainer">产品维护者（可配置）</option>
         </select>
       </Field>
-      <SubmitButton label="添加产品授权" disabled={!productId || !groupId || pending} onClick={onSubmit} />
+      <SubmitButton label={editing ? '保存权限等级' : '添加产品访问授权'} disabled={!productId || !groupId || pending} onClick={onSubmit} />
     </FormStack>
   );
 }
@@ -325,13 +387,52 @@ function Field({ label, children }: { label: string; children: ReactNode }) {
   return <label className="grid gap-1.5 text-xs font-semibold text-muted">{label}{children}</label>;
 }
 
-function TextField({ label, value, type = 'text', onChange }: { label: string; value: string; type?: string; onChange: (value: string) => void }) {
-  return <Field label={label}><input className="console-input w-full" type={type} value={value} onChange={(event) => onChange(event.target.value)} /></Field>;
+function TextField({
+  label,
+  value,
+  type = 'text',
+  help,
+  error,
+  disabled = false,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  type?: string;
+  help?: string;
+  error?: string;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
+  return (
+    <Field label={label}>
+      <input
+        className="console-input w-full"
+        type={type}
+        value={value}
+        aria-invalid={Boolean(error)}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+      />
+      {help ? <span className="console-field-help font-normal">{help}</span> : null}
+      {error ? <span className="console-field-error font-normal" role="alert">{error}</span> : null}
+    </Field>
+  );
 }
 
-function Select({ value, options, onChange }: { value: string; options: Array<{ value: string; label: string }>; onChange: (value: string) => void }) {
+function Select({
+  value,
+  options,
+  disabled = false,
+  onChange,
+}: {
+  value: string;
+  options: Array<{ value: string; label: string }>;
+  disabled?: boolean;
+  onChange: (value: string) => void;
+}) {
   return (
-    <select className="console-select w-full" value={value} onChange={(event) => onChange(event.target.value)}>
+    <select className="console-select w-full" value={value} disabled={disabled} onChange={(event) => onChange(event.target.value)}>
       {!options.length ? <option value="">暂无可选项</option> : null}
       {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
     </select>
@@ -351,16 +452,17 @@ function k8sLevelLabel(level: K8sAccessLevel) {
 }
 
 function identityOptionLabel(item: PlatformUser | PlatformGroup) {
-  if (item.displayName) return item.displayName;
-  if ('username' in item) return item.username;
-  return item.name;
+  if ('username' in item) {
+    return item.email ? `${item.username} · ${item.email}` : item.username;
+  }
+  return item.displayName || item.name;
 }
 
 export function editorTitle(editor: Editor) {
   if (editor === 'identity') return '创建用户或用户组';
   if (editor === 'membership') return '维护用户组成员';
   if (editor === 'platform-admin') return '添加平台管理员';
-  if (editor === 'product-access') return '添加产品授权';
+  if (editor === 'product-access') return '添加产品访问授权';
   if (editor === 'k8s-profile') return '创建命名空间权限';
   if (editor === 'k8s-grant') return '分配命名空间权限';
   return '申请紧急访问';

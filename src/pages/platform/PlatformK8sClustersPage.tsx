@@ -127,7 +127,7 @@ export function PlatformK8sClustersPage() {
   return (
     <div className="space-y-4">
       <DataPanel
-        title="K8S 集群接入"
+        title="K8s 集群接入"
         help="这里维护集群目录和控制面凭据。工作负载访问仍必须通过用户组绑定的命名空间权限分配。"
         action={(
           <button type="button" className="console-button console-button-primary" onClick={() => setRegistrationOpen(true)}>
@@ -167,7 +167,7 @@ export function PlatformK8sClustersPage() {
         ) : clustersQuery.isLoading ? (
           <div className="console-skeleton h-48" />
         ) : clusters.length === 0 ? (
-          <EmptyState title="尚未登记 K8S 集群" />
+          <EmptyState title="尚未登记 K8s 集群" />
         ) : visibleClusters.length === 0 ? (
           <EmptyState title="没有匹配的集群" />
         ) : (
@@ -267,7 +267,7 @@ export function PlatformK8sClustersPage() {
                   className="console-button text-danger"
                   disabled={deleteCredentials.isPending}
                   onClick={() => {
-                    const confirmation = window.prompt(`清理会撤销集群 “${clusterId}” 的全部 K8S 权限并删除凭据。\n请输入集群 ID 确认：`);
+                    const confirmation = window.prompt(`清理会撤销集群 “${clusterId}” 的全部 K8s 权限并删除凭据。\n请输入集群 ID 确认：`);
                     if (confirmation?.trim() === clusterId) deleteCredentials.mutate(clusterId);
                   }}
                 >

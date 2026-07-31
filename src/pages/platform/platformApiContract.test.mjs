@@ -18,22 +18,22 @@ test('平台 IAM 用户和主体目录调用 /api/v1/platform/*', async () => {
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
     if (String(path).endsWith('/subjects')) {
-      return jsonResponse([{ id: 'user:operator-1', subject_id: 'operator-1', subject_type: 'user', display_name: '一线运维', binding_refs: 2, source: 'iam', status: 'active' }]);
+      return jsonResponse([{ id: 'user:operator-1', subject_id: 'operator-1', subject_type: 'user', display_name: 'operator-1', binding_refs: 2, source: 'iam', status: 'active' }]);
     }
     if (String(path).endsWith('/users') && init.method === 'POST') {
-      return jsonResponse({ item: { id: 'operator-1', username: 'operator-1', display_name: '一线运维', email: 'operator@example.com', password_set: true, status: 'active' }, status: 'created' });
+      return jsonResponse({ item: { id: 'operator-1', username: 'operator-1', email: 'operator@example.com', password_set: true, status: 'active' }, status: 'created' });
     }
     return jsonResponse([]);
   };
 
   try {
     const subjects = await platformApi.listSubjects();
-    const created = await platformApi.createUser({ username: 'operator-1', displayName: '一线运维', email: 'operator@example.com', ['password']: userLoginValue });
+    const created = await platformApi.createUser({ username: 'operator-1', email: 'operator@example.com', ['password']: userLoginValue });
 
     assert.equal(requests[0].path, '/api/v1/platform/subjects');
     assert.equal(requests[1].path, '/api/v1/platform/users');
     assert.equal(requests[1].init.method, 'POST');
-    assert.deepEqual(JSON.parse(requests[1].init.body), { username: 'operator-1', display_name: '一线运维', email: 'operator@example.com', ['password']: userLoginValue });
+    assert.deepEqual(JSON.parse(requests[1].init.body), { username: 'operator-1', email: 'operator@example.com', ['password']: userLoginValue });
     assert.equal(subjects[0].bindingRefs, 2);
     assert.equal(created.item.username, 'operator-1');
     assert.equal(created.item.passwordSet, true);
@@ -61,6 +61,44 @@ test('平台 IAM 空库列表把 null 统一映射为空数组', async () => {
   }
 });
 
+test('平台 IAM 创建用户组调用统一后端契约', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({
+      item: {
+        id: 'developers',
+        name: 'developers',
+        display_name: '研发组',
+        description: '研发成员',
+        status: 'active',
+      },
+      status: 'created',
+    });
+  };
+
+  try {
+    const created = await platformApi.createGroup({
+      name: 'developers',
+      displayName: '研发组',
+      description: '研发成员',
+    });
+
+    assert.equal(requests[0].path, '/api/v1/platform/groups');
+    assert.equal(requests[0].init.method, 'POST');
+    assert.deepEqual(JSON.parse(requests[0].init.body), {
+      name: 'developers',
+      display_name: '研发组',
+      description: '研发成员',
+    });
+    assert.equal(created.item.name, 'developers');
+    assert.equal(created.item.displayName, '研发组');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
 test('平台 IAM 列表拒绝非数组成功响应', async () => {
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async () => jsonResponse({});
@@ -81,7 +119,7 @@ test('平台 IAM 组成员调用统一平台 API', async () => {
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
     if (String(path).endsWith('/group-memberships') && init.method === 'POST') {
-      return jsonResponse({ item: { id: 'membership-1', group_id: 'sre', group_name: 'SRE', user_id: 'dev-admin', user_display_name: '开发管理员' }, status: 'created' });
+      return jsonResponse({ item: { id: 'membership-1', group_id: 'sre', group_name: 'SRE', user_id: 'dev-admin', username: 'dev-admin' }, status: 'created' });
     }
     return jsonResponse([]);
   };
@@ -104,7 +142,7 @@ test('平台 IAM 删除接口覆盖用户和用户组', async () => {
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
     if (String(path).includes('/users/')) {
-      return jsonResponse({ item: { id: 'operator-1', username: 'operator-1', display_name: '一线运维', status: 'active' }, status: 'deleted' });
+      return jsonResponse({ item: { id: 'operator-1', username: 'operator-1', status: 'active' }, status: 'deleted' });
     }
     if (String(path).includes('/groups/')) {
       return jsonResponse({ item: { id: 'sre', name: 'sre', display_name: 'SRE', status: 'active' }, status: 'deleted' });

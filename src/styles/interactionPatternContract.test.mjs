@@ -48,6 +48,19 @@ test('全站具备表单反馈、图标动作、加载骨架、危险操作和�
   }
 });
 
+test('授权下拉控件提供明确的选择箭头和完整交互状态', () => {
+  const selectRule = css.match(/\.console-select\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.match(platformAccessPage, /console-select/);
+  assert.match(selectRule, /appearance-none/);
+  assert.match(selectRule, /cursor-pointer/);
+  assert.match(selectRule, /background-image/);
+  assert.match(selectRule, /focus:border-primary/);
+  assert.match(selectRule, /focus:ring-2/);
+  assert.match(css, /\.console-select:hover/);
+  assert.match(css, /\.console-select:disabled/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]+appearance: auto;[\s\S]+background-image: none;/);
+});
+
 test('产品与服务采用产品服务树表、按需抽屉和可发现的危险操作', () => {
   assert.match(servicesPage, /console-resource-list/);
   assert.match(servicesPage, /ProductServiceRows/);
