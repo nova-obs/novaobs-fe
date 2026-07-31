@@ -108,7 +108,19 @@ export function ServiceDeploymentTaskPage() {
       return deployment;
     },
     onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: ['service-deployments', productId, serviceId] });
+      const invalidations = [
+        queryClient.invalidateQueries({ queryKey: ['service-deployments', productId, serviceId] }),
+      ];
+      if (kind === 'host_set') {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: ['service-deployment-targets', productId, serviceId] }),
+          queryClient.invalidateQueries({ queryKey: ['service-deployment-host-assets', productId, serviceId] }),
+          queryClient.invalidateQueries({ queryKey: ['logs-onboarding-workspace'] }),
+          queryClient.invalidateQueries({ queryKey: ['logs-route-runtime'] }),
+          queryClient.invalidateQueries({ queryKey: ['logs-route-rollouts'] }),
+        );
+      }
+      await Promise.all(invalidations);
       navigate(`/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}`);
     },
   });
@@ -252,7 +264,7 @@ function HostSetEditor({ hosts, loading, error, selectedHostIds, onSelectedHostI
   return (
     <section className="rounded-md border border-outline bg-white">
       <div className="flex items-center justify-between gap-3 border-b border-outline px-3 py-2.5">
-        <div><h2 className="text-sm font-semibold">预期主机</h2><p className="mt-1 text-xs text-muted">未安装 Agent 的主机仍计入覆盖率。</p></div>
+        <div><h2 className="text-sm font-semibold">预期主机</h2><p className="mt-1 text-xs text-muted">未安装 Agent 的主机仍计入覆盖率。保存主机范围后，平台会按当前已发布路由自动生成新的主机配置。</p></div>
         <button className="console-button" onClick={() => onCreatingHostChange(!creatingHost)}><Plus className="h-3.5 w-3.5" />新增主机</button>
       </div>
       {creatingHost ? <CreateHostForm onCreated={() => { onCreatingHostChange(false); onHostCreated(); }} /> : null}

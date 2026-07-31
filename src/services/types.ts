@@ -70,7 +70,6 @@ export interface ServiceDeployment {
   source: 'manual' | 'k8s' | 'cmdb' | string;
   k8sRef: ServiceDeploymentK8sRef | null;
   allowedLogRoots: string[];
-  hostTargets: HostAsset[];
   createdAt: string;
   updatedAt: string;
 }
@@ -79,7 +78,7 @@ export interface ServiceDeploymentTarget {
   id: string;
   serviceDeploymentId: string;
   hostAssetId: string;
-  status: 'active' | 'retired' | string;
+  status: 'active' | 'removed' | string;
   createdAt: string;
   updatedAt: string;
 }

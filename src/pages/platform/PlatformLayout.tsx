@@ -1,11 +1,18 @@
 import { Outlet } from 'react-router-dom';
-import { Settings, ShieldCheck } from 'lucide-react';
+import { Settings } from 'lucide-react';
 import { ModuleWorkbench } from '../../components/navigation/ModuleWorkbench';
 import type { ModuleRailItem } from '../../components/navigation/ModuleRail';
+import { platformAccessNavigationItems } from './platformNavigation';
 
 const platformRailItems: ModuleRailItem[] = [
-  { to: '/platform/settings', label: '平台设置', description: '镜像模板与平台级运行配置', icon: Settings },
-  { to: '/platform/access', label: '访问控制', description: '平台用户、角色与授权', icon: ShieldCheck },
+  { to: '/platform/settings', label: '平台设置', description: '镜像模板与 Grafana 入口', icon: Settings, end: true },
+  ...platformAccessNavigationItems.map((item) => ({
+    to: item.path,
+    label: item.label,
+    description: item.description,
+    icon: item.icon,
+    end: true,
+  })),
 ];
 
 export function PlatformLayout() {

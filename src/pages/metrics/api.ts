@@ -62,10 +62,11 @@ export interface MetricsHealthSnapshot {
   createdAt: string;
 }
 export interface MetricsOverviewItem extends MetricsIntegrationView { latestSnapshot: MetricsHealthSnapshot | null }
-export type MetricsDashboardState = 'unconfigured' | 'disabled' | 'ready';
+export type MetricsDashboardState = 'unconfigured' | 'disabled' | 'isolation_unavailable' | 'ready';
 export interface MetricsDashboard {
 	state: MetricsDashboardState;
 	embedURL: string;
+	unavailableReason: string;
 	updatedAt: string;
 }
 export interface MetricsCollectorRelease {
@@ -155,11 +156,12 @@ export const metricsApi = {
 		const raw = await apiRequest<any[]>('/metrics/overview');
 		return Array.isArray(raw) ? raw.map((item) => ({ ...mapIntegrationView(item), latestSnapshot: item?.latest_snapshot ? mapHealthSnapshot(item.latest_snapshot) : null })) : [];
 	},
-	async getDashboard(): Promise<MetricsDashboard> {
-		const raw = await apiRequest<any>('/metrics/dashboard');
+	async getDashboard(productId: string): Promise<MetricsDashboard> {
+		const raw = await apiRequest<any>(`/products/${encodeURIComponent(productId)}/metrics/dashboard`);
 		return {
 			state: raw?.state ?? 'unconfigured',
 			embedURL: raw?.embed_url ?? raw?.embedURL ?? '',
+			unavailableReason: raw?.unavailable_reason ?? raw?.unavailableReason ?? '',
 			updatedAt: raw?.updated_at ?? raw?.updatedAt ?? '',
 		};
 	},

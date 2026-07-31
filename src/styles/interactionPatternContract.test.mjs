@@ -9,7 +9,11 @@ const logsAgentsPage = readFileSync(new URL('../pages/logs/LogsAgentsPage.tsx', 
 const k8sDashboardPage = readFileSync(new URL('../pages/k8s/DashboardPage.tsx', import.meta.url), 'utf8');
 const k8sAuditPage = readFileSync(new URL('../pages/k8s/AuditPage.tsx', import.meta.url), 'utf8');
 const k8sLayout = readFileSync(new URL('../pages/k8s/K8sOpsLayout.tsx', import.meta.url), 'utf8');
-const platformAccessPage = readFileSync(new URL('../pages/platform/PlatformAccessAdminPage.tsx', import.meta.url), 'utf8');
+const platformAccessPage = [
+  '../pages/platform/PlatformAccessAdminPage.tsx',
+  '../pages/platform/PlatformAccessForms.tsx',
+  '../pages/platform/PlatformAccessWorkspaces.tsx',
+].map((file) => readFileSync(new URL(file, import.meta.url), 'utf8')).join('\n');
 
 test('全站具备公司控制台式工作区、工具栏、详情栏和固定动作语义', () => {
   for (const className of [
@@ -42,6 +46,19 @@ test('全站具备表单反馈、图标动作、加载骨架、危险操作和�
   ]) {
     assert.match(css, new RegExp(className.replace('.', '\\.')));
   }
+});
+
+test('授权下拉控件提供明确的选择箭头和完整交互状态', () => {
+  const selectRule = css.match(/\.console-select\s*\{([^}]+)\}/)?.[1] ?? '';
+  assert.match(platformAccessPage, /console-select/);
+  assert.match(selectRule, /appearance-none/);
+  assert.match(selectRule, /cursor-pointer/);
+  assert.match(selectRule, /background-image/);
+  assert.match(selectRule, /focus:border-primary/);
+  assert.match(selectRule, /focus:ring-2/);
+  assert.match(css, /\.console-select:hover/);
+  assert.match(css, /\.console-select:disabled/);
+  assert.match(css, /@media \(forced-colors: active\)[\s\S]+appearance: auto;[\s\S]+background-image: none;/);
 });
 
 test('产品与服务采用产品服务树表、按需抽屉和可发现的危险操作', () => {
@@ -79,6 +96,6 @@ test('K8s 与平台 IAM 从指标卡墙收敛为工具栏、工程表格和轻�
   assert.doesNotMatch(k8sLayout, /k8s-context-items/);
   assert.doesNotMatch(k8sLayout, /<aside/);
   assert.match(platformAccessPage, /console-workbench/);
-  assert.match(platformAccessPage, /console-detail-rail/);
-  assert.match(platformAccessPage, /console-danger-zone/);
+  assert.match(platformAccessPage, /console-drawer-panel/);
+  assert.match(platformAccessPage, /console-table-action-danger/);
 });

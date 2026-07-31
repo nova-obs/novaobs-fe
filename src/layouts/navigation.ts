@@ -15,6 +15,8 @@ import {
   ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import type { PlatformAccessContext } from '../pages/platform/accessApi';
+import { platformAccessNavigationItems } from '../pages/platform/platformNavigation';
 
 export interface NavigationItem {
   id: string;
@@ -92,17 +94,6 @@ const navigationDomains: NavigationDomain[] = [
             ],
           },
           { id: 'traces', label: 'Trace', description: '链路查询与 Span 分析', path: '/traces', icon: GitBranch },
-          {
-            id: 'observability-endpoints',
-            label: '接入配置',
-            description: '管理日志与指标下游',
-            path: '/observability/endpoints/logs',
-            icon: RadioTower,
-            children: [
-              { id: 'observability-logs-endpoints', label: 'Logs 下游端点', description: '管理日志写入与查询端点', path: '/observability/endpoints/logs', icon: FileText },
-              { id: 'observability-metrics-endpoints', label: '指标下游端点', description: '管理指标写入与查询端点', path: '/observability/endpoints/metrics', icon: Activity },
-            ],
-          },
         ],
       },
     ],
@@ -120,12 +111,11 @@ const navigationDomains: NavigationDomain[] = [
           {
             id: 'k8s-cluster',
             label: '集群',
-            description: '集群总览、登记接入与连接状态',
+            description: '查看 Profile 授权的集群与工作负载',
             path: '/k8s',
             icon: Boxes,
             children: [
-              { id: 'k8s-fleet', label: '集群总览', description: '集群登记与连接状态', path: '/k8s', icon: Boxes },
-              { id: 'k8s-observability', label: '观测接入', description: '启用集群级可观测性运行时', path: '/k8s/observability', icon: Activity },
+              { id: 'k8s-fleet', label: '集群总览', description: '查看有效授权范围', path: '/k8s', icon: Boxes },
             ],
           },
         ],
@@ -135,15 +125,40 @@ const navigationDomains: NavigationDomain[] = [
   {
     id: 'platform',
     label: '平台管理',
-    description: '身份权限与平台配置',
+    description: '身份授权、集群与观测配置',
     icon: ShieldCheck,
     groups: [
       {
         id: 'platform-settings',
         label: '平台设置',
         items: [
-          { id: 'platform-settings', label: '平台设置', description: '平台级模板与运行配置', path: '/platform/settings', icon: Settings },
-          { id: 'platform-access', label: '访问控制', description: '用户、组、角色与授权', path: '/platform/access', icon: ShieldCheck },
+          { id: 'platform-settings', label: '平台设置', description: '镜像模板与 Grafana 入口', path: '/platform/settings', icon: Settings },
+          {
+            id: 'platform-access',
+            label: '身份与授权',
+            description: '用户、用户组与授权',
+            path: '/platform/access',
+            icon: ShieldCheck,
+            children: platformAccessNavigationItems.map((item) => ({
+              id: item.id,
+              label: item.label,
+              description: item.description,
+              path: item.path,
+              icon: item.icon,
+            })),
+          },
+          { id: 'platform-k8s-clusters', label: 'K8s 集群接入', description: '集群登记与控制面凭据', path: '/platform/k8s-clusters', icon: ServerCog },
+          {
+            id: 'platform-observability-endpoints',
+            label: '观测数据端点',
+            description: '日志与指标端点',
+            path: '/platform/observability/endpoints/logs',
+            icon: RadioTower,
+            children: [
+              { id: 'platform-observability-logs-endpoints', label: '日志数据端点', description: '配置日志写入与查询端点', path: '/platform/observability/endpoints/logs', icon: FileText },
+              { id: 'platform-observability-metrics-endpoints', label: '指标数据端点', description: '配置指标写入与查询端点', path: '/platform/observability/endpoints/metrics', icon: Activity },
+            ],
+          },
         ],
       },
     ],
@@ -159,13 +174,20 @@ const allNavigationItems = navigationDomains.flatMap((domain) => (
   domain.groups.flatMap((group) => flattenNavigationItems(group.items))
 ));
 
-export const getNavigationDomains = () => navigationDomains.map((domain) => ({
-  ...domain,
-  groups: domain.groups.map((group) => ({
-    ...group,
-    items: group.items.map(cloneNavigationItem),
-  })),
-}));
+export const getNavigationDomains = (access?: PlatformAccessContext | null) => navigationDomains
+  .map((domain) => ({
+    ...domain,
+    groups: domain.groups
+      .map((group) => ({
+        ...group,
+        items: group.items
+          .map(cloneNavigationItem)
+          .map((item) => filterNavigationItem(item, access))
+          .filter((item): item is NavigationItem => Boolean(item)),
+      }))
+      .filter((group) => group.items.length > 0),
+  }))
+  .filter((domain) => domain.groups.length > 0);
 
 function cloneNavigationItem(item: NavigationItem): NavigationItem {
   return {
@@ -174,32 +196,38 @@ function cloneNavigationItem(item: NavigationItem): NavigationItem {
   };
 }
 
-export const getNavigationByPath = (path: string) => {
+export const getNavigationByPath = (path: string, access?: PlatformAccessContext | null) => {
   const normalizedPath = path.split('?')[0] || '/';
+  const availableItems = access === undefined
+    ? allNavigationItems
+    : getNavigationDomains(access).flatMap((domain) => domain.groups.flatMap((group) => flattenNavigationItems(group.items)));
 	const metricsEntryMatch = normalizedPath.match(/^\/metrics\/([^/]+)/);
 	if (metricsEntryMatch && !metricsNavigationChildID(metricsEntryMatch[1])) {
-		return metricsEntryMatch[1] === 'explore' ? allNavigationItems.find((item) => item.id === 'metrics') : undefined;
+		return metricsEntryMatch[1] === 'explore' ? availableItems.find((item) => item.id === 'metrics') : undefined;
 	}
 	const logsServiceMatch = normalizedPath.match(/^\/products\/[^/]+\/services\/[^/]+\/logs(?:\/([^/]+))?/);
 	if (logsServiceMatch) {
 		const childID = logsNavigationChildID(logsServiceMatch[1] ?? '');
-		return allNavigationItems.find((item) => item.id === (childID || 'logs'));
+		return availableItems.find((item) => item.id === (childID || 'logs'));
 	}
 	const metricsServiceMatch = normalizedPath.match(/^\/products\/[^/]+\/services\/[^/]+\/metrics(?:\/([^/]+))?/);
 	if (metricsServiceMatch) {
 		const childID = metricsNavigationChildID(metricsServiceMatch[1] ?? '');
-		return allNavigationItems.find((item) => item.id === (childID || 'metrics'));
+		return availableItems.find((item) => item.id === (childID || 'metrics'));
 	}
-  if (normalizedPath === '/k8s/access') {
+  if (normalizedPath.startsWith('/k8s/')) {
+    if (normalizedPath.startsWith('/k8s/clusters/')) {
+      return availableItems.find((item) => item.id === 'k8s-fleet');
+    }
     return undefined;
   }
   if (normalizedPath.startsWith('/agents/') || normalizedPath === '/onboarding') {
-    return allNavigationItems.find((item) => item.id === 'logs-agents');
+    return availableItems.find((item) => item.id === 'logs-agents');
   }
   if (normalizedPath === '/observability/endpoints' || normalizedPath === '/logs/endpoints') {
-    return allNavigationItems.find((item) => item.id === 'observability-logs-endpoints');
+    return availableItems.find((item) => item.id === 'observability-logs-endpoints');
   }
-  return [...allNavigationItems]
+  return [...availableItems]
     .sort((left, right) => {
       const pathDelta = right.path.length - left.path.length;
       if (pathDelta !== 0) return pathDelta;
@@ -228,8 +256,9 @@ function metricsNavigationChildID(segment: string): string | undefined {
 	return undefined;
 }
 
-export const getNavigationDomainByPath = (path: string) => {
+export const getNavigationDomainByPath = (path: string, access?: PlatformAccessContext | null) => {
   const normalizedPath = path.split('?')[0] || '/';
+  const visibleDomains = access === undefined ? navigationDomains : getNavigationDomains(access);
   if (
     normalizedPath.startsWith('/logs')
     || normalizedPath.startsWith('/agents/')
@@ -240,16 +269,45 @@ export const getNavigationDomainByPath = (path: string) => {
     || normalizedPath.startsWith('/alerts')
 	|| /^\/products\/[^/]+\/services\/[^/]+\/(?:logs|metrics)(?:\/|$)/.test(normalizedPath)
   ) {
-    return navigationDomains.find((domain) => domain.id === 'observability');
+    return visibleDomains.find((domain) => domain.id === 'observability');
   }
   if (normalizedPath.startsWith('/k8s')) {
-    return navigationDomains.find((domain) => domain.id === 'k8s');
+    return visibleDomains.find((domain) => domain.id === 'k8s');
   }
   if (normalizedPath.startsWith('/platform')) {
-    return navigationDomains.find((domain) => domain.id === 'platform');
+    return visibleDomains.find((domain) => domain.id === 'platform');
   }
   if (normalizedPath === '/' || normalizedPath.startsWith('/services') || normalizedPath.startsWith('/products')) {
-    return navigationDomains.find((domain) => domain.id === 'workspace');
+    return visibleDomains.find((domain) => domain.id === 'workspace');
   }
   return undefined;
 };
+
+function filterNavigationItem(item: NavigationItem, access?: PlatformAccessContext | null): NavigationItem | null {
+  if (access === undefined) return item;
+  const visible = navigationItemVisible(item.id, access);
+  if (!visible) return null;
+  const children = item.children
+    ?.map((child) => filterNavigationItem(child, access))
+    .filter((child): child is NavigationItem => Boolean(child));
+  if (item.children?.length && !children?.length) return null;
+  return { ...item, children };
+}
+
+function navigationItemVisible(itemId: string, access: PlatformAccessContext | null) {
+  if (!access) return itemId === 'overview';
+  const hasProducts = access.productAccesses.length > 0;
+  const hasK8s = access.k8sProfiles.some((profile) => profile.status === 'active')
+    || (access.k8sBreakGlass ?? []).some((grant) => new Date(grant.expiresAt).getTime() > Date.now());
+  const observabilityAvailable = (access.availableModules ?? []).includes('observability');
+  const k8sAvailable = (access.availableModules ?? []).includes('k8s');
+  if (itemId === 'overview') return true;
+  if (itemId === 'products') return access.platformAdmin || hasProducts || access.modules.products === 'read' || access.modules.products === 'manage';
+  if (itemId === 'logs' || itemId.startsWith('logs-')) return observabilityAvailable || access.modules.logs === 'read' || access.modules.logs === 'manage';
+  if (itemId === 'metrics' || itemId.startsWith('metrics-')) return observabilityAvailable || access.modules.metrics === 'read' || access.modules.metrics === 'manage';
+  if (itemId === 'traces') return observabilityAvailable || access.modules.traces === 'read' || access.modules.traces === 'manage';
+  if (itemId === 'k8s-cluster' || itemId === 'k8s-fleet') return k8sAvailable || hasK8s;
+  if (itemId === 'k8s-observability') return false;
+  if (itemId.startsWith('platform-')) return access.platformAdmin;
+  return false;
+}

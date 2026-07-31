@@ -6,14 +6,15 @@ interface DataPanelProps extends PropsWithChildren {
   meta?: string;
   help?: string;
   action?: ReactNode;
+  className?: string;
 }
 
-export function DataPanel({ title, meta, help, action, children }: DataPanelProps) {
+export function DataPanel({ title, meta, help, action, className = '', children }: DataPanelProps) {
   const hasTitleBlock = Boolean(title || meta || help);
   const hasHeader = hasTitleBlock || Boolean(action);
 
   return (
-    <section className="console-panel overflow-hidden">
+    <section className={`console-panel overflow-hidden ${className}`}>
       {hasHeader ? (
         <div className={`console-panel-header ${hasTitleBlock ? '' : 'justify-end'}`}>
           {hasTitleBlock ? (

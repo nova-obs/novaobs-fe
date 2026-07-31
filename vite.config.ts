@@ -9,7 +9,10 @@ export default defineConfig(({ mode }) => {
     server: {
       port: 3001,
       proxy: {
-        '/api': apiTarget,
+        '/api': {
+          target: apiTarget,
+          changeOrigin: false,
+        },
         '/grafana': {
           target: apiTarget,
           changeOrigin: false,

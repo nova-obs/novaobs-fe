@@ -82,3 +82,14 @@ test('Logs、K8s、平台管理和 Metrics 模块导航统一采用可折叠垂�
   assert.match(styles, /\.module-rail-link\s*\{[\s\S]*min-height:\s*36px/);
   assert.match(styles, /\.module-workbench\[data-rail='true'\]\s*\{[\s\S]*padding-left:\s*60px/);
 });
+
+test('折叠态模块导航保留可见的展开箭头', () => {
+  assert.match(
+    styles,
+    /\.module-rail-collapsed\s+\.module-rail-toggle-label\s*\{[^}]*display:\s*none/,
+  );
+  assert.match(
+    styles,
+    /\.module-rail-toggle\s*>\s*svg\s*\{[^}]*width:\s*16px[^}]*height:\s*16px[^}]*flex-shrink:\s*0/,
+  );
+});

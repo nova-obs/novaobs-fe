@@ -10,6 +10,7 @@ import { LogsEmptyState, LogsErrorLine } from './LogsPrimitives';
 import { logsApi, type LogRouteView, type LogTargetView, type LogsServiceSummary } from './api';
 import { routeAccessPriority } from './ServicePickerPanel';
 import { ServiceContextSelector } from '../../components/navigation/ServiceContextSelector';
+import { accessAllows, usePlatformAccess } from '../../layouts/access';
 
 type AlertServiceLogKind = 'external' | 'platform' | 'none';
 
@@ -162,6 +163,12 @@ export function LogsAlertsPage() {
   const location = useLocation();
   const navigate = useNavigate();
 	const { productId = '', serviceId = '', id: routeRuleId = '' } = useParams();
+  const { data: accessContext } = usePlatformAccess();
+  const canMaintain = Boolean(accessContext && accessAllows(accessContext, {
+    kind: 'product',
+    productId,
+    minimum: 'product-maintainer',
+  }));
 	const base = `/products/${encodeURIComponent(productId)}/services/${encodeURIComponent(serviceId)}/logs`;
   const [ruleQuery, setRuleQuery] = useState('');
   const { data: rules = [], error, refetch } = useQuery({
@@ -216,11 +223,11 @@ export function LogsAlertsPage() {
                 <input className="console-input h-9 w-full pl-8 text-sm" value={ruleQuery} onChange={(event) => setRuleQuery(event.target.value)} placeholder="搜索告警规则" />
               </label>
               <button className="console-button" onClick={() => refetch()}><RefreshCw className="h-3.5 w-3.5" />刷新</button>
-              {createDisabled ? (
+              {canMaintain ? createDisabled ? (
                 <button className="console-button console-button-primary" disabled title={selectedService ? '当前服务没有可用于告警的日志链路' : '请先选择服务'}><Plus className="h-3.5 w-3.5" />创建告警</button>
               ) : (
                 <Link className="console-button console-button-primary" to={createAlertTo}><Plus className="h-3.5 w-3.5" />创建告警</Link>
-              )}
+              ) : null}
             </div>
           </div>
         </div>
@@ -230,7 +237,7 @@ export function LogsAlertsPage() {
           <LogsEmptyState
             title="当前服务暂无日志告警"
             description={selectedService.canCreateAlert ? '可以基于当前服务日志链路创建告警规则。' : '当前服务没有可用于告警的日志链路。'}
-            action={selectedService.canCreateAlert ? <Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to={createAlertTo}>创建告警</Link> : undefined}
+            action={canMaintain && selectedService.canCreateAlert ? <Link className="inline-flex h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-semibold text-white" to={createAlertTo}>创建告警</Link> : undefined}
           />
         ) : filteredRules.length === 0 ? (
           <LogsEmptyState title="未找到匹配的告警规则" description="请调整搜索关键字。" />
@@ -269,7 +276,7 @@ export function LogsAlertsPage() {
                     <td className="max-w-[420px] truncate font-mono text-xs text-muted">{rule.spec.query.expression}</td>
                     <td>
                       <div className="flex items-center gap-2">
-						<Link className="console-table-action" to={`${base}/alerts/${rule.id}`}>编辑</Link>
+						{canMaintain ? <Link className="console-table-action" to={`${base}/alerts/${rule.id}`}>编辑</Link> : <span className="text-xs text-muted">只读</span>}
                       </div>
                     </td>
                   </tr>
@@ -279,7 +286,7 @@ export function LogsAlertsPage() {
           </div>
         )}
       </section>
-      {editorOpen ? (
+      {editorOpen && canMaintain ? (
 		<LogsAlertRuleEditorDrawer productId={productId} serviceId={serviceId} ruleId={editorRuleId} onClose={() => navigate(closeEditorTo)} />
       ) : null}
     </div>

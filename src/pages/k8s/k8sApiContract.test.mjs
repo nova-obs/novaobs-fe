@@ -26,7 +26,22 @@ test('K8s 集群列表调用统一 NovaAPM API', async () => {
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
     return jsonResponse([
-      { id: 'prod', name: 'prod-core', version: 'v1.29.4', region: 'cn-shanghai', status: 'active', access_mode: 'direct', read_only: true },
+      {
+        id: 'prod',
+        name: 'prod-core',
+        version: 'v1.29.4',
+        region: 'cn-shanghai',
+        status: 'active',
+        access_mode: 'direct',
+        read_only: true,
+        last_probe: {
+          status: 'connected',
+          server_version: 'v1.29.4',
+          resource_count: 42,
+          checked_at: '2026-07-30T04:00:00Z',
+          warnings: [],
+        },
+      },
     ]);
   };
 
@@ -37,44 +52,65 @@ test('K8s 集群列表调用统一 NovaAPM API', async () => {
     assert.equal(clusters[0].status, 'active');
     assert.equal(clusters[0].accessMode, 'direct');
     assert.equal(clusters[0].readOnly, true);
+    assert.equal(clusters[0].lastProbe?.status, 'connected');
+    assert.equal(clusters[0].lastProbe?.serverVersion, 'v1.29.4');
   } finally {
     globalThis.fetch = originalFetch;
   }
 });
 
-test('K8s 集群登记调用统一 NovaAPM API 并刷新真实数据源', async () => {
+test('平台控制面集群目录使用独立接口', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
-    return jsonResponse({ id: 'prod', name: 'prod-core', version: 'v1.30.1', region: 'cn-shanghai', status: 'active', access_mode: 'agent', read_only: true });
+    return jsonResponse([{ id: 'prod', name: 'prod-core', status: 'active' }]);
   };
 
   try {
-    const cluster = await k8sApi.createCluster({
+    const clusters = await k8sApi.listClustersForAdministration('prod');
+    assert.equal(requests[0].path, '/api/v1/platform/k8s/clusters?q=prod');
+    assert.equal(clusters[0].id, 'prod');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('K8s 集群与 Controller 凭据通过单一登记接口提交且不发送空过期时间', async () => {
+  const requests = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (path, init = {}) => {
+    requests.push({ path, init });
+    return jsonResponse({
+      cluster: { id: 'prod', name: 'prod-core', status: 'active', access_mode: 'direct', read_only: true },
+      credentials: {
+        controller: { secret_id: 'controller-1', cluster_id: 'prod', name: 'prod-core', status: 'active' },
+        broker: { secret_id: 'broker-1', cluster_id: 'prod', name: 'prod-broker', status: 'active' },
+        audit_id: 'audit-1',
+      },
+    });
+  };
+
+  try {
+    const result = await k8sApi.registerCluster({
       id: 'prod',
       name: 'prod-core',
-      version: 'v1.30.1',
-      region: 'cn-shanghai',
-      description: '生产集群',
-      accessMode: 'agent',
+      version: '',
+      region: '',
+      description: '',
+      accessMode: 'direct',
       readOnly: true,
+      kubeconfig: 'apiVersion: v1\nkind: Config',
     });
 
-    assert.equal(requests[0].path, '/api/v1/k8s/clusters');
-    assert.equal(requests[0].init.method, 'POST');
-    assert.deepEqual(JSON.parse(requests[0].init.body), {
-      id: 'prod',
-      name: 'prod-core',
-      version: 'v1.30.1',
-      region: 'cn-shanghai',
-      description: '生产集群',
-      access_mode: 'agent',
-      read_only: true,
-    });
-    assert.equal(cluster.status, 'active');
-    assert.equal(cluster.accessMode, 'agent');
-    assert.equal(cluster.readOnly, true);
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].path, '/api/v1/k8s/cluster-registrations');
+    const body = JSON.parse(requests[0].init.body);
+    assert.equal(body.cluster.id, 'prod');
+    assert.equal(body.kubeconfig.includes('apiVersion'), true);
+    assert.equal('expires_at' in body, false);
+    assert.equal(result.cluster.id, 'prod');
+    assert.equal(result.credentials.auditId, 'audit-1');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -167,7 +203,7 @@ test('K8s 命名空间列表调用统一 NovaAPM API', async () => {
   }
 });
 
-test('K8s 命名空间和 ServiceAccount API 不内置演示集群默认值', async () => {
+test('K8s 命名空间 API 不内置演示集群默认值', async () => {
   const requests = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
@@ -177,10 +213,8 @@ test('K8s 命名空间和 ServiceAccount API 不内置演示集群默认值', as
 
   try {
     await k8sApi.listNamespaces();
-    await k8sApi.listServiceAccounts();
 
     assert.equal(requests[0].path, '/api/v1/k8s/namespaces');
-    assert.equal(requests[1].path, '/api/v1/k8s/service-accounts');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -191,22 +225,23 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (path, init = {}) => {
     requests.push({ path, init });
-    if (init.method === 'POST' && String(path).endsWith('/rollback')) {
-      return jsonResponse({
-        item: { secret_id: 'secret-rollback', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', active: true, version: 3 },
-        audit_id: 'audit-rollback-1',
-        probe: { cluster_id: 'prod', status: 'connected', server_version: 'v1.30.2', resource_count: 42, warnings: [], checked_at: '2026-05-27T10:00:00Z' },
-      });
-    }
-    if (init.method === 'POST' && String(path).endsWith('/rotate')) {
-      return jsonResponse({
-        item: { secret_id: 'secret-rotated', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:def', status: 'active', active: true, version: 2 },
-        audit_id: 'audit-rotate-1',
-        probe: { cluster_id: 'prod', status: 'connected', server_version: 'v1.30.2', resource_count: 42, warnings: [], checked_at: '2026-05-27T10:00:00Z' },
-      });
-    }
     if (init.method === 'POST') {
-      return jsonResponse({ item: { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', active: true, version: 1 }, audit_id: 'audit-create-1' });
+      return jsonResponse({
+        controller: { secret_id: 'secret-created', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:abc', status: 'active', active: true, version: 1 },
+        broker: { secret_id: 'broker-created', cluster_id: 'prod', name: 'prod-broker', fingerprint: 'sha256:broker', status: 'active', active: true, version: 1 },
+        audit_id: 'audit-create-1',
+        probe_state_persisted: false,
+      });
+    }
+    if (init.method === 'DELETE') {
+      return jsonResponse({
+        cluster_id: 'prod',
+        deleted_controller_versions: 2,
+        deleted_broker_versions: 1,
+        access_invalidated: true,
+        audit_id: 'audit-delete-1',
+        cluster_state_persisted: false,
+      });
     }
     return jsonResponse([
       { secret_id: 'secret-rotated', cluster_id: 'prod', name: 'prod-readonly', fingerprint: 'sha256:def', status: 'active', active: true, version: 2, expires_soon: true, expired: false, kubeconfig: 'must-not-be-used' },
@@ -217,15 +252,15 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
   try {
     const credentials = await k8sApi.listClusterCredentials('prod');
     const created = await k8sApi.createClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
-    const rotated = await k8sApi.rotateClusterCredential({ clusterId: 'prod', name: 'prod-readonly', kubeconfig: 'apiVersion: v1\nkind: Config\nclusters: []' });
-    const rollback = await k8sApi.rollbackClusterCredential({ clusterId: 'prod', secretId: 'secret-created' });
+    const deleted = await k8sApi.deleteClusterCredentials('prod');
 
     assert.equal(requests[0].path, '/api/v1/k8s/cluster-credentials?cluster_id=prod');
     assert.equal(requests[1].path, '/api/v1/k8s/cluster-credentials');
-    assert.equal(JSON.parse(requests[1].init.body).kubeconfig.includes('apiVersion'), true);
-    assert.equal(requests[2].path, '/api/v1/k8s/cluster-credentials/rotate');
-    assert.equal(requests[3].path, '/api/v1/k8s/cluster-credentials/rollback');
-    assert.deepEqual(JSON.parse(requests[3].init.body), { cluster_id: 'prod', secret_id: 'secret-created' });
+    const createBody = JSON.parse(requests[1].init.body);
+    assert.equal(createBody.kubeconfig.includes('apiVersion'), true);
+    assert.equal('expires_at' in createBody, false);
+    assert.equal(requests[2].path, '/api/v1/k8s/cluster-credentials/prod');
+    assert.equal(requests[2].init.method, 'DELETE');
     assert.equal(credentials[0].secretId, 'secret-rotated');
     assert.equal(credentials[0].fingerprint, 'sha256:def');
     assert.equal(credentials[0].active, true);
@@ -233,10 +268,11 @@ test('K8s 集群凭据调用统一 NovaAPM API 且只映射元数据', async () 
     assert.equal(credentials[0].expiresSoon, true);
     assert.equal('kubeconfig' in credentials[0], false);
     assert.equal(created.auditId, 'audit-create-1');
-    assert.equal(rotated.item.secretId, 'secret-rotated');
-    assert.equal(rotated.probe.serverVersion, 'v1.30.2');
-    assert.equal(rollback.item.secretId, 'secret-rollback');
-    assert.equal(rollback.probe.resourceCount, 42);
+    assert.equal(created.controller.secretId, 'secret-created');
+    assert.equal(created.broker.secretId, 'broker-created');
+    assert.equal(created.probeStatePersisted, false);
+    assert.equal(deleted.accessInvalidated, true);
+    assert.equal(deleted.clusterStatePersisted, false);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -327,275 +363,6 @@ test('K8s 部署历史和审计事件调用统一 NovaAPM API', async () => {
     assert.equal(requests[1].path, '/api/v1/k8s/audit-events?cluster_id=prod&namespace=orders');
     assert.equal(history[0].workload, 'orders-api');
     assert.equal(audits[0].traceId, 'trace-1');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('K8s 证书中心调用统一 NovaAPM API 且只映射元数据', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    return jsonResponse([
-      {
-        id: 'cert-prod-1',
-        cluster_id: 'prod',
-        namespace: 'ingress',
-        name: 'wildcard-prod',
-        common_name: '*.prod.example.com',
-        fingerprint: 'sha256:6f7d8e',
-        not_after: '2026-08-19T00:00:00Z',
-        status: 'valid',
-        source: 'startorch',
-        private_key: 'must-not-be-used',
-      },
-    ]);
-  };
-
-  try {
-    const certificates = await k8sApi.listCertificates('prod');
-    assert.equal(requests[0].path, '/api/v1/k8s/certificates?cluster_id=prod');
-    assert.equal(certificates[0].clusterId, 'prod');
-    assert.equal(certificates[0].commonName, '*.prod.example.com');
-    assert.equal(certificates[0].fingerprint, 'sha256:6f7d8e');
-    assert.equal(certificates[0].notAfter, '2026-08-19T00:00:00Z');
-    assert.equal('privateKey' in certificates[0], false);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('K8s 证书写操作调用统一 NovaAPM API 且私钥只在提交体中出现', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    if (init.method === 'POST') {
-      return jsonResponse({ item: { id: 'cert-1', cluster_id: 'prod', namespace: 'ingress', name: 'wildcard-prod', common_name: '*.prod.example.com', fingerprint: 'sha256:abc', secret_id: 'secret-1', status: 'valid' }, audit_id: 'audit-create-1' });
-    }
-    if (init.method === 'DELETE') {
-      return jsonResponse({ status: 'deleted', audit_id: 'audit-delete-1' });
-    }
-    return jsonResponse([]);
-  };
-
-  try {
-    const created = await k8sApi.createCertificate({
-      clusterId: 'prod',
-      namespace: 'ingress',
-      name: 'wildcard-prod',
-      commonName: '*.prod.example.com',
-      certificatePEM: 'certificate',
-      keyMaterialPEM: 'private-key-material',
-      notAfter: '2026-08-19',
-    });
-    const deleted = await k8sApi.deleteCertificate('cert-1');
-
-    assert.equal(requests[0].path, '/api/v1/k8s/certificates');
-    assert.equal(JSON.parse(requests[0].init.body).private_key_pem, 'private-key-material');
-    assert.equal(requests[1].path, '/api/v1/k8s/certificates/cert-1');
-    assert.equal(created.item.secretId, 'secret-1');
-    assert.equal('privateKey' in created.item, false);
-    assert.equal(deleted.auditId, 'audit-delete-1');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('K8s ServiceAccount 写操作调用统一 NovaAPM API 并传递审计上下文', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    if (init.method === 'POST') {
-      return jsonResponse({ item: { id: 'sa-1', cluster_id: 'prod', namespace: 'orders', name: 'orders-reader', uid: 'uid-1', status: 'active' }, audit_id: 'audit-create-1' });
-    }
-    if (init.method === 'DELETE') {
-      return jsonResponse({ status: 'deleted', audit_id: 'audit-delete-1' });
-    }
-    return jsonResponse([{ id: 'sa-1', cluster_id: 'prod', namespace: 'orders', name: 'orders-reader', uid: 'uid-1', status: 'active', source: 'startorch' }]);
-  };
-
-  try {
-    const accounts = await k8sApi.listServiceAccounts('prod', 'orders');
-    const created = await k8sApi.createServiceAccount({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader' });
-    const deleted = await k8sApi.deleteServiceAccount({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader', uid: 'uid-1' });
-
-    assert.equal(requests[0].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders');
-    assert.equal(requests[1].path, '/api/v1/k8s/service-accounts');
-    assert.equal(requests[1].init.method, 'POST');
-    assert.equal('X-NovaAPM-User' in requests[1].init.headers, false);
-    assert.equal(JSON.parse(requests[1].init.body).name, 'orders-reader');
-    assert.equal(requests[2].path, '/api/v1/k8s/service-accounts?cluster_id=prod&namespace=orders&name=orders-reader&uid=uid-1');
-    assert.equal(requests[2].init.method, 'DELETE');
-    assert.equal('X-NovaAPM-User' in requests[2].init.headers, false);
-    assert.equal(accounts[0].uid, 'uid-1');
-    assert.equal(created.auditId, 'audit-create-1');
-    assert.equal(created.item.uid, 'uid-1');
-    assert.equal(deleted.auditId, 'audit-delete-1');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('K8s RBAC Role 和 Binding 调用统一 NovaAPM API', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    if (init.method === 'POST' && String(path).includes('/roles')) {
-      return jsonResponse({ item: { id: 'role-1', cluster_id: 'prod', namespace: 'orders', kind: 'Role', name: 'orders-reader', uid: 'uid-role', rules: [{ api_groups: [''], resources: ['pods'], verbs: ['get'] }] }, audit_id: 'audit-role-1' });
-    }
-    if (init.method === 'POST' && String(path).includes('/bindings')) {
-      return jsonResponse({ item: { id: 'binding-1', cluster_id: 'prod', namespace: 'orders', kind: 'RoleBinding', name: 'orders-reader-binding', uid: 'uid-binding', role_ref: { kind: 'Role', name: 'orders-reader' }, subjects: [{ kind: 'ServiceAccount', name: 'orders-reader', namespace: 'orders' }] }, audit_id: 'audit-binding-1' });
-    }
-    if (init.method === 'DELETE') {
-      return jsonResponse({ status: 'deleted', audit_id: 'audit-binding-delete-1' });
-    }
-    if (String(path).includes('/bindings')) {
-      return jsonResponse([{ id: 'binding-1', cluster_id: 'prod', namespace: 'orders', kind: 'RoleBinding', name: 'orders-reader-binding', uid: 'uid-binding', role_ref: { kind: 'Role', name: 'orders-reader' }, subjects: [] }]);
-    }
-    return jsonResponse([{ id: 'role-1', cluster_id: 'prod', namespace: 'orders', kind: 'Role', name: 'orders-reader', uid: 'uid-role', rules: [{ api_groups: [''], resources: ['pods'], verbs: ['get'] }] }]);
-  };
-
-  try {
-    const roles = await k8sApi.listRBACRoles('prod', 'orders');
-    const bindings = await k8sApi.listRBACBindings('prod', 'orders');
-    const role = await k8sApi.createRBACRole({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader' });
-    const binding = await k8sApi.createRBACBinding({ clusterId: 'prod', namespace: 'orders', name: 'orders-reader-binding', roleName: 'orders-reader', serviceAccountName: 'orders-reader' });
-    const deleted = await k8sApi.deleteRBACBinding({ clusterId: 'prod', namespace: 'orders', kind: 'RoleBinding', name: 'orders-reader-binding', uid: 'uid-binding' });
-
-    assert.equal(requests[0].path, '/api/v1/k8s/rbac/roles?cluster_id=prod&namespace=orders');
-    assert.equal(requests[1].path, '/api/v1/k8s/rbac/bindings?cluster_id=prod&namespace=orders');
-    assert.equal(requests[2].path, '/api/v1/k8s/rbac/roles');
-    assert.equal(requests[2].init.method, 'POST');
-    assert.equal(JSON.parse(requests[2].init.body).rules[0].resources[0], 'pods');
-    assert.equal(requests[3].path, '/api/v1/k8s/rbac/bindings');
-    assert.equal(JSON.parse(requests[3].init.body).role_ref.name, 'orders-reader');
-    assert.equal(requests[4].path, '/api/v1/k8s/rbac/bindings?cluster_id=prod&namespace=orders&kind=RoleBinding&name=orders-reader-binding&uid=uid-binding');
-    assert.equal(roles[0].rules[0].apiGroups[0], '');
-    assert.equal(bindings[0].roleRef.name, 'orders-reader');
-    assert.equal(role.auditId, 'audit-role-1');
-    assert.equal(binding.auditId, 'audit-binding-1');
-    assert.equal(deleted.auditId, 'audit-binding-delete-1');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('K8s Kubeconfig 生成只返回元数据，导出单独调用', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    if (String(path).includes('/export')) {
-      return jsonResponse({ kubeconfig: 'apiVersion: v1\nkind: Config', audit_id: 'audit-export-1' });
-    }
-    return jsonResponse({ secret_id: 'secret-1', fingerprint: 'sha256:abc', expires_at: '2026-05-20T00:00:00Z', audit_id: 'audit-create-1' });
-  };
-
-  try {
-    const metadata = await k8sApi.createKubeconfig({ clusterId: 'prod', namespace: 'orders', serviceAccount: 'orders-reader' });
-    const exported = await k8sApi.exportKubeconfig('secret-1');
-
-    assert.equal(requests[0].path, '/api/v1/k8s/kubeconfigs');
-    assert.equal(requests[0].init.method, 'POST');
-    assert.equal(JSON.parse(requests[0].init.body).service_account, 'orders-reader');
-    assert.equal(requests[1].path, '/api/v1/k8s/kubeconfigs/export');
-    assert.equal(JSON.parse(requests[1].init.body).secret_id, 'secret-1');
-    assert.equal(metadata.secretId, 'secret-1');
-    assert.equal(metadata.auditId, 'audit-create-1');
-    assert.equal(exported.kubeconfig.includes('apiVersion'), true);
-    assert.equal(exported.auditId, 'audit-export-1');
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('K8s 平台授权权限包调用统一 NovaAPM API 并映射风险与推荐主体', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    return jsonResponse([
-      {
-        id: 'k8s-readonly',
-        label: '只读观察者',
-        description: '查看资源',
-        risk: 'low',
-        scope_mode: 'namespace',
-        recommended_subject_type: 'group',
-        permission_ids: ['k8s.namespace:read', 'k8s.resource:read'],
-      },
-    ]);
-  };
-
-  try {
-    const profiles = await k8sApi.listPlatformAccessProfiles();
-
-    assert.equal(requests[0].path, '/api/v1/k8s/platform-access/profiles');
-    assert.equal(profiles[0].id, 'k8s-readonly');
-    assert.equal(profiles[0].risk, 'low');
-    assert.equal(profiles[0].scopeMode, 'namespace');
-    assert.equal(profiles[0].recommendedSubjectType, 'group');
-    assert.deepEqual(profiles[0].permissionIds, ['k8s.namespace:read', 'k8s.resource:read']);
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
-});
-
-test('K8s 平台授权创建支持多命名空间、全命名空间和风险确认契约', async () => {
-  const requests = [];
-  const originalFetch = globalThis.fetch;
-  globalThis.fetch = async (path, init = {}) => {
-    requests.push({ path, init });
-    return jsonResponse({
-      item: {
-        id: 'binding-prod-sre',
-        subject_id: 'sre',
-        subject_type: 'group',
-        role_id: 'role-k8s-platform-access',
-        role_name: 'K8s 平台授权组合',
-        scope: { cluster_id: 'prod', namespaces: ['orders', 'payments'] },
-        permission_ids: ['k8s.resource:read'],
-        permissions: [{ resource: 'k8s.resource', action: 'read', scope_mode: 'namespace' }],
-      },
-      items: [
-        {
-          id: 'binding-prod-sre',
-          subject_id: 'sre',
-          subject_type: 'group',
-          role_id: 'role-k8s-platform-access',
-          role_name: 'K8s 平台授权组合',
-          scope: { cluster_id: 'prod', namespaces: ['orders', 'payments'] },
-          permission_ids: ['k8s.resource:read'],
-          permissions: [{ resource: 'k8s.resource', action: 'read', scope_mode: 'namespace' }],
-        },
-      ],
-      audit_id: 'audit-grant-1',
-    });
-  };
-
-  try {
-    const result = await k8sApi.createPlatformAccessBinding({
-      subjectId: 'sre',
-      subjectType: 'group',
-      clusterId: 'prod',
-      namespaces: ['orders', 'payments'],
-      allNamespaces: false,
-      riskAccepted: true,
-      permissionIds: ['k8s.resource:read'],
-    });
-
-    assert.equal(requests[0].path, '/api/v1/k8s/platform-access/bindings');
-    const payload = JSON.parse(requests[0].init.body);
-    assert.deepEqual(payload.namespaces, ['orders', 'payments']);
-    assert.equal(payload.all_namespaces, false);
-    assert.equal(payload.risk_accepted, true);
-    assert.equal(payload.namespace, '');
-    assert.equal(result.items.length, 1);
-    assert.deepEqual(result.items[0].scope.namespaces, ['orders', 'payments']);
   } finally {
     globalThis.fetch = originalFetch;
   }

@@ -1,15 +1,12 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import type { LucideIcon } from 'lucide-react';
-import { Folder, Layers3, Plus, ShieldCheck, Trash2 } from 'lucide-react';
+import { Folder, Layers3, ShieldCheck } from 'lucide-react';
 import { k8sApi, type K8sNamespace } from './api';
 import { useK8sOpsContext } from './context';
 
 export function K8sNamespacePage() {
-  const queryClient = useQueryClient();
   const { activeClusterId, activeCluster, clusterError } = useK8sOpsContext();
-  const [name, setName] = useState('');
-  const [owner, setOwner] = useState('');
   const [selectedNamespaceName, setSelectedNamespaceName] = useState('');
 
   const { data = [], isLoading, error } = useQuery({
@@ -19,19 +16,6 @@ export function K8sNamespacePage() {
     retry: false,
   });
   const namespaces = data;
-  const createNamespace = useMutation({
-    mutationFn: () => k8sApi.createNamespace({ clusterId: activeClusterId, name, owner }),
-    onSuccess: () => {
-      setName('');
-      setOwner('');
-      queryClient.invalidateQueries({ queryKey: ['k8s-namespaces'] });
-    },
-  });
-  const deleteNamespace = useMutation({
-    mutationFn: (target: (typeof namespaces)[number]) => k8sApi.deleteNamespace(target),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['k8s-namespaces'] }),
-  });
-  const writeError = createNamespace.error?.message || deleteNamespace.error?.message || '';
   const selectedNamespace = namespaces.find((item) => item.name === selectedNamespaceName) ?? namespaces[0];
 
   useEffect(() => {
@@ -66,27 +50,12 @@ export function K8sNamespacePage() {
           </div>
 
           <div className="console-list-toolbar shrink-0">
-            <div className="grid min-w-0 flex-1 gap-2 lg:grid-cols-[minmax(180px,1fr)_minmax(160px,240px)_auto]">
-              <label className="block min-w-0 text-xs font-semibold text-muted">
-                name
-                <input className="console-input mt-1.5 h-8 w-full" value={name} onChange={(event) => setName(event.target.value)} />
-              </label>
-              <label className="block min-w-0 text-xs font-semibold text-muted">
-                owner
-                <input className="console-input mt-1.5 h-8 w-full" value={owner} onChange={(event) => setOwner(event.target.value)} />
-              </label>
-              <button
-                className="console-button console-button-primary self-end"
-                disabled={!activeClusterId || !name.trim() || createNamespace.isPending}
-                onClick={() => createNamespace.mutate()}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                创建命名空间
-              </button>
+            <div className="console-notice w-full">
+              <ShieldCheck className="h-4 w-4" />
+              Namespace 由集群侧维护；NovaAPM 仅展示当前 Profile 可见范围，不提供创建或删除操作。
             </div>
           </div>
 
-          {writeError ? <div className="mx-3 mt-3 rounded-md bg-amber-50 px-3 py-2 text-sm font-semibold text-warning">{writeError}</div> : null}
           {isLoading ? (
             <div className="mx-3 mt-3 rounded-md border border-outline bg-surface px-3 py-2 text-sm font-semibold text-muted">
               正在从 `/api/v1/k8s/namespaces` 读取命名空间。
@@ -108,7 +77,6 @@ export function K8sNamespacePage() {
                     <th>Owner</th>
                     <th>状态</th>
                     <th>来源</th>
-                    <th>操作</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -126,21 +94,6 @@ export function K8sNamespacePage() {
                       <td className="text-xs text-muted">{item.owner || '-'}</td>
                       <td><StatusPill status={item.status} /></td>
                       <td className="text-xs text-muted">{item.id ? 'Kubernetes API' : '-'}</td>
-                      <td>
-                        <button
-                          className="console-table-action console-table-action-danger"
-                          disabled={deleteNamespace.isPending}
-                          onClick={(event) => {
-                            event.stopPropagation();
-                            if (window.confirm(`确认删除命名空间 ${item.name}？`)) {
-                              deleteNamespace.mutate(item);
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                          删除
-                        </button>
-                      </td>
                     </tr>
                   ))}
                 </tbody>

@@ -18,10 +18,13 @@ import { Link, useLocation, useNavigate, useParams } from 'react-router-dom';
 import { EmptyState } from '../../components/EmptyState';
 import { HelpTip } from '../../components/HelpTip';
 import { StatusBadge } from '../../components/StatusBadge';
+import { buildLogsExplorePath } from '../../components/navigation/serviceScope';
+import { usePlatformAccess } from '../../layouts/access';
 import { api } from '../../services/api';
 import { k8sApi } from '../k8s/api';
 import { defaultLogsCollectorNamespace, logsApi } from '../logs/api';
 import { buildLogsRuntimeURL, summarizeK8sRuntimeStatus } from '../logs/logsRuntimeViewModel';
+import { productCatalogCapabilities, type ProductCatalogCapabilities } from './catalogAccess';
 import { buildProductCatalogGroups, type ProductCatalogSort } from './servicesViewModel';
 import type {
   GrafanaProductIntegration,
@@ -54,6 +57,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
 }) {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { data: accessContext } = usePlatformAccess();
   const [creating, setCreating] = useState(false);
   const [serviceProduct, setServiceProduct] = useState<Product | null>(null);
   const [archiveProductTarget, setArchiveProductTarget] = useState<Product | null>(null);
@@ -62,12 +66,19 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
   const [catalogSource, setCatalogSource] = useState<'' | 'manual' | 'k8s' | 'cmdb'>('');
   const [catalogSort, setCatalogSort] = useState<ProductCatalogSort>('updated_desc');
   const [collapsedProductIds, setCollapsedProductIds] = useState<string[]>([]);
-  const productsQuery = useQuery({ queryKey: ['products'], queryFn: api.getProducts });
+  const productsQuery = useQuery({
+    queryKey: ['products', accessContext?.platformAdmin ? 'administration' : 'accessible'],
+    queryFn: accessContext?.platformAdmin ? api.getProductsForAdministration : api.getProducts,
+    enabled: Boolean(accessContext),
+  });
   const products = productsQuery.data ?? [];
+  const capabilitiesFor = (productId: string) => productCatalogCapabilities(accessContext, productId);
+  const canCreateProduct = Boolean(accessContext?.platformAdmin);
   const productServiceQueries = useQueries({
     queries: products.map((product) => ({
       queryKey: ['product-services', product.id],
       queryFn: () => api.getProductServices(product.id),
+      enabled: capabilitiesFor(product.id).canViewProduct,
       retry: false,
     })),
   });
@@ -75,6 +86,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
     queries: products.map((product) => ({
       queryKey: ['product-grafana', product.id],
       queryFn: () => api.getGrafanaProductIntegration(product.id),
+      enabled: capabilitiesFor(product.id).canViewProduct,
       retry: false,
     })),
   });
@@ -170,13 +182,15 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
   return (
     <div className="page-shell">
       <div className="page-header">
-        <div>
+        <div className="flex min-w-0 items-center gap-1.5">
           <h1 className="page-title">产品与服务</h1>
-          <p className="page-description">产品定义统一租户和权限边界，服务在产品下维护稳定观测身份。</p>
+          <HelpTip content="产品定义统一租户和权限边界，服务在产品下维护稳定观测身份。" label="产品与服务说明" />
         </div>
-        <button className="console-button console-button-primary" onClick={() => setCreating(true)}>
-          <Plus className="h-3.5 w-3.5" />新增产品
-        </button>
+        {canCreateProduct ? (
+          <button className="console-button console-button-primary" onClick={() => setCreating(true)}>
+            <Plus className="h-3.5 w-3.5" />新增产品
+          </button>
+        ) : null}
       </div>
       {productsQuery.error ? (
         <div className="console-notice console-notice-danger">{errorMessage(productsQuery.error)}</div>
@@ -256,6 +270,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
                 {catalogGroups.map(({ product, services }) => (
                   <ProductServiceMobileCard
                     key={product.id}
+                    capabilities={capabilitiesFor(product.id)}
                     product={product}
                     integration={integrationByProduct.get(product.id)}
                     state={{ ...(servicesByProduct.get(product.id) ?? { loading: false, error: undefined }), services }}
@@ -281,6 +296,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
                     {catalogGroups.map(({ product, services }) => (
                       <ProductServiceRows
                         key={product.id}
+                        capabilities={capabilitiesFor(product.id)}
                         product={product}
                         integration={integrationByProduct.get(product.id)}
                         state={{ ...(servicesByProduct.get(product.id) ?? { loading: false, error: undefined }), services }}
@@ -301,7 +317,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
           )}
         </div>
       )}
-      {creating ? (
+      {creating && canCreateProduct ? (
         <ProductDrawer
           pending={createMutation.isPending}
           error={createMutation.error}
@@ -309,7 +325,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
           onSubmit={(input) => createMutation.mutate(input)}
         />
       ) : null}
-      {serviceProduct ? (
+      {serviceProduct && capabilitiesFor(serviceProduct.id).canMaintainProduct ? (
         <ServiceDrawer
           pending={createService.isPending}
           error={createService.error}
@@ -324,6 +340,7 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
           loading={integrationQueries[selectedProductIndex]?.isLoading ?? false}
           error={integrationQueries[selectedProductIndex]?.error ?? reconcile.error}
           reconciling={reconcile.isPending}
+          canReconcile={capabilitiesFor(selectedProduct.id).canMaintainProduct}
           onClose={() => navigate('/products')}
           onReconcile={() => reconcile.mutate(selectedProduct.id)}
         />
@@ -342,11 +359,12 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
           deploymentsError={deploymentsQuery.error}
           archiving={archiveService.isPending}
           archiveError={archiveService.error}
+          canMaintain={capabilitiesFor(selectedProduct.id).canMaintainProduct}
           onClose={() => navigate('/products')}
           onArchive={() => archiveService.mutate({ productId: selectedProduct.id, serviceId: routeServiceId })}
         />
       ) : null}
-      {archiveProductTarget ? (
+      {archiveProductTarget && capabilitiesFor(archiveProductTarget.id).canArchiveProduct ? (
         <Drawer
           title="归档产品"
           onClose={() => setArchiveProductTarget(null)}
@@ -366,8 +384,9 @@ function ProductsIndex({ routeProductId, routeServiceId, integrationOpen }: {
   );
 }
 
-function ProductServiceRows({ product, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onCreateService, onArchiveProduct, onOpenService }: {
+function ProductServiceRows({ product, capabilities, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onCreateService, onArchiveProduct, onOpenService }: {
   product: Product;
+  capabilities: ProductCatalogCapabilities;
   integration?: GrafanaProductIntegration;
   state?: { services: Service[]; loading: boolean; error: unknown };
   totalServiceCount: number;
@@ -395,7 +414,7 @@ function ProductServiceRows({ product, integration, state, totalServiceCount, co
           </button>
           <div className="ml-5 mt-1 truncate text-[11px] text-muted">{product.description || '暂无产品描述'}</div>
         </td>
-        <td><Identity primary={product.key} secondary={product.id} /></td>
+        <td><Identity primary={product.key} internalId={product.id} /></td>
         <td className="font-mono text-xs">{product.tenant.accountId}:{product.tenant.projectId}</td>
         <td><span className="text-xs text-muted">产品边界</span></td>
         <td>
@@ -407,9 +426,9 @@ function ProductServiceRows({ product, integration, state, totalServiceCount, co
         <td className="text-xs text-muted">{formatTime(product.updatedAt)}</td>
         <td>
           <div className="flex justify-end gap-1">
-            <button className="product-catalog-row-action" onClick={onOpenIntegration}>集成</button>
-            <button className="product-catalog-row-action" onClick={onCreateService}><Plus className="h-3.5 w-3.5" />服务</button>
-            <button className="product-catalog-row-action product-catalog-row-action-icon product-catalog-row-action-danger" aria-label={`归档产品 ${product.name}`} title="归档产品" onClick={onArchiveProduct}><Archive className="h-3.5 w-3.5" /></button>
+            {capabilities.canViewProduct ? <button className="product-catalog-row-action" onClick={onOpenIntegration}>集成</button> : null}
+            {capabilities.canMaintainProduct ? <button className="product-catalog-row-action" onClick={onCreateService}><Plus className="h-3.5 w-3.5" />服务</button> : null}
+            {capabilities.canArchiveProduct ? <button className="product-catalog-row-action product-catalog-row-action-icon product-catalog-row-action-danger" aria-label={`归档产品 ${product.name}`} title="归档产品" onClick={onArchiveProduct}><Archive className="h-3.5 w-3.5" /></button> : null}
           </div>
         </td>
       </tr>
@@ -424,19 +443,21 @@ function ProductServiceRows({ product, integration, state, totalServiceCount, co
               <span className="truncate">{service.name}</span>
             </button>
           </td>
-          <td><Identity primary={service.key} secondary={service.id} /></td>
+          <td><Identity primary={service.key} internalId={service.id} /></td>
           <td className="text-xs text-muted">继承产品租户</td>
           <td><div className="text-xs">{service.ownerTeam || service.owner || '-'}</div><div className="mt-1 text-[11px] text-muted">{sourceLabel(service.source)}</div></td>
           <td><StatusBadge value={service.status} appearance="inline" /></td>
           <td className="text-xs text-muted">{formatTime(service.updatedAt)}</td>
-          <td><div className="flex justify-end gap-1"><button className="product-catalog-row-action" onClick={() => onOpenService(service.id)}>查看</button><Link className="product-catalog-row-action" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/logs/explore`}>Logs</Link></div></td>
+          <td><div className="flex justify-end gap-1"><button className="product-catalog-row-action" onClick={() => onOpenService(service.id)}>查看</button><Link className="product-catalog-row-action" to={buildLogsExplorePath(product.id, service.id)}>Logs</Link></div></td>
         </tr>
       )) : (
         <tr>
           <td colSpan={7}>
             {filtered
               ? <span className="ml-6 text-xs text-muted">当前条件下无匹配服务</span>
-              : <button className="ml-6 text-xs font-semibold text-primary" onClick={onCreateService}>产品下暂无服务，立即新增</button>}
+              : capabilities.canMaintainProduct
+                ? <button className="ml-6 text-xs font-semibold text-primary" onClick={onCreateService}>产品下暂无服务，立即新增</button>
+                : <span className="ml-6 text-xs text-muted">产品下暂无可查看服务</span>}
           </td>
         </tr>
       )}
@@ -444,8 +465,9 @@ function ProductServiceRows({ product, integration, state, totalServiceCount, co
   );
 }
 
-function ProductServiceMobileCard({ product, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onCreateService, onArchiveProduct, onOpenService }: {
+function ProductServiceMobileCard({ product, capabilities, integration, state, totalServiceCount, collapsed, filtered, onToggle, onOpenIntegration, onCreateService, onArchiveProduct, onOpenService }: {
   product: Product;
+  capabilities: ProductCatalogCapabilities;
   integration?: GrafanaProductIntegration;
   state?: { services: Service[]; loading: boolean; error: unknown };
   totalServiceCount: number;
@@ -470,14 +492,18 @@ function ProductServiceMobileCard({ product, integration, state, totalServiceCou
             {collapsed ? <ChevronRight className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" /> : <ChevronDown className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted" />}
             <span className="min-w-0">
               <span className="flex items-center gap-2"><span className="truncate font-semibold">{product.name}</span><span className="shrink-0 text-[10px] font-medium text-muted">{state?.loading ? '加载中' : `${totalServiceCount} 个服务`}</span></span>
-              <span className="mt-1 block break-all font-mono text-[11px] text-muted">{product.key} · {product.id}</span>
+              <span className="mt-1 block break-all font-mono text-[11px] text-muted" title={product.id}>{product.key}</span>
             </span>
           </button>
           <StatusBadge value={product.status} appearance="inline" />
         </div>
         <div className="flex items-end justify-between gap-3">
           <Info label="统一租户" value={`${product.tenant.accountId}:${product.tenant.projectId}`} mono />
-          <div className="flex gap-1"><button className="product-catalog-row-action" onClick={onOpenIntegration}>集成</button><button className="product-catalog-row-action" onClick={onCreateService}><Plus className="h-3.5 w-3.5" />服务</button><button className="product-catalog-row-action product-catalog-row-action-icon product-catalog-row-action-danger" aria-label={`归档产品 ${product.name}`} title="归档产品" onClick={onArchiveProduct}><Archive className="h-3.5 w-3.5" /></button></div>
+          <div className="flex gap-1">
+            {capabilities.canViewProduct ? <button className="product-catalog-row-action" onClick={onOpenIntegration}>集成</button> : null}
+            {capabilities.canMaintainProduct ? <button className="product-catalog-row-action" onClick={onCreateService}><Plus className="h-3.5 w-3.5" />服务</button> : null}
+            {capabilities.canArchiveProduct ? <button className="product-catalog-row-action product-catalog-row-action-icon product-catalog-row-action-danger" aria-label={`归档产品 ${product.name}`} title="归档产品" onClick={onArchiveProduct}><Archive className="h-3.5 w-3.5" /></button> : null}
+          </div>
         </div>
       </div>
       {!collapsed ? <div className="divide-y divide-outline">
@@ -493,19 +519,22 @@ function ProductServiceMobileCard({ product, integration, state, totalServiceCou
           </button>
         )) : filtered
           ? <div className="p-3 text-xs text-muted">当前条件下无匹配服务</div>
-          : <button className="w-full p-3 text-left text-xs font-semibold text-primary" onClick={onCreateService}>产品下暂无服务，立即新增</button>}
+          : capabilities.canMaintainProduct
+            ? <button className="w-full p-3 text-left text-xs font-semibold text-primary" onClick={onCreateService}>产品下暂无服务，立即新增</button>
+            : <div className="p-3 text-xs text-muted">产品下暂无可查看服务</div>}
       </div> : null}
       <div className="flex items-center justify-between border-t border-outline px-3 py-2 text-[11px] text-muted"><span>Grafana</span><StatusBadge value={integration?.state ?? 'pending'} appearance="inline" /></div>
     </article>
   );
 }
 
-function ProductIntegrationDrawer({ product, integration, loading, error, reconciling, onClose, onReconcile }: {
+function ProductIntegrationDrawer({ product, integration, loading, error, reconciling, canReconcile, onClose, onReconcile }: {
   product: Product;
   integration?: GrafanaProductIntegration;
   loading: boolean;
   error: unknown;
   reconciling: boolean;
+  canReconcile: boolean;
   onClose: () => void;
   onReconcile: () => void;
 }) {
@@ -516,7 +545,7 @@ function ProductIntegrationDrawer({ product, integration, loading, error, reconc
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
           <div className="min-w-0"><div id="product-integration-title" className="truncate text-sm font-semibold">{product.name} · Grafana 集成</div><div className="mt-1 font-mono text-[11px] text-muted">{product.id}</div></div>
           <div className="flex shrink-0 gap-2">
-            <button className="console-button" onClick={onReconcile} disabled={reconciling}><RefreshCw className={`h-3.5 w-3.5 ${reconciling ? 'animate-spin' : ''}`} />立即协调</button>
+            {canReconcile ? <button className="console-button" onClick={onReconcile} disabled={reconciling}><RefreshCw className={`h-3.5 w-3.5 ${reconciling ? 'animate-spin' : ''}`} />立即协调</button> : null}
             <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭产品集成" title="关闭"><X className="h-4 w-4" /></button>
           </div>
         </div>
@@ -550,7 +579,7 @@ function ProductIntegrationDrawer({ product, integration, loading, error, reconc
   );
 }
 
-function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoading, graphError, deployments, deploymentsLoading, deploymentsError, archiving, archiveError, onClose, onArchive }: {
+function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoading, graphError, deployments, deploymentsLoading, deploymentsError, archiving, archiveError, canMaintain, onClose, onArchive }: {
   product: Product;
   service?: Service;
   loading: boolean;
@@ -563,6 +592,7 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
   deploymentsError: unknown;
   archiving: boolean;
   archiveError: unknown;
+  canMaintain: boolean;
   onClose: () => void;
   onArchive: () => void;
 }) {
@@ -574,7 +604,7 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
         <div className="flex shrink-0 items-center justify-between gap-3 border-b border-outline bg-surface-lowest px-4 py-3">
           <div className="min-w-0"><div className="text-[11px] text-muted">{product.name}</div><div className="mt-1 flex items-center gap-2"><div id="service-detail-title" className="truncate text-sm font-semibold">{service?.name || '服务详情'}</div>{service ? <StatusBadge value={service.status} /> : null}</div></div>
           <div className="flex shrink-0 gap-2">
-            {service ? <Link className="console-button console-button-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/logs/explore`}>进入 Logs</Link> : null}
+            {service ? <Link className="console-button console-button-primary" to={buildLogsExplorePath(product.id, service.id)}>进入 Logs</Link> : null}
             <button className="console-icon-button border-outline bg-white" onClick={onClose} aria-label="关闭服务详情" title="关闭"><X className="h-4 w-4" /></button>
           </div>
         </div>
@@ -582,11 +612,11 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
           {loading ? <div className="console-skeleton h-52" /> : error ? <div className="console-notice console-notice-danger">{errorMessage(error)}</div> : !service ? <EmptyState title="服务不存在或不属于当前产品" /> : (
             <>
               <DetailSection title="部署与日志采集" description="先确认服务运行在哪里，再查看各部署的日志接入和发布状态。">
-                <div className="mb-3 flex justify-end">
+                {canMaintain ? <div className="mb-3 flex justify-end">
                   <Link className="console-button console-button-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/new`}>
                     <Plus className="h-3.5 w-3.5" />新增部署
                   </Link>
-                </div>
+                </div> : null}
                 {deploymentsLoading ? <div className="console-skeleton h-24" /> : deploymentsError ? (
                   <div className="console-notice console-notice-danger">{errorMessage(deploymentsError)}</div>
                 ) : !deployments?.length ? (
@@ -612,9 +642,9 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
                             <td>{graphLoading ? <span className="text-xs text-muted">读取中…</span> : graphError ? <span className="text-xs text-danger">读取失败</span> : <DeploymentLogSummary deployment={deployment} routes={deploymentRoutes} />}</td>
                             <td className="text-right">
                               <div className="flex justify-end gap-3">
-                                {!graphLoading && !graphError ? <Link className="text-xs font-semibold text-primary hover:underline" to={configureURL}>{deploymentRoutes.length > 1 ? `管理 ${deploymentRoutes.length} 条路由` : '配置采集'}</Link> : null}
+                                {canMaintain && !graphLoading && !graphError ? <Link className="text-xs font-semibold text-primary hover:underline" to={configureURL}>{deploymentRoutes.length > 1 ? `管理 ${deploymentRoutes.length} 条路由` : '配置采集'}</Link> : null}
                                 {!graphLoading && !graphError && route ? <Link className="text-xs font-semibold text-primary hover:underline" to={buildLogsRuntimeURL(product.id, service.id, { deploymentId: deployment.id, routeId: route.route.id })}>查看采集</Link> : null}
-                                <Link className="text-xs font-semibold text-muted hover:text-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/${encodeURIComponent(deployment.id)}/edit`}>编辑部署</Link>
+                                {canMaintain ? <Link className="text-xs font-semibold text-muted hover:text-primary" to={`/products/${encodeURIComponent(product.id)}/services/${encodeURIComponent(service.id)}/deployments/${encodeURIComponent(deployment.id)}/edit`}>编辑部署</Link> : null}
                               </div>
                             </td>
                           </tr>
@@ -639,7 +669,7 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
                 <Capability icon={Activity} label="Metrics" ready={false} reason="当前后端尚未支持服务作用域指标" />
                 <Capability icon={GitBranch} label="Traces" ready={false} reason="当前后端尚未支持服务作用域链路" />
               </DetailSection>
-              <DetailSection title="设置">
+              {canMaintain ? <DetailSection title="设置">
                 <div className="flex flex-wrap items-center justify-between gap-3 rounded border border-red-200 bg-red-50/50 p-3">
                   <div><div className="text-sm font-semibold text-red-700">归档服务</div><div className="mt-1 text-xs text-red-600">服务身份保留；已有日志路由、Grafana 数据源和审计记录不会被删除。</div></div>
                   <button className="console-button text-red-600" onClick={() => confirmArchive ? onArchive() : setConfirmArchive(true)} disabled={archiving}>
@@ -647,7 +677,7 @@ function ServiceDetailDrawer({ product, service, loading, error, graph, graphLoa
                   </button>
                 </div>
                 {archiveError ? <div className="mt-3 text-xs text-red-700">{errorMessage(archiveError)}</div> : null}
-              </DetailSection>
+              </DetailSection> : null}
             </>
           )}
         </div>
@@ -750,8 +780,9 @@ function DetailSection({ title, description, children }: { title: string; descri
   );
 }
 
-function Identity({ primary, secondary }: { primary: string; secondary: string }) {
-  return <div className="min-w-0"><div className="truncate font-mono text-xs text-on-surface">{primary}</div><div className="mt-1 truncate font-mono text-[10px] text-muted">{secondary}</div></div>;
+// 内部主键对使用者没有价值，只挂在 title 上供排查，正文里只留稳定标识。
+function Identity({ primary, internalId }: { primary: string; internalId: string }) {
+  return <div className="min-w-0" title={internalId}><div className="truncate font-mono text-xs text-on-surface">{primary}</div></div>;
 }
 
 function ProductDrawer({ pending, error, onClose, onSubmit }: {
